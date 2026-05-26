@@ -131,28 +131,27 @@ pub async fn spawn_reflection_server_v1alpha() -> (SocketAddr, oneshot::Sender<(
 }
 
 /// Spawn a tonic server with NO reflection service registered.
-/// Useful to exercise the `ReflectionDisabled` path.
 ///
-/// Uses a raw TCP listener that accepts and immediately drops connections so that
-/// any gRPC caller gets a connection-refused or stream-reset, which maps to the
-/// `ReflectionDisabled` error path.  We don't add any tonic service because
-/// `Server::builder()` without `add_service` has no `serve_with_shutdown(addr,
-/// signal)` overload in tonic 0.14 — only the `Router` returned by `add_service`
-/// has that 2-argument form.
+/// We register `tonic_health::server::HealthServer` as a "filler" so the listener
+/// speaks full HTTP/2 + gRPC. Any request to a reflection path (v1 or v1alpha)
+/// gets back a real gRPC `Unimplemented` status — exactly the condition the
+/// reflection client's fallback logic must recognise as `ReflectionDisabled`.
+///
+/// Without a registered service tonic 0.14's `Server::serve_with_shutdown` is
+/// 3-arg `(addr, svc, signal)`; only the `Router` returned by `add_service(svc)`
+/// has the 2-arg `serve_with_shutdown(addr, signal)` we use here.
 pub async fn spawn_bare_server() -> (SocketAddr, oneshot::Sender<()>) {
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr = listener.local_addr().unwrap();
+    let addr = pick_addr().await;
+    let (_reporter, health_service) = tonic_health::server::health_reporter();
+
     let (tx, rx) = oneshot::channel::<()>();
     tokio::spawn(async move {
-        tokio::select! {
-            _ = rx => {}
-            // accept and immediately drop every connection
-            _ = async {
-                loop {
-                    let _ = listener.accept().await;
-                }
-            } => {}
-        }
+        let _ = tonic::transport::Server::builder()
+            .add_service(health_service)
+            .serve_with_shutdown(addr, async {
+                rx.await.ok();
+            })
+            .await;
     });
     tokio::time::sleep(std::time::Duration::from_millis(50)).await;
     (addr, tx)

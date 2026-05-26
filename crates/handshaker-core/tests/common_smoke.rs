@@ -14,3 +14,12 @@ async fn v1_server_spawns_and_listens() {
     assert_ne!(addr.port(), 0);
     drop(shutdown);
 }
+
+#[tokio::test]
+async fn bare_server_spawns_and_listens() {
+    let (addr, shutdown) = common::spawn_bare_server().await;
+    // can we open a TCP connection? if so, the listener bound.
+    let stream = tokio::net::TcpStream::connect(addr).await;
+    assert!(stream.is_ok(), "bare server should accept TCP connections");
+    drop(shutdown);
+}
