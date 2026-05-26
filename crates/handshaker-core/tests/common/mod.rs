@@ -129,6 +129,125 @@ pub async fn spawn_reflection_server_v1alpha() -> (SocketAddr, oneshot::Sender<(
     (addr, tx)
 }
 
+/// Build a `FileDescriptorSet` containing TWO files that exercise the
+/// dependency-crawl path:
+///
+/// ```proto
+/// // file: test/common.proto
+/// syntax = "proto3";
+/// package test;
+/// message Header { string trace_id = 1; }
+///
+/// // file: test/echo_with_deps.proto
+/// syntax = "proto3";
+/// package test;
+/// import "test/common.proto";
+/// message PingX { Header h = 1; string id = 2; }
+/// message PongX { Header h = 1; string echoed = 2; }
+/// service EchoWithDeps { rpc Send (PingX) returns (PongX); }
+/// ```
+pub fn fixture_descriptor_set_with_deps_bytes() -> Vec<u8> {
+    let header = DescriptorProto {
+        name: Some("Header".to_string()),
+        field: vec![FieldDescriptorProto {
+            name: Some("trace_id".to_string()),
+            number: Some(1),
+            r#type: Some(FieldType::String as i32),
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    let common_file = FileDescriptorProto {
+        name: Some("test/common.proto".to_string()),
+        package: Some("test".to_string()),
+        syntax: Some("proto3".to_string()),
+        message_type: vec![header],
+        ..Default::default()
+    };
+
+    let header_field = FieldDescriptorProto {
+        name: Some("h".to_string()),
+        number: Some(1),
+        r#type: Some(FieldType::Message as i32),
+        type_name: Some(".test.Header".to_string()),
+        ..Default::default()
+    };
+    let ping_x = DescriptorProto {
+        name: Some("PingX".to_string()),
+        field: vec![
+            header_field.clone(),
+            FieldDescriptorProto {
+                name: Some("id".to_string()),
+                number: Some(2),
+                r#type: Some(FieldType::String as i32),
+                ..Default::default()
+            },
+        ],
+        ..Default::default()
+    };
+    let pong_x = DescriptorProto {
+        name: Some("PongX".to_string()),
+        field: vec![
+            header_field,
+            FieldDescriptorProto {
+                name: Some("echoed".to_string()),
+                number: Some(2),
+                r#type: Some(FieldType::String as i32),
+                ..Default::default()
+            },
+        ],
+        ..Default::default()
+    };
+    let echo_with_deps = ServiceDescriptorProto {
+        name: Some("EchoWithDeps".to_string()),
+        method: vec![MethodDescriptorProto {
+            name: Some("Send".to_string()),
+            input_type: Some(".test.PingX".to_string()),
+            output_type: Some(".test.PongX".to_string()),
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    let echo_file = FileDescriptorProto {
+        name: Some("test/echo_with_deps.proto".to_string()),
+        package: Some("test".to_string()),
+        syntax: Some("proto3".to_string()),
+        dependency: vec!["test/common.proto".to_string()],
+        message_type: vec![ping_x, pong_x],
+        service: vec![echo_with_deps],
+        ..Default::default()
+    };
+
+    let set = FileDescriptorSet {
+        file: vec![common_file, echo_file],
+    };
+    let mut buf = Vec::new();
+    set.encode(&mut buf).expect("encode FileDescriptorSet");
+    buf
+}
+
+/// Spawn a v1 reflection server hosting the multi-file fixture (forces dep crawl).
+pub async fn spawn_reflection_server_v1_with_deps() -> (SocketAddr, oneshot::Sender<()>) {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let reflection = tonic_reflection::server::Builder::configure()
+        .register_encoded_file_descriptor_set(&fixture_descriptor_set_with_deps_bytes())
+        .build_v1()
+        .expect("build v1 reflection service");
+
+    let (tx, rx) = oneshot::channel::<()>();
+    tokio::spawn(async move {
+        let incoming = tokio_stream::wrappers::TcpListenerStream::new(listener);
+        let _ = tonic::transport::Server::builder()
+            .add_service(reflection)
+            .serve_with_incoming_shutdown(incoming, async {
+                rx.await.ok();
+            })
+            .await;
+    });
+    (addr, tx)
+}
+
 /// Spawn a tonic server with NO reflection service registered.
 ///
 /// We register `tonic_health::server::HealthServer` as a "filler" so the listener

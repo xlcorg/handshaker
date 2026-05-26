@@ -16,11 +16,9 @@ pub(crate) trait ReflectionAdapter {
     /// Human-readable version label for error messages, e.g. "v1" / "v1alpha".
     fn version_label(&self) -> &'static str;
 
-    /// Open a bidi `ServerReflectionInfo` stream and return:
-    ///   - a sender we can push `MessageRequest`s into (`Send` items),
-    ///   - a receiver that yields raw `FileDescriptorResponse` bytes batches OR error markers.
-    ///
-    /// The implementation drives the underlying tonic streaming client.
+    /// Drive one full reflection session: send everything described in `plan` over a
+    /// fresh `ServerReflectionInfo` bidi stream, drain responses to EOF, and return
+    /// the aggregated `SessionOutcome` (services + raw file bytes — undecoded).
     async fn run_session(
         &self,
         channel: TonicChannel,
@@ -85,22 +83,15 @@ pub(crate) async fn run<A: ReflectionAdapter + Send + Sync>(
     let mut requested: HashSet<String> = HashSet::new();
 
     for bytes in &fetched.file_proto_bytes {
-        let fdp = FileDescriptorProto::decode(&bytes[..]).map_err(|e| {
-            CoreError::DescriptorBuild(format!(
-                "decode FileDescriptorProto from {} server: {e}",
-                adapter.version_label()
-            ))
-        })?;
+        let (name, fdp) = decode_fdp(bytes, adapter.version_label())?;
         for dep in &fdp.dependency {
             if !requested.contains(dep) {
                 queue.push_back(dep.clone());
                 requested.insert(dep.clone());
             }
         }
-        if let Some(name) = fdp.name.clone() {
-            requested.insert(name.clone());
-            by_name.insert(name, fdp);
-        }
+        requested.insert(name.clone());
+        by_name.entry(name).or_insert(fdp);
     }
 
     // Crawl dependencies until the queue drains.
@@ -117,26 +108,34 @@ pub(crate) async fn run<A: ReflectionAdapter + Send + Sync>(
             )
             .await?;
         for bytes in &resp.file_proto_bytes {
-            let fdp = FileDescriptorProto::decode(&bytes[..]).map_err(|e| {
-                CoreError::DescriptorBuild(format!(
-                    "decode FileDescriptorProto from {} server: {e}",
-                    adapter.version_label()
-                ))
-            })?;
+            let (name, fdp) = decode_fdp(bytes, adapter.version_label())?;
             for dep in &fdp.dependency {
                 if !requested.contains(dep) {
                     queue.push_back(dep.clone());
                     requested.insert(dep.clone());
                 }
             }
-            if let Some(name) = fdp.name.clone() {
-                if !by_name.contains_key(&name) {
-                    by_name.insert(name, fdp);
-                }
-            }
+            requested.insert(name.clone());
+            by_name.entry(name).or_insert(fdp);
         }
     }
 
     let files = by_name.into_values().collect::<Vec<_>>();
     Ok((listed.services, files))
+}
+
+/// Decode `FileDescriptorProto` from raw bytes, returning `DescriptorBuild` on either
+/// a prost decode failure or a missing `name` field.
+fn decode_fdp(bytes: &[u8], label: &str) -> Result<(String, FileDescriptorProto), CoreError> {
+    let fdp = FileDescriptorProto::decode(bytes).map_err(|e| {
+        CoreError::DescriptorBuild(format!(
+            "decode FileDescriptorProto from {label} server: {e}"
+        ))
+    })?;
+    let name = fdp.name.clone().ok_or_else(|| {
+        CoreError::DescriptorBuild(format!(
+            "{label} server returned FileDescriptorProto without a `name` field"
+        ))
+    })?;
+    Ok((name, fdp))
 }

@@ -5,14 +5,14 @@ use crate::grpc::reflection::algorithm::{self, ReflectionAdapter, SessionOutcome
 use crate::grpc::transport::TonicChannel;
 use async_trait::async_trait;
 use prost_types::FileDescriptorProto;
-use tokio_stream::wrappers::ReceiverStream;
+use tokio_stream::wrappers::UnboundedReceiverStream;
 use tonic::Code;
 use tonic_reflection::pb::v1::server_reflection_client::ServerReflectionClient;
 use tonic_reflection::pb::v1::server_reflection_request::MessageRequest;
 use tonic_reflection::pb::v1::server_reflection_response::MessageResponse;
 use tonic_reflection::pb::v1::ServerReflectionRequest;
 
-pub struct V1Adapter;
+pub(crate) struct V1Adapter;
 
 #[async_trait]
 impl ReflectionAdapter for V1Adapter {
@@ -27,45 +27,41 @@ impl ReflectionAdapter for V1Adapter {
     ) -> Result<SessionOutcome, CoreError> {
         let mut client = ServerReflectionClient::new(channel);
 
-        // Build the request stream.
-        let (tx, rx) = tokio::sync::mpsc::channel::<ServerReflectionRequest>(16);
-        let mut expected: usize = 0;
+        // Build the request stream. Use an unbounded channel so all sends complete
+        // synchronously before we hand the receiver to tonic — a bounded channel
+        // would deadlock when the batch exceeds the buffer capacity (no consumer
+        // yet at send time).
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<ServerReflectionRequest>();
         if plan.list_services {
             tx.send(make_list_services_request())
-                .await
                 .map_err(|_| CoreError::Reflection("send list_services: channel closed".into()))?;
-            expected += 1;
         }
         for sym in &plan.symbols {
             tx.send(make_file_containing_symbol_request(sym))
-                .await
                 .map_err(|_| CoreError::Reflection("send file_containing_symbol: channel closed".into()))?;
-            expected += 1;
         }
         for fname in &plan.filenames {
             tx.send(make_file_by_filename_request(fname))
-                .await
                 .map_err(|_| CoreError::Reflection("send file_by_filename: channel closed".into()))?;
-            expected += 1;
         }
-        drop(tx); // close the sender so the server side completes.
+        drop(tx); // close the sender — the server sees EOF and closes the response stream.
 
         let response = client
-            .server_reflection_info(ReceiverStream::new(rx))
+            .server_reflection_info(UnboundedReceiverStream::new(rx))
             .await
             .map_err(map_status)?;
         let mut stream = response.into_inner();
 
         let mut services = Vec::new();
         let mut file_proto_bytes: Vec<Vec<u8>> = Vec::new();
-        let mut received = 0usize;
 
+        // Don't break early — the server closes the stream after responding to all
+        // requests (we signaled "no more" by drop(tx) before this call). Read until EOF.
         while let Some(item) = stream
             .message()
             .await
             .map_err(map_status)?
         {
-            received += 1;
             let Some(msg) = item.message_response else {
                 continue;
             };
@@ -87,9 +83,6 @@ impl ReflectionAdapter for V1Adapter {
                 MessageResponse::AllExtensionNumbersResponse(_) => {
                     // ignored — we don't ask for extension numbers.
                 }
-            }
-            if received >= expected {
-                break;
             }
         }
 
