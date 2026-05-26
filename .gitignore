@@ -8,6 +8,9 @@ node_modules
 dist
 dist-ssr
 
+# TypeScript build cache
+*.tsbuildinfo
+
 # Tauri build output
 src-tauri/target
 src-tauri/gen
