@@ -27,6 +27,23 @@
 
 ---
 
+## Errata applied 2026-05-27
+
+The following corrections were applied after Plan #1 execution surfaced issues. Future re-runs of this plan should use the corrected content below (inline). Original-vs-corrected summary:
+
+1. **Task 5 `package.json` scripts** — `"lint": "tsc -b --noEmit"` was wrong (`tsc -b` doesn't accept `--noEmit`; `noEmit` is set per-tsconfig). Use `"lint": "tsc -b"`.
+2. **Task 5 `tsconfig.node.json`** — needs `composite: true` + `declaration` + `emitDeclarationOnly` + non-noEmit `outDir`; the original snippet had `"noEmit": true` which is incompatible with project references.
+3. **Task 5 `package.json` dependencies** — must include `"class-variance-authority": "^0.7.1"` (shadcn Button requires it).
+4. **Task 5 Step 7.5** — must write `src/vite-env.d.ts` with `/// <reference types="vite/client" />` because `noUncheckedSideEffectImports` plus the CSS side-effect import in `main.tsx` needs Vite client type declarations.
+5. **Task 7 Step 5** — should edit `src-tauri/src/lib.rs` (not `main.rs`); Tauri 2 standard split keeps `main.rs` as a thin wrapper around `pub fn run()` in `lib.rs`.
+6. **Task 7 Step 6.5** — add a dedicated `[[bin]] export-bindings` because the `cfg(debug_assertions)` export inside `run()` only fires when the windowed app starts; on Windows the `#[cfg(test)]` export path crashes with `STATUS_ENTRYPOINT_NOT_FOUND`.
+7. **Task 4 Step 5 icon URL** — `examples/api/src-tauri/icons/icon.png` 404s on `tauri-apps/tauri@dev`; use `crates/tauri-cli/templates/app/src-tauri/icons/icon.png` instead.
+8. **Task 8 prerequisite** — if `src/ipc/bindings.ts` is missing, run `cargo run -p handshaker --bin export-bindings --quiet` before `pnpm tauri:dev`.
+
+The inline Step content below has been edited to reflect these corrections.
+
+---
+
 ## File map
 
 Создаём:
@@ -500,7 +517,7 @@ Run:
 ```powershell
 mkdir src-tauri/icons
 # Скачать placeholder Tauri логотипа
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/tauri-apps/tauri/dev/examples/api/src-tauri/icons/icon.png" -OutFile "src-tauri/icons/icon.png"
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-cli/templates/app/src-tauri/icons/icon.png" -OutFile "src-tauri/icons/icon.png"
 # Сгенерировать форматы
 pnpm dlx @tauri-apps/cli icon src-tauri/icons/icon.png
 ```
@@ -585,11 +602,12 @@ git commit -m "feat(tauri): scaffold src-tauri shell with least-privilege capabi
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build --no-bundle",
-    "lint": "tsc -b --noEmit",
+    "lint": "tsc -b",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,md}\""
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
+    "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.460.0",
     "react": "^18.3.1",
@@ -645,9 +663,15 @@ git commit -m "feat(tauri): scaffold src-tauri shell with least-privilege capabi
 
 - [ ] **Step 3: Write `tsconfig.node.json`**
 
+Composite-enabled version (required for project references — `noEmit: true` is incompatible with `composite: true`):
+
 ```json
 {
   "compilerOptions": {
+    "composite": true,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "outDir": "./node_modules/.tmp/tsconfig.node",
     "target": "ES2022",
     "lib": ["ES2023"],
     "module": "ESNext",
@@ -656,7 +680,6 @@ git commit -m "feat(tauri): scaffold src-tauri shell with least-privilege capabi
     "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "moduleDetection": "force",
-    "noEmit": true,
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
@@ -741,6 +764,14 @@ export default function App() {
   );
 }
 ```
+
+- [ ] **Step 7.5: Write `src/vite-env.d.ts`**
+
+```ts
+/// <reference types="vite/client" />
+```
+
+Required because `noUncheckedSideEffectImports: true` in `tsconfig.json` plus the CSS side-effect import in `main.tsx` (`import "@/styles/globals.css";`) needs the Vite client type declarations to register the side-effect modules. Without this file, `pnpm lint` fails with "Side effect import of …".
 
 - [ ] **Step 8: Install dependencies**
 
@@ -1014,13 +1045,13 @@ pub struct AppReady {
 pub mod meta;
 ```
 
-- [ ] **Step 5: Rewrite `src-tauri/src/main.rs` to wire tauri-specta**
+- [ ] **Step 5: Edit `src-tauri/src/lib.rs` to wire tauri-specta**
+
+Tauri 2 standard split: `main.rs` stays a thin wrapper around `pub fn run()` in `lib.rs` so mobile entry points (`#[cfg_attr(mobile, tauri::mobile_entry_point)]`) can attach. Edit `src-tauri/src/lib.rs`:
 
 ```rust
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-
-mod commands;
-mod ipc;
+pub mod commands;
+pub mod ipc;
 mod state;
 
 use commands::meta::{app_version, AppReady};
@@ -1028,14 +1059,20 @@ use specta_typescript::Typescript;
 use state::AppState;
 use tauri_specta::{collect_commands, collect_events, Builder};
 
-fn main() {
-    let specta_builder = Builder::<tauri::Wry>::new()
+pub fn specta_builder() -> Builder<tauri::Wry> {
+    Builder::<tauri::Wry>::new()
         .commands(collect_commands![app_version])
-        .events(collect_events![AppReady]);
+        .events(collect_events![AppReady])
+}
 
-    // Регенерим TS bindings при каждом cargo build в debug-режиме.
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    let builder = specta_builder();
+
+    // Регенерим TS bindings при каждом cargo run в debug-режиме (only fires once the
+    // windowed app starts — for manual regeneration use the `export-bindings` bin from Step 6.5).
     #[cfg(debug_assertions)]
-    specta_builder
+    builder
         .export(
             Typescript::default()
                 .formatter(specta_typescript::formatter::prettier)
@@ -1046,9 +1083,9 @@ fn main() {
 
     tauri::Builder::default()
         .manage(AppState::default())
-        .invoke_handler(specta_builder.invoke_handler())
+        .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
-            specta_builder.mount_events(app);
+            builder.mount_events(app);
             Ok(())
         })
         .run(tauri::generate_context!())
@@ -1056,12 +1093,61 @@ fn main() {
 }
 ```
 
-- [ ] **Step 6: Build src-tauri to trigger bindings export**
+`commands` and `ipc` are `pub mod` so the `export-bindings` bin (Step 6.5) can reach them. `specta_builder()` is factored out so the bin reuses the same command set.
+
+- [ ] **Step 6: Build src-tauri**
 
 Run: `cargo build -p handshaker`
-Expected: `Compiling handshaker v0.1.0` → `Finished`. После сборки появляется файл `src/ipc/bindings.ts` (если debug build). Если файла нет — проверьте что `specta_builder.export` действительно вызвался (помогает `cargo run -p handshaker --bin handshaker` один раз; export не требует запуска main).
+Expected: `Compiling handshaker v0.1.0` → `Finished`. Note that the `cfg(debug_assertions)` export inside `run()` only fires when the windowed app actually starts — `cargo build` alone will NOT generate `src/ipc/bindings.ts`. Use the `export-bindings` bin (next step).
 
-**Note:** tauri-specta export срабатывает на компиляции lib-target и main. В debug-режиме `export()` вызывается каждый раз; в release — пропускается (см. `#[cfg(debug_assertions)]`). Файл `src/ipc/bindings.ts` НЕ комитим (см. `.gitignore`).
+**Note:** Файл `src/ipc/bindings.ts` НЕ комитим (см. `.gitignore`).
+
+- [ ] **Step 6.5: Add `[[bin]] export-bindings` workaround**
+
+The `cfg(debug_assertions)` export inside `run()` only fires when the windowed app starts. On Windows, the alternative `#[cfg(test)]` export-via-test path crashes with `STATUS_ENTRYPOINT_NOT_FOUND`. The reliable regeneration path is a dedicated bin target.
+
+In `src-tauri/Cargo.toml`, add:
+
+```toml
+[[bin]]
+name = "export-bindings"
+path = "src/bin/export_bindings.rs"
+```
+
+Also add to `[package]` (so `cargo run -p handshaker` still launches the windowed app by default):
+
+```toml
+default-run = "handshaker"
+```
+
+Create `src-tauri/src/bin/export_bindings.rs`:
+
+```rust
+//! Standalone binary for regenerating tauri-specta bindings. Run with:
+//!   cargo run -p handshaker --bin export-bindings --quiet
+//! The cfg(debug_assertions) export inside lib.rs::run() only fires once the windowed
+//! app starts; this bin is the manual regeneration path during dev.
+
+use specta_typescript::Typescript;
+
+fn main() {
+    let builder = handshaker_lib::specta_builder();
+    let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..").join("src").join("ipc").join("bindings.ts");
+    builder
+        .export(
+            Typescript::default()
+                .formatter(specta_typescript::formatter::prettier)
+                .header("// AUTO-GENERATED by tauri-specta. Do NOT edit.\n"),
+            &path,
+        )
+        .expect("failed to export tauri-specta bindings");
+    eprintln!("wrote {}", path.display());
+}
+```
+
+Run: `cargo run -p handshaker --bin export-bindings --quiet`
+Expected: `wrote …/src/ipc/bindings.ts` printed, file appears.
 
 - [ ] **Step 7: Sanity-check сгенерированный `src/ipc/bindings.ts`**
 
@@ -1149,6 +1235,12 @@ Run: `pnpm build`
 Expected: `dist/` собирается без ошибок.
 
 - [ ] **Step 3: Manual run — открыть app в dev-режиме**
+
+**Prerequisite:** if `src/ipc/bindings.ts` does not yet exist (e.g. fresh clone, or it has been deleted), run the bindings regen bin first — otherwise the Vite import will fail:
+
+```sh
+cargo run -p handshaker --bin export-bindings --quiet
+```
 
 Run: `pnpm tauri:dev`
 Expected:
