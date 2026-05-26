@@ -78,18 +78,14 @@ pub fn fixture_descriptor_set_bytes() -> Vec<u8> {
     buf
 }
 
-/// Pick a free TCP port by binding to 127.0.0.1:0 and reading back the assigned port.
-async fn pick_addr() -> SocketAddr {
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr = listener.local_addr().unwrap();
-    drop(listener);
-    addr
-}
-
 /// Spawn a tonic server exposing reflection over the v1 protocol.
 /// Returns `(address, shutdown_sender)`. Drop the sender to stop the server.
+///
+/// The listener is bound before returning, so the address is ready for connections
+/// immediately — no sleep needed.
 pub async fn spawn_reflection_server_v1() -> (SocketAddr, oneshot::Sender<()>) {
-    let addr = pick_addr().await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
     let reflection = tonic_reflection::server::Builder::configure()
         .register_encoded_file_descriptor_set(&fixture_descriptor_set_bytes())
         .build_v1()
@@ -97,21 +93,24 @@ pub async fn spawn_reflection_server_v1() -> (SocketAddr, oneshot::Sender<()>) {
 
     let (tx, rx) = oneshot::channel::<()>();
     tokio::spawn(async move {
+        let incoming = tokio_stream::wrappers::TcpListenerStream::new(listener);
         let _ = tonic::transport::Server::builder()
             .add_service(reflection)
-            .serve_with_shutdown(addr, async {
+            .serve_with_incoming_shutdown(incoming, async {
                 rx.await.ok();
             })
             .await;
     });
-    // tiny pause to let the listener bind
-    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
     (addr, tx)
 }
 
 /// Spawn a tonic server exposing reflection ONLY over the v1alpha protocol.
+///
+/// The listener is bound before returning, so the address is ready for connections
+/// immediately — no sleep needed.
 pub async fn spawn_reflection_server_v1alpha() -> (SocketAddr, oneshot::Sender<()>) {
-    let addr = pick_addr().await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
     let reflection = tonic_reflection::server::Builder::configure()
         .register_encoded_file_descriptor_set(&fixture_descriptor_set_bytes())
         .build_v1alpha()
@@ -119,14 +118,14 @@ pub async fn spawn_reflection_server_v1alpha() -> (SocketAddr, oneshot::Sender<(
 
     let (tx, rx) = oneshot::channel::<()>();
     tokio::spawn(async move {
+        let incoming = tokio_stream::wrappers::TcpListenerStream::new(listener);
         let _ = tonic::transport::Server::builder()
             .add_service(reflection)
-            .serve_with_shutdown(addr, async {
+            .serve_with_incoming_shutdown(incoming, async {
                 rx.await.ok();
             })
             .await;
     });
-    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
     (addr, tx)
 }
 
@@ -140,19 +139,26 @@ pub async fn spawn_reflection_server_v1alpha() -> (SocketAddr, oneshot::Sender<(
 /// Without a registered service tonic 0.14's `Server::serve_with_shutdown` is
 /// 3-arg `(addr, svc, signal)`; only the `Router` returned by `add_service(svc)`
 /// has the 2-arg `serve_with_shutdown(addr, signal)` we use here.
+///
+/// The listener is bound before returning, so the address is ready for connections
+/// immediately — no sleep needed.
 pub async fn spawn_bare_server() -> (SocketAddr, oneshot::Sender<()>) {
-    let addr = pick_addr().await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    // The HealthReporter is dropped — we never publish health status updates;
+    // its only purpose is to give us a non-reflection gRPC service so tonic's
+    // Router returns `Unimplemented` for unmatched reflection paths.
     let (_reporter, health_service) = tonic_health::server::health_reporter();
 
     let (tx, rx) = oneshot::channel::<()>();
     tokio::spawn(async move {
+        let incoming = tokio_stream::wrappers::TcpListenerStream::new(listener);
         let _ = tonic::transport::Server::builder()
             .add_service(health_service)
-            .serve_with_shutdown(addr, async {
+            .serve_with_incoming_shutdown(incoming, async {
                 rx.await.ok();
             })
             .await;
     });
-    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
     (addr, tx)
 }

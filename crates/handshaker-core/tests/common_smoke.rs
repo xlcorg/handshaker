@@ -16,6 +16,14 @@ async fn v1_server_spawns_and_listens() {
 }
 
 #[tokio::test]
+async fn v1alpha_server_spawns_and_listens() {
+    let (addr, shutdown) = common::spawn_reflection_server_v1alpha().await;
+    assert_eq!(addr.ip().to_string(), "127.0.0.1");
+    assert_ne!(addr.port(), 0);
+    drop(shutdown);
+}
+
+#[tokio::test]
 async fn bare_server_spawns_and_listens() {
     let (addr, shutdown) = common::spawn_bare_server().await;
     // can we open a TCP connection? if so, the listener bound.
