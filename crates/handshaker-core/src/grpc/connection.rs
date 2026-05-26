@@ -3,6 +3,16 @@
 use crate::error::CoreError;
 use serde::{Deserialize, Serialize};
 
+/// Resolved gRPC endpoint: `host:port` + TLS flags. Pure value type, no platform-specifics.
+///
+/// # Validation contract
+///
+/// `GrpcTarget::new(...)` is the validating constructor. **Other construction paths
+/// (struct literals, `Deserialize` from JSON / IPC payloads) bypass validation** —
+/// callers receiving externally-supplied `GrpcTarget`s from IPC must treat the
+/// `address` field as untrusted and route through `new()` before use. Fields are
+/// public to keep the IPC + serialisation surface ergonomic; the `pub` is a
+/// deliberate KISS trade-off matching spec §5.6.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct GrpcTarget {
     /// `host:port`, already resolved (no `{{var}}`).
@@ -18,9 +28,12 @@ impl GrpcTarget {
     ///
     /// Rules:
     /// - `address` non-empty.
-    /// - `address` contains exactly one `:`.
-    /// - Port is a valid u16 (1..=65535).
-    /// - Host is non-empty.
+    /// - `address` must contain at least one `:`; the port is parsed from everything
+    ///   after the last `:`, and the host is everything before. (Bracketed IPv6 like
+    ///   `[::1]:443` is out of scope for Plan #2 and may produce a host of `[::1]`,
+    ///   accepted but not exercised here.)
+    /// - Host (everything before the last `:`) is non-empty.
+    /// - Port (after the last `:`) is a valid `u16` in `1..=65535`.
     pub fn new(address: impl Into<String>, tls: bool, skip_verify: bool) -> Result<Self, CoreError> {
         let address = address.into();
         if address.is_empty() {
@@ -66,6 +79,8 @@ mod tests {
     fn accepts_ipv4() {
         let t = GrpcTarget::new("127.0.0.1:50051", false, false).unwrap();
         assert_eq!(t.address, "127.0.0.1:50051");
+        assert!(!t.tls);
+        assert!(!t.skip_verify);
     }
 
     #[test]
