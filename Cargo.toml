@@ -1,0 +1,36 @@
+[workspace]
+members = ["crates/handshaker-core"]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+rust-version = "1.74"
+license = "Apache-2.0 OR MIT"
+authors = ["Handshaker Authors"]
+
+[workspace.dependencies]
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+async-trait = "0.1"
+
+# Pinned at workspace level for reuse in plans #2-#6.
+tonic = "0.14"
+tonic-reflection = "0.14"
+prost = "0.13"
+prost-types = "0.13"
+prost-reflect = { version = "0.14", features = ["serde"] }
+
+# Tauri runtime + bindings generator
+tauri = { version = "2.11", features = [] }
+tauri-build = { version = "2", features = [] }
+tauri-specta = { version = "=2.0.0-rc.21", features = ["derive", "typescript"] }
+specta = "=2.0.0-rc.22"
+specta-typescript = "=0.0.9"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true

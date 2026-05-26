@@ -1,0 +1,8 @@
+//! handshaker-core — OS-independent core.
+//!
+//! Modules grow plan-by-plan: error (plan 1), grpc/* (plans 2-3), env+resolver (plan 4),
+//! auth (plan 5), collections (plan 6).
+
+pub mod error;
+
+pub use error::CoreError;
