@@ -4,5 +4,7 @@
 //! auth (plan 5), collections (plan 6).
 
 pub mod error;
+pub mod grpc;
 
 pub use error::CoreError;
+pub use grpc::GrpcTarget;
