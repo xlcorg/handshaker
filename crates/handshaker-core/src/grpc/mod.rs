@@ -7,6 +7,7 @@
 //! data types defined here.
 
 pub mod connection;
+pub mod reflection;
 pub mod transport;
 
 pub use connection::GrpcTarget;
