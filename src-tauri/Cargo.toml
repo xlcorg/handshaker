@@ -28,7 +28,8 @@ specta-typescript = { workspace = true }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["sync", "rt-multi-thread", "macros", "time"] }
+async-trait.workspace = true
 
 [features]
 default = ["custom-protocol"]

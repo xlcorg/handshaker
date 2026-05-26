@@ -22,6 +22,12 @@ prost = "0.13"
 prost-types = "0.13"
 prost-reflect = { version = "0.14", features = ["serde"] }
 
+# Plan #2 — Reflection spine
+tokio-stream = "0.1"
+futures-util = "0.3"
+http = "1"
+bytes = "1"
+
 # Tauri runtime + bindings generator
 tauri = { version = "2.11", features = [] }
 tauri-build = { version = "2", features = [] }
