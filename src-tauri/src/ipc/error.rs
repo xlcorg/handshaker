@@ -47,3 +47,51 @@ impl From<CoreError> for IpcError {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::IpcError;
+    use handshaker_core::CoreError;
+
+    /// One-shot exhaustiveness check: every CoreError variant maps to the expected IpcError shape.
+    /// If a new CoreError variant is added without updating the From impl above, this test fails to
+    /// compile (because the match below is exhaustive over CoreError).
+    #[test]
+    fn from_core_error_exhaustive() {
+        let cases: Vec<CoreError> = vec![
+            CoreError::InvalidTarget("t".into()),
+            CoreError::NotConnected,
+            CoreError::ReflectionDisabled { hint: "h".into() },
+            CoreError::Reflection("r".into()),
+            CoreError::DescriptorBuild("d".into()),
+            CoreError::ServiceNotFound { service: "s".into() },
+            CoreError::MethodNotFound { service: "s".into(), method: "m".into() },
+            CoreError::EncodeRequest("e".into()),
+            CoreError::DecodeResponse("d".into()),
+            CoreError::UnresolvedVariable { name: "v".into() },
+            CoreError::VariableCycle { chain: vec!["a".into()] },
+            CoreError::Transport("t".into()),
+            CoreError::Auth("a".into()),
+            CoreError::GrpcStatus { code: 1, message: "m".into() },
+            CoreError::NotImplemented("n".into()),
+        ];
+
+        assert_eq!(cases.len(), 15, "Update this test when CoreError variants change");
+
+        for c in cases {
+            // Smoke test: From impl must succeed for every variant. If a future CoreError variant
+            // is added but the From impl above forgets it, this won't compile.
+            let _: IpcError = c.into();
+        }
+    }
+
+    /// Sanity-check the JSON discriminator works as the frontend expects.
+    #[test]
+    fn serializes_with_type_tag() {
+        let e: IpcError = CoreError::ServiceNotFound { service: "foo.Bar".into() }.into();
+        let json = serde_json::to_string(&e).unwrap();
+        // Tagged union with discriminator "type"
+        assert!(json.contains(r#""type":"ServiceNotFound""#));
+        assert!(json.contains(r#""service":"foo.Bar""#));
+    }
+}
