@@ -27,6 +27,10 @@ impl ReflectionAdapter for V1AlphaAdapter {
     ) -> Result<SessionOutcome, CoreError> {
         let mut client = ServerReflectionClient::new(channel);
 
+        // Build the request stream. Use an unbounded channel so all sends complete
+        // synchronously before we hand the receiver to tonic — a bounded channel
+        // would deadlock when the batch exceeds the buffer capacity (no consumer
+        // yet at send time).
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<ServerReflectionRequest>();
         if plan.list_services {
             tx.send(make_list_services_request())

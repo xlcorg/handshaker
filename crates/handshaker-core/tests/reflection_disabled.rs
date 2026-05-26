@@ -17,8 +17,8 @@ async fn bare_server_yields_reflection_disabled() {
     match err {
         CoreError::ReflectionDisabled { hint } => {
             assert!(
-                hint.to_lowercase().contains("v1") && hint.to_lowercase().contains("v1alpha"),
-                "hint should mention both protocols, got `{hint}`"
+                hint.contains("v1:") && hint.contains("v1alpha:"),
+                "hint should mention both protocol legs by name, got `{hint}`"
             );
         }
         other => panic!("expected ReflectionDisabled, got {other:?}"),
