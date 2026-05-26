@@ -1,4 +1,4 @@
-//! Tauri-side app state. Будет наполняться по мере появления модулей (plans #2-#6).
+//! Tauri-side app state. Fields land per plans #2-#6.
 
 #[derive(Default)]
 pub struct AppState {
