@@ -4,5 +4,7 @@
 //! talks `prost_reflect::DescriptorPool` and the data types defined here.
 
 pub mod connection;
+pub mod transport;
 
 pub use connection::GrpcTarget;
+pub use transport::{GrpcTransport, TonicChannel, TonicTransport};
