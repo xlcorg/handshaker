@@ -136,6 +136,16 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn env_active_set_accepts_existing_some() {
+        let state = build_state(&[("prod", &[])], None);
+        state
+            .env_active_set_impl(Some("prod".to_string()))
+            .await
+            .unwrap();
+        assert_eq!(state.env_active_get_impl().await, Some("prod".to_string()));
+    }
+
+    #[tokio::test]
     async fn env_active_set_rejects_missing_some() {
         let state = AppState::default();
         let err = state

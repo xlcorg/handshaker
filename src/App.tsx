@@ -33,10 +33,20 @@ export default function App() {
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && (e.key === "e" || e.key === "E")) {
-        e.preventDefault();
-        envSwitcherTriggerRef.current?.click();
+      if (!((e.metaKey || e.ctrlKey) && (e.key === "e" || e.key === "E"))) return;
+      // Skip when the user is typing in a text field — including Monaco's
+      // contenteditable host (handled by Monaco's own bindings, but we don't
+      // want to fight it here either).
+      const target = e.target as HTMLElement | null;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target?.isContentEditable
+      ) {
+        return;
       }
+      e.preventDefault();
+      envSwitcherTriggerRef.current?.click();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

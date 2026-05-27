@@ -74,18 +74,18 @@ export function EnvEditorDialog({
     setVars(loaded);
   }, [open, originalName]);
 
-  const nameInvalid = name.length > 0 && !NAME_RE.test(name);
-  const nameEmpty = name.length === 0;
+  const trimmedName = name.trim();
+  const nameInvalid = trimmedName.length > 0 && !NAME_RE.test(trimmedName);
+  const nameEmpty = trimmedName.length === 0;
   const nameIsDuplicate =
-    !nameInvalid && !nameEmpty && name !== originalName && envs.some((e) => e.name === name);
+    !nameInvalid &&
+    !nameEmpty &&
+    trimmedName !== originalName &&
+    envs.some((e) => e.name === trimmedName);
   const canSave = !nameInvalid && !nameEmpty && !nameIsDuplicate;
 
   async function handleSave() {
-    const trimmedName = name.trim();
-    // Re-validate against the trimmed name (in case the user submitted via Enter
-    // and the canSave check ran against an untrimmed value).
-    if (trimmedName.length === 0 || !NAME_RE.test(trimmedName)) return;
-    if (trimmedName !== originalName && envs.some((e) => e.name === trimmedName)) return;
+    if (!canSave) return;
     const renamed = !isCreate && trimmedName !== originalName;
     setBusy(true);
     setError(null);
