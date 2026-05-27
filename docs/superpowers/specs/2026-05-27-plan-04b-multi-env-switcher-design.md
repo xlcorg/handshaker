@@ -22,13 +22,13 @@
 **Goal:** turn the header env-pill from a single-purpose "edit Default's variables" trigger into a real multi-env switcher with create / rename / delete CRUD. Backend gains exactly one new IPC command (`env_delete`); the bulk of the work is frontend (dropdown menu + three small dialogs + hotkey).
 
 **Acceptance:** in the running app, the user can:
-1. Click the header pill → see a dropdown listing `Default` with a check icon.
-2. Pick «+ New env…», type `staging`, save → new env is created, becomes active, pill reads `staging ▾`.
-3. Reopen the dropdown → both envs listed; click `Default` → switches back, ResolvesPreview re-renders with Default's variables.
-4. Pick «Rename env…» on `staging`, type `prod`, save → pill now reads `prod ▾`; variables preserved.
-5. Pick «Delete env…» on `prod`, confirm → env removed; active falls back to `Default`.
-6. Try Delete on the last env → menu item is disabled; backend would reject anyway with `InvalidTarget`.
-7. `⌘E` / `Ctrl+E` opens the dropdown menu (focus first item, ↑↓ navigates, Enter selects, Esc closes).
+1. Click the header pill → see a dropdown listing `Default` with a check icon, plus a «+ New env…» entry. On the active row, a trailing `⋮` reveals on hover.
+2. Click «+ New env…», type `staging`, save → new env is created, auto-activated, pill reads `staging ▾`.
+3. Reopen the dropdown → both envs listed; click the `Default` row body → switches back, `ResolvesPreview` re-renders with Default's variables.
+4. With active = `Default`, hover the `staging` row → click `⋮` → «Rename env…» → type `prod` → Save. Menu now shows `✓ Default, prod`; variables preserved on the renamed env; active stays `Default` (renaming a non-active env does not switch).
+5. Hover `prod` row → `⋮` → «Delete env…» → confirm dialog → Delete. Menu now shows only `✓ Default`. `⋮` → «Delete env…» on Default is disabled (last env).
+6. Create a second env `qa` and delete it while it is active: backend would reject (active env), so the frontend pre-switches active to `Default` first, then issues `env_delete(qa)`. Pill returns to `Default ▾`.
+7. `⌘E` / `Ctrl+E` opens the dropdown menu (focus first row; ↑↓ navigates; Enter switches; → opens the focused row's submenu; ← closes the submenu; Esc closes the menu).
 
 ### 1.1 In scope
 
@@ -171,44 +171,64 @@ The `from_core_error_exhaustive` test in `src-tauri/src/ipc/error.rs` (Plan #1) 
 
 ### 5.1 Header — `EnvPill` + `EnvSwitcherMenu`
 
+Models Postman's environment quick-look (top-right of the workbench): each env row is independently clickable for switch and exposes per-row hover actions via a trailing icon. References — [Postman docs: «Group sets of variables using environments»](https://learning.postman.com/docs/sending-requests/variables/managing-environments/) confirms «click the dropdown menu in the upper right … to select an active environment» as the row click; per-row hover-revealed actions are documented in [Postman docs: «Navigating Postman»](https://learning.postman.com/docs/getting-started/basics/navigating-postman/) («hover over an item, it exposes View more actions»).
+
 ```
 ┌──────────────────────────────────────────────────────────┐
 │  Handshaker                              prod ▾          │
 └──────────────────────────────────────────────────────────┘
                                           │
                                           ▼  (click or ⌘E)
-                                  ┌──────────────────────┐
-                                  │  ✓ Default            │
-                                  │    prod               │
-                                  │    staging            │
-                                  │  ────────────────────  │
-                                  │  Edit variables…       │
-                                  │  Rename env…           │
-                                  │  Delete env… (red, off│ ← disabled if envs.length===1
-                                  │  ────────────────────  │
-                                  │  + New env…            │
-                                  └──────────────────────┘
+                          ┌─────────────────────────────┐
+                          │  Environments                │   ← label header
+                          │  ─────────────────────────── │
+                          │    Default                ⋮  │   ← ⋮ visible on row hover
+                          │  ✓ prod                   ⋮  │     or keyboard focus
+                          │    staging                ⋮  │
+                          │  ─────────────────────────── │
+                          │  + New env…                  │
+                          └─────────────────────────────┘
+                                  │ click ⋮ on a row →
+                                  ▼
+                          ┌──────────────────────────┐
+                          │  Edit variables…          │
+                          │  Rename env…              │
+                          │  Delete env… (red, off)   │   ← off if envs.length===1
+                          └──────────────────────────┘
 ```
 
-- Pill itself stays a `Button variant="ghost" size="sm"` with the active env name + `▾` chevron icon.
-- Click → DropdownMenu opens. Default trigger affordance from `radix-ui DropdownMenu`.
-- Menu items, top to bottom:
-  - **Env list.** One `DropdownMenuItem` per env, alphabetically sorted. Active env carries a `Check` icon (lucide-react) on the left; the others have a same-width placeholder (preserves text alignment). Click → calls `ipc.envActiveSet(name)` and `setActiveEnv(name)` in App.tsx state. No confirm.
-  - **Separator.**
-  - **«Edit variables…»** — opens the existing `EditEnvDialog` for the **currently active** env (matches Plan #4 behavior).
-  - **«Rename env…»** — opens `RenameEnvDialog` for the **currently active** env.
-  - **«Delete env…»** — opens `ConfirmDeleteEnvDialog` for the **currently active** env. Styled with `text-destructive`. Disabled (`grayed out` via `DropdownMenuItem disabled`) when `envs.length === 1`.
-  - **Separator.**
-  - **«+ New env…»** — opens `NewEnvDialog`.
-- Width: matches the longest env name + chevron, no horizontal scrolling.
-- Position: anchored under the pill, right-aligned (use radix `align="end"`).
-- Keyboard: provided by radix. ↑↓ navigates, Enter activates, Esc closes. ⌘E to open lands in `App.tsx` (see §5.5).
+- Pill itself stays a `Button variant="ghost" size="sm"` showing the active env name + `▾` chevron icon. Pill click → opens `EnvSwitcherMenu`.
+- **Env rows (direct manipulation):**
+  - Sorted alphabetically.
+  - **Click on the row body (name area)** → switches active to this env. Calls `ipc.envActiveSet(name)` and `setActiveEnv(name)` in `App.tsx`. Menu closes.
+  - **Active row** carries a `Check` icon (lucide-react) on the left; non-active rows render a same-width placeholder for alignment.
+  - **Trailing `⋮` icon** (lucide-react `MoreVertical`) is rendered with `opacity-0 group-hover:opacity-100 focus-visible:opacity-100` — hidden by default, revealed on row hover or keyboard focus. The `⋮` is a separate clickable element from the row body.
+  - **Click on `⋮`** → opens a nested per-row submenu anchored next to the icon (radix nested `DropdownMenu` via `DropdownMenuSub` or a separate `DropdownMenu` instance — implementation choice for writing-plans). Menu close on outer-row click is suppressed via `event.stopPropagation()` on the `⋮` button so the user can keep interacting with the parent menu.
+- **Per-row submenu contents (act on THIS row's env, not necessarily the active one):**
+  - «Edit variables…» — opens `EditEnvDialog` with `envName = row.name`.
+  - «Rename env…» — opens `RenameEnvDialog` with `oldName = row.name`.
+  - «Delete env…» — opens `ConfirmDeleteEnvDialog` with `target = row.name`. Styled `text-destructive`. Disabled (`DropdownMenuItem disabled`) when `envs.length === 1`.
+- **Below the env list:**
+  - Separator.
+  - **«+ New env…»** — opens `NewEnvDialog`. Auto-activates the created env on success (matches Postman create-and-activate behavior).
+- **Layout details:**
+  - Width: fits the longest env name + ⋮ icon padding; no horizontal scrolling.
+  - Position: anchored under the pill, right-aligned (`align="end"`).
+- **Keyboard navigation (provided by radix):**
+  - ↑↓ navigates between rows and the «+ New env…» entry.
+  - On a row, → opens the per-row submenu; ← closes it.
+  - Enter on a row activates it (switches env).
+  - Esc closes the menu.
+  - ⌘E / Ctrl+E opens the menu (see §5.5).
 
-#### 5.1.1 Why three actions act on «currently active» rather than per-row?
+#### 5.1.1 Direct manipulation rationale (Postman-style)
 
-Considered: per-row actions (each env row has trailing ⋮ icon with Edit/Rename/Delete submenu) — more direct manipulation but heavier visually and harder to keyboard-navigate (two-level menu). The chosen single-level «active acts» pattern lines up with Postman's environment manager (which also operates on the active selection) and keeps the menu narrow.
+The «point at the thing, then act on it» model is what Postman uses and what users expect from environment switchers. The alternative considered was a single-level menu where Edit/Rename/Delete entries live below the env list and always act on the active env. Rejected for two reasons:
 
-Switching is fast: click env → it becomes active → reopen menu → Edit/Rename/Delete apply to that env. Two clicks per cross-env op, same as direct manipulation if you count the trailing ⋮ click.
+1. **Cross-env friction.** Deleting an inactive env would require: (a) click env to switch active → (b) reopen menu → (c) click «Delete env…». Three interactions plus an unwanted active-env switch as side effect. With per-row submenus: (a) hover row → (b) click ⋮ → (c) click Delete. Same step count without the side effect.
+2. **Visual ambiguity.** «Delete env…» sitting below the env list raises the question «delete what?». Per-row `⋮` makes the target unambiguous because the menu is anchored to the row.
+
+Trade-off accepted: a second menu level slightly complicates keyboard nav (radix `DropdownMenuSub` provides `→ ←` arrow keys to enter / leave the submenu, which is the standard cascade-menu convention).
 
 ### 5.2 `NewEnvDialog`
 
@@ -242,6 +262,7 @@ Switching is fast: click env → it becomes active → reopen menu → Edit/Rena
 └─────────────────────────────────────────────────────┘
 ```
 
+- Opened from a per-row `⋮` submenu (§5.1); the row's env is the rename target. The dialog operates on whichever env was clicked, **not** necessarily the active env. If the target happens to be active, the active-env handover lives in step 2 below.
 - Same validation rules as `NewEnvDialog` for the new name input.
 - Cannot rename to an existing name (other than the current — re-typing the same name is a no-op and just closes the dialog).
 - `Rename` button disabled when input empty, invalid, or duplicate (excluding self).
@@ -265,6 +286,7 @@ Switching is fast: click env → it becomes active → reopen menu → Edit/Rena
 └────────────────────────────────────────────────────┘
 ```
 
+- Opened from a per-row `⋮` submenu (§5.1); the row's env is the delete target, **regardless of whether it is the currently active env**. The active-env handover (step 1 below) only fires when target === active.
 - shadcn `AlertDialog` (added in #4b).
 - Title: «Delete env?». Description includes env name in `<code>` style.
 - Buttons: `Cancel` (default), `Delete` (`destructive` variant).
@@ -393,17 +415,19 @@ Should grow from current `76 passed, 1 ignored, 0 failed` to `~79 passed, 1 igno
 Run against `127.0.0.1:5002` (Notex testbed) per handoff §10:
 
 1. `pnpm tauri dev`. App boots; pill reads `Default ▾`.
-2. **Open dropdown.** Click pill → menu opens. `✓ Default` visible. «Delete env…» disabled (envs.length === 1).
-3. **Create.** «+ New env…» → type `staging` → Create. Dialog closes; pill reads `staging ▾`. Reopen menu: `Default`, `✓ staging`.
-4. **Switch.** Click `Default` in menu → pill reads `Default ▾`. Reopen: `✓ Default`, `staging`.
-5. **Edit variables.** Pick a method, type body with `{{uid}}`. Open Default's `Edit variables…` → add `uid=alpha`. Save. Preview shows `→ resolves: {"user_id":"alpha"}`.
-6. **Cross-env preview.** Switch to `staging` via menu → preview turns to `⚠ Unresolved: uid` (staging has no `uid`). Switch back → preview restores. Confirms activeEnv → ResolvesPreview prop wiring.
-7. **Rename.** Switch to `staging`, open menu → «Rename env…» → new name `prod` → Save. Pill reads `prod ▾`. Reopen menu: `Default`, `✓ prod`.
-8. **Delete env (full flow).** State: `Default`, `✓ prod`. «Delete env…» acts on active (`prod`); to remove `Default` instead, first click `Default` in the menu → active = `Default`. Reopen menu: `✓ Default`, `prod`. Click «Delete env…» → confirm dialog. Click `Delete` → frontend pre-switches active to `prod` (only remaining choice), backend then deletes `Default`. Pill reads `prod ▾`. Reopen menu: only `✓ prod`. «Delete env…» is disabled (last env).
-9. **Validation.** «+ New env…» → name `1bad` → red border, Create disabled. Type `Default` (when Default exists earlier in flow) → red border, helper text «name already exists», Create disabled.
-10. **Hotkey.** `⌘E` (macOS) or `Ctrl+E` (Windows) → dropdown opens, first item focused. ↓↓ Enter → switches.
-11. **Esc.** Open any dialog → Esc → closes, no state change.
-12. **Regression.** Body editor `{{var}}` highlighting still works. Send still resolves and posts to server. Ctrl+Enter still sends.
+2. **Open dropdown.** Click pill → menu opens. `✓ Default` visible. Hover Default row → trailing `⋮` appears. Click `⋮` → submenu opens with `Edit variables…`, `Rename env…`, `Delete env… (disabled, last env)`.
+3. **Create.** Esc the submenus. Click «+ New env…» at the menu bottom → `NewEnvDialog`. Type `staging` → Create. Dialog closes; pill reads `staging ▾` (create auto-activates). Reopen menu: `Default`, `✓ staging`.
+4. **Switch (row click).** Click the `Default` row body → pill reads `Default ▾`. Reopen menu: `✓ Default`, `staging`. Confirms row-click = switch.
+5. **Per-row Edit variables.** Pick a method, type body with `{{uid}}` (preview shows `⚠ Unresolved: uid`). Hover `Default` row in the menu, click `⋮` → `Edit variables…`. `EditEnvDialog` opens for Default. Add `uid=alpha`. Save. Preview now shows `→ resolves: {"user_id":"alpha"}`. Confirms per-row Edit works regardless of active.
+6. **Cross-env preview.** Click `staging` row → switches → preview turns red `⚠ Unresolved: uid` (staging has no `uid`). Click `Default` row → switches back, preview restores. Confirms `activeEnv` → `ResolvesPreview` prop wiring.
+7. **Per-row Rename (non-active target).** Active is `Default`. Hover `staging` row, click `⋮` → `Rename env…`. Type `prod` → Save. Pill stays `Default ▾`. Reopen menu: `✓ Default`, `prod`. Confirms renaming a non-active env does not change active.
+8. **Per-row Delete (inactive target).** Hover `prod` row, click `⋮` → `Delete env…`. Confirm dialog appears with `prod` named. Click `Delete` → backend deletes `prod` directly (no pre-switch needed, target wasn't active). Pill remains `Default ▾`. Reopen menu: only `✓ Default`. `⋮` → `Delete env…` is now disabled (last env).
+9. **Create second env for active-delete test.** «+ New env…» → `qa` → Save. Pill → `qa ▾`. envs={Default, qa}.
+10. **Per-row Delete (active target).** State: `Default`, `✓ qa`. Hover `qa` row, click `⋮` → `Delete env…`. Confirm dialog. Click `Delete` → frontend pre-switches active to `Default` (only alphabetically-remaining choice) then backend deletes `qa`. Pill reads `Default ▾`. Reopen menu: only `✓ Default`.
+11. **Validation.** «+ New env…» → type `1bad` → red border, `Create` disabled. Clear, type `Default` → red border + helper text «name already exists», `Create` disabled.
+12. **Hotkey.** `⌘E` (macOS) or `Ctrl+E` (Windows) → dropdown opens, first row focused. ↓ moves focus, Enter switches. → opens the focused row's submenu; ← closes it. Esc closes the menu.
+13. **Esc behaviour.** Open any dialog → Esc → closes without persisting input. Open the per-row submenu → Esc → only the submenu closes, outer menu stays open. Esc again → outer menu closes.
+14. **Regression.** Body editor `{{var}}` highlighting still works. Send still resolves and posts to server. Ctrl+Enter still sends.
 
 ### 7.7 Cross-platform smoke
 
@@ -431,6 +455,7 @@ Hotkey: macOS Cmd vs Windows Ctrl is handled by the `e.metaKey || e.ctrlKey` che
 | R4 | shadcn add invocations (`dropdown-menu`, `alert-dialog`) pull additional radix dependencies that bloat the Monaco-isolated bundle. | radix-ui meta-package is already in deps; shadcn `add` only generates wrappers. No measurable bundle delta expected. |
 | R5 | Confirm dialog on Delete is good UX but adds a click for power users. | Acceptable — env deletion is destructive in spirit (loses variables) and infrequent. No «don't ask again» checkbox to keep state surface small. |
 | R6 | tauri-specta bindings regeneration drift — adding 1 command. | Standard `cargo run -p handshaker --bin export-bindings` step; `pnpm lint` (tsc -b) catches type drift in `client.ts`. |
+| R7 | «Row click switches + ⋮ click opens submenu» is unusual for a radix `DropdownMenu`. Naively nesting two click targets inside `DropdownMenuItem` either swallows the row click or fires both handlers. | Two acceptable implementations: (a) render env rows as plain `<div>` (not `DropdownMenuItem`) with a left clickable area for switch and a right `Button` that triggers a separate nested `DropdownMenu` for actions — loses radix's auto ↑↓ focus management and needs a small manual roving-tabindex implementation; (b) use `DropdownMenuSub` so the entire row is a sub-trigger that opens the actions submenu, and put «Switch to this env» as the first item inside the submenu — costs one extra click for the most common op (switch). Recommend (a) for fidelity to Postman; pick during writing-plans based on implementation cost. |
 
 ## 10. Implementation order (input to writing-plans)
 
@@ -439,8 +464,8 @@ Roughly TDD-friendly; `writing-plans` refines into tasks with subagent breakdown
 1. **`env_delete` IPC command** + unit tests (last-env reject, active-env reject, success). Register in `collect_commands!`. Regen bindings.
 2. **Frontend wrapper** `ipc.envDelete` in `src/ipc/client.ts`.
 3. **shadcn add `dropdown-menu` and `alert-dialog`**. Verify they appear in `src/components/ui/`. Lint passes.
-4. **`EnvSwitcherMenu` component** — renders the menu with env list + 4 action items. No dialogs wired yet; clicking items only logs.
-5. **Refactor `EnvPill`** to render `EnvSwitcherMenu` instead of opening `EditEnvDialog` directly. Lift `envs` and `activeEnv` state into `App.tsx`. Pass them as props. Re-test current Plan #4 flow («Edit variables…» still works) — regression gate.
+4. **`EnvSwitcherMenu` component** — renders the menu shell: env rows with `Check` on active, trailing `⋮` revealed on row hover/focus, and «+ New env…» at the bottom. Each `⋮` opens a per-row submenu with `Edit variables…`, `Rename env…`, `Delete env…` placeholders that only log for now. Verify keyboard nav (↑↓ between rows, → / ← for submenu) works out of the box from radix.
+5. **Refactor `EnvPill`** to render `EnvSwitcherMenu` instead of opening `EditEnvDialog` directly. Lift `envs` and `activeEnv` state into `App.tsx`. Pass them as props. Wire the per-row `Edit variables…` to the existing `EditEnvDialog` (passing `envName = row.name`) — regression gate against Plan #4: the prior «click pill → opens Edit» path is gone, but per-row Edit on the active row reproduces it for the common case.
 6. **`NewEnvDialog`** — name validation, create + activate flow. Wire into `EnvSwitcherMenu`. Manual smoke: can create env.
 7. **`RenameEnvDialog`** — composed rename. Wire into menu. Manual smoke: can rename, variables preserved.
 8. **`ConfirmDeleteEnvDialog`** — alert-dialog + active-env handover. Wire into menu. Manual smoke: can delete inactive, active, can't delete last.
@@ -464,7 +489,9 @@ Roughly TDD-friendly; `writing-plans` refines into tasks with subagent breakdown
 | Plan #4 errata #2 | `../errata/2026-05-27-plan-04-env-vars.md` | `EnvironmentIpc.variables` `Partial<...>` shape — informs how dialogs read variables |
 | shadcn dropdown-menu | <https://ui.shadcn.com/docs/components/dropdown-menu> | menu primitive + `align="end"` API |
 | shadcn alert-dialog | <https://ui.shadcn.com/docs/components/alert-dialog> | confirm dialog pattern, destructive button styling |
-| radix DropdownMenu | <https://www.radix-ui.com/primitives/docs/components/dropdown-menu> | keyboard interaction (↑↓ Enter Esc) and `disabled` semantics |
+| radix DropdownMenu | <https://www.radix-ui.com/primitives/docs/components/dropdown-menu> | keyboard interaction (↑↓ Enter Esc, → / ← for submenus) and `disabled` semantics; `DropdownMenuSub` for per-row submenus |
+| Postman docs «Managing environments» | <https://learning.postman.com/docs/sending-requests/variables/managing-environments/> | confirms «click the dropdown menu in the upper right … to select an active environment» pattern — row-click switches |
+| Postman docs «Navigating Postman» | <https://learning.postman.com/docs/getting-started/basics/navigating-postman/> | confirms «hover over an item, it exposes View more actions» — basis for per-row `⋮` affordance |
 | Memory rule `feedback_verify_technical_claims` | local | requires source citations |
 | Memory rule `feedback_ui_transparent_mechanics` | local | confirms switcher dropdown is standard affordance, not an engine-state indicator |
 | Memory rule `preference_subagent_driven_default` | local | execution mode after writing-plans |
