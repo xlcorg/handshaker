@@ -10,10 +10,11 @@ use tokio::sync::{Mutex, RwLock};
 pub struct AppState {
     /// At most one active gRPC connection per spec §4.
     pub connection: Mutex<Option<Arc<GrpcConnection>>>,
-    /// Environment store, bootstrapped with a single "Default" env at startup.
+    /// Environment store. Cold boot: empty.
     pub env_store: Arc<dyn EnvironmentStore>,
-    /// Active environment name; updated by `env_active_set`. UI loads via `env_active_get`.
-    pub active_env: RwLock<String>,
+    /// Active environment name; `None` ≡ "No environment" (Postman-style).
+    /// Updated by `env_active_set`. UI loads via `env_active_get`.
+    pub active_env: RwLock<Option<String>>,
     // plan #6: pub collection_store: Arc<dyn CollectionStore>,
 }
 
@@ -21,8 +22,8 @@ impl Default for AppState {
     fn default() -> Self {
         Self {
             connection: Mutex::new(None),
-            env_store: Arc::new(InMemoryEnvironmentStore::with_default()),
-            active_env: RwLock::new("Default".to_string()),
+            env_store: Arc::new(InMemoryEnvironmentStore::new()),
+            active_env: RwLock::new(None),
         }
     }
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ConnectPanel } from "@/features/connect/ConnectPanel";
 import { CatalogList } from "@/features/connect/CatalogList";
 import { InvokePanel, type SelectedMethod } from "@/features/invoke/InvokePanel";
@@ -14,7 +14,7 @@ import {
   onContractUpdated,
 } from "@/ipc/events";
 import { ipc } from "@/ipc/client";
-import type { ServiceCatalogIpc, InvokeOutcomeIpc } from "@/ipc/bindings";
+import type { ServiceCatalogIpc, InvokeOutcomeIpc, EnvironmentIpc } from "@/ipc/bindings";
 
 export default function App() {
   const [catalog, setCatalog] = useState<ServiceCatalogIpc | null>(null);
@@ -23,14 +23,41 @@ export default function App() {
   const [selected, setSelected] = useState<SelectedMethod | null>(null);
   const [outcome, setOutcome] = useState<InvokeOutcomeIpc | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [activeEnv, setActiveEnv] = useState<string>("Default");
+  const [activeEnv, setActiveEnv] = useState<string | null>(null);
+  const [envs, setEnvs] = useState<EnvironmentIpc[]>([]);
+  const envSwitcherTriggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     ipc.appVersion().then(setVersion).catch(console.error);
   }, []);
 
   useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (!((e.metaKey || e.ctrlKey) && (e.key === "e" || e.key === "E"))) return;
+      // Skip when the user is typing in a text field — including Monaco's
+      // contenteditable host (handled by Monaco's own bindings, but we don't
+      // want to fight it here either).
+      const target = e.target as HTMLElement | null;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target?.isContentEditable
+      ) {
+        return;
+      }
+      e.preventDefault();
+      envSwitcherTriggerRef.current?.click();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  useEffect(() => {
     ipc.envActiveGet().then(setActiveEnv).catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    ipc.envList().then(setEnvs).catch(console.error);
   }, []);
 
   useEffect(() => {
@@ -62,7 +89,13 @@ export default function App() {
         <h1 className="text-base font-semibold">Handshaker</h1>
         <div className="flex items-center gap-3">
           <span className="text-xs text-muted-foreground font-mono">v{version}</span>
-          <EnvPill activeEnv={activeEnv} onVariablesSaved={() => { /* no-op: live preview re-fetches */ }} />
+          <EnvPill
+            ref={envSwitcherTriggerRef}
+            envs={envs}
+            activeEnv={activeEnv}
+            onEnvsChanged={async () => setEnvs(await ipc.envList())}
+            onActiveEnvChanged={setActiveEnv}
+          />
         </div>
       </header>
       <section
@@ -96,6 +129,7 @@ export default function App() {
             <ResizablePanel defaultSize={50} minSize={20}>
               <InvokePanel
                 selected={selected}
+                activeEnv={activeEnv}
                 onOutcome={(o) => {
                   setOutcome(o);
                   setError(null);
