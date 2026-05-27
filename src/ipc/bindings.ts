@@ -71,7 +71,7 @@ async envList() : Promise<Result<EnvironmentIpc[], IpcError>> {
     else return { status: "error", error: e  as any };
 }
 },
-async envActiveGet() : Promise<Result<string, IpcError>> {
+async envActiveGet() : Promise<Result<string | null, IpcError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("env_active_get") };
 } catch (e) {
@@ -79,7 +79,7 @@ async envActiveGet() : Promise<Result<string, IpcError>> {
     else return { status: "error", error: e  as any };
 }
 },
-async envActiveSet(name: string) : Promise<Result<null, IpcError>> {
+async envActiveSet(name: string | null) : Promise<Result<null, IpcError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("env_active_set", { name }) };
 } catch (e) {
@@ -90,6 +90,14 @@ async envActiveSet(name: string) : Promise<Result<null, IpcError>> {
 async envUpsert(env: EnvironmentIpc) : Promise<Result<null, IpcError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("env_upsert", { env }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async envDelete(name: string) : Promise<Result<null, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("env_delete", { name }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
