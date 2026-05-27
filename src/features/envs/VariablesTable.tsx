@@ -1,7 +1,15 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { cn } from "@/lib/cn";
 
 const NAME_RE = /^[a-zA-Z_][a-zA-Z0-9_-]*$/;
@@ -45,6 +53,11 @@ function fromRows(rows: Row[]): Record<string, string> {
   return out;
 }
 
+// Borderless input that fills its table cell. Padding matches TableHead/TableCell (px-2)
+// so column header text aligns visually with the input content below.
+const CELL_INPUT_CLASS =
+  "h-9 w-full border-0 bg-transparent px-2 shadow-none rounded-none focus-visible:bg-accent/30 focus-visible:ring-0 font-mono text-sm";
+
 export function VariablesTable({ value, onChange }: VariablesTableProps) {
   const [rows, setRows] = useState<Row[]>(() => initialRows(value));
 
@@ -80,53 +93,72 @@ export function VariablesTable({ value, onChange }: VariablesTableProps) {
   });
 
   return (
-    <div className="space-y-1">
-      <div className="grid grid-cols-[1fr_2fr_auto] gap-2 text-xs text-muted-foreground font-mono">
-        <span>key</span>
-        <span>value</span>
-        <span aria-hidden />
-      </div>
-      {rows.map((r, i) => {
-        const isTrailingEmpty = i === rows.length - 1 && r.key === "";
-        const invalid = r.key.length > 0 && !NAME_RE.test(r.key);
-        return (
-          <div key={r.id}>
-            <div className="grid grid-cols-[1fr_2fr_auto] gap-2 items-center group">
-              <Input
-                value={r.key}
-                onChange={(e) => updateRow(i, { key: e.target.value })}
-                placeholder={isTrailingEmpty ? "Add variable" : undefined}
-                className={cn("font-mono text-sm", invalid && "border-destructive")}
-                title={isTrailingEmpty ? undefined : "key must match ^[a-zA-Z_][a-zA-Z0-9_-]*$"}
-              />
-              <Input
-                value={r.value}
-                onChange={(e) => updateRow(i, { value: e.target.value })}
-                disabled={isTrailingEmpty}
-                className="font-mono text-sm"
-              />
-              {isTrailingEmpty ? (
-                <span aria-hidden />
-              ) : (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="opacity-0 group-hover:opacity-100"
-                  onClick={() => deleteRow(i)}
-                  aria-label="delete variable"
-                >
-                  ✕
-                </Button>
-              )}
-            </div>
-            {dupFlags[i] && (
-              <div className="text-xs text-amber-500 px-1 mt-0.5">
-                duplicate key — last value wins
-              </div>
-            )}
-          </div>
-        );
-      })}
+    <div className="rounded-md border overflow-hidden">
+      <Table>
+        <TableHeader>
+          <TableRow className="hover:bg-transparent bg-muted/40">
+            <TableHead className="w-1/3 h-8 text-[11px] uppercase tracking-wide font-medium text-muted-foreground">
+              Key
+            </TableHead>
+            <TableHead className="h-8 text-[11px] uppercase tracking-wide font-medium text-muted-foreground border-l">
+              Value
+            </TableHead>
+            <TableHead className="w-9 h-8 border-l" aria-label="actions" />
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((r, i) => {
+            const isTrailingEmpty = i === rows.length - 1 && r.key === "";
+            const invalid = r.key.length > 0 && !NAME_RE.test(r.key);
+            return (
+              <Fragment key={r.id}>
+                <TableRow className="group hover:bg-transparent border-t">
+                  <TableCell className="p-0 align-middle">
+                    <Input
+                      value={r.key}
+                      onChange={(e) => updateRow(i, { key: e.target.value })}
+                      placeholder={isTrailingEmpty ? "Add variable" : "key"}
+                      className={cn(CELL_INPUT_CLASS, invalid && "text-destructive")}
+                      title={
+                        isTrailingEmpty ? undefined : "key must match ^[a-zA-Z_][a-zA-Z0-9_-]*$"
+                      }
+                    />
+                  </TableCell>
+                  <TableCell className="p-0 align-middle border-l">
+                    <Input
+                      value={r.value}
+                      onChange={(e) => updateRow(i, { value: e.target.value })}
+                      disabled={isTrailingEmpty}
+                      placeholder={isTrailingEmpty ? "" : "value"}
+                      className={CELL_INPUT_CLASS}
+                    />
+                  </TableCell>
+                  <TableCell className="w-9 p-0 align-middle border-l text-center">
+                    {isTrailingEmpty ? null : (
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 text-muted-foreground hover:text-destructive"
+                        onClick={() => deleteRow(i)}
+                        aria-label={`delete variable ${r.key || "(unnamed)"}`}
+                      >
+                        ✕
+                      </Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+                {dupFlags[i] && (
+                  <TableRow className="hover:bg-transparent border-b-0">
+                    <TableCell colSpan={3} className="py-1 px-2 text-xs text-amber-500">
+                      duplicate key — last value wins
+                    </TableCell>
+                  </TableRow>
+                )}
+              </Fragment>
+            );
+          })}
+        </TableBody>
+      </Table>
     </div>
   );
 }
