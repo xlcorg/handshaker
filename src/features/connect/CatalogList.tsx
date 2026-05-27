@@ -20,7 +20,7 @@ export function CatalogList({ catalog, selected, onSelect }: CatalogListProps) {
       {catalog.services.map((s) => (
         <li key={s.full_name} className="flex flex-col gap-1">
           <div className="font-semibold font-mono text-sm">{s.full_name}</div>
-          <ul className="flex flex-col gap-0.5 pl-4 text-sm font-mono text-muted-foreground">
+          <ul className="flex flex-col gap-0.5 pl-2 text-sm font-mono text-muted-foreground">
             {s.methods.map((m) => {
               const isSelected =
                 selected?.service === s.full_name && selected?.method === m.name;
@@ -29,11 +29,15 @@ export function CatalogList({ catalog, selected, onSelect }: CatalogListProps) {
                   <button
                     type="button"
                     onClick={() => onSelect({ service: s.full_name, method: m.name })}
-                    className={`text-left w-full hover:text-foreground transition-colors ${
-                      isSelected ? "text-foreground font-medium" : ""
+                    className={`text-left w-full cursor-pointer px-2 py-1 rounded transition-colors hover:bg-accent hover:text-foreground ${
+                      isSelected
+                        ? "bg-accent text-foreground font-medium"
+                        : ""
                     }`}
                   >
-                    {m.name}
+                    <span className={isSelected ? "" : "text-foreground"}>
+                      {m.name}
+                    </span>
                     <span className="text-xs ml-2 text-muted-foreground">
                       ({m.input_message} → {m.output_message})
                     </span>

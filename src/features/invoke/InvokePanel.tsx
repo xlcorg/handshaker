@@ -86,7 +86,7 @@ export function InvokePanel({ selected, onOutcome, onError }: InvokePanelProps) 
           {busy ? "Sending…" : "Send"}
         </Button>
       </div>
-      <div className="flex-1">
+      <div className="flex-1 min-h-0">
         <BodyEditor value={body} onChange={setBody} />
       </div>
     </div>

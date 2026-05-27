@@ -11,7 +11,7 @@ export function ResponsePanel({ outcome }: ResponsePanelProps) {
   return (
     <div className="flex flex-col h-full">
       <StatusBar outcome={outcome} />
-      <div className="flex-1">
+      <div className="flex-1 min-h-0">
         {outcome.response_json !== null && outcome.response_json !== undefined ? (
           <BodyView json={outcome.response_json} />
         ) : (
