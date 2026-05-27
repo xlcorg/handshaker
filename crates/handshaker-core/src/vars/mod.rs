@@ -202,4 +202,35 @@ mod tests {
         // Dedup, order-preserving:
         assert_eq!(r.unresolved_vars, vec!["a".to_string(), "b".to_string()]);
     }
+
+    #[test]
+    fn chained_two_pass() {
+        // {{a}} → {{b}} → "2"
+        let env = map(&[("a", "{{b}}"), ("b", "2")]);
+        let coll = map(&[]);
+        let r = resolve_template_with_diagnostics("{{a}}", &vs(&env, &coll));
+        assert_eq!(r.resolved, "2");
+        assert!(r.unresolved_vars.is_empty());
+        assert!(r.cycle_chain.is_none());
+    }
+
+    #[test]
+    fn chain_three_hops() {
+        // {{a}} → {{b}} → {{c}} → "3" (3 hops, within MAX_PASSES=4)
+        let env = map(&[("a", "{{b}}"), ("b", "{{c}}"), ("c", "3")]);
+        let coll = map(&[]);
+        let r = resolve_template_with_diagnostics("{{a}}", &vs(&env, &coll));
+        assert_eq!(r.resolved, "3");
+    }
+
+    #[test]
+    fn chain_mixed_with_literal() {
+        let env = map(&[("uri", "https://api.{{env}}.example.com"), ("env", "prod")]);
+        let coll = map(&[]);
+        let r = resolve_template_with_diagnostics(
+            r#"{"url": "{{uri}}/v1/users"}"#,
+            &vs(&env, &coll),
+        );
+        assert_eq!(r.resolved, r#"{"url": "https://api.prod.example.com/v1/users"}"#);
+    }
 }
