@@ -383,9 +383,14 @@ impl tower::Service<http::Request<tonic::body::Body>> for EchoService {
         use handshaker_core::grpc::transport::DynamicCodec;
         use tonic::server::Grpc;
 
+        // DynamicCodec's `response_descriptor` is what the decoder uses to construct the
+        // DynamicMessage being parsed. On the server side, the decoder parses the incoming
+        // REQUEST (Ping), so we put ping_desc in `response_descriptor`. The `request_descriptor`
+        // field is unused by DynamicEncoder (DynamicMessage carries its own descriptor) — we
+        // fill it with pong_desc for symmetry-of-naming with what the server actually emits.
         let codec = DynamicCodec {
-            request_descriptor: self.ping_desc.clone(),
-            response_descriptor: self.pong_desc.clone(),
+            request_descriptor: self.pong_desc.clone(),
+            response_descriptor: self.ping_desc.clone(),
         };
         let handler = EchoHandler {
             pong_desc: self.pong_desc.clone(),
