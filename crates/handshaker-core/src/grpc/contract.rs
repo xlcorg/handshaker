@@ -16,12 +16,15 @@ pub async fn activate(
     transport: Arc<dyn GrpcTransport>,
 ) -> Result<GrpcConnection, CoreError> {
     let channel = transport.channel(&target).await?;
-    let (_services_listed, files) = list_and_fetch_files(channel).await?;
+    // clone — TonicChannel дешёвый Clone (Arc внутри), reflection consume его свою копию,
+    // оригинал останется в GrpcConnection для последующих invoke.
+    let (_services_listed, files) = list_and_fetch_files(channel.clone()).await?;
     let pool = build_pool(files)?;
     let catalog = build_catalog(&pool);
     Ok(GrpcConnection {
         target,
         transport,
+        channel,
         pool,
         catalog,
     })
