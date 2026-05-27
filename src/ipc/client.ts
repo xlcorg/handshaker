@@ -5,6 +5,8 @@ import type {
   ServiceCatalogIpc,
   InvokeRequest,
   InvokeOutcomeIpc,
+  EnvironmentIpc,
+  ResolutionReportIpc,
 } from "./bindings";
 
 /**
@@ -49,6 +51,34 @@ export async function grpcBuildRequestSkeleton(
   return r.data;
 }
 
+export async function envList(): Promise<EnvironmentIpc[]> {
+  const r = await commands.envList();
+  if (r.status === "error") throw r.error;
+  return r.data;
+}
+
+export async function envActiveGet(): Promise<string> {
+  const r = await commands.envActiveGet();
+  if (r.status === "error") throw r.error;
+  return r.data;
+}
+
+export async function envActiveSet(name: string): Promise<void> {
+  const r = await commands.envActiveSet(name);
+  if (r.status === "error") throw r.error;
+}
+
+export async function envUpsert(env: EnvironmentIpc): Promise<void> {
+  const r = await commands.envUpsert(env);
+  if (r.status === "error") throw r.error;
+}
+
+export async function varsResolve(template: string): Promise<ResolutionReportIpc> {
+  const r = await commands.varsResolve(template);
+  if (r.status === "error") throw r.error;
+  return r.data;
+}
+
 export const ipc = {
   appVersion,
   grpcConnect,
@@ -56,4 +86,9 @@ export const ipc = {
   grpcRefreshContract,
   grpcInvokeUnary,
   grpcBuildRequestSkeleton,
+  envList,
+  envActiveGet,
+  envActiveSet,
+  envUpsert,
+  varsResolve,
 };
