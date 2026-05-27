@@ -4,6 +4,7 @@
 //! connection. `unary_dynamic(...)` joins in Plan #3 (dynamic invoke).
 
 pub mod tonic_impl;
+pub mod codec;
 
 use crate::error::CoreError;
 use crate::grpc::connection::GrpcTarget;
@@ -18,3 +19,4 @@ pub trait GrpcTransport: Send + Sync {
 }
 
 pub use tonic_impl::TonicTransport;
+pub use codec::DynamicCodec;
