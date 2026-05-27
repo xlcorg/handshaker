@@ -23,7 +23,7 @@ export default function App() {
   const [selected, setSelected] = useState<SelectedMethod | null>(null);
   const [outcome, setOutcome] = useState<InvokeOutcomeIpc | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [activeEnv, setActiveEnv] = useState<string>("Default");
+  const [activeEnv, setActiveEnv] = useState<string | null>(null);
 
   useEffect(() => {
     ipc.appVersion().then(setVersion).catch(console.error);
