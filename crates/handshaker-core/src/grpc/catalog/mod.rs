@@ -5,20 +5,21 @@
 pub mod build;
 
 use serde::{Deserialize, Serialize};
+use specta::Type;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub struct ServiceCatalog {
     pub services: Vec<ServiceEntry>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub struct ServiceEntry {
     /// Fully-qualified, e.g. `test.Echo`.
     pub full_name: String,
     pub methods: Vec<MethodEntry>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub struct MethodEntry {
     /// Short name, e.g. `Send`.
     pub name: String,

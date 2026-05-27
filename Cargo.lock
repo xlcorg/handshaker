@@ -1269,6 +1269,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "handshaker-core",
+ "rustls",
  "serde",
  "serde_json",
  "specta",
@@ -1292,10 +1293,12 @@ dependencies = [
  "prost-reflect",
  "prost-types 0.13.5",
  "serde",
+ "specta",
  "thiserror 2.0.18",
  "tokio",
  "tokio-stream",
  "tonic",
+ "tonic-health",
  "tonic-reflection",
 ]
 
@@ -3790,6 +3793,7 @@ dependencies = [
  "futures-core",
  "pin-project-lite",
  "tokio",
+ "tokio-util",
 ]
 
 [[package]]
@@ -3954,6 +3958,19 @@ dependencies = [
  "tower-layer",
  "tower-service",
  "tracing",
+]
+
+[[package]]
+name = "tonic-health"
+version = "0.14.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fcfab99db777fba2802f0dfa861d1628d1ae916fb199d29819941f139ae85082"
+dependencies = [
+ "prost 0.14.3",
+ "tokio",
+ "tokio-stream",
+ "tonic",
+ "tonic-prost",
 ]
 
 [[package]]
