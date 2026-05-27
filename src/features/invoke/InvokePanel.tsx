@@ -12,11 +12,12 @@ export interface SelectedMethod {
 
 export interface InvokePanelProps {
   selected: SelectedMethod;
+  activeEnv: string | null;
   onOutcome: (outcome: InvokeOutcomeIpc) => void;
   onError: (message: string) => void;
 }
 
-export function InvokePanel({ selected, onOutcome, onError }: InvokePanelProps) {
+export function InvokePanel({ selected, activeEnv, onOutcome, onError }: InvokePanelProps) {
   const [body, setBody] = useState<string>("{}");
   const [busy, setBusy] = useState(false);
 
@@ -131,7 +132,7 @@ export function InvokePanel({ selected, onOutcome, onError }: InvokePanelProps) 
         <div className="flex-1 min-h-0">
           <BodyEditor value={body} onChange={setBody} />
         </div>
-        <ResolvesPreview body={body} />
+        <ResolvesPreview body={body} activeEnv={activeEnv} />
       </div>
     </div>
   );

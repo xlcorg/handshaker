@@ -17,9 +17,11 @@ function collapseInline(s: string): string {
 
 export interface ResolvesPreviewProps {
   body: string;
+  /** Current active env. Included so the preview re-resolves when env switches. */
+  activeEnv: string | null;
 }
 
-export function ResolvesPreview({ body }: ResolvesPreviewProps) {
+export function ResolvesPreview({ body, activeEnv }: ResolvesPreviewProps) {
   const [report, setReport] = useState<ResolutionReportIpc | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -36,7 +38,7 @@ export function ResolvesPreview({ body }: ResolvesPreviewProps) {
     return () => {
       if (timer.current) clearTimeout(timer.current);
     };
-  }, [body]);
+  }, [body, activeEnv]);
 
   if (!hasVars(body) || report === null) return null;
 

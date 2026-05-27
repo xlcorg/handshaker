@@ -119,6 +119,7 @@ export default function App() {
             <ResizablePanel defaultSize={50} minSize={20}>
               <InvokePanel
                 selected={selected}
+                activeEnv={activeEnv}
                 onOutcome={(o) => {
                   setOutcome(o);
                   setError(null);
