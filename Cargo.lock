@@ -1298,6 +1298,7 @@ dependencies = [
  "tonic",
  "tonic-health",
  "tonic-reflection",
+ "tower",
 ]
 
 [[package]]

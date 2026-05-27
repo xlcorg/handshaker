@@ -281,3 +281,189 @@ pub async fn spawn_bare_server() -> (SocketAddr, oneshot::Sender<()>) {
     });
     (addr, tx)
 }
+
+// ---------------------------------------------------------------------------
+// EchoServer — in-process gRPC server for invoke integration tests (Plan #3)
+// ---------------------------------------------------------------------------
+
+/// Behavior knobs for `EchoService` — used by invoke_status / invoke_trailers tests.
+#[derive(Clone, Default, Debug)]
+pub struct EchoConfig {
+    /// If `Some(code)`, `Echo.Send` returns a gRPC status with this code instead of OK.
+    pub return_status: Option<i32>,
+    /// Extra trailing metadata the server injects in the response.
+    pub trailers: std::collections::HashMap<String, String>,
+}
+
+/// In-process gRPC server implementing `test.Echo/Send(Ping) → Pong { id, echoed }` via
+/// `tonic::server::Grpc<DynamicCodec>` (no tonic-build / static stubs).
+/// Also exposes reflection so the client under test can call `activate()` + `invoke` in one shot.
+///
+/// Returns `(addr, shutdown_sender)`. Drop the sender to stop the server.
+pub async fn spawn_echo_server(config: EchoConfig) -> (SocketAddr, oneshot::Sender<()>) {
+    use prost_reflect::DescriptorPool;
+
+    let mut pool = DescriptorPool::new();
+    pool.add_file_descriptor_set(
+        prost::Message::decode(&fixture_descriptor_set_bytes()[..])
+            .expect("decode fixture descriptor set"),
+    )
+    .expect("add fixture to DescriptorPool");
+
+    let ping_desc = pool
+        .get_message_by_name("test.Ping")
+        .expect("test.Ping in pool");
+    let pong_desc = pool
+        .get_message_by_name("test.Pong")
+        .expect("test.Pong in pool");
+
+    let svc = EchoService {
+        ping_desc,
+        pong_desc,
+        config: std::sync::Arc::new(tokio::sync::Mutex::new(config)),
+    };
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let (tx, rx) = oneshot::channel::<()>();
+
+    let reflection = tonic_reflection::server::Builder::configure()
+        .register_encoded_file_descriptor_set(&fixture_descriptor_set_bytes())
+        .build_v1()
+        .expect("build v1 reflection service");
+
+    tokio::spawn(async move {
+        let incoming = tokio_stream::wrappers::TcpListenerStream::new(listener);
+        let _ = tonic::transport::Server::builder()
+            .add_service(reflection)
+            .add_service(svc)
+            .serve_with_incoming_shutdown(incoming, async {
+                rx.await.ok();
+            })
+            .await;
+    });
+    (addr, tx)
+}
+
+// ---------------------------------------------------------------------------
+// EchoService internals
+// ---------------------------------------------------------------------------
+
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
+/// Tower service that handles all HTTP/2 requests for the `test.Echo` service.
+/// Dispatches `/test.Echo/Send` to `EchoHandler` via `tonic::server::Grpc`.
+#[derive(Clone)]
+struct EchoService {
+    ping_desc: prost_reflect::MessageDescriptor,
+    pong_desc: prost_reflect::MessageDescriptor,
+    config: Arc<Mutex<EchoConfig>>,
+}
+
+impl tonic::server::NamedService for EchoService {
+    const NAME: &'static str = "test.Echo";
+}
+
+impl tower::Service<http::Request<tonic::body::Body>> for EchoService {
+    type Response = http::Response<tonic::body::Body>;
+    type Error = std::convert::Infallible;
+    type Future = std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>> + Send>,
+    >;
+
+    fn poll_ready(
+        &mut self,
+        _cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        std::task::Poll::Ready(Ok(()))
+    }
+
+    fn call(&mut self, req: http::Request<tonic::body::Body>) -> Self::Future {
+        use handshaker_core::grpc::transport::DynamicCodec;
+        use tonic::server::Grpc;
+
+        let codec = DynamicCodec {
+            request_descriptor: self.ping_desc.clone(),
+            response_descriptor: self.pong_desc.clone(),
+        };
+        let handler = EchoHandler {
+            pong_desc: self.pong_desc.clone(),
+            config: Arc::clone(&self.config),
+        };
+
+        Box::pin(async move {
+            let resp = Grpc::new(codec).unary(handler, req).await;
+            Ok(resp)
+        })
+    }
+}
+
+/// Implements the unary `Echo.Send` business logic.
+/// `tower::Service<tonic::Request<DynamicMessage>>` auto-derives `tonic::server::UnaryService`.
+#[derive(Clone)]
+struct EchoHandler {
+    pong_desc: prost_reflect::MessageDescriptor,
+    config: Arc<Mutex<EchoConfig>>,
+}
+
+impl tower::Service<tonic::Request<prost_reflect::DynamicMessage>> for EchoHandler {
+    type Response = tonic::Response<prost_reflect::DynamicMessage>;
+    type Error = tonic::Status;
+    type Future = std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>> + Send>,
+    >;
+
+    fn poll_ready(
+        &mut self,
+        _cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        std::task::Poll::Ready(Ok(()))
+    }
+
+    fn call(
+        &mut self,
+        req: tonic::Request<prost_reflect::DynamicMessage>,
+    ) -> Self::Future {
+        use prost_reflect::{DynamicMessage, Value};
+
+        let pong_desc = self.pong_desc.clone();
+        let config = Arc::clone(&self.config);
+
+        Box::pin(async move {
+            let cfg = config.lock().await;
+
+            // If configured to return a gRPC error status, do so.
+            if let Some(code) = cfg.return_status {
+                let code = tonic::Code::from(code);
+                return Err(tonic::Status::new(code, format!("injected error: {code:?}")));
+            }
+
+            // Extract `id` from the incoming Ping.
+            let ping = req.into_inner();
+            let id = ping
+                .get_field_by_name("id")
+                .and_then(|v| v.as_str().map(str::to_owned))
+                .unwrap_or_default();
+
+            // Build Pong { id, echoed: "echo: {id}" }.
+            let mut pong = DynamicMessage::new(pong_desc);
+            pong.set_field_by_name("id", Value::String(id.clone()));
+            pong.set_field_by_name("echoed", Value::String(format!("echo: {id}")));
+
+            let mut response = tonic::Response::new(pong);
+
+            // Inject any configured trailing metadata.
+            for (k, v) in &cfg.trailers {
+                if let (Ok(key), Ok(val)) = (
+                    tonic::metadata::AsciiMetadataKey::from_bytes(k.to_lowercase().as_bytes()),
+                    tonic::metadata::AsciiMetadataValue::try_from(v.as_str()),
+                ) {
+                    response.metadata_mut().insert(key, val);
+                }
+            }
+
+            Ok(response)
+        })
+    }
+}
