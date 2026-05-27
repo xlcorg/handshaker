@@ -106,8 +106,9 @@ src/
     ResolvesPreview.tsx         MODIFY — add activeEnv to useEffect deps
     InvokePanel.tsx             MODIFY — pass activeEnv prop down
   components/ui/
-    dropdown-menu.tsx           NEW (shadcn add)
-    alert-dialog.tsx            NEW (shadcn add)
+    dropdown-menu.tsx           NEW (shadcn add dropdown-menu)
+    alert-dialog.tsx            NEW (shadcn add alert-dialog)
+    label.tsx                   NEW (shadcn add label) — paired with Input in EnvEditorDialog
   ipc/
     client.ts                   MODIFY — typed wrapper envDelete; updated
                                          envActiveGet/envActiveSet for Option
@@ -207,6 +208,31 @@ The `from_core_error_exhaustive` test in `src-tauri/src/ipc/error.rs` (Plan #1) 
 
 ## 5. UI surface
 
+### 5.0 Component library and theme
+
+**Theme:** unchanged from master §8.8 — shadcn `new-york` style on the OKLCH dark palette already wired in `src/styles/globals.css`. No new color tokens, no new fonts. Everything ships under `.dark` class which is the only mode in MVP.
+
+**Component policy:** every interactive surface in Plan #4b uses shadcn/ui primitives directly. No custom styled buttons, no hand-rolled menu items, no ad-hoc dialogs. Where a shadcn primitive does not exist (e.g. the trailing `⋮` icon inside a menu row), the markup is a thin composition of shadcn `<Button variant="ghost" size="icon">` + `<lucide-react>` icon, **not** a raw `<button>` or `<div role="button">`.
+
+Primitives used (some new, some already in the project):
+
+| Primitive | Status | Used in |
+|---|---|---|
+| `<Button>` | Plan #4 | Pill trigger, ⋮ icon button, dialog footer buttons |
+| `<Input>` | Plan #4 | Name field in EnvEditorDialog; key/value inputs (via existing `VariablesTable`) |
+| `<Dialog>` family (`DialogContent`, `DialogHeader`, `DialogTitle`, `DialogDescription`, `DialogFooter`) | Plan #4 | EnvEditorDialog |
+| `<Label>` | **NEW (shadcn add `label`)** | Name field label in EnvEditorDialog |
+| `<DropdownMenu>` family — `DropdownMenuTrigger`, `DropdownMenuContent`, `DropdownMenuLabel`, `DropdownMenuItem`, `DropdownMenuRadioGroup`, `DropdownMenuRadioItem`, `DropdownMenuSeparator` | **NEW (shadcn add `dropdown-menu`)** | EnvSwitcherMenu (outer menu + per-row actions submenu) |
+| `<AlertDialog>` family — `AlertDialogContent`, `AlertDialogHeader`, `AlertDialogTitle`, `AlertDialogDescription`, `AlertDialogFooter`, `AlertDialogCancel`, `AlertDialogAction` | **NEW (shadcn add `alert-dialog`)** | ConfirmDeleteEnvDialog |
+| `<Separator>` | Plan #4 (only if absent — shadcn add `separator` is `pnpm dlx shadcn@latest add separator`) | Optional visual separator between Name section and Variables section in EnvEditorDialog |
+
+shadcn defaults from <https://ui.shadcn.com/docs/components/...> are used as-is. No restyling, no className overrides except:
+- `text-destructive` / `focus:text-destructive` / `focus:bg-destructive/10` on destructive menu items (Delete env…). This is the shadcn-documented pattern for destructive menu items.
+- `opacity-0 group-hover:opacity-100 focus-visible:opacity-100` on the per-row `⋮` button so it's hover/focus-revealed (Postman-style).
+- `text-muted-foreground italic` on the `No environment` menu row to visually distinguish the pseudo-entry from real env names.
+
+shadcn CLI config (`components.json`) is already present in the project from Plan #4's `dialog` addition; new components inherit the same style + path aliases.
+
 ### 5.1 Header — `EnvPill` + `EnvSwitcherMenu`
 
 Models Postman's environment quick-look (top-right of the workbench): each env row is independently clickable for switch and exposes per-row hover actions via a trailing icon. References — [Postman docs: «Group sets of variables using environments»](https://learning.postman.com/docs/sending-requests/variables/managing-environments/) confirms «click the dropdown menu in the upper right … to select an active environment» as the row click; per-row hover-revealed actions are documented in [Postman docs: «Navigating Postman»](https://learning.postman.com/docs/getting-started/basics/navigating-postman/) («hover over an item, it exposes View more actions»).
@@ -235,24 +261,28 @@ Models Postman's environment quick-look (top-right of the workbench): each env r
                           └──────────────────────────┘
 ```
 
-- Pill itself stays a `Button variant="ghost" size="sm"` showing the active env name (or `No environment` when active is `null`) + `▾` chevron icon. Pill click → opens `EnvSwitcherMenu`.
-- **«No environment» pseudo-row (always at the top, separator below):**
-  - Renders the literal text `No environment` in `text-muted-foreground` italic style to distinguish from real envs.
-  - Click → calls `ipc.envActiveSet(null)` and `setActiveEnv(null)` in `App.tsx`. Pill becomes `No environment ▾`. Menu closes.
-  - `Check` icon on the left when `activeEnv === null`.
-  - **No trailing `⋮`** — not editable, not renamable, not deletable. The row is purely a switch target.
+- Pill itself stays a shadcn `<Button variant="ghost" size="sm">` showing the active env name (or `No environment` when active is `null`) + `▾` chevron icon (`lucide-react ChevronDown`). The `<Button>` is also the `<DropdownMenuTrigger asChild>`.
+- **Menu shell:** `<DropdownMenu>` → `<DropdownMenuTrigger asChild>{Pill}</DropdownMenuTrigger>` → `<DropdownMenuContent align="end">`. Inside `DropdownMenuContent`:
+  1. `<DropdownMenuLabel>Environments</DropdownMenuLabel>` — section header.
+  2. `<DropdownMenuRadioGroup value={activeEnv ?? ""} onValueChange={onActiveSet}>` containing all switch-target rows. shadcn's radio-group primitive gives us:
+     - Automatic selected-state styling (the indicator is the inserted `Check` icon).
+     - `value=""` reserved for the `No environment` pseudo-row; `value=<name>` for real env rows.
+  3. `<DropdownMenuSeparator />` between real env rows and the trailer.
+  4. `<DropdownMenuItem onSelect={openCreateDialog}>+ New env…</DropdownMenuItem>` — trailer.
+- **«No environment» pseudo-row:**
+  - `<DropdownMenuRadioItem value="" className="text-muted-foreground italic">No environment</DropdownMenuRadioItem>` — the radio-item visually distinguished by italic muted text.
+  - The radio-item indicator (left-side dot/check) renders only when `activeEnv === null`.
+  - **No `⋮`** — radio-item is the entire clickable surface.
 - **Env rows (real envs, direct manipulation):**
   - Sorted alphabetically.
-  - **Click on the row body (name area)** → switches active to this env. Calls `ipc.envActiveSet(name)` and `setActiveEnv(name)` in `App.tsx`. Menu closes.
-  - **Active row** carries a `Check` icon (lucide-react) on the left; non-active rows render a same-width placeholder for alignment.
-  - **Trailing `⋮` icon** (lucide-react `MoreVertical`) is rendered with `opacity-0 group-hover:opacity-100 focus-visible:opacity-100` — hidden by default, revealed on row hover or keyboard focus. The `⋮` is a separate clickable element from the row body.
-  - **Click on `⋮`** → opens a nested per-row submenu anchored next to the icon (radix nested `DropdownMenu` via `DropdownMenuSub` or a separate `DropdownMenu` instance — implementation choice for writing-plans). Menu close on outer-row click is suppressed via `event.stopPropagation()` on the `⋮` button so the user can keep interacting with the parent menu.
-- **Per-row submenu contents (act on THIS row's env, not necessarily the active one):**
-  - «Edit env…» — opens `EnvEditorDialog` with `originalName = row.name` (edit mode). Lets the user rename and edit variables in a single Save round-trip.
-  - «Delete env…» — opens `ConfirmDeleteEnvDialog` with `target = row.name`. Styled `text-destructive`. **Always enabled** for real env rows (no last-env restriction — deleting the last real env just leaves `No environment` active).
-- **Below the env list:**
-  - Separator.
-  - **«+ New env…»** — opens `EnvEditorDialog` with `originalName = null` (create mode). User can fill name + variables in the same dialog before Save. Auto-activates the created env on success (matches Postman create-and-activate behavior).
+  - Each row is a `<div className="flex items-center group">` containing:
+    - `<DropdownMenuRadioItem value={env.name} className="flex-1">{env.name}</DropdownMenuRadioItem>` — the row body; click switches active.
+    - A nested `<DropdownMenu>` rendered as `<DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100" onClick={(e) => e.stopPropagation()}><MoreVertical /></Button></DropdownMenuTrigger>` followed by a `<DropdownMenuContent>` carrying the per-row actions. The `stopPropagation` on click is what prevents the outer radio-group from interpreting the ⋮ click as a row switch.
+  - The radio-item indicator (left-side check) renders only on the active row.
+- **Per-row actions submenu** (one `<DropdownMenu>` per row, anchored to its `⋮` trigger):
+  - `<DropdownMenuItem onSelect={() => openEditDialog(env.name)}>Edit env…</DropdownMenuItem>` — opens `EnvEditorDialog` with `originalName = env.name` (edit mode).
+  - `<DropdownMenuItem onSelect={() => openDeleteDialog(env.name)} className="text-destructive focus:text-destructive focus:bg-destructive/10">Delete env…</DropdownMenuItem>` — opens `ConfirmDeleteEnvDialog` with `target = env.name`. **Always enabled** for real env rows (no last-env restriction).
+- **Trailing menu item** (after the radio group, after the separator): `<DropdownMenuItem onSelect={openCreateDialog}>+ New env…</DropdownMenuItem>` — opens `EnvEditorDialog` with `originalName = null` (create mode). Auto-activates the created env on Save.
 - **When `env_store.list()` is empty** (cold boot, or all envs deleted):
   - The menu shows just `✓ No environment` + separator + `+ New env…`. No real-env rows.
 - **Layout details:**
@@ -296,13 +326,14 @@ This is the only env-editing surface in the app. It replaces Plan #4's `EditEnvD
 └─────────────────────────────────────────────────────────┘
 ```
 
-- shadcn `Dialog` (already added by Plan #4).
+- **shadcn primitives:** `<Dialog>` → `<DialogContent>` → `<DialogHeader>` (`<DialogTitle>` + `<DialogDescription>`) → body (`<Label>` + `<Input>` + `<VariablesTable>`) → `<DialogFooter>` (`<Button variant="ghost">` Cancel + `<Button>` Save/Create). All primitives from <https://ui.shadcn.com/docs/components/dialog>; no className overrides on the dialog shell.
 - **Mode is controlled by the `originalName: string | null` prop:**
-  - `null` → **create mode**: name field empty, variables table empty, header title `New environment`, Save button label `Create`.
-  - `string` → **edit mode**: name field preloaded with current name, variables loaded from `env_list().find(...)`, header title `Edit environment`, Save button label `Save`.
-- **Name input:** real-time validation `^[a-zA-Z_][a-zA-Z0-9_-]*$`. Invalid → red border (matches `VariablesTable` style). Already-exists check: if `name !== originalName && envs.some(e => e.name === name)` → red border + helper text «name already exists». Re-typing the original name in edit mode is a no-op (not flagged as duplicate).
-- **Variables table:** reuses the existing `VariablesTable` component from Plan #4 unchanged (key validation, hover-delete, dup warning, empty-row materialization).
-- **Save button** disabled when name empty, invalid, or duplicate. When enabled, clicking it runs the unified handler:
+  - `null` → **create mode**: name field empty, variables table empty. `<DialogTitle>` reads `New environment`; `<DialogDescription>` reads `Create a new environment and define its variables.`; primary button label `Create`.
+  - `string` → **edit mode**: name field preloaded with current name, variables loaded from `env_list().find(e => e.name === originalName)`. `<DialogTitle>` reads `Edit environment`; `<DialogDescription>` reads `Rename or update variables.`; primary button label `Save`.
+- **Name field:** `<Label htmlFor="env-name">Name</Label>` + `<Input id="env-name" />`. Real-time validation `^[a-zA-Z_][a-zA-Z0-9_-]*$`. Invalid → `aria-invalid="true"` + shadcn's destructive border (the project already styles invalid inputs via `border-destructive`; the `VariablesTable` component sets the same class on invalid keys). Already-exists check: if `name !== originalName && envs.some(e => e.name === name)` → invalid + helper text rendered as a `<p className="text-xs text-destructive mt-1">name already exists</p>` below the input. Re-typing the original name in edit mode is a no-op (not flagged as duplicate).
+- **Variables table:** reuses the existing `VariablesTable` component from Plan #4 unchanged (key validation, hover-delete, dup warning, empty-row materialization). Preceded by a small `<Label>Variables</Label>` heading for visual structure.
+- **Footer:** `<DialogFooter>` containing `<Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>Cancel</Button>` and the primary `<Button onClick={handleSave} disabled={!canSave || busy}>{isCreate ? "Create" : "Save"}</Button>`. Buttons inherit shadcn default styling (no `className` overrides).
+- **Save button** is `disabled` when name empty, invalid, or duplicate. When enabled, clicking it runs the unified handler:
 
   ```ts
   async function handleSave() {
@@ -357,9 +388,10 @@ This is the only env-editing surface in the app. It replaces Plan #4's `EditEnvD
 ```
 
 - Opened from a per-row `⋮` submenu (§5.1); the row's env is the delete target, **regardless of whether it is the currently active env**. The active-env handover (step 1 below) only fires when target === active.
-- shadcn `AlertDialog` (added in #4b).
-- Title: «Delete env?». Description includes env name in `<code>` style.
-- Buttons: `Cancel` (default), `Delete` (`destructive` variant).
+- **shadcn primitives:** `<AlertDialog>` → `<AlertDialogContent>` → `<AlertDialogHeader>` (`<AlertDialogTitle>` + `<AlertDialogDescription>`) → `<AlertDialogFooter>` (`<AlertDialogCancel>` + `<AlertDialogAction>`). All from <https://ui.shadcn.com/docs/components/alert-dialog>; no className overrides on the shell.
+- **Title:** `<AlertDialogTitle>Delete env?</AlertDialogTitle>`.
+- **Description:** `<AlertDialogDescription>Are you sure you want to delete <code>{target}</code>? Its variables will be lost.</AlertDialogDescription>`. The `<code>` element inherits the project's mono font styling.
+- **Footer buttons:** `<AlertDialogCancel>Cancel</AlertDialogCancel>` (shadcn's default cancel styling) and `<AlertDialogAction onClick={handleDelete} className={buttonVariants({ variant: "destructive" })}>Delete</AlertDialogAction>`. Per shadcn docs, `AlertDialogAction` uses the default button styling; the `destructive` variant is applied via `buttonVariants` — this is the exact pattern recommended at <https://ui.shadcn.com/docs/components/alert-dialog#destructive-style>.
 - On `Delete` (frontend-composed):
   1. If `activeEnv === target` → switch active to `No environment`: `ipc.envActiveSet(null)`, `setActiveEnv(null)`.
   2. `ipc.envDelete(target)`.
@@ -395,12 +427,14 @@ Notable: this also intercepts ⌘E in the Monaco editor (which would otherwise i
 
 ### 5.5 Visual style
 
-- `EnvSwitcherMenu` uses shadcn `DropdownMenu` default classes (background `--popover`, border `--border`, foreground `--popover-foreground`).
-- `DropdownMenuItem` for «Delete env…» — explicit `className="text-destructive focus:text-destructive focus:bg-destructive/10"` to make destructive intent obvious.
-- The `No environment` row uses `text-muted-foreground italic` to distinguish it visually from real env names.
-- `Check` icon on active env: `w-4 h-4 mr-2 text-foreground`. Non-active rows get `<span className="w-4 mr-2" />` placeholder for alignment.
-- `AlertDialog` for delete uses shadcn defaults; destructive button class.
-- `EnvEditorDialog`'s Name input reuses the same `font-mono text-sm` styling as `VariablesTable` for consistency.
+Theme and component policy are spelled out in §5.0 — short version: shadcn `new-york` style on the OKLCH dark palette from master §8.8, no color overrides. Plan #4b's per-feature exceptions are limited to:
+
+- Destructive menu items («Delete env…»): `className="text-destructive focus:text-destructive focus:bg-destructive/10"` — the shadcn-documented pattern for destructive entries inside `DropdownMenuContent`.
+- `No environment` row: `className="text-muted-foreground italic"` to visually mark it as a pseudo-entry.
+- Trailing `⋮` button: `className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"` (the row wrapper carries `className="flex items-center group"`).
+- Active env indicator: `DropdownMenuRadioItem`'s built-in indicator (a `<Check>` icon inserted by shadcn) appears automatically on the selected value; no manual icon placement needed.
+- Names in code positions (the `<code>` element in `AlertDialogDescription`, key/value cells in `VariablesTable`, the Name input itself): inherit `font-mono` from existing project utility classes.
+- `EnvEditorDialog` typography otherwise uses shadcn defaults — `Label` is `text-sm font-medium`, `DialogTitle` is `text-lg font-semibold`, `DialogDescription` is `text-sm text-muted-foreground`. No overrides.
 
 ## 6. Data flow
 
@@ -532,7 +566,7 @@ Hotkey: macOS Cmd vs Windows Ctrl is handled by the `e.metaKey || e.ctrlKey` che
 | R4 | shadcn add invocations (`dropdown-menu`, `alert-dialog`) pull additional radix dependencies that bloat the Monaco-isolated bundle. | radix-ui meta-package is already in deps; shadcn `add` only generates wrappers. No measurable bundle delta expected. |
 | R5 | Confirm dialog on Delete is good UX but adds a click for power users. | Acceptable — env deletion is destructive in spirit (loses variables) and infrequent. No «don't ask again» checkbox to keep state surface small. |
 | R6 | tauri-specta bindings regeneration drift — adding 1 command. | Standard `cargo run -p handshaker --bin export-bindings` step; `pnpm lint` (tsc -b) catches type drift in `client.ts`. |
-| R7 | «Row click switches + ⋮ click opens submenu» is unusual for a radix `DropdownMenu`. Naively nesting two click targets inside `DropdownMenuItem` either swallows the row click or fires both handlers. | Two acceptable implementations: (a) render env rows as plain `<div>` (not `DropdownMenuItem`) with a left clickable area for switch and a right `Button` that triggers a separate nested `DropdownMenu` for actions — loses radix's auto ↑↓ focus management and needs a small manual roving-tabindex implementation; (b) use `DropdownMenuSub` so the entire row is a sub-trigger that opens the actions submenu, and put «Switch to this env» as the first item inside the submenu — costs one extra click for the most common op (switch). Recommend (a) for fidelity to Postman; pick during writing-plans based on implementation cost. |
+| R7 | Nesting a `<DropdownMenu>` (for per-row actions) inside a `<DropdownMenuRadioGroup>` (for env switching) is a less-trodden radix pattern. Outer-menu click-outside handling could close both menus when the user clicks the ⋮; or vice versa, opening the inner menu could be blocked by the radio group's focus capture. | Mitigation in `EnvSwitcherMenu`: wrap the ⋮ button click handler with `e.stopPropagation()` (already specified in §5.1) so the outer radio-group doesn't interpret it as a row switch. radix's `DropdownMenu` portal renders the inner content in a separate stacking context, so click-outside on the inner menu does not propagate to the outer menu. If this combination misbehaves during smoke (§7.6), the documented fallback is to render env rows as plain `<div>` wrappers around a clickable name area and a separate `<DropdownMenu>` for the ⋮ — losing radix radio-group keyboard nav and requiring manual roving-tabindex. Pick during implementation. |
 
 ## 10. Implementation order (input to writing-plans)
 
@@ -548,7 +582,7 @@ Roughly TDD-friendly; `writing-plans` refines into tasks with subagent breakdown
    - `cargo test --workspace` green at this checkpoint.
 2. **`env_delete` IPC command** + unit tests (active-env reject, success on inactive, success when only env is being deleted while active=None). Register in `collect_commands!`. Regen bindings.
 3. **Frontend wrapper** `ipc.envDelete` in `src/ipc/client.ts`. Audit existing `activeEnv` consumers for null-safety (`App.tsx`, `EnvPill`, `EditEnvDialog` (about to be renamed), `InvokePanel`'s pass-through to `ResolvesPreview`). `pnpm lint` clean.
-4. **shadcn add `dropdown-menu` and `alert-dialog`**. Verify they appear in `src/components/ui/`. Lint passes.
+4. **shadcn add `dropdown-menu`, `alert-dialog`, `label`** (one `pnpm dlx shadcn@latest add dropdown-menu alert-dialog label` invocation). Verify they appear in `src/components/ui/`. Lint passes. Inherits `components.json` config from Plan #4 — no theme/style choice prompts.
 5. **Rename `EditEnvDialog` → `EnvEditorDialog`** and expand its API:
    - Rename file `EditEnvDialog.tsx` → `EnvEditorDialog.tsx`. Update all imports.
    - Change props: `envName: string` → `originalName: string | null`. Add header that reads `New environment` (create mode) or `Edit environment` (edit mode); update Save button label accordingly.
@@ -580,9 +614,13 @@ Roughly TDD-friendly; `writing-plans` refines into tasks with subagent breakdown
 | Master spec §10.1 | local | optimistic switch + debounced persist policy |
 | Plan #4 design §1.2 | `2026-05-27-plan-04-env-vars-design.md` | confirms exact OOS items being lifted |
 | Plan #4 errata #2 | `../errata/2026-05-27-plan-04-env-vars.md` | `EnvironmentIpc.variables` `Partial<...>` shape — informs how dialogs read variables |
-| shadcn dropdown-menu | <https://ui.shadcn.com/docs/components/dropdown-menu> | menu primitive + `align="end"` API |
-| shadcn alert-dialog | <https://ui.shadcn.com/docs/components/alert-dialog> | confirm dialog pattern, destructive button styling |
-| radix DropdownMenu | <https://www.radix-ui.com/primitives/docs/components/dropdown-menu> | keyboard interaction (↑↓ Enter Esc, → / ← for submenus) and `disabled` semantics; `DropdownMenuSub` for per-row submenus |
+| shadcn dropdown-menu | <https://ui.shadcn.com/docs/components/dropdown-menu> | `DropdownMenu`, `DropdownMenuTrigger`, `DropdownMenuContent` (`align="end"`), `DropdownMenuLabel`, `DropdownMenuItem`, `DropdownMenuRadioGroup`, `DropdownMenuRadioItem`, `DropdownMenuSeparator` |
+| shadcn alert-dialog | <https://ui.shadcn.com/docs/components/alert-dialog> | `AlertDialog`, `AlertDialogContent`, `AlertDialogHeader`, `AlertDialogTitle`, `AlertDialogDescription`, `AlertDialogFooter`, `AlertDialogCancel`, `AlertDialogAction` |
+| shadcn alert-dialog destructive style | <https://ui.shadcn.com/docs/components/alert-dialog#destructive-style> | `buttonVariants({ variant: "destructive" })` pattern for `AlertDialogAction` |
+| shadcn dialog | <https://ui.shadcn.com/docs/components/dialog> | `Dialog`, `DialogContent`, `DialogHeader`, `DialogTitle`, `DialogDescription`, `DialogFooter` — already in project from Plan #4, used by `EnvEditorDialog` |
+| shadcn label | <https://ui.shadcn.com/docs/components/label> | `<Label htmlFor>` paired with `<Input>` for the Name field |
+| shadcn theme (new-york dark) | <https://ui.shadcn.com/themes> + master §8.8 | the OKLCH palette already wired in `src/styles/globals.css`; no Plan #4b additions |
+| radix DropdownMenu | <https://www.radix-ui.com/primitives/docs/components/dropdown-menu> | keyboard interaction (↑↓ Enter Esc, → / ← for submenus); event propagation semantics for nested DropdownMenu inside DropdownMenuRadioGroup |
 | Postman docs «Managing environments» | <https://learning.postman.com/docs/sending-requests/variables/managing-environments/> | confirms «click the dropdown menu in the upper right … to select an active environment» pattern — row-click switches |
 | Postman docs «Navigating Postman» | <https://learning.postman.com/docs/getting-started/basics/navigating-postman/> | confirms «hover over an item, it exposes View more actions» — basis for per-row `⋮` affordance |
 | Memory rule `feedback_verify_technical_claims` | local | requires source citations |
