@@ -16,8 +16,8 @@ pub async fn activate(
     transport: Arc<dyn GrpcTransport>,
 ) -> Result<GrpcConnection, CoreError> {
     let channel = transport.channel(&target).await?;
-    // clone — TonicChannel дешёвый Clone (Arc внутри), reflection consume его свою копию,
-    // оригинал останется в GrpcConnection для последующих invoke.
+    // clone — TonicChannel is cheap to Clone (Arc internally); reflection consumes its copy,
+    // and the original stays in GrpcConnection for subsequent invokes.
     let (_services_listed, files) = list_and_fetch_files(channel.clone()).await?;
     let pool = build_pool(files)?;
     let catalog = build_catalog(&pool);

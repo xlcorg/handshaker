@@ -71,9 +71,10 @@ impl GrpcTarget {
 /// plus the assembled descriptor pool and projected catalog. **NOT** `Clone`: there's at most
 /// one live connection in the app (per spec §4 "Activated gRPC connections = 1").
 ///
-/// `channel` хранится здесь, чтобы invoke не делал лишний h2-handshake на каждый вызов —
-/// один Channel acquired в `activate()` и переиспользуется. Plan #3 §3.1.1 объясняет
-/// почему это pragmatic relaxation invariant'а Plan #2 «tonic confined to transport/reflection».
+/// `channel` is stored here so invoke doesn't perform a fresh h2 handshake per call —
+/// one Channel is acquired in `activate()` and reused. Plan #3 §3.1.1 explains why
+/// this is a pragmatic relaxation of Plan #2's "tonic confined to transport/reflection"
+/// invariant (the field uses the `TonicChannel` alias, never raw `tonic::transport::Channel`).
 pub struct GrpcConnection {
     pub target: GrpcTarget,
     pub transport: Arc<dyn crate::grpc::GrpcTransport>,
@@ -149,7 +150,7 @@ mod tests {
 
     #[test]
     fn grpc_connection_struct_has_channel_field() {
-        // Compile-only тест: если поле `channel: TonicChannel` исчезнет, не скомпилируется.
+        // Compile-only check: if the `channel: TonicChannel` field is removed, this won't compile.
         fn _accepts_channel(c: &super::GrpcConnection) -> &crate::grpc::transport::TonicChannel {
             &c.channel
         }
