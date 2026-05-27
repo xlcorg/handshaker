@@ -6,6 +6,8 @@
 
 use std::collections::HashMap;
 
+pub(crate) mod skeleton;
+
 /// Outcome of one unary call. `status_code == 0` means success (`response_json` is `Some`).
 /// Any other code is a normal non-OK gRPC status (`response_json` is `None`); in that case
 /// `status_message` carries `{Code}: {message}` (e.g. `"NOT_FOUND: user does not exist"`).
