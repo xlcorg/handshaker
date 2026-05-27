@@ -7,8 +7,10 @@
 //! data types defined here.
 
 pub mod connection;
+pub mod descriptor;
 pub mod reflection;
 pub mod transport;
 
 pub use connection::GrpcTarget;
+pub use descriptor::build_pool;
 pub use transport::{GrpcTransport, TonicChannel, TonicTransport};
