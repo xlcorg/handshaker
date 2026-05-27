@@ -42,7 +42,7 @@ pub async fn grpc_connect(
     let target = GrpcTarget::new(input.address, input.tls, input.skip_verify)?;
     let transport = Arc::new(TonicTransport::new());
 
-    let conn = activate(target.clone(), transport).await?;
+    let conn = activate(target, transport).await?;
     let summary: TargetSummary = (&conn.target).into();
     let key = target_key(&conn.target);
     let catalog: ServiceCatalogIpc = conn.catalog.clone().into();
@@ -76,8 +76,10 @@ pub async fn grpc_disconnect(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), IpcError> {
-    let mut slot = state.connection.lock().await;
-    *slot = None;
+    {
+        let mut slot = state.connection.lock().await;
+        *slot = None;
+    }
     ConnectionStateChanged {
         connected: false,
         target: None,
@@ -100,7 +102,7 @@ pub async fn grpc_refresh_contract(
     };
 
     let transport = Arc::new(TonicTransport::new());
-    let conn = activate(target.clone(), transport).await?;
+    let conn = activate(target, transport).await?;
     let catalog: ServiceCatalogIpc = conn.catalog.clone().into();
     let key = target_key(&conn.target);
 
