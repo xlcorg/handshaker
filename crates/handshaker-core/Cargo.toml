@@ -26,6 +26,9 @@ prost.workspace = true
 prost-types.workspace = true
 prost-reflect.workspace = true     # features ["serde"] from workspace
 
+# Plan #4 — Env + Vars
+regex.workspace = true
+
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tonic-health.workspace = true

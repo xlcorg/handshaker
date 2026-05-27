@@ -1290,6 +1290,7 @@ dependencies = [
  "prost 0.13.5",
  "prost-reflect",
  "prost-types 0.13.5",
+ "regex",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
