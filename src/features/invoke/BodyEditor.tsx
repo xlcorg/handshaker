@@ -19,7 +19,7 @@ export function BodyEditor({ value, onChange }: BodyEditorProps) {
     >
       <MonacoEditor
         height="100%"
-        defaultLanguage="json"
+        defaultLanguage="json-with-vars"
         theme={MONACO_THEME}
         value={value}
         onChange={(v) => onChange(v ?? "")}

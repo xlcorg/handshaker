@@ -37,6 +37,53 @@ export const MonacoEditor = lazy(async () => {
   };
   loaderMod.default.config({ monaco });
 
+  // Custom language: JSON with `{{var}}` placeholder highlighting.
+  // No JSON diagnostics yet (trade-off acknowledged in Plan #4 spec §7.2);
+  // pre-Send `JSON.parse` already validates. Plan #4b may add diagnostics
+  // or switch to overlay-decorations.
+  monaco.languages.register({ id: "json-with-vars" });
+
+  monaco.languages.setLanguageConfiguration("json-with-vars", {
+    brackets: [
+      ["{", "}"],
+      ["[", "]"],
+    ],
+    autoClosingPairs: [
+      { open: "{", close: "}" },
+      { open: "[", close: "]" },
+      { open: '"', close: '"' },
+    ],
+    surroundingPairs: [
+      { open: "{", close: "}" },
+      { open: "[", close: "]" },
+      { open: '"', close: '"' },
+    ],
+  });
+
+  monaco.languages.setMonarchTokensProvider("json-with-vars", {
+    // Order matters: the variable rule runs before string body matching so that
+    // `"{{uid}}"` paints the inner placeholder with the variable token.
+    tokenizer: {
+      root: [
+        [/\{\{[a-zA-Z_][a-zA-Z0-9_\-]*\}\}/, "variable.template"],
+        [/"(?:[^"\\]|\\.)*"/, "string"],
+        [/-?\d+(\.\d+)?([eE][+\-]?\d+)?/, "number"],
+        [/\b(?:true|false|null)\b/, "keyword"],
+        [/[{}\[\],:]/, "delimiter"],
+        [/[ \t\r\n]+/, "white"],
+      ],
+    },
+  });
+
+  monaco.editor.defineTheme("handshaker-dark", {
+    base: "vs-dark",
+    inherit: true,
+    rules: [
+      { token: "variable.template", foreground: "FACC15", fontStyle: "bold" },
+    ],
+    colors: {},
+  });
+
   return { default: reactMod.default };
 });
 
@@ -57,7 +104,8 @@ export const READ_ONLY_OPTIONS = {
 } as const;
 
 /**
- * Monaco theme — `vs-dark` fits the shadcn new-york OKLCH dark palette closely
- * enough for MVP. Custom theme registration is a separate sub-plan.
+ * Monaco theme — `handshaker-dark` extends `vs-dark` with a warm-yellow rule
+ * for the `variable.template` token used by the `json-with-vars` language.
+ * Registered inside the lazy factory above.
  */
-export const MONACO_THEME = "vs-dark" as const;
+export const MONACO_THEME = "handshaker-dark" as const;
