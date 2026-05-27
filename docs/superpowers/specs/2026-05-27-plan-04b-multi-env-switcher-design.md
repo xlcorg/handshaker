@@ -3,7 +3,7 @@
 **Date:** 2026-05-27
 **Branch (suggested):** `claude/plan-04b-multi-env-switcher`
 **Realizes spec rules:**
-- Master §4 line 137 — relax «одна Default env в MVP» constraint to multi-env (with single Default still as bootstrap).
+- Master §4 line 137 — relax «одна Default env в MVP» constraint to multi-env. Bootstrap also changes: no auto-seeded Default; initial state is "No environment" (Postman-style), the user explicitly creates their first env.
 - Master §5.2 — `EnvironmentStore` trait (already matches; no changes).
 - Master §6.2 — wire up the only missing IPC command: `env_delete`.
 - Master §8.1 — header env-pill `<Active> ▾` becomes a real switcher dropdown.
@@ -19,20 +19,28 @@
 
 ## 1. Goal and scope
 
-**Goal:** turn the header env-pill from a single-purpose "edit Default's variables" trigger into a real multi-env switcher with create / rename / delete CRUD. Backend gains exactly one new IPC command (`env_delete`); the bulk of the work is frontend (dropdown menu + three small dialogs + hotkey).
+**Goal:** turn the header env-pill from a single-purpose "edit Default's variables" trigger into a real multi-env switcher with create / rename / delete CRUD. Bootstrap is changed from auto-seeding a `Default` env to a Postman-style **"No environment"** initial state — the user explicitly creates their first env. Backend gains exactly one new IPC command (`env_delete`) and the signatures of `env_active_get` / `env_active_set` change to use `Option<String>` to model the no-env state. The bulk of the work is frontend (dropdown menu + three small dialogs + hotkey).
 
 **Acceptance:** in the running app, the user can:
-1. Click the header pill → see a dropdown listing `Default` with a check icon, plus a «+ New env…» entry. On the active row, a trailing `⋮` reveals on hover.
-2. Click «+ New env…», type `staging`, save → new env is created, auto-activated, pill reads `staging ▾`.
-3. Reopen the dropdown → both envs listed; click the `Default` row body → switches back, `ResolvesPreview` re-renders with Default's variables.
-4. With active = `Default`, hover the `staging` row → click `⋮` → «Rename env…» → type `prod` → Save. Menu now shows `✓ Default, prod`; variables preserved on the renamed env; active stays `Default` (renaming a non-active env does not switch).
-5. Hover `prod` row → `⋮` → «Delete env…» → confirm dialog → Delete. Menu now shows only `✓ Default`. `⋮` → «Delete env…» on Default is disabled (last env).
-6. Create a second env `qa` and delete it while it is active: backend would reject (active env), so the frontend pre-switches active to `Default` first, then issues `env_delete(qa)`. Pill returns to `Default ▾`.
-7. `⌘E` / `Ctrl+E` opens the dropdown menu (focus first row; ↑↓ navigates; Enter switches; → opens the focused row's submenu; ← closes the submenu; Esc closes the menu).
+1. **Cold boot** — pill reads `No environment ▾`. Body `{{var}}` immediately shows `⚠ Unresolved: var` (no env → empty var set → unresolved).
+2. Click the header pill → menu opens with a non-removable `✓ No environment` row at the top, then a separator, then `+ New env…`. No real envs yet.
+3. Click «+ New env…», type `staging`, save → env created, auto-activated. Pill reads `staging ▾`.
+4. Reopen menu → `No environment`, `✓ staging`. Click `No environment` row → switches back to no-env. Pill reads `No environment ▾`. Click `staging` row → switches back.
+5. With active = `staging`, hover `staging` row → `⋮` → «Edit variables…» → add `uid=alpha`. Save. Body `{{uid}}` preview now shows `→ resolves: {"...":"alpha"}`.
+6. Create a second env `prod`. Hover `prod` row → `⋮` → «Rename env…» → `prod-eu` → Save. Menu shows `No environment`, `✓ prod-eu` (was created last and auto-activated), `staging`. Variables on the renamed env preserved.
+7. Hover `staging` row → `⋮` → «Delete env…» → confirm dialog → Delete. Active stays `prod-eu`. Menu shows `No environment`, `✓ prod-eu`.
+8. Delete the active env: hover `prod-eu` row → `⋮` → «Delete env…» → Delete. Frontend pre-switches active to `No environment` (since target was active), then `env_delete(prod-eu)`. Pill reads `No environment ▾`. Menu shows just `✓ No environment`.
+9. `⌘E` / `Ctrl+E` opens the dropdown menu (focus first row; ↑↓ navigates; Enter switches; → opens the focused row's submenu; ← closes the submenu; Esc closes the menu). The `No environment` row has no submenu (no `⋮`), so → on it is a no-op.
 
 ### 1.1 In scope
 
-1. **Backend:** add `env_delete` IPC command (single line of new logic). Register in `collect_commands!`. Last-env protection — `InMemoryEnvironmentStore::delete` already idempotent; we add the «cannot delete the only env» guard at the IPC layer (frontend disables the menu item too, so this is defense-in-depth, not the primary UX).
+1. **Backend:**
+   - Add `env_delete` IPC command (single line of new logic). Register in `collect_commands!`. No last-env guard — once all envs are deleted, active falls to `None` (≡ "No environment") and that's a valid steady state.
+   - **Change `active_env` from `RwLock<String>` to `RwLock<Option<String>>`.** `None` ≡ "No environment".
+   - **Change `env_active_get` signature** from `Result<String, IpcError>` to `Result<Option<String>, IpcError>` (TS: `string | null`).
+   - **Change `env_active_set` signature** from `name: String` to `name: Option<String>` (TS: `string | null`). Passing `null` switches to no-env. Validation still rejects a `Some(name)` referring to a non-existent env.
+   - **Remove the `with_default()` bootstrap.** `AppState::default()` now uses `InMemoryEnvironmentStore::new()` (empty) and `active_env = None`. The `with_default` constructor stays in the core crate for tests but is unused by `src-tauri`.
+   - `vars_resolve` reads the active env name; if `None`, it resolves against an empty `HashMap<String, String>`. `resolve_template_with_diagnostics` already handles empty var sets — all `{{var}}` end up in `unresolved_vars`.
 2. **Frontend:**
    - shadcn add `dropdown-menu` and `alert-dialog`.
    - `EnvSwitcherMenu` component (replaces direct EditEnvDialog trigger inside `EnvPill`).
@@ -42,9 +50,9 @@
    - `EnvPill` rebuilt around the new menu; existing `Edit variables…` flow lands as one of the menu items.
    - `⌘E` / `Ctrl+E` hotkey opens the dropdown — global keyboard listener in `App.tsx`.
 3. **State plumbing:**
-   - `App.tsx` becomes the owner of the `envs: EnvironmentIpc[]` list + `activeEnv: string`. Pill consumes both via props.
+   - `App.tsx` becomes the owner of the `envs: EnvironmentIpc[]` list + `activeEnv: string | null`. Pill consumes both via props. `null` ≡ "No environment".
    - List refreshes on mount + after every mutation reply.
-   - `activeEnv` propagated as a prop to `InvokePanel` → `ResolvesPreview` so the latter re-fires `vars_resolve` when env switches (live preview updates without page reload).
+   - `activeEnv` propagated as a prop to `InvokePanel` → `ResolvesPreview` so the latter re-fires `vars_resolve` when env switches (live preview updates without page reload). When `activeEnv === null`, the preview line still calls `vars_resolve` and renders the unresolved-vars warning (consistent with «No environment» semantics).
 
 ### 1.2 Out of scope (explicit deferrals)
 
@@ -53,7 +61,7 @@
 - **Variables-table-inline switcher** (e.g. inside `EditEnvDialog`). The dialog continues to edit only the env it was opened for. Switching envs always happens through the header pill. Keeps mental model simple.
 - **Persistence to disk.** Master §4 line 148 — in-memory only in MVP.
 - **Bulk import/export of envs.** Out of MVP scope.
-- **Env-level «active» persistence across app restarts.** Active env is also in-memory; restart resets to `Default`.
+- **Env-level «active» persistence across app restarts.** Active env is in-memory; restart always resets to `None` ("No environment").
 - **Auth-per-env editing.** Lands with Plan #5.
 - **Variables at Collection scope.** Lands with Plan #6.
 
@@ -61,21 +69,24 @@
 
 ### 2.1 Core (`crates/handshaker-core/src/env/`)
 
-**No changes.** The trait already exposes `list / get / upsert / delete` exactly as master §5.2 prescribes, and `InMemoryEnvironmentStore` already implements all four. `delete` is currently idempotent (silently succeeds on missing name) — kept as-is; the «cannot delete only env» rule lives at the IPC boundary.
+**No changes.** The trait already exposes `list / get / upsert / delete` exactly as master §5.2 prescribes, and `InMemoryEnvironmentStore` already implements all four. `delete` is currently idempotent (silently succeeds on missing name) — kept as-is. The `with_default()` constructor stays for use in tests but `src-tauri` no longer calls it.
 
-Trade-off considered: pushing the last-env guard into `InMemoryEnvironmentStore::delete` would let any other consumer (e.g. a future `FileEnvironmentStore`) inherit the invariant for free. Rejected: it couples core to a UX rule that's MVP-specific. A persistent-storage variant might want to allow deleting all envs and ship «no envs» state to the UI. Keep core dumb, enforce at IPC.
+There is no «cannot delete the only env» rule. The "No environment" pseudo-entry handled at the src-tauri / UI layer subsumes that invariant: when `env_store.list()` is empty, `active_env` is `None`, and the UI shows `No environment ▾`. No core involvement.
 
 ### 2.2 src-tauri (`src-tauri/src/`)
 
 ```
 src/
-  commands/env.rs    MODIFY — add #[tauri::command] env_delete
-  ipc/env.rs         UNCHANGED — types stay the same
-  state.rs           UNCHANGED — active_env: RwLock<String> already in place
+  commands/env.rs    MODIFY — add env_delete; widen env_active_get / env_active_set
+                              signatures from String to Option<String>
+  commands/vars.rs   MODIFY — handle active_env = None (resolve against empty var map)
+  ipc/env.rs         UNCHANGED — EnvironmentIpc types stay the same
+  state.rs           MODIFY — active_env: RwLock<Option<String>>; default = None;
+                              env_store seeded empty (no with_default() call)
   lib.rs             MODIFY — register env_delete in collect_commands![]
 ```
 
-That's the entirety of the Rust delta. Estimated ≤ 30 lines including tests.
+That's the entirety of the Rust delta. Estimated ~50 lines including tests.
 
 ### 2.3 Frontend (`src/`)
 
@@ -109,6 +120,14 @@ No Zustand introduction (KISS continued from Plan #4). React props + local state
 
 **No new IPC types.** `EnvironmentIpc` from Plan #4 ([`src-tauri/src/ipc/env.rs`](../../../src-tauri/src/ipc/env.rs)) is reused for every command including the new `env_delete` (which takes a `String`, not an `EnvironmentIpc`).
 
+**Signature changes (Plan #4 → Plan #4b):**
+- `env_active_get`: return type `String` → `Option<String>` (tauri-specta emits TS `string | null`).
+- `env_active_set`: argument `name: String` → `name: Option<String>` (TS `string | null`).
+- `AppState::active_env`: `RwLock<String>` → `RwLock<Option<String>>`; default `None` (was `"Default"`).
+- `AppState::env_store`: initialized via `InMemoryEnvironmentStore::new()` (was `with_default()`); store starts empty.
+
+`InMemoryEnvironmentStore::with_default()` is left in the core crate (used by some existing tests; not invoked by `src-tauri`).
+
 ## 4. IPC contract
 
 ### 4.1 Commands (after Plan #4b)
@@ -116,11 +135,11 @@ No Zustand introduction (KISS continued from Plan #4). React props + local state
 | Command | Args | Return | Status |
 |---|---|---|---|
 | `env_list` | — | `Vec<EnvironmentIpc>` | unchanged (Plan #4) |
-| `env_active_get` | — | `String` | unchanged (Plan #4) |
-| `env_active_set` | `name: String` | `()` | unchanged (Plan #4) |
+| `env_active_get` | — | `Option<String>` (TS: `string \| null`) | **signature widened** — `null` = "No environment" |
+| `env_active_set` | `name: Option<String>` (TS: `string \| null`) | `()` | **signature widened** — pass `null` to clear active |
 | `env_upsert` | `env: EnvironmentIpc` | `()` | unchanged (Plan #4) |
 | `env_delete` | `name: String` | `()` | **NEW** |
-| `vars_resolve` | `template: String` | `ResolutionReportIpc` | unchanged (Plan #4) |
+| `vars_resolve` | `template: String` | `ResolutionReportIpc` | unchanged (Plan #4) — backend now handles `active = None` internally |
 
 ### 4.2 `env_delete` semantics
 
@@ -128,18 +147,11 @@ No Zustand introduction (KISS continued from Plan #4). React props + local state
 #[tauri::command]
 #[specta::specta]
 pub async fn env_delete(state: State<'_, AppState>, name: String) -> Result<(), IpcError> {
-    // Last-env guard. Defense-in-depth — UI disables the menu item too.
-    let envs = state.env_store.list();
-    if envs.len() <= 1 {
-        return Err(handshaker_core::error::CoreError::InvalidTarget(
-            "cannot delete the only env".to_string(),
-        ).into());
-    }
-    // Active-env guard. Frontend is expected to env_active_set before delete
-    // when targeting the active env. We refuse to delete the currently active
-    // env to keep the invariant "active always exists" trivial.
+    // Active-env guard. Frontend is expected to env_active_set(None or other) before
+    // delete when targeting the active env. We refuse to delete the currently active
+    // env to keep the invariant "active is always None or a real existing env" trivial.
     let active = state.active_env.read().await.clone();
-    if active == name {
+    if active.as_deref() == Some(name.as_str()) {
         return Err(handshaker_core::error::CoreError::InvalidTarget(format!(
             "cannot delete active env `{name}`; switch first"
         )).into());
@@ -148,11 +160,34 @@ pub async fn env_delete(state: State<'_, AppState>, name: String) -> Result<(), 
 }
 ```
 
-**Why guard «can't delete active»?** Two options were considered:
-- (a) Auto-pick a new active in the backend and switch silently. Requires the command to return the new active name to avoid a follow-up `env_active_get` round-trip — deviates from master §6.2 signature `env_delete(name)`.
-- (b) Refuse with `InvalidTarget`, force frontend to compose `env_active_set(other) → env_delete(target)`. Stays exactly within master's signature. Frontend orchestration is trivial.
+**No last-env guard.** With "No environment" as a valid steady state, deleting the last real env simply leaves `env_store.list()` empty and `active_env = None`. The pill renders `No environment ▾`. Nothing breaks.
 
-Chose (b). The frontend already composes the delete-active sequence in `ConfirmDeleteEnvDialog.handleConfirm`.
+**Why keep the active-env guard?** Without it, `env_delete(activeName)` would leave `active_env` pointing at a deleted env, breaking the invariant «active is None or a real existing env» throughout the backend (especially `vars_resolve`). Two implementation options were considered:
+- (a) Auto-clear active in the backend (`if active == name { active = None }`) and return `()`. Slightly more lenient API but harder to reason about; UI may have stale `activeEnv` until next `env_active_get`.
+- (b) Refuse with `InvalidTarget`, force frontend to compose `env_active_set(None_or_other) → env_delete(target)`. Stays exactly within master §6.2 signature. The frontend already composes this in `ConfirmDeleteEnvDialog.handleConfirm`.
+
+Chose (b) for the same reason as before — keeps the IPC simple and lets the frontend stay the source of truth for the React-prop `activeEnv`.
+
+### 4.2.1 `env_active_set` semantics
+
+```rust
+#[tauri::command]
+#[specta::specta]
+pub async fn env_active_set(state: State<'_, AppState>, name: Option<String>) -> Result<(), IpcError> {
+    match &name {
+        Some(n) => {
+            if state.env_store.get(n).is_none() {
+                return Err(handshaker_core::error::CoreError::InvalidTarget(format!(
+                    "no such env: `{n}`"
+                )).into());
+            }
+        }
+        None => {} // null clears active — always allowed
+    }
+    *state.active_env.write().await = name;
+    Ok(())
+}
+```
 
 ### 4.3 Events
 
@@ -161,9 +196,9 @@ Chose (b). The frontend already composes the delete-active sequence in `ConfirmD
 ### 4.4 Error mapping
 
 All paths reuse existing `IpcError` variants:
-- `env_delete` last-env / active-env / invalid-name → `IpcError::InvalidTarget { message }`.
+- `env_delete` active-env / invalid-name → `IpcError::InvalidTarget { message }`.
 - `env_upsert` invalid name → `IpcError::InvalidTarget { message }` (existing).
-- `env_active_set` missing env → `IpcError::InvalidTarget { message }` (existing).
+- `env_active_set Some(name)` for missing env → `IpcError::InvalidTarget { message }` (existing). `env_active_set(None)` never fails.
 
 The `from_core_error_exhaustive` test in `src-tauri/src/ipc/error.rs` (Plan #1) needs **no update**.
 
@@ -175,30 +210,36 @@ Models Postman's environment quick-look (top-right of the workbench): each env r
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│  Handshaker                              prod ▾          │
+│  Handshaker                              prod ▾          │   (or `No environment ▾`)
 └──────────────────────────────────────────────────────────┘
                                           │
                                           ▼  (click or ⌘E)
                           ┌─────────────────────────────┐
                           │  Environments                │   ← label header
                           │  ─────────────────────────── │
-                          │    Default                ⋮  │   ← ⋮ visible on row hover
-                          │  ✓ prod                   ⋮  │     or keyboard focus
+                          │    No environment            │   ← no ⋮, not removable
+                          │  ─────────────────────────── │
+                          │  ✓ prod                   ⋮  │   ← ⋮ on row hover/focus
                           │    staging                ⋮  │
                           │  ─────────────────────────── │
                           │  + New env…                  │
                           └─────────────────────────────┘
-                                  │ click ⋮ on a row →
+                                  │ click ⋮ on a real env row →
                                   ▼
                           ┌──────────────────────────┐
                           │  Edit variables…          │
                           │  Rename env…              │
-                          │  Delete env… (red, off)   │   ← off if envs.length===1
+                          │  Delete env… (red)        │
                           └──────────────────────────┘
 ```
 
-- Pill itself stays a `Button variant="ghost" size="sm"` showing the active env name + `▾` chevron icon. Pill click → opens `EnvSwitcherMenu`.
-- **Env rows (direct manipulation):**
+- Pill itself stays a `Button variant="ghost" size="sm"` showing the active env name (or `No environment` when active is `null`) + `▾` chevron icon. Pill click → opens `EnvSwitcherMenu`.
+- **«No environment» pseudo-row (always at the top, separator below):**
+  - Renders the literal text `No environment` in `text-muted-foreground` italic style to distinguish from real envs.
+  - Click → calls `ipc.envActiveSet(null)` and `setActiveEnv(null)` in `App.tsx`. Pill becomes `No environment ▾`. Menu closes.
+  - `Check` icon on the left when `activeEnv === null`.
+  - **No trailing `⋮`** — not editable, not renamable, not deletable. The row is purely a switch target.
+- **Env rows (real envs, direct manipulation):**
   - Sorted alphabetically.
   - **Click on the row body (name area)** → switches active to this env. Calls `ipc.envActiveSet(name)` and `setActiveEnv(name)` in `App.tsx`. Menu closes.
   - **Active row** carries a `Check` icon (lucide-react) on the left; non-active rows render a same-width placeholder for alignment.
@@ -207,10 +248,12 @@ Models Postman's environment quick-look (top-right of the workbench): each env r
 - **Per-row submenu contents (act on THIS row's env, not necessarily the active one):**
   - «Edit variables…» — opens `EditEnvDialog` with `envName = row.name`.
   - «Rename env…» — opens `RenameEnvDialog` with `oldName = row.name`.
-  - «Delete env…» — opens `ConfirmDeleteEnvDialog` with `target = row.name`. Styled `text-destructive`. Disabled (`DropdownMenuItem disabled`) when `envs.length === 1`.
+  - «Delete env…» — opens `ConfirmDeleteEnvDialog` with `target = row.name`. Styled `text-destructive`. **Always enabled** for real env rows (no last-env restriction — deleting the last real env just leaves `No environment` active).
 - **Below the env list:**
   - Separator.
   - **«+ New env…»** — opens `NewEnvDialog`. Auto-activates the created env on success (matches Postman create-and-activate behavior).
+- **When `env_store.list()` is empty** (cold boot, or all envs deleted):
+  - The menu shows just `✓ No environment` + separator + `+ New env…`. No real-env rows.
 - **Layout details:**
   - Width: fits the longest env name + ⋮ icon padding; no horizontal scrolling.
   - Position: anchored under the pill, right-aligned (`align="end"`).
@@ -291,13 +334,15 @@ Trade-off accepted: a second menu level slightly complicates keyboard nav (radix
 - Title: «Delete env?». Description includes env name in `<code>` style.
 - Buttons: `Cancel` (default), `Delete` (`destructive` variant).
 - On `Delete` (frontend-composed):
-  1. If `activeEnv === target` → pick a new active: `firstAlphabetical = envs.filter(e => e.name !== target).map(e => e.name).sort()[0]`. Call `ipc.envActiveSet(firstAlphabetical)`, `setActiveEnv(firstAlphabetical)`.
+  1. If `activeEnv === target` → switch active to `No environment`: `ipc.envActiveSet(null)`, `setActiveEnv(null)`.
   2. `ipc.envDelete(target)`.
   3. Refetch `envs` in `App.tsx`.
 - Failure in step 1 or 2 → footer error strip; dialog stays open.
 - Esc / Cancel → discard.
 
 The active-env-switching guard at the backend (§4.2) means step 1 is mandatory when deleting the active env — otherwise step 2 fails with `InvalidTarget("cannot delete active env...")`. UI handles this transparently.
+
+**Why switch to `No environment` rather than the first alphabetical remaining env?** Postman's behavior matches: deleting the active env drops you to «No Environment», not to an arbitrary neighbour. This is also more predictable: deleting a real env is a destructive op; auto-switching to another arbitrary env is a second mutation the user didn't request. «No environment» as the post-delete state lets the user explicitly pick the next active.
 
 ### 5.5 Global hotkey ⌘E / Ctrl+E
 
@@ -325,7 +370,7 @@ Notable: this also intercepts ⌘E in the Monaco editor (which would otherwise i
 
 - `EnvSwitcherMenu` uses shadcn `DropdownMenu` default classes (background `--popover`, border `--border`, foreground `--popover-foreground`).
 - `DropdownMenuItem` for «Delete env…» — explicit `className="text-destructive focus:text-destructive focus:bg-destructive/10"` to make destructive intent obvious.
-- `DropdownMenuItem disabled` (when envs.length === 1) inherits shadcn's reduced opacity automatically.
+- The `No environment` row uses `text-muted-foreground italic` to distinguish it visually from real env names.
 - `Check` icon on active env: `w-4 h-4 mr-2 text-foreground`. Non-active rows get `<span className="w-4 mr-2" />` placeholder for alignment.
 - `AlertDialog` for delete uses shadcn defaults; destructive button class.
 - `NewEnvDialog` / `RenameEnvDialog` inputs reuse the same `font-mono text-sm` styling as `VariablesTable` for consistency.
@@ -334,15 +379,16 @@ Notable: this also intercepts ⌘E in the Monaco editor (which would otherwise i
 
 ### 6.1 Initial load
 
-1. `App.tsx` mount effect (existing): `ipc.envActiveGet()` → `setActiveEnv`.
-2. NEW: `App.tsx` mount effect: `ipc.envList()` → `setEnvs`.
+1. `App.tsx` mount effect (existing): `ipc.envActiveGet()` → `setActiveEnv`. On cold boot returns `null` (no env auto-seeded).
+2. NEW: `App.tsx` mount effect: `ipc.envList()` → `setEnvs`. On cold boot returns `[]`.
 3. `<EnvPill envs={envs} activeEnv={activeEnv} onChange={refresh} />` — pill renders.
+4. The pill displays `No environment` when `activeEnv === null`; otherwise the env name.
 
 ### 6.2 Switch active env
 
-1. User clicks env row in `EnvSwitcherMenu`.
-2. Menu callback: `setActiveEnv(name)` (optimistic, sync), then fire-and-forget `ipc.envActiveSet(name)` from the click handler. No `await` blocking the render — the optimistic UI update happens immediately and the IPC call resolves in the background.
-3. `activeEnv` prop change propagates to `InvokePanel` → `ResolvesPreview` → `useEffect` deps trigger → `ipc.varsResolve(body)` re-fires with the new active env.
+1. User clicks an env row (real env or the `No environment` pseudo-row).
+2. Menu callback: `setActiveEnv(value)` (optimistic, sync, where `value` is `string` or `null`), then fire-and-forget `ipc.envActiveSet(value)` from the click handler. No `await` blocking the render — the optimistic UI update happens immediately and the IPC call resolves in the background.
+3. `activeEnv` prop change propagates to `InvokePanel` → `ResolvesPreview` → `useEffect` deps trigger → `ipc.varsResolve(body)` re-fires. When `activeEnv === null` the backend uses an empty var set; `unresolved_vars` will list every `{{var}}` in the body.
 
 On `env_active_set` failure (e.g. env got deleted in another window — not possible in MVP but coded for completeness): revert `activeEnv` to previous, show toast «failed to switch env». In practice: never fires.
 
@@ -369,16 +415,15 @@ On `env_active_set` failure (e.g. env got deleted in another window — not poss
 
 `ConfirmDeleteEnvDialog.handleDelete(targetName)`:
 1. If `activeEnv === targetName`:
-   a. `newActive = envs.filter(e => e.name !== targetName).map(e => e.name).sort()[0]`.
-   b. `ipc.envActiveSet(newActive)`.
-   c. `setActiveEnv(newActive)`.
+   a. `ipc.envActiveSet(null)`.
+   b. `setActiveEnv(null)`.  // post-delete state = "No environment"
 2. `ipc.envDelete(targetName)`.
 3. `ipc.envList()` → `setEnvs`.
 4. Close dialog.
 
 ### 6.6 Edit variables
 
-Unchanged from Plan #4 — opens `EditEnvDialog` for `activeEnv`, which uses `ipc.envUpsert`.
+Per-row entry from §5.1: hover any real env row → `⋮` → «Edit variables…». Opens `EditEnvDialog` for `row.name`, which uses `ipc.envUpsert`. Active env does not change.
 
 ## 7. Testing strategy
 
@@ -390,11 +435,15 @@ Unchanged from Plan #4 — opens `EditEnvDialog` for `activeEnv`, which uses `ip
 
 | File | Test |
 |---|---|
-| `src-tauri/src/commands/env.rs` (add a new `#[cfg(test)] mod tests`; the file currently has no test module) | `env_delete_rejects_when_only_one_env` |
-| | `env_delete_rejects_when_target_is_active` |
-| | `env_delete_succeeds_for_inactive_non_last` |
+| `src-tauri/src/commands/env.rs` (add a new `#[cfg(test)] mod tests`; the file currently has no test module) | `env_delete_rejects_when_target_is_active` |
+| | `env_delete_succeeds_for_inactive` |
+| | `env_delete_succeeds_for_only_real_env_when_active_is_none` (no last-env restriction) |
+| | `env_active_set_accepts_none` |
+| | `env_active_set_rejects_missing_some` |
+| | `env_active_get_returns_none_on_fresh_state` |
+| `src-tauri/src/commands/vars.rs` (add tests if absent) | `vars_resolve_treats_active_none_as_empty_var_set` |
 
-Setup helper: `fn build_state_with(envs: &[(&str, &[(&str, &str)])], active: &str) -> AppState`. Uses `InMemoryEnvironmentStore::new()` then upserts each.
+Setup helper: `fn build_state_with(envs: &[(&str, &[(&str, &str)])], active: Option<&str>) -> AppState`. Uses `InMemoryEnvironmentStore::new()` then upserts each.
 
 The «no tauri test infra» constraint from Plan #4 §9 still applies: we test the command function directly with a constructed `AppState`, not through Tauri's full IPC plumbing.
 
@@ -408,26 +457,27 @@ Still no Vitest in the project. Continue manual smoke (§7.6).
 
 ### 7.5 `cargo test --workspace`
 
-Should grow from current `76 passed, 1 ignored, 0 failed` to `~79 passed, 1 ignored, 0 failed` (3 new src-tauri tests in §7.2).
+Should grow from current `76 passed, 1 ignored, 0 failed` to `~83 passed, 1 ignored, 0 failed` (7 new src-tauri tests in §7.2).
 
 ### 7.6 Manual UI smoke
 
 Run against `127.0.0.1:5002` (Notex testbed) per handoff §10:
 
-1. `pnpm tauri dev`. App boots; pill reads `Default ▾`.
-2. **Open dropdown.** Click pill → menu opens. `✓ Default` visible. Hover Default row → trailing `⋮` appears. Click `⋮` → submenu opens with `Edit variables…`, `Rename env…`, `Delete env… (disabled, last env)`.
-3. **Create.** Esc the submenus. Click «+ New env…» at the menu bottom → `NewEnvDialog`. Type `staging` → Create. Dialog closes; pill reads `staging ▾` (create auto-activates). Reopen menu: `Default`, `✓ staging`.
-4. **Switch (row click).** Click the `Default` row body → pill reads `Default ▾`. Reopen menu: `✓ Default`, `staging`. Confirms row-click = switch.
-5. **Per-row Edit variables.** Pick a method, type body with `{{uid}}` (preview shows `⚠ Unresolved: uid`). Hover `Default` row in the menu, click `⋮` → `Edit variables…`. `EditEnvDialog` opens for Default. Add `uid=alpha`. Save. Preview now shows `→ resolves: {"user_id":"alpha"}`. Confirms per-row Edit works regardless of active.
-6. **Cross-env preview.** Click `staging` row → switches → preview turns red `⚠ Unresolved: uid` (staging has no `uid`). Click `Default` row → switches back, preview restores. Confirms `activeEnv` → `ResolvesPreview` prop wiring.
-7. **Per-row Rename (non-active target).** Active is `Default`. Hover `staging` row, click `⋮` → `Rename env…`. Type `prod` → Save. Pill stays `Default ▾`. Reopen menu: `✓ Default`, `prod`. Confirms renaming a non-active env does not change active.
-8. **Per-row Delete (inactive target).** Hover `prod` row, click `⋮` → `Delete env…`. Confirm dialog appears with `prod` named. Click `Delete` → backend deletes `prod` directly (no pre-switch needed, target wasn't active). Pill remains `Default ▾`. Reopen menu: only `✓ Default`. `⋮` → `Delete env…` is now disabled (last env).
-9. **Create second env for active-delete test.** «+ New env…» → `qa` → Save. Pill → `qa ▾`. envs={Default, qa}.
-10. **Per-row Delete (active target).** State: `Default`, `✓ qa`. Hover `qa` row, click `⋮` → `Delete env…`. Confirm dialog. Click `Delete` → frontend pre-switches active to `Default` (only alphabetically-remaining choice) then backend deletes `qa`. Pill reads `Default ▾`. Reopen menu: only `✓ Default`.
-11. **Validation.** «+ New env…» → type `1bad` → red border, `Create` disabled. Clear, type `Default` → red border + helper text «name already exists», `Create` disabled.
-12. **Hotkey.** `⌘E` (macOS) or `Ctrl+E` (Windows) → dropdown opens, first row focused. ↓ moves focus, Enter switches. → opens the focused row's submenu; ← closes it. Esc closes the menu.
-13. **Esc behaviour.** Open any dialog → Esc → closes without persisting input. Open the per-row submenu → Esc → only the submenu closes, outer menu stays open. Esc again → outer menu closes.
-14. **Regression.** Body editor `{{var}}` highlighting still works. Send still resolves and posts to server. Ctrl+Enter still sends.
+1. `pnpm tauri dev`. **Cold boot.** Pill reads `No environment ▾`. (No auto-seeded Default env anymore.)
+2. **Open dropdown.** Click pill → menu opens. `✓ No environment` is the only row (no real envs yet). Below: separator + `+ New env…`. The `No environment` row has **no** trailing `⋮`.
+3. **Unresolved preview without env.** Pick a method, type body `{"id":"{{uid}}"}`. Preview line: `⚠ Unresolved: uid`. Confirms `vars_resolve` with `active = None` returns the var as unresolved.
+4. **Create first env.** Click «+ New env…» → type `staging` → Create. Dialog closes; pill reads `staging ▾` (auto-activated). Reopen menu: `No environment`, `✓ staging`. The `staging` row has `⋮` on hover; `No environment` does not.
+5. **Switch back to No environment.** Click `No environment` row → pill reads `No environment ▾`. Preview returns to `⚠ Unresolved: uid`.
+6. **Switch to env.** Click `staging` row → pill reads `staging ▾`. Preview: `⚠ Unresolved: uid` (staging is empty). Per-row Edit: hover `staging`, click `⋮` → `Edit variables…` → add `uid=alpha`. Save. Preview now: `→ resolves: {"id":"alpha"}`.
+7. **Create second env.** «+ New env…» → `prod` → Create. Pill → `prod ▾` (auto-activated). Menu shows `No environment`, `✓ prod`, `staging`. Preview: `⚠ Unresolved: uid` (prod has no `uid`).
+8. **Cross-env preview.** Click `staging` row → preview restores `→ resolves: {"id":"alpha"}`. Click `prod` row → unresolved again.
+9. **Per-row Rename (non-active target).** Active is `prod`. Hover `staging` row → `⋮` → `Rename env…` → `staging-eu` → Save. Pill stays `prod ▾`. Menu shows `No environment`, `✓ prod`, `staging-eu`. Confirms renaming non-active does not switch.
+10. **Per-row Delete (inactive target).** Hover `staging-eu` row → `⋮` → `Delete env…` → confirm → Delete. Pill remains `prod ▾`. Menu: `No environment`, `✓ prod`.
+11. **Per-row Delete (active target).** Hover `prod` row → `⋮` → `Delete env…` → confirm → Delete. Frontend pre-switches active to `null` then backend deletes `prod`. Pill reads `No environment ▾`. Menu: `✓ No environment`. No real envs left, but no «last-env» error fires.
+12. **Validation.** «+ New env…» → `1bad` → red border, `Create` disabled. Try `No environment` (with space) → red border (regex `^[a-zA-Z_][a-zA-Z0-9_-]*$` rejects the space — no special «reserved name» check needed, the literal pseudo-row label is grammatically un-creatable). Type a name that already exists, e.g. `staging` if it's present → red border + helper «name already exists», `Create` disabled.
+13. **Hotkey.** `⌘E` (macOS) or `Ctrl+E` (Windows) → dropdown opens, first row focused. ↓ moves focus, Enter switches. → opens the focused row's submenu (only for real env rows); on `No environment` row, → is a no-op. ← closes the submenu. Esc closes the menu.
+14. **Esc behaviour.** Open any dialog → Esc → closes without persisting input. Open the per-row submenu → Esc → only the submenu closes, outer menu stays open. Esc again → outer menu closes.
+15. **Regression.** Body editor `{{var}}` highlighting still works. Send with `active = some env` and a resolvable body still posts to server. Send with `active = None` and a body containing `{{var}}` is blocked by the existing unresolved-vars guard in `handleSend` (toast «Unresolved variables: …»). Ctrl+Enter still sends.
 
 ### 7.7 Cross-platform smoke
 
@@ -437,11 +487,11 @@ Hotkey: macOS Cmd vs Windows Ctrl is handled by the `e.metaKey || e.ctrlKey` che
 
 | Trigger | `CoreError` | `IpcError` | UI surface |
 |---|---|---|---|
-| `env_delete` on last env | `InvalidTarget("cannot delete the only env")` | `InvalidTarget { message }` | Confirm dialog footer error strip; should never fire if UI disables menu item correctly. |
-| `env_delete` on active env | `InvalidTarget("cannot delete active env `{name}`; switch first")` | `InvalidTarget { message }` | Same. UI auto-switches before delete, so should never fire. |
+| `env_delete` on active env | `InvalidTarget("cannot delete active env `{name}`; switch first")` | `InvalidTarget { message }` | Confirm dialog footer error strip; UI auto-switches active to `None` before delete, so should never fire. |
 | `env_delete` on missing env | `delete` is idempotent (returns `Ok`) — no error. | n/a | n/a |
 | `env_upsert` invalid name | `InvalidTarget("invalid env name: ...")` | `InvalidTarget { message }` | NewEnvDialog / RenameEnvDialog footer error strip. Client-side validation prevents reaching the IPC in practice. |
-| `env_active_set` missing env | `InvalidTarget("no such env: ...")` | `InvalidTarget { message }` | Toast in App.tsx (existing handler). |
+| `env_active_set Some(name)` missing env | `InvalidTarget("no such env: ...")` | `InvalidTarget { message }` | Toast in App.tsx (existing handler). |
+| `env_active_set(None)` | infallible | n/a | n/a |
 
 **No new `CoreError` / `IpcError` variants.** The exhaustive-match test stays green without edits.
 
@@ -451,7 +501,7 @@ Hotkey: macOS Cmd vs Windows Ctrl is handled by the `e.metaKey || e.ctrlKey` che
 |---|---|---|
 | R1 | ⌘E global handler swallows Monaco's built-in `editor.action.toggleTabFocusMode` (mapped to Ctrl+M on default Monaco, but other commands use Ctrl+E in some keymaps). | Accept for MVP; revisit if users report. Could narrow scope via `e.target` check excluding the editor container. |
 | R2 | Rename non-atomicity: between `env_upsert(new)` and `env_delete(old)` a parallel `env_active_get` call could see both envs. Trivial under single-user MVP. | Documented; not blocking. |
-| R3 | Frontend «can't delete last env» check (`envs.length === 1`) drifts from backend after refetch race. | Backend guard catches it; UI shows footer error. Stale optimistic UI is corrected by `env_list` refetch in the next mutation cycle. |
+| R3 | Plan #4 frontend code (e.g. `EditEnvDialog`) assumes `activeEnv` is always a non-empty string. After the signature widening, code paths that consume `activeEnv` without a null check could throw. | Implementation task explicitly audits and updates all consumers of `activeEnv`. The compiler/`tsc` catches most via the `string \| null` type. Pre-merge `pnpm lint` is the gate. |
 | R4 | shadcn add invocations (`dropdown-menu`, `alert-dialog`) pull additional radix dependencies that bloat the Monaco-isolated bundle. | radix-ui meta-package is already in deps; shadcn `add` only generates wrappers. No measurable bundle delta expected. |
 | R5 | Confirm dialog on Delete is good UX but adds a click for power users. | Acceptable — env deletion is destructive in spirit (loses variables) and infrequent. No «don't ask again» checkbox to keep state surface small. |
 | R6 | tauri-specta bindings regeneration drift — adding 1 command. | Standard `cargo run -p handshaker --bin export-bindings` step; `pnpm lint` (tsc -b) catches type drift in `client.ts`. |
@@ -461,18 +511,26 @@ Hotkey: macOS Cmd vs Windows Ctrl is handled by the `e.metaKey || e.ctrlKey` che
 
 Roughly TDD-friendly; `writing-plans` refines into tasks with subagent breakdown.
 
-1. **`env_delete` IPC command** + unit tests (last-env reject, active-env reject, success). Register in `collect_commands!`. Regen bindings.
-2. **Frontend wrapper** `ipc.envDelete` in `src/ipc/client.ts`.
-3. **shadcn add `dropdown-menu` and `alert-dialog`**. Verify they appear in `src/components/ui/`. Lint passes.
-4. **`EnvSwitcherMenu` component** — renders the menu shell: env rows with `Check` on active, trailing `⋮` revealed on row hover/focus, and «+ New env…» at the bottom. Each `⋮` opens a per-row submenu with `Edit variables…`, `Rename env…`, `Delete env…` placeholders that only log for now. Verify keyboard nav (↑↓ between rows, → / ← for submenu) works out of the box from radix.
-5. **Refactor `EnvPill`** to render `EnvSwitcherMenu` instead of opening `EditEnvDialog` directly. Lift `envs` and `activeEnv` state into `App.tsx`. Pass them as props. Wire the per-row `Edit variables…` to the existing `EditEnvDialog` (passing `envName = row.name`) — regression gate against Plan #4: the prior «click pill → opens Edit» path is gone, but per-row Edit on the active row reproduces it for the common case.
-6. **`NewEnvDialog`** — name validation, create + activate flow. Wire into `EnvSwitcherMenu`. Manual smoke: can create env.
-7. **`RenameEnvDialog`** — composed rename. Wire into menu. Manual smoke: can rename, variables preserved.
-8. **`ConfirmDeleteEnvDialog`** — alert-dialog + active-env handover. Wire into menu. Manual smoke: can delete inactive, active, can't delete last.
-9. **`⌘E` / `Ctrl+E` hotkey** — global listener in `App.tsx` + ref to trigger. Smoke: opens dropdown.
-10. **`activeEnv` prop to `ResolvesPreview`** — wire through `InvokePanel`. Smoke: switching env updates preview live.
-11. **Full §7.6 smoke pass.** Fix issues. Iterate.
-12. **Errata file** if any deviation surfaces.
+1. **Backend signature widening + bootstrap removal:**
+   - `AppState`: `active_env: RwLock<Option<String>>`, default `None`. Drop the `with_default()` call — `env_store` is `InMemoryEnvironmentStore::new()`.
+   - `commands/env.rs::env_active_get` → returns `Option<String>`.
+   - `commands/env.rs::env_active_set` → takes `Option<String>`; passing `None` is always Ok.
+   - `commands/vars.rs::vars_resolve` → treat `active = None` as empty var set.
+   - Update the existing «active env in state» test from Plan #4 to use `Option` shape.
+   - Regen bindings; existing client wrappers in `src/ipc/client.ts` get type-updated (env_active_get returns `string | null`, env_active_set accepts `string | null`).
+   - `cargo test --workspace` green at this checkpoint.
+2. **`env_delete` IPC command** + unit tests (active-env reject, success on inactive, success when only env is being deleted while active=None). Register in `collect_commands!`. Regen bindings.
+3. **Frontend wrapper** `ipc.envDelete` in `src/ipc/client.ts`. Audit existing `activeEnv` consumers for null-safety (`App.tsx`, `EnvPill`, `EditEnvDialog`, `InvokePanel`'s pass-through to `ResolvesPreview`). `pnpm lint` clean.
+4. **shadcn add `dropdown-menu` and `alert-dialog`**. Verify they appear in `src/components/ui/`. Lint passes.
+5. **`EnvSwitcherMenu` component** — renders the menu shell: a non-removable `No environment` row at the top (Check icon when `activeEnv === null`, no ⋮), separator, real env rows with `Check` on active + trailing `⋮` revealed on row hover/focus, separator, and «+ New env…» at the bottom. Each `⋮` opens a per-row submenu with `Edit variables…`, `Rename env…`, `Delete env…` placeholders that only log for now. Verify keyboard nav (↑↓ between rows, → / ← for submenu) works out of the box from radix; → on `No environment` is a no-op.
+6. **Refactor `EnvPill`** to render `EnvSwitcherMenu` instead of opening `EditEnvDialog` directly. Lift `envs` and `activeEnv` state into `App.tsx`. Pass them as props. When `activeEnv === null`, pill renders `No environment ▾`. Wire the per-row `Edit variables…` to the existing `EditEnvDialog` (passing `envName = row.name`) — regression gate against Plan #4: the prior «click pill → opens Edit» path is gone, replaced by per-row Edit. Manual smoke: app boots with `No environment ▾`, opening the menu shows just the pseudo-row.
+7. **`NewEnvDialog`** — name validation, create + activate flow. Wire into `EnvSwitcherMenu`. Manual smoke: can create env from `No environment` state; pill switches to new env.
+8. **`RenameEnvDialog`** — composed rename. Wire into menu. Manual smoke: can rename, variables preserved.
+9. **`ConfirmDeleteEnvDialog`** — alert-dialog + active-env handover to `None`. Wire into menu. Manual smoke: can delete inactive, can delete active (falls back to `No environment`), can delete all envs (terminal state is `No environment`).
+10. **`⌘E` / `Ctrl+E` hotkey** — global listener in `App.tsx` + ref to trigger. Smoke: opens dropdown.
+11. **`activeEnv` prop to `ResolvesPreview`** — wire through `InvokePanel`. Smoke: switching env updates preview live; null activeEnv shows everything as unresolved.
+12. **Full §7.6 smoke pass.** Fix issues. Iterate.
+13. **Errata file** if any deviation surfaces.
 
 ## 11. Sources verified before submission
 
