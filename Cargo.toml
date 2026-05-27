@@ -24,9 +24,6 @@ prost-reflect = { version = "0.14", features = ["serde"] }
 
 # Plan #2 — Reflection spine
 tokio-stream = "0.1"
-futures-util = "0.3"
-http = "1"
-bytes = "1"
 tonic-health = "0.14"   # dev-only filler service for bare-server integration tests
 
 # Tauri runtime + bindings generator

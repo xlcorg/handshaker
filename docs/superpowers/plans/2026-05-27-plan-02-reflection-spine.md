@@ -39,6 +39,40 @@
 
 ---
 
+## Execution errata 2026-05-27
+
+The following deviations and observations surfaced during Plan #2 execution. Future re-runs of this plan should use the corrections below.
+
+1. **`spawn_bare_server` cannot use bare `Server::serve_with_shutdown(addr, signal)`.** Tonic 0.14's bare `Server` has no 2-arg `serve_with_shutdown`; only the `Router` returned by `add_service(svc)` does. Fix: register `tonic_health::server::HealthServer` as a filler service so the listener speaks full HTTP/2 + gRPC. Unmatched reflection paths automatically return `Unimplemented`. Added `tonic-health = "0.14"` as a `[dev-dependencies]` entry on `handshaker-core` (workspace-pinned).
+
+2. **TOCTOU race in `pick_addr`.** The plan's original `pick_addr` bound a `TcpListener` and dropped it before tonic re-bound the same port — under parallel test execution the OS could reassign the port. Fix: each spawner now binds the `TcpListener` itself and feeds it to tonic via `serve_with_incoming_shutdown(TcpListenerStream::new(listener), signal)`. Removed the 50ms sleeps that papered over the race.
+
+3. **`tonic-reflection` `FileDescriptorResponse.file_descriptor_proto` is `Vec<bytes::Bytes>`, not `Vec<Vec<u8>>`.** The plan's `extend(fdr.file_descriptor_proto)` was a type mismatch. Fix: `.extend(fdr.file_descriptor_proto.into_iter().map(|b| b.to_vec()))`.
+
+4. **Reflection v1 read-to-EOF.** The plan's V1Adapter included an `expected/received/break` mechanism. This is fragile against conforming servers that may send N responses per request. Fix: read the bidi response stream to natural EOF — the server closes after our `drop(tx)` signals end of requests. Also switched `mpsc::channel(16)` to `mpsc::unbounded_channel()` to avoid self-deadlock when a single batch enqueues more than 15 dependencies.
+
+5. **Files without `.name` are an error, not silently dropped.** `algorithm::decode_fdp` returns `CoreError::DescriptorBuild` for both prost decode failure and missing `name`, surfacing what would otherwise be silent data loss.
+
+6. **`reflection_disabled` test assertion strengthened.** `hint.contains("v1") && hint.contains("v1alpha")` was a false-positive trap (`"v1alpha"` contains `"v1"`). Fixed to `hint.contains("v1:") && hint.contains("v1alpha:")` — both substrings present by construction in `fallback.rs`'s combined-hint format.
+
+7. **`handshaker-core` stays specta-free (spec rule 1).** Task 10 initially added `specta::Type` derives to `ServiceCatalog`/`ServiceEntry`/`MethodEntry`, dragging the Tauri-binding ecosystem into the supposedly OS-independent core. Fix: keep the core types serde-only; add wrapper types `ServiceCatalogIpc`/`ServiceEntryIpc`/`MethodEntryIpc` in `src-tauri/src/ipc/catalog.rs` that derive `specta::Type` and convert `From<...>`. `ConnectOutcome.catalog` and `grpc_refresh_contract`'s return use the wrapper.
+
+8. **`grpc_disconnect` scoped the mutex with a `{ }` block.** Plan's original code held the `MutexGuard` across the `.emit(&app)` call — latent deadlock if any future event handler triggers another grpc command. Fix matches the pattern in `grpc_connect` / `grpc_refresh_contract`.
+
+9. **Plan's `Builder::serve_with_shutdown(addr, signal)` is on `Router`, not bare `Server`.** Plan §Task 4 documentation should note this — every spawner builds a `Router` via `add_service` before calling `serve_with_incoming_shutdown`.
+
+10. **`skip_verify=true` deferred.** As planned, the implementation returns `CoreError::NotImplemented("skip_verify=true is deferred to a follow-up plan (requires hyper-rustls connector)")`. Real implementation will require either a hyper-rustls + tower-service stack, or a future tonic version exposing `with_custom_certificate_verifier`. Track for Plan #3 or a dedicated security-knobs sub-plan.
+
+11. **`prost-reflect ["serde"]` feature is unused in Plan #2** but kept enabled — Plan #3's dynamic-invoke pipeline needs `DynamicMessage` JSON ser/de.
+
+12. **`reflection/{v1,v1alpha,fallback}` are intentionally `pub mod`** — integration tests under `tests/` need the typed entry points. The re-exports at `reflection::*` give app code a clean facade; the double exposure is harmless.
+
+13. **`AppReady` placeholder event removed.** It was a Plan #1 smoke marker; the frontend doesn't need a separate "ready" signal because it can poll `app_version()` on mount. Removed cleanly in Task 10.
+
+The inline task content above reflects the original plan; consult this errata for the actual landed shape.
+
+---
+
 ## File map
 
 Создаём в `handshaker-core`:

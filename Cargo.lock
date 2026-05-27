@@ -1286,9 +1286,6 @@ name = "handshaker-core"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "bytes",
- "futures-util",
- "http",
  "prost 0.13.5",
  "prost-reflect",
  "prost-types 0.13.5",

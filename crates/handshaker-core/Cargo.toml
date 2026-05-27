@@ -15,10 +15,7 @@ thiserror.workspace = true
 serde = { workspace = true, features = ["derive"] }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync", "time"] }
 tokio-stream.workspace = true
-futures-util.workspace = true
 async-trait.workspace = true
-http.workspace = true
-bytes.workspace = true
 
 # gRPC + reflection + descriptors
 tonic = { workspace = true, features = ["tls-ring", "tls-native-roots"] }
