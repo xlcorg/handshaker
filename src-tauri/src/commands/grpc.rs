@@ -2,14 +2,14 @@
 
 use std::sync::Arc;
 
-use handshaker_core::grpc::{activate, GrpcTarget, ServiceCatalog, TonicTransport};
+use handshaker_core::grpc::{activate, GrpcTarget, TonicTransport};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::{AppHandle, State};
 use tauri_specta::Event;
 
 use crate::commands::events::{ConnectionStateChanged, ContractUpdated, TargetSummary};
-use crate::ipc::IpcError;
+use crate::ipc::{IpcError, ServiceCatalogIpc};
 use crate::state::AppState;
 
 #[derive(Debug, Deserialize, Type)]
@@ -22,7 +22,7 @@ pub struct ConnectInput {
 #[derive(Debug, Serialize, Type)]
 pub struct ConnectOutcome {
     pub target: TargetSummary,
-    pub catalog: ServiceCatalog,
+    pub catalog: ServiceCatalogIpc,
 }
 
 fn target_key(t: &GrpcTarget) -> String {
@@ -45,7 +45,7 @@ pub async fn grpc_connect(
     let conn = activate(target.clone(), transport).await?;
     let summary: TargetSummary = (&conn.target).into();
     let key = target_key(&conn.target);
-    let catalog = conn.catalog.clone();
+    let catalog: ServiceCatalogIpc = conn.catalog.clone().into();
 
     {
         let mut slot = state.connection.lock().await;
@@ -92,7 +92,7 @@ pub async fn grpc_disconnect(
 pub async fn grpc_refresh_contract(
     app: AppHandle,
     state: State<'_, AppState>,
-) -> Result<ServiceCatalog, IpcError> {
+) -> Result<ServiceCatalogIpc, IpcError> {
     let target = {
         let slot = state.connection.lock().await;
         let conn = slot.as_ref().ok_or(IpcError::NotConnected)?;
@@ -101,7 +101,7 @@ pub async fn grpc_refresh_contract(
 
     let transport = Arc::new(TonicTransport::new());
     let conn = activate(target.clone(), transport).await?;
-    let catalog = conn.catalog.clone();
+    let catalog: ServiceCatalogIpc = conn.catalog.clone().into();
     let key = target_key(&conn.target);
 
     {

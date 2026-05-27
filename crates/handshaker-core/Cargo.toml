@@ -13,7 +13,6 @@ unsafe_code = "forbid"
 [dependencies]
 thiserror.workspace = true
 serde = { workspace = true, features = ["derive"] }
-specta.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync", "time"] }
 tokio-stream.workspace = true
 futures-util.workspace = true

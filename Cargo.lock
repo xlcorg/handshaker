@@ -1293,7 +1293,6 @@ dependencies = [
  "prost-reflect",
  "prost-types 0.13.5",
  "serde",
- "specta",
  "thiserror 2.0.18",
  "tokio",
  "tokio-stream",
