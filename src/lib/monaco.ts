@@ -61,16 +61,26 @@ export const MonacoEditor = lazy(async () => {
   });
 
   monaco.languages.setMonarchTokensProvider("json-with-vars", {
-    // Order matters: the variable rule runs before string body matching so that
-    // `"{{uid}}"` paints the inner placeholder with the variable token.
+    // The `root` state handles top-level JSON syntax. When entering a string
+    // (opening quote), we switch to the `@string` state which re-applies the
+    // variable rule — this is what lets `{{uid}}` inside `"{{uid}}"` paint as
+    // the variable token rather than being swallowed by an atomic string match.
     tokenizer: {
       root: [
         [/\{\{[a-zA-Z_][a-zA-Z0-9_\-]*\}\}/, "variable.template"],
-        [/"(?:[^"\\]|\\.)*"/, "string"],
+        [/"/, { token: "string.quote", next: "@string" }],
         [/-?\d+(\.\d+)?([eE][+\-]?\d+)?/, "number"],
         [/\b(?:true|false|null)\b/, "keyword"],
         [/[{}\[\],:]/, "delimiter"],
         [/[ \t\r\n]+/, "white"],
+      ],
+      string: [
+        [/\{\{[a-zA-Z_][a-zA-Z0-9_\-]*\}\}/, "variable.template"],
+        [/[^"\\{]+/, "string"],
+        [/\\./, "string.escape"],
+        // A bare `{` not followed by a second `{` is just literal string content.
+        [/\{/, "string"],
+        [/"/, { token: "string.quote", next: "@pop" }],
       ],
     },
   });
