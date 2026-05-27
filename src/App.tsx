@@ -14,7 +14,7 @@ import {
   onContractUpdated,
 } from "@/ipc/events";
 import { ipc } from "@/ipc/client";
-import type { ServiceCatalogIpc, InvokeOutcomeIpc } from "@/ipc/bindings";
+import type { ServiceCatalogIpc, InvokeOutcomeIpc, EnvironmentIpc } from "@/ipc/bindings";
 
 export default function App() {
   const [catalog, setCatalog] = useState<ServiceCatalogIpc | null>(null);
@@ -24,6 +24,7 @@ export default function App() {
   const [outcome, setOutcome] = useState<InvokeOutcomeIpc | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeEnv, setActiveEnv] = useState<string | null>(null);
+  const [envs, setEnvs] = useState<EnvironmentIpc[]>([]);
 
   useEffect(() => {
     ipc.appVersion().then(setVersion).catch(console.error);
@@ -31,6 +32,10 @@ export default function App() {
 
   useEffect(() => {
     ipc.envActiveGet().then(setActiveEnv).catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    ipc.envList().then(setEnvs).catch(console.error);
   }, []);
 
   useEffect(() => {
@@ -62,7 +67,14 @@ export default function App() {
         <h1 className="text-base font-semibold">Handshaker</h1>
         <div className="flex items-center gap-3">
           <span className="text-xs text-muted-foreground font-mono">v{version}</span>
-          <EnvPill activeEnv={activeEnv} onVariablesSaved={() => { /* no-op: live preview re-fetches */ }} />
+          <EnvPill
+            envs={envs}
+            activeEnv={activeEnv}
+            onSaved={async (savedName, becameActive) => {
+              setEnvs(await ipc.envList());
+              if (becameActive) setActiveEnv(savedName);
+            }}
+          />
         </div>
       </header>
       <section

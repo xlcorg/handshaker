@@ -2,16 +2,17 @@ import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import type { EnvironmentIpc } from "@/ipc/bindings";
 
-import { EditEnvDialog } from "./EditEnvDialog";
+import { EnvEditorDialog } from "./EnvEditorDialog";
 
 export interface EnvPillProps {
+  envs: EnvironmentIpc[];
   activeEnv: string | null;
-  /** Called after the user saves variables in the dialog. */
-  onVariablesSaved: (variables: Record<string, string>) => void;
+  onSaved: (savedName: string, becameActive: boolean) => void;
 }
 
-export function EnvPill({ activeEnv, onVariablesSaved }: EnvPillProps) {
+export function EnvPill({ envs, activeEnv, onSaved }: EnvPillProps) {
   const [open, setOpen] = useState(false);
   const label = activeEnv ?? "No environment";
   return (
@@ -20,9 +21,6 @@ export function EnvPill({ activeEnv, onVariablesSaved }: EnvPillProps) {
         variant="ghost"
         size="sm"
         onClick={() => {
-          // In this transitional state, opening the editor only makes sense for
-          // a concrete env. No-op when active is null; the dropdown menu (Task
-          // 10) will provide both "switch" and "open editor for a row" paths.
           if (activeEnv !== null) setOpen(true);
         }}
         className="gap-1 font-mono"
@@ -31,14 +29,14 @@ export function EnvPill({ activeEnv, onVariablesSaved }: EnvPillProps) {
         {label}
         <ChevronDown className="w-3 h-3" aria-hidden />
       </Button>
-      {activeEnv !== null && (
-        <EditEnvDialog
-          open={open}
-          envName={activeEnv}
-          onOpenChange={setOpen}
-          onSaved={onVariablesSaved}
-        />
-      )}
+      <EnvEditorDialog
+        open={open}
+        originalName={activeEnv}
+        activeEnv={activeEnv}
+        envs={envs}
+        onOpenChange={setOpen}
+        onSaved={onSaved}
+      />
     </>
   );
 }
