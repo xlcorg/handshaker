@@ -436,7 +436,19 @@ impl tower::Service<tonic::Request<prost_reflect::DynamicMessage>> for EchoHandl
             // If configured to return a gRPC error status, do so.
             if let Some(code) = cfg.return_status {
                 let code = tonic::Code::from(code);
-                return Err(tonic::Status::new(code, format!("injected error: {code:?}")));
+                let mut status = tonic::Status::new(code, format!("injected error: {code:?}"));
+
+                // Inject any configured trailing metadata (same as OK path).
+                for (k, v) in &cfg.trailers {
+                    if let (Ok(key), Ok(val)) = (
+                        tonic::metadata::AsciiMetadataKey::from_bytes(k.to_lowercase().as_bytes()),
+                        tonic::metadata::AsciiMetadataValue::try_from(v.as_str()),
+                    ) {
+                        status.metadata_mut().insert(key, val);
+                    }
+                }
+
+                return Err(status);
             }
 
             // Extract `id` from the incoming Ping.
