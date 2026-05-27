@@ -74,7 +74,7 @@ pub fn resolve_template_with_diagnostics(
     let unresolved_vars = collect_unresolved(&current);
 
     let cycle_chain = if !converged && !unresolved_vars.is_empty() {
-        None  // Filled in by Task 4 — cycle detection.
+        detect_cycle(&unresolved_vars, vars)
     } else {
         None
     };
@@ -90,6 +90,41 @@ pub fn resolve_template_with_diagnostics(
         unresolved_vars: final_unresolved,
         cycle_chain,
     }
+}
+
+/// Pick the lexicographically smallest seed name and DFS from it through the
+/// substitution graph (env ∪ collection definitions). Return the first cycle found.
+/// `None` if no cycle is reachable from any seed (shouldn't happen if MAX_PASSES
+/// was exhausted with unresolved names remaining, but we handle it defensively).
+fn detect_cycle(seeds: &[String], vars: &VariableSet<'_>) -> Option<Vec<String>> {
+    let mut sorted: Vec<&String> = seeds.iter().collect();
+    sorted.sort();
+    for seed in sorted {
+        let mut stack: Vec<String> = Vec::new();
+        if let Some(chain) = dfs(seed, vars, &mut stack) {
+            return Some(chain);
+        }
+    }
+    None
+}
+
+fn dfs(name: &str, vars: &VariableSet<'_>, stack: &mut Vec<String>) -> Option<Vec<String>> {
+    if let Some(start) = stack.iter().position(|n| n == name) {
+        // Back-edge: cycle from `start..` in stack, repeated at end.
+        let mut chain: Vec<String> = stack[start..].to_vec();
+        chain.push(name.to_string());
+        return Some(chain);
+    }
+    let value = lookup(name, vars)?;
+    stack.push(name.to_string());
+    for caps in VAR_RE.captures_iter(value) {
+        let next = caps.get(1).unwrap().as_str();
+        if let Some(chain) = dfs(next, vars, stack) {
+            return Some(chain);
+        }
+    }
+    stack.pop();
+    None
 }
 
 /// One substitution pass. Returns the new string and a flag indicating whether any
@@ -232,5 +267,44 @@ mod tests {
             &vs(&env, &coll),
         );
         assert_eq!(r.resolved, r#"{"url": "https://api.prod.example.com/v1/users"}"#);
+    }
+
+    #[test]
+    fn cycle_two_node() {
+        // {{a}} → {{b}} → {{a}} (cycle)
+        let env = map(&[("a", "{{b}}"), ("b", "{{a}}")]);
+        let coll = map(&[]);
+        let r = resolve_template_with_diagnostics("{{a}}", &vs(&env, &coll));
+        assert!(r.cycle_chain.is_some(), "expected cycle, got {:?}", r);
+        let chain = r.cycle_chain.unwrap();
+        // Chain starts and ends with the same name (back-edge form).
+        assert_eq!(chain.first(), chain.last());
+        // Contains both 'a' and 'b'.
+        assert!(chain.contains(&"a".to_string()));
+        assert!(chain.contains(&"b".to_string()));
+        // When cycle is reported, unresolved_vars is cleared.
+        assert!(r.unresolved_vars.is_empty());
+    }
+
+    #[test]
+    fn cycle_self() {
+        // {{a}} → {{a}} (self-loop)
+        let env = map(&[("a", "{{a}}")]);
+        let coll = map(&[]);
+        let r = resolve_template_with_diagnostics("{{a}}", &vs(&env, &coll));
+        let chain = r.cycle_chain.expect("expected cycle");
+        assert_eq!(chain, vec!["a".to_string(), "a".to_string()]);
+    }
+
+    #[test]
+    fn cycle_three_node() {
+        // a → b → c → a
+        let env = map(&[("a", "{{b}}"), ("b", "{{c}}"), ("c", "{{a}}")]);
+        let coll = map(&[]);
+        let r = resolve_template_with_diagnostics("{{a}}", &vs(&env, &coll));
+        let chain = r.cycle_chain.expect("expected cycle");
+        // Should include all three names (a, b, c) plus the closing repeat.
+        assert!(chain.len() >= 4, "chain too short: {chain:?}");
+        assert_eq!(chain.first(), chain.last());
     }
 }
