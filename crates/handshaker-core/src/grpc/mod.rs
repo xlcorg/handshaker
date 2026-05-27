@@ -8,11 +8,13 @@
 
 pub mod catalog;
 pub mod connection;
+pub mod contract;
 pub mod descriptor;
 pub mod reflection;
 pub mod transport;
 
 pub use catalog::{build_catalog, MethodEntry, ServiceCatalog, ServiceEntry};
-pub use connection::GrpcTarget;
+pub use connection::{GrpcConnection, GrpcTarget};
+pub use contract::activate;
 pub use descriptor::build_pool;
 pub use transport::{GrpcTransport, TonicChannel, TonicTransport};

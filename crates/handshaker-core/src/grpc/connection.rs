@@ -1,6 +1,9 @@
 //! GrpcTarget — resolved address + TLS flags. No `{{var}}` here.
 
+use std::sync::Arc;
+
 use crate::error::CoreError;
+use crate::grpc::catalog::ServiceCatalog;
 use serde::{Deserialize, Serialize};
 
 /// Resolved gRPC endpoint: `host:port` + TLS flags. Pure value type, no platform-specifics.
@@ -60,6 +63,25 @@ impl GrpcTarget {
             tls,
             skip_verify,
         })
+    }
+}
+
+/// Live connection state — the result of `activate()`. Holds the channel-bearing transport
+/// plus the assembled descriptor pool and projected catalog. **NOT** `Clone`: there's at most
+/// one live connection in the app (per spec §4 "Activated gRPC connections = 1").
+pub struct GrpcConnection {
+    pub target: GrpcTarget,
+    pub transport: Arc<dyn crate::grpc::GrpcTransport>,
+    pub pool: prost_reflect::DescriptorPool,
+    pub catalog: ServiceCatalog,
+}
+
+impl std::fmt::Debug for GrpcConnection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GrpcConnection")
+            .field("target", &self.target)
+            .field("services", &self.catalog.services.len())
+            .finish()
     }
 }
 
