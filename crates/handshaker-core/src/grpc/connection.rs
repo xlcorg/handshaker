@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use crate::error::CoreError;
 use crate::grpc::catalog::ServiceCatalog;
+use crate::grpc::transport::TonicChannel;
 use serde::{Deserialize, Serialize};
 
 /// Resolved gRPC endpoint: `host:port` + TLS flags. Pure value type, no platform-specifics.
@@ -69,9 +70,15 @@ impl GrpcTarget {
 /// Live connection state — the result of `activate()`. Holds the channel-bearing transport
 /// plus the assembled descriptor pool and projected catalog. **NOT** `Clone`: there's at most
 /// one live connection in the app (per spec §4 "Activated gRPC connections = 1").
+///
+/// `channel` is stored here so invoke doesn't perform a fresh h2 handshake per call —
+/// one Channel is acquired in `activate()` and reused. Plan #3 §3.1.1 explains why
+/// this is a pragmatic relaxation of Plan #2's "tonic confined to transport/reflection"
+/// invariant (the field uses the `TonicChannel` alias, never raw `tonic::transport::Channel`).
 pub struct GrpcConnection {
     pub target: GrpcTarget,
     pub transport: Arc<dyn crate::grpc::GrpcTransport>,
+    pub channel: TonicChannel,
     pub pool: prost_reflect::DescriptorPool,
     pub catalog: ServiceCatalog,
 }
@@ -139,5 +146,13 @@ mod tests {
     fn rejects_overflow_port() {
         let err = GrpcTarget::new("api.prod:99999", true, false).unwrap_err();
         assert!(matches!(err, CoreError::InvalidTarget(_)));
+    }
+
+    #[test]
+    fn grpc_connection_struct_has_channel_field() {
+        // Compile-only check: if the `channel: TonicChannel` field is removed, this won't compile.
+        fn _accepts_channel(c: &super::GrpcConnection) -> &crate::grpc::transport::TonicChannel {
+            &c.channel
+        }
     }
 }

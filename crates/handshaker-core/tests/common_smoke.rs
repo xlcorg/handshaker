@@ -31,3 +31,11 @@ async fn bare_server_spawns_and_listens() {
     assert!(stream.is_ok(), "bare server should accept TCP connections");
     drop(shutdown);
 }
+
+#[tokio::test]
+async fn spawn_echo_server_binds_and_shuts_down() {
+    let (addr, stop) = common::spawn_echo_server(common::EchoConfig::default()).await;
+    assert!(addr.port() > 0);
+    drop(stop);
+    // Drop signals the shutdown receiver; the spawned task completes in background.
+}
