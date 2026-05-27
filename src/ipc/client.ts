@@ -57,19 +57,24 @@ export async function envList(): Promise<EnvironmentIpc[]> {
   return r.data;
 }
 
-export async function envActiveGet(): Promise<string> {
+export async function envActiveGet(): Promise<string | null> {
   const r = await commands.envActiveGet();
   if (r.status === "error") throw r.error;
   return r.data;
 }
 
-export async function envActiveSet(name: string): Promise<void> {
+export async function envActiveSet(name: string | null): Promise<void> {
   const r = await commands.envActiveSet(name);
   if (r.status === "error") throw r.error;
 }
 
 export async function envUpsert(env: EnvironmentIpc): Promise<void> {
   const r = await commands.envUpsert(env);
+  if (r.status === "error") throw r.error;
+}
+
+export async function envDelete(name: string): Promise<void> {
+  const r = await commands.envDelete(name);
   if (r.status === "error") throw r.error;
 }
 
@@ -90,5 +95,6 @@ export const ipc = {
   envActiveGet,
   envActiveSet,
   envUpsert,
+  envDelete,
   varsResolve,
 };
