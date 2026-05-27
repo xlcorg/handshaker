@@ -70,10 +70,8 @@ export default function App() {
           <EnvPill
             envs={envs}
             activeEnv={activeEnv}
-            onSaved={async (savedName, becameActive) => {
-              setEnvs(await ipc.envList());
-              if (becameActive) setActiveEnv(savedName);
-            }}
+            onEnvsChanged={async () => setEnvs(await ipc.envList())}
+            onActiveEnvChanged={setActiveEnv}
           />
         </div>
       </header>
