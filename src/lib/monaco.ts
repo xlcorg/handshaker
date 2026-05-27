@@ -1,36 +1,43 @@
 import { lazy } from "react";
-import * as monaco from "monaco-editor";
-import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
-import jsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker";
-import loader from "@monaco-editor/loader";
 
 /**
  * Bundle Monaco locally — no CDN dependency. Desktop apps need to work offline.
  *
- * We register `self.MonacoEnvironment` BEFORE `loader.config({ monaco })` so the
- * Monaco instance we pass to the loader already knows how to spawn its workers
- * when consumers mount `<MonacoEditor>`. Both are synchronous top-level
- * statements — order is preserved.
+ * All Monaco setup lives inside the lazy factory so the ~4MB core ships as a
+ * separate chunk instead of being baked into the initial bundle. The factory
+ * runs once on first mount of `<MonacoEditor>`:
+ *
+ * 1. Dynamic-imports `monaco-editor`, the editor + json workers (via Vite
+ *    `?worker`), `@monaco-editor/loader`, and `@monaco-editor/react`.
+ * 2. Sets `self.MonacoEnvironment.getWorker` BEFORE configuring the loader,
+ *    so Monaco's first internal `getWorker()` call resolves to our locals.
+ * 3. Calls `loader.config({ monaco })` to make `@monaco-editor/react` use
+ *    the same Monaco instance we just imported.
+ * 4. Returns the React wrapper as `default`.
  *
  * Workers we ship: editor (required) + json (request/response are JSON).
- * We deliberately skip ts/css/html/* workers — they aren't used and would
- * bloat the bundle.
- */
-self.MonacoEnvironment = {
-  getWorker(_workerId, label) {
-    if (label === "json") return new jsonWorker();
-    return new editorWorker();
-  },
-};
-loader.config({ monaco });
-
-/**
- * Lazy-loaded Monaco editor. Initial app bundle stays small; the first render
- * of `<MonacoEditor>` pulls in the ~4MB Monaco core + json worker on demand.
+ * Other language workers (ts/css/html/...) are NOT requested at runtime —
+ * Monaco only spawns workers via the `getWorker(label)` dispatch.
  */
 export const MonacoEditor = lazy(async () => {
-  const mod = await import("@monaco-editor/react");
-  return { default: mod.default };
+  const [monaco, editorWorkerMod, jsonWorkerMod, loaderMod, reactMod] =
+    await Promise.all([
+      import("monaco-editor"),
+      import("monaco-editor/esm/vs/editor/editor.worker?worker"),
+      import("monaco-editor/esm/vs/language/json/json.worker?worker"),
+      import("@monaco-editor/loader"),
+      import("@monaco-editor/react"),
+    ]);
+
+  self.MonacoEnvironment = {
+    getWorker(_workerId, label) {
+      if (label === "json") return new jsonWorkerMod.default();
+      return new editorWorkerMod.default();
+    },
+  };
+  loaderMod.default.config({ monaco });
+
+  return { default: reactMod.default };
 });
 
 export const EDITOR_OPTIONS = {
