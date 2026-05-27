@@ -1,26 +1,26 @@
-//! Codec для DynamicMessage. Один codec на один call (per мастер-спека §5.6).
+//! Codec for DynamicMessage. One codec per call (per master spec §5.6).
 //!
-//! Параметризуется парой MessageDescriptor'ов из общего DescriptorPool;
-//! tonic::client::Grpc вызывает encoder/decoder для encode request + decode response.
+//! Parametrized by a pair of MessageDescriptor instances from a shared DescriptorPool;
+//! tonic::client::Grpc calls encoder/decoder to encode request and decode response.
 
 use prost::Message;
 use prost_reflect::{DynamicMessage, MessageDescriptor};
 use tonic::codec::{Codec, DecodeBuf, Decoder, EncodeBuf, Encoder};
 
-/// Codec для динамических protobuf-сообщений. Несёт descriptor'ы request и response
-/// той Method'ы, которую вызываем — `tonic::client::Grpc` вызывает `encoder()`
-/// перед отправкой и `decoder()` после получения.
+/// Codec for dynamic protobuf messages. Carries request and response descriptors
+/// of the Method being invoked — `tonic::client::Grpc` calls `encoder()`
+/// before sending and `decoder()` after receiving.
 pub struct DynamicCodec {
     pub request_descriptor: MessageDescriptor,
     pub response_descriptor: MessageDescriptor,
 }
 
-/// Encoder — без внутреннего state. DynamicMessage сам несёт свой descriptor
-/// и реализует `prost::Message::encode`.
+/// Encoder — without internal state. DynamicMessage itself carries its descriptor
+/// and implements `prost::Message::encode`.
 pub struct DynamicEncoder;
 
-/// Decoder — содержит response descriptor, чтобы создать `DynamicMessage::new`
-/// и заполнить его из wire bytes через `merge`.
+/// Decoder — contains the response descriptor to construct `DynamicMessage::new`
+/// and populate it from wire bytes via `merge`.
 pub struct DynamicDecoder {
     response_descriptor: MessageDescriptor,
 }
@@ -70,7 +70,7 @@ mod tests {
     use prost_reflect::{DescriptorPool, ReflectMessage};
     use tonic::codec::EncodeBody;
 
-    /// Минимальный pool с message `test.Ping { string id = 1 }` для round-trip тестов.
+    /// Minimal pool with message `test.Ping { string id = 1 }` for round-trip tests.
     fn ping_pool() -> DescriptorPool {
         // syntax = "proto3"; package test; message Ping { string id = 1; }
         use prost_types::{field_descriptor_proto::Type as Ty, *};
