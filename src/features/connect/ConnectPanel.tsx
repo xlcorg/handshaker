@@ -11,8 +11,10 @@ export interface ConnectPanelProps {
 }
 
 export function ConnectPanel(props: ConnectPanelProps) {
-  const [address, setAddress] = useState("");
-  const [tls, setTls] = useState(true);
+  // Defaults match the local Notex testbed (`127.0.0.1:5002`, plaintext).
+  // Convenient for development; override at any time.
+  const [address, setAddress] = useState("localhost:5002");
+  const [tls, setTls] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

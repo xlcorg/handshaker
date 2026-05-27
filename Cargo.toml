@@ -27,6 +27,9 @@ prost-reflect = { version = "0.14", features = ["serde"] }
 tokio-stream = "0.1"
 tonic-health = "0.14"   # dev-only filler service for bare-server integration tests
 
+# Plan #4 — Env + Vars
+regex = "1"
+
 # Tauri runtime + bindings generator
 tauri = { version = "2.11", features = [] }
 tauri-build = { version = "2", features = [] }

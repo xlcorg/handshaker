@@ -62,6 +62,46 @@ async grpcBuildRequestSkeleton(service: string, method: string) : Promise<Result
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async envList() : Promise<Result<EnvironmentIpc[], IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("env_list") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async envActiveGet() : Promise<Result<string, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("env_active_get") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async envActiveSet(name: string) : Promise<Result<null, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("env_active_set", { name }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async envUpsert(env: EnvironmentIpc) : Promise<Result<null, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("env_upsert", { env }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async varsResolve(template: string) : Promise<Result<ResolutionReportIpc, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("vars_resolve", { template }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -97,6 +137,7 @@ export type ContractUpdated = {
  * Stable key identifying the target whose contract just refreshed.
  */
 target_key: string }
+export type EnvironmentIpc = { name: string; variables: Partial<{ [key in string]: string }> }
 export type InvokeOutcomeIpc = { status_code: number; status_message: string; response_json: string | null; trailing_metadata: Partial<{ [key in string]: string }>; 
 /**
  * Elapsed time in milliseconds. Capped at u32::MAX (~49 days) for
@@ -106,6 +147,7 @@ elapsed_ms: number }
 export type InvokeRequest = { service: string; method: string; request_json: string; metadata: Partial<{ [key in string]: string }> }
 export type IpcError = { type: "InvalidTarget"; message: string } | { type: "NotConnected" } | { type: "ReflectionDisabled"; hint: string } | { type: "Reflection"; message: string } | { type: "DescriptorBuild"; message: string } | { type: "ServiceNotFound"; service: string } | { type: "MethodNotFound"; service: string; method: string } | { type: "EncodeRequest"; message: string } | { type: "DecodeResponse"; message: string } | { type: "UnresolvedVariable"; name: string } | { type: "VariableCycle"; chain: string[] } | { type: "Transport"; message: string } | { type: "Auth"; message: string } | { type: "GrpcStatus"; code: number; message: string } | { type: "NotImplemented"; message: string }
 export type MethodEntryIpc = { name: string; path: string; input_message: string; output_message: string; client_streaming: boolean; server_streaming: boolean }
+export type ResolutionReportIpc = { resolved: string; unresolved_vars: string[]; cycle_chain: string[] | null }
 export type ServiceCatalogIpc = { services: ServiceEntryIpc[] }
 export type ServiceEntryIpc = { full_name: string; methods: MethodEntryIpc[] }
 export type TargetSummary = { address: string; tls: boolean; skip_verify: boolean }

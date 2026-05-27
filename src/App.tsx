@@ -3,6 +3,7 @@ import { ConnectPanel } from "@/features/connect/ConnectPanel";
 import { CatalogList } from "@/features/connect/CatalogList";
 import { InvokePanel, type SelectedMethod } from "@/features/invoke/InvokePanel";
 import { ResponsePanel } from "@/features/response/ResponsePanel";
+import { EnvPill } from "@/features/envs/EnvPill";
 import {
   ResizableHandle,
   ResizablePanel,
@@ -22,9 +23,14 @@ export default function App() {
   const [selected, setSelected] = useState<SelectedMethod | null>(null);
   const [outcome, setOutcome] = useState<InvokeOutcomeIpc | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [activeEnv, setActiveEnv] = useState<string>("Default");
 
   useEffect(() => {
     ipc.appVersion().then(setVersion).catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    ipc.envActiveGet().then(setActiveEnv).catch(console.error);
   }, []);
 
   useEffect(() => {
@@ -54,7 +60,10 @@ export default function App() {
     <main className="h-screen bg-background text-foreground flex flex-col overflow-hidden">
       <header className="px-6 py-3 border-b border-border flex items-center justify-between shrink-0">
         <h1 className="text-base font-semibold">Handshaker</h1>
-        <span className="text-xs text-muted-foreground font-mono">v{version}</span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-muted-foreground font-mono">v{version}</span>
+          <EnvPill activeEnv={activeEnv} onVariablesSaved={() => { /* no-op: live preview re-fetches */ }} />
+        </div>
       </header>
       <section
         className={`p-6 flex flex-col gap-6 shrink-0 overflow-y-auto ${

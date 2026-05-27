@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { BodyEditor } from "./BodyEditor";
+import { ResolvesPreview } from "./ResolvesPreview";
 import { ipc } from "@/ipc/client";
 import type { InvokeOutcomeIpc } from "@/ipc/bindings";
 
@@ -57,12 +58,30 @@ export function InvokePanel({ selected, onOutcome, onError }: InvokePanelProps) 
       return;
     }
 
+    let resolved: string;
+    try {
+      const report = await ipc.varsResolve(body);
+      if (report.unresolved_vars.length > 0) {
+        onError(`Unresolved variables: ${report.unresolved_vars.join(", ")}`);
+        return;
+      }
+      if (report.cycle_chain) {
+        onError(`Variable cycle: ${report.cycle_chain.join(" → ")}`);
+        return;
+      }
+      resolved = report.resolved;
+    } catch (e) {
+      const tagged = e as { type?: string; message?: string };
+      onError(tagged.message ?? tagged.type ?? "resolve failed");
+      return;
+    }
+
     setBusy(true);
     try {
       const outcome = await ipc.grpcInvokeUnary({
         service: selected.service,
         method: selected.method,
-        request_json: body,
+        request_json: resolved,
         metadata: {},
       });
       onOutcome(outcome);
@@ -108,8 +127,11 @@ export function InvokePanel({ selected, onOutcome, onError }: InvokePanelProps) 
           {busy ? "Sending…" : "Send"}
         </Button>
       </div>
-      <div className="flex-1 min-h-0">
-        <BodyEditor value={body} onChange={setBody} />
+      <div className="flex-1 min-h-0 flex flex-col">
+        <div className="flex-1 min-h-0">
+          <BodyEditor value={body} onChange={setBody} />
+        </div>
+        <ResolvesPreview body={body} />
       </div>
     </div>
   );
