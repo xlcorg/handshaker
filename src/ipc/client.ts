@@ -3,6 +3,8 @@ import type {
   ConnectInput,
   ConnectOutcome,
   ServiceCatalogIpc,
+  InvokeRequest,
+  InvokeOutcomeIpc,
 } from "./bindings";
 
 /**
@@ -32,9 +34,26 @@ export async function grpcRefreshContract(): Promise<ServiceCatalogIpc> {
   return r.data;
 }
 
+export async function grpcInvokeUnary(req: InvokeRequest): Promise<InvokeOutcomeIpc> {
+  const r = await commands.grpcInvokeUnary(req);
+  if (r.status === "error") throw r.error;
+  return r.data;
+}
+
+export async function grpcBuildRequestSkeleton(
+  service: string,
+  method: string,
+): Promise<string> {
+  const r = await commands.grpcBuildRequestSkeleton(service, method);
+  if (r.status === "error") throw r.error;
+  return r.data;
+}
+
 export const ipc = {
   appVersion,
   grpcConnect,
   grpcDisconnect,
   grpcRefreshContract,
+  grpcInvokeUnary,
+  grpcBuildRequestSkeleton,
 };
