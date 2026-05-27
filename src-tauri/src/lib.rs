@@ -4,12 +4,14 @@ pub mod commands;
 pub mod ipc;
 mod state;
 
+use commands::env::{env_active_get, env_active_set, env_list, env_upsert};
 use commands::events::{ConnectionStateChanged, ContractUpdated};
 use commands::grpc::{
     grpc_build_request_skeleton, grpc_connect, grpc_disconnect, grpc_invoke_unary,
     grpc_refresh_contract,
 };
 use commands::meta::app_version;
+use commands::vars::vars_resolve;
 use specta_typescript::Typescript;
 use state::AppState;
 use tauri_specta::{collect_commands, collect_events, Builder};
@@ -25,6 +27,11 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             grpc_refresh_contract,
             grpc_invoke_unary,
             grpc_build_request_skeleton,
+            env_list,
+            env_active_get,
+            env_active_set,
+            env_upsert,
+            vars_resolve,
         ])
         .events(collect_events![ContractUpdated, ConnectionStateChanged])
 }
