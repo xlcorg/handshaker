@@ -75,17 +75,19 @@ export function InvokePanel({ selected, onOutcome, onError }: InvokePanelProps) 
   }
 
   // ⌘↵ / Ctrl+Enter Send — master spec §9 mandate.
-  // `preventDefault()` so Monaco doesn't insert a newline when the editor has
-  // focus.
+  // Listener uses CAPTURE phase (third arg `true`) so we intercept the event
+  // top-down before it reaches Monaco's editor-level handler. preventDefault
+  // + stopPropagation ensure Monaco never inserts a newline.
   useEffect(() => {
     function onKeydown(e: KeyboardEvent) {
       if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !busy) {
         e.preventDefault();
+        e.stopPropagation();
         handleSend();
       }
     }
-    window.addEventListener("keydown", onKeydown);
-    return () => window.removeEventListener("keydown", onKeydown);
+    window.addEventListener("keydown", onKeydown, true);
+    return () => window.removeEventListener("keydown", onKeydown, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- handleSend captures body via closure; we want fresh body on each keystroke
   }, [busy, body, selected.service, selected.method]);
 
