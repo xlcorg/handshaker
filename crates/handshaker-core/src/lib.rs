@@ -8,3 +8,4 @@ pub mod grpc;
 
 pub use error::CoreError;
 pub use grpc::GrpcTarget;
+pub use grpc::UnaryOutcome;

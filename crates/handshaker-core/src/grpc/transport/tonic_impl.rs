@@ -40,6 +40,19 @@ impl GrpcTransport for TonicTransport {
             .await
             .map_err(|e| CoreError::Transport(format!("connect `{uri}`: {e}")))
     }
+
+    async fn unary_dynamic(
+        &self,
+        _channel: TonicChannel,
+        _method_path: String,
+        _request_codec: crate::grpc::transport::DynamicCodec,
+        _request: prost_reflect::DynamicMessage,
+        _metadata: std::collections::HashMap<String, String>,
+    ) -> Result<crate::grpc::UnaryOutcome, CoreError> {
+        Err(CoreError::NotImplemented(
+            "unary_dynamic — real impl arrives in Plan #3 Task 4".into(),
+        ))
+    }
 }
 
 #[cfg(test)]
