@@ -5,7 +5,10 @@ pub mod ipc;
 mod state;
 
 use commands::events::{ConnectionStateChanged, ContractUpdated};
-use commands::grpc::{grpc_connect, grpc_disconnect, grpc_refresh_contract};
+use commands::grpc::{
+    grpc_build_request_skeleton, grpc_connect, grpc_disconnect, grpc_invoke_unary,
+    grpc_refresh_contract,
+};
 use commands::meta::app_version;
 use specta_typescript::Typescript;
 use state::AppState;
@@ -20,6 +23,8 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             grpc_connect,
             grpc_disconnect,
             grpc_refresh_contract,
+            grpc_invoke_unary,
+            grpc_build_request_skeleton,
         ])
         .events(collect_events![ContractUpdated, ConnectionStateChanged])
 }

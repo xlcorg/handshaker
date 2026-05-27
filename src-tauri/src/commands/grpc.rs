@@ -9,7 +9,7 @@ use tauri::{AppHandle, State};
 use tauri_specta::Event;
 
 use crate::commands::events::{ConnectionStateChanged, ContractUpdated, TargetSummary};
-use crate::ipc::{IpcError, ServiceCatalogIpc};
+use crate::ipc::{IpcError, InvokeOutcomeIpc, InvokeRequest, ServiceCatalogIpc};
 use crate::state::AppState;
 
 #[derive(Debug, Deserialize, Type)]
@@ -113,6 +113,59 @@ pub async fn grpc_refresh_contract(
 
     ContractUpdated { target_key: key }.emit(&app).ok();
     Ok(catalog)
+}
+
+/// Send unary RPC through the active connection.
+///
+/// `Result<InvokeOutcomeIpc, IpcError>` — non-OK gRPC status arrives in
+/// `InvokeOutcomeIpc.status_code`, NOT as `Err`. Err is only for client-side
+/// failures (NotConnected, transport, encode/decode).
+#[tauri::command]
+#[specta::specta]
+pub async fn grpc_invoke_unary(
+    state: tauri::State<'_, crate::state::AppState>,
+    request: InvokeRequest,
+) -> Result<InvokeOutcomeIpc, crate::ipc::IpcError> {
+    let conn = {
+        let guard = state.connection.lock().await;
+        guard
+            .as_ref()
+            .ok_or(crate::ipc::IpcError::NotConnected)?
+            .clone()
+    };
+    // Mutex released — invoke can be slow, don't hold the lock.
+
+    let outcome = handshaker_core::grpc::invoke_unary(
+        &conn,
+        &request.service,
+        &request.method,
+        &request.request_json,
+        request.metadata,
+    )
+    .await?;
+    Ok(outcome.into())
+}
+
+/// Build a JSON skeleton for the request body of the given method.
+#[tauri::command]
+#[specta::specta]
+pub async fn grpc_build_request_skeleton(
+    state: tauri::State<'_, crate::state::AppState>,
+    service: String,
+    method: String,
+) -> Result<String, crate::ipc::IpcError> {
+    let conn = {
+        let guard = state.connection.lock().await;
+        guard
+            .as_ref()
+            .ok_or(crate::ipc::IpcError::NotConnected)?
+            .clone()
+    };
+    Ok(handshaker_core::grpc::build_request_skeleton(
+        &conn,
+        &service,
+        &method,
+    )?)
 }
 
 // Smoke unit tests — we can't easily spin a Tauri app in cargo test, so only test
