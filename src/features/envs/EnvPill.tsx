@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ipc } from "@/ipc/client";
 import type { EnvironmentIpc } from "@/ipc/bindings";
 
+import { ConfirmDeleteEnvDialog } from "./ConfirmDeleteEnvDialog";
 import { EnvEditorDialog } from "./EnvEditorDialog";
 import { EnvSwitcherMenu } from "./EnvSwitcherMenu";
 
@@ -19,8 +20,8 @@ export interface EnvPillProps {
 
 export const EnvPill = forwardRef<HTMLButtonElement, EnvPillProps>(function EnvPill(props, ref) {
   const { envs, activeEnv, onEnvsChanged, onActiveEnvChanged } = props;
-  /** null = closed; null in originalName = create mode; string in originalName = edit mode. */
   const [editor, setEditor] = useState<{ originalName: string | null } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   const label = activeEnv ?? "No environment";
 
@@ -37,16 +38,11 @@ export const EnvPill = forwardRef<HTMLButtonElement, EnvPillProps>(function EnvP
           </Button>
         }
         onActiveSet={(next) => {
-          // Optimistic: update local state first, fire-and-forget IPC.
           onActiveEnvChanged(next);
           void ipc.envActiveSet(next);
         }}
         onEditEnv={(name) => setEditor({ originalName: name })}
-        onDeleteEnv={(_name) => {
-          // Wired in Task 11 (ConfirmDeleteEnvDialog).
-          // For now, log so Task 10 manual smoke can proceed; Task 11 swaps this.
-          console.warn("Delete env requested — ConfirmDeleteEnvDialog lands in Task 11");
-        }}
+        onDeleteEnv={(name) => setDeleteTarget(name)}
         onNewEnv={() => setEditor({ originalName: null })}
       />
       {editor && (
@@ -64,6 +60,17 @@ export const EnvPill = forwardRef<HTMLButtonElement, EnvPillProps>(function EnvP
           }}
         />
       )}
+      <ConfirmDeleteEnvDialog
+        target={deleteTarget}
+        activeEnv={activeEnv}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+        onDeleted={async (_name, activeChangedToNull) => {
+          await onEnvsChanged();
+          if (activeChangedToNull) onActiveEnvChanged(null);
+        }}
+      />
     </>
   );
 });
