@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   Dialog,
@@ -45,6 +45,11 @@ export function EnvEditorDialog({
   const [vars, setVars] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Snapshot of `envs` kept fresh each render. The reload effect reads
+  // through this ref instead of depending on `envs` directly, so background
+  // refetches by the parent cannot clobber the user's in-progress edits.
+  const envsRef = useRef<EnvironmentIpc[]>(envs);
+  envsRef.current = envs;
 
   // Reload state whenever the dialog opens or the target env changes.
   useEffect(() => {
@@ -55,8 +60,10 @@ export function EnvEditorDialog({
       setVars({});
       return;
     }
-    // Edit mode: load variables for originalName from the parent-provided list.
-    const cur = envs.find((e) => e.name === originalName);
+    // Edit mode: load variables for originalName from the snapshot taken when
+    // the dialog opened. We deliberately do NOT depend on `envs` to avoid
+    // overwriting the user's in-progress edits if the parent refetches.
+    const cur = envsRef.current.find((e) => e.name === originalName);
     const loaded: Record<string, string> = {};
     if (cur) {
       // Defensive coerce — tauri-specta emits Partial<Record<...>> for HashMap.
@@ -65,7 +72,7 @@ export function EnvEditorDialog({
       }
     }
     setVars(loaded);
-  }, [open, originalName, envs]);
+  }, [open, originalName]);
 
   const nameInvalid = name.length > 0 && !NAME_RE.test(name);
   const nameEmpty = name.length === 0;
@@ -74,19 +81,23 @@ export function EnvEditorDialog({
   const canSave = !nameInvalid && !nameEmpty && !nameIsDuplicate;
 
   async function handleSave() {
-    if (!canSave) return;
-    const renamed = !isCreate && name !== originalName;
+    const trimmedName = name.trim();
+    // Re-validate against the trimmed name (in case the user submitted via Enter
+    // and the canSave check ran against an untrimmed value).
+    if (trimmedName.length === 0 || !NAME_RE.test(trimmedName)) return;
+    if (trimmedName !== originalName && envs.some((e) => e.name === trimmedName)) return;
+    const renamed = !isCreate && trimmedName !== originalName;
     setBusy(true);
     setError(null);
     try {
       // 1. Persist the (possibly renamed) env with its current variables.
-      await ipc.envUpsert({ name, variables: vars });
+      await ipc.envUpsert({ name: trimmedName, variables: vars });
 
       // 2. Renaming the active env: switch active to the new name BEFORE
       //    deleting the old one (backend env_delete refuses to delete active).
       let becameActive = false;
       if (renamed && activeEnv === originalName) {
-        await ipc.envActiveSet(name);
+        await ipc.envActiveSet(trimmedName);
         becameActive = true;
       }
 
@@ -97,11 +108,11 @@ export function EnvEditorDialog({
 
       // 4. Create mode: auto-activate the new env.
       if (isCreate) {
-        await ipc.envActiveSet(name);
+        await ipc.envActiveSet(trimmedName);
         becameActive = true;
       }
 
-      onSaved(name, becameActive);
+      onSaved(trimmedName, becameActive);
       onOpenChange(false);
     } catch (e) {
       const t = e as { type?: string; message?: string };
