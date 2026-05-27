@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ConnectPanel } from "@/features/connect/ConnectPanel";
 import { CatalogList } from "@/features/connect/CatalogList";
 import { InvokePanel, type SelectedMethod } from "@/features/invoke/InvokePanel";
@@ -25,9 +25,21 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [activeEnv, setActiveEnv] = useState<string | null>(null);
   const [envs, setEnvs] = useState<EnvironmentIpc[]>([]);
+  const envSwitcherTriggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     ipc.appVersion().then(setVersion).catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && (e.key === "e" || e.key === "E")) {
+        e.preventDefault();
+        envSwitcherTriggerRef.current?.click();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, []);
 
   useEffect(() => {
@@ -68,6 +80,7 @@ export default function App() {
         <div className="flex items-center gap-3">
           <span className="text-xs text-muted-foreground font-mono">v{version}</span>
           <EnvPill
+            ref={envSwitcherTriggerRef}
             envs={envs}
             activeEnv={activeEnv}
             onEnvsChanged={async () => setEnvs(await ipc.envList())}
