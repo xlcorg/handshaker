@@ -27,4 +27,3 @@ prost-reflect.workspace = true     # features ["serde"] from workspace
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tonic-health.workspace = true
-bytes = "1"

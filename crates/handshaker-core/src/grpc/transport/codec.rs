@@ -73,7 +73,6 @@ mod tests {
     /// Минимальный pool с message `test.Ping { string id = 1 }` для round-trip тестов.
     fn ping_pool() -> DescriptorPool {
         // syntax = "proto3"; package test; message Ping { string id = 1; }
-        use prost::Message as _;
         use prost_types::{field_descriptor_proto::Type as Ty, *};
         let ping = DescriptorProto {
             name: Some("Ping".to_string()),
@@ -93,8 +92,6 @@ mod tests {
             ..Default::default()
         };
         let set = prost_types::FileDescriptorSet { file: vec![file] };
-        let mut buf = Vec::new();
-        set.encode(&mut buf).expect("encode set");
         let mut pool = DescriptorPool::new();
         pool.add_file_descriptor_set(set).expect("add set");
         pool
