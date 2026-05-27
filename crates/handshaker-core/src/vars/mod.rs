@@ -127,6 +127,19 @@ fn dfs(name: &str, vars: &VariableSet<'_>, stack: &mut Vec<String>) -> Option<Ve
     None
 }
 
+/// Strict resolve — fails on the first unresolved variable or any detected cycle.
+/// Use this in the invoke path or anywhere a fully-resolved string is required.
+pub fn resolve_string(template: &str, vars: &VariableSet<'_>) -> Result<String, CoreError> {
+    let report = resolve_template_with_diagnostics(template, vars);
+    if let Some(chain) = report.cycle_chain {
+        return Err(CoreError::VariableCycle { chain });
+    }
+    if let Some(name) = report.unresolved_vars.into_iter().next() {
+        return Err(CoreError::UnresolvedVariable { name });
+    }
+    Ok(report.resolved)
+}
+
 /// One substitution pass. Returns the new string and a flag indicating whether any
 /// substitution happened (used by the caller to decide whether to continue iterating).
 fn substitute_once(input: &str, vars: &VariableSet<'_>) -> (String, bool) {
@@ -306,5 +319,49 @@ mod tests {
         // Should include all three names (a, b, c) plus the closing repeat.
         assert!(chain.len() >= 4, "chain too short: {chain:?}");
         assert_eq!(chain.first(), chain.last());
+    }
+
+    #[test]
+    fn resolve_string_ok_when_resolved() {
+        let env = map(&[("x", "1")]);
+        let coll = map(&[]);
+        let s = resolve_string("{{x}}", &vs(&env, &coll)).unwrap();
+        assert_eq!(s, "1");
+    }
+
+    #[test]
+    fn resolve_string_err_unresolved() {
+        let env = map(&[]);
+        let coll = map(&[]);
+        let err = resolve_string("{{missing}}", &vs(&env, &coll)).unwrap_err();
+        match err {
+            CoreError::UnresolvedVariable { name } => assert_eq!(name, "missing"),
+            other => panic!("expected UnresolvedVariable, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_string_err_cycle() {
+        let env = map(&[("a", "{{b}}"), ("b", "{{a}}")]);
+        let coll = map(&[]);
+        let err = resolve_string("{{a}}", &vs(&env, &coll)).unwrap_err();
+        match err {
+            CoreError::VariableCycle { chain } => {
+                assert_eq!(chain.first(), chain.last());
+                assert!(chain.contains(&"a".to_string()));
+            }
+            other => panic!("expected VariableCycle, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_string_err_unresolved_picks_first() {
+        let env = map(&[]);
+        let coll = map(&[]);
+        let err = resolve_string("{{first}} {{second}}", &vs(&env, &coll)).unwrap_err();
+        match err {
+            CoreError::UnresolvedVariable { name } => assert_eq!(name, "first"),
+            other => panic!("expected UnresolvedVariable, got {other:?}"),
+        }
     }
 }
