@@ -74,6 +74,23 @@ export function InvokePanel({ selected, onOutcome, onError }: InvokePanelProps) 
     }
   }
 
+  // ⌘↵ / Ctrl+Enter Send — master spec §9 mandate.
+  // Listener uses CAPTURE phase (third arg `true`) so we intercept the event
+  // top-down before it reaches Monaco's editor-level handler. preventDefault
+  // + stopPropagation ensure Monaco never inserts a newline.
+  useEffect(() => {
+    function onKeydown(e: KeyboardEvent) {
+      if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !busy) {
+        e.preventDefault();
+        e.stopPropagation();
+        handleSend();
+      }
+    }
+    window.addEventListener("keydown", onKeydown, true);
+    return () => window.removeEventListener("keydown", onKeydown, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- handleSend captures body via closure; we want fresh body on each keystroke
+  }, [busy, body, selected.service, selected.method]);
+
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between px-4 py-2 border-b border-border">
@@ -82,7 +99,12 @@ export function InvokePanel({ selected, onOutcome, onError }: InvokePanelProps) 
           <span className="mx-1">/</span>
           <span className="font-semibold">{selected.method}</span>
         </div>
-        <Button onClick={handleSend} disabled={busy} size="sm">
+        <Button
+          onClick={handleSend}
+          disabled={busy}
+          size="sm"
+          aria-keyshortcuts="Control+Enter Meta+Enter"
+        >
           {busy ? "Sending…" : "Send"}
         </Button>
       </div>
