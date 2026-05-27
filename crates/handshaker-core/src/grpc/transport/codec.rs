@@ -68,11 +68,10 @@ impl Decoder for DynamicDecoder {
 mod tests {
     use super::*;
     use prost_reflect::{DescriptorPool, ReflectMessage};
+    use tonic::codec::EncodeBody;
 
     /// Минимальный pool с message `test.Ping { string id = 1 }` для round-trip тестов.
     fn ping_pool() -> DescriptorPool {
-        // Используем fixture байтов из common test helper'а (пересобираем здесь, чтобы codec.rs
-        // оставался unit-тестируемым без integration test infra). Структура:
         // syntax = "proto3"; package test; message Ping { string id = 1; }
         use prost::Message as _;
         use prost_types::{field_descriptor_proto::Type as Ty, *};
@@ -107,24 +106,46 @@ mod tests {
             .expect("test.Ping in pool")
     }
 
-    #[test]
-    fn roundtrip_ping_with_id() {
+    /// Build a DynamicCodec for test.Ping ↔ test.Ping and run a message through
+    /// the full Encoder → wire frames → Decoder path.
+    ///
+    /// `tonic::codec::EncodeBuf::new` and `DecodeBuf::new` are `pub(crate)` in
+    /// tonic 0.14.6 (see codec/buffer.rs), so we cannot construct them directly.
+    /// Instead we go through the two public wrappers that tonic exposes:
+    ///
+    ///   • `EncodeBody::new_client`  — drives `DynamicEncoder::encode`
+    ///   • `tonic::Streaming::new_request` — drives `DynamicDecoder::decode`
+    ///
+    /// This is the same call-stack that `tonic::client::Grpc` uses in production.
+    async fn roundtrip(msg: DynamicMessage) -> DynamicMessage {
+        let desc = msg.descriptor();
+        let mut codec = DynamicCodec {
+            request_descriptor: desc.clone(),
+            response_descriptor: desc.clone(),
+        };
+
+        // --- encode: calls DynamicEncoder::encode ---
+        let stream = tokio_stream::once(Ok::<_, tonic::Status>(msg));
+        let encode_body = EncodeBody::new_client(codec.encoder(), stream, None, None);
+
+        // --- decode: calls DynamicDecoder::decode ---
+        let mut streaming =
+            tonic::Streaming::new_request(codec.decoder(), encode_body, None, None);
+
+        streaming
+            .message()
+            .await
+            .expect("decode should succeed")
+            .expect("stream should yield one message")
+    }
+
+    #[tokio::test]
+    async fn roundtrip_ping_with_id() {
         let desc = ping_descriptor();
-        let mut req = DynamicMessage::new(desc.clone());
-        req.set_field_by_name(
-            "id",
-            prost_reflect::Value::String("hello".to_string()),
-        );
+        let mut msg = DynamicMessage::new(desc.clone());
+        msg.set_field_by_name("id", prost_reflect::Value::String("hello".to_string()));
 
-        // Encode via prost::Message::encode
-        let mut buf = Vec::new();
-        req.encode(&mut buf).expect("encode");
-        assert!(!buf.is_empty(), "encoded bytes should be non-empty");
-
-        // Decode via merge
-        let mut decoded = DynamicMessage::new(desc.clone());
-        let mut slice = &buf[..];
-        decoded.merge(&mut slice).expect("decode");
+        let decoded = roundtrip(msg).await;
 
         assert_eq!(decoded.descriptor().full_name(), "test.Ping");
         let id = decoded
@@ -136,22 +157,16 @@ mod tests {
         assert_eq!(id, "hello");
     }
 
-    #[test]
-    fn roundtrip_empty_message_decodes_to_defaults() {
+    #[tokio::test]
+    async fn roundtrip_empty_message_decodes_to_defaults() {
         let desc = ping_descriptor();
-        let req = DynamicMessage::new(desc.clone()); // id = "" default
+        let msg = DynamicMessage::new(desc.clone()); // id = "" (proto3 default)
 
-        // Encode empty message
-        let mut buf = Vec::new();
-        req.encode(&mut buf).expect("encode");
+        let decoded = roundtrip(msg).await;
 
-        // Decode into new message
-        let mut decoded = DynamicMessage::new(desc.clone());
-        let mut slice = &buf[..];
-        decoded.merge(&mut slice).expect("decode");
-
-        // proto3 default for string = "" — поле может отсутствовать в wire format,
-        // но get_field_by_name по дефолту возвращает default value.
+        assert_eq!(decoded.descriptor().full_name(), "test.Ping");
+        // proto3 string default = "" — the field is absent on the wire but
+        // get_field_by_name returns the default value.
         let id = decoded
             .get_field_by_name("id")
             .expect("field id present")
