@@ -6,11 +6,13 @@
 //! eventually subsume it. The rest of the core talks `prost_reflect::DescriptorPool` and the
 //! data types defined here.
 
+pub mod catalog;
 pub mod connection;
 pub mod descriptor;
 pub mod reflection;
 pub mod transport;
 
+pub use catalog::{build_catalog, MethodEntry, ServiceCatalog, ServiceEntry};
 pub use connection::GrpcTarget;
 pub use descriptor::build_pool;
 pub use transport::{GrpcTransport, TonicChannel, TonicTransport};
