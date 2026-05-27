@@ -35,7 +35,7 @@ export function ResponsePanel({ outcome }: ResponsePanelProps) {
     <Tabs
       value={tab}
       onValueChange={(v) => setTab(v as TabKey)}
-      className="flex flex-col h-full"
+      className="flex flex-col h-full gap-0"
     >
       <div className="flex items-center justify-between border-b border-border px-3">
         <TabsList className="bg-transparent p-0 h-9">
