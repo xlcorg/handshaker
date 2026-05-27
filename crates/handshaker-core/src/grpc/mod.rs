@@ -18,5 +18,5 @@ pub use catalog::{build_catalog, MethodEntry, ServiceCatalog, ServiceEntry};
 pub use connection::{GrpcConnection, GrpcTarget};
 pub use contract::activate;
 pub use descriptor::build_pool;
-pub use invoke::UnaryOutcome;
+pub use invoke::{build_request_skeleton, invoke_unary, UnaryOutcome};
 pub use transport::{GrpcTransport, TonicChannel, TonicTransport};
