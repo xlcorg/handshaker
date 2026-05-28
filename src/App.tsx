@@ -14,6 +14,7 @@ import type { MetadataRow } from "@/features/invoke/MetadataView";
 import { AUTH_DEFAULTS, type AuthState } from "@/features/invoke/AuthInline";
 import { ResponsePanel } from "@/features/response/ResponsePanel";
 import type { RespState } from "@/features/response/RespMeta";
+import { SettingsDialog } from "@/features/settings/SettingsDialog";
 import { ipc } from "@/ipc/client";
 import { onConnectionStateChanged, onContractUpdated } from "@/ipc/events";
 import type { EnvironmentIpc, InvokeOutcomeIpc, ServiceCatalogIpc } from "@/ipc/bindings";
@@ -293,11 +294,7 @@ export default function App() {
           )}
         </main>
       </div>
-      {settingsOpen && (
-        <div className="fixed bottom-4 left-4 rounded-md border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-md">
-          Settings placeholder · <button onClick={() => setSettingsOpen(false)} className="underline">close</button>
-        </div>
-      )}
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
     </div>
   );
 }
