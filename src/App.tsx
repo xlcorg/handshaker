@@ -29,6 +29,29 @@ export default function App() {
   }, [prefs.theme]);
 
   useEffect(() => {
+    // density → root font-size
+    const fs =
+      prefs.density === "compact" ? "12.5px" :
+      prefs.density === "cozy"    ? "13.5px" :
+                                    "13px";
+    document.documentElement.style.fontSize = fs;
+
+    // UI font
+    const ui =
+      prefs.fontUi === "geist"  ? `"Geist","Inter",ui-sans-serif,system-ui,sans-serif` :
+      prefs.fontUi === "system" ? `system-ui,-apple-system,"Segoe UI",sans-serif` :
+                                  `"Inter",ui-sans-serif,system-ui,sans-serif`;
+    document.documentElement.style.setProperty("--font-sans-override", ui);
+
+    // Mono font
+    const mn =
+      prefs.fontMono === "geist-mono" ? `"Geist Mono","JetBrains Mono",ui-monospace,monospace` :
+      prefs.fontMono === "ibm"        ? `"IBM Plex Mono","JetBrains Mono",ui-monospace,monospace` :
+                                         `"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace`;
+    document.documentElement.style.setProperty("--font-mono-override", mn);
+  }, [prefs.density, prefs.fontUi, prefs.fontMono]);
+
+  useEffect(() => {
     const el = mainRef.current;
     if (!el || !prefs.dots) return;
     function onMove(e: MouseEvent) {
