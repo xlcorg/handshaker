@@ -38,10 +38,7 @@ export const RequestPanel = forwardRef<RequestPanelHandle, RequestPanelProps>(fu
       try {
         const skeleton = await ipc.grpcBuildRequestSkeleton(selected.service, selected.method);
         if (cancelled) return;
-        const isEmpty = body.trim() === "" || body.trim() === "{}";
-        if (isEmpty || window.confirm("Replace current request body with the method's skeleton?")) {
-          setBody(skeleton);
-        }
+        setBody(skeleton);
       } catch (e) {
         const tagged = e as { type?: string; message?: string };
         onError(tagged.message ?? tagged.type ?? "failed to load skeleton");
@@ -50,7 +47,7 @@ export const RequestPanel = forwardRef<RequestPanelHandle, RequestPanelProps>(fu
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- body intentionally not a dep
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onError is a fresh closure each parent render; we only want method changes to retrigger.
   }, [selected.service, selected.method]);
 
   useImperativeHandle(ref, () => ({ send }), [body, metadata, auth, selected]);
