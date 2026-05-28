@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { isTauri } from "@tauri-apps/api/core";
 import { EnvPill } from "@/features/envs/EnvPill";
 import { Titlebar } from "@/features/shell/Titlebar";
 import { Toolbar } from "@/features/shell/Toolbar";
@@ -51,12 +52,17 @@ export default function App() {
   }, [prefs.theme]);
 
   useEffect(() => {
-    // density → root font-size
+    // density → #root font-size (NOT documentElement — keep rem === 16px
+    // so Tailwind h-8/h-12/h-14 keep their design-intended pixel sizes).
     const fs =
       prefs.density === "compact" ? "12.5px" :
       prefs.density === "cozy"    ? "13.5px" :
                                     "13px";
-    document.documentElement.style.fontSize = fs;
+    const root = document.getElementById("root");
+    if (root) root.style.fontSize = fs;
+    // Reset any documentElement.fontSize that earlier builds may have set —
+    // we want rem to track the browser default (typically 16px).
+    document.documentElement.style.fontSize = "";
 
     // UI font
     const ui =
@@ -86,10 +92,12 @@ export default function App() {
   }, [prefs.dots]);
 
   useEffect(() => {
+    if (!isTauri()) return;
     ipc.appVersion().then(setVersion).catch(console.error);
   }, []);
 
   useEffect(() => {
+    if (!isTauri()) return;
     ipc.envActiveGet().then(setActiveEnv).catch(console.error);
     ipc.envList().then(setEnvs).catch(console.error);
   }, []);
@@ -107,6 +115,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (!isTauri()) return;
     let a: (() => void) | undefined;
     let b: (() => void) | undefined;
     onConnectionStateChanged((e) => setConnected(e.connected)).then((fn) => (a = fn));
