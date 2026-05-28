@@ -6,6 +6,9 @@ import { Sidebar, type SidebarTab } from "@/features/shell/Sidebar";
 import { ConnectionBar } from "@/features/shell/ConnectionBar";
 import { DisconnectedHero } from "@/features/shell/DisconnectedHero";
 import { MethodPicker } from "@/features/shell/MethodPicker";
+import { SidebarServicesPane } from "@/features/shell/SidebarServicesPane";
+import { SidebarHistoryPane } from "@/features/shell/SidebarHistoryPane";
+import { SidebarCollectionsPane } from "@/features/shell/SidebarCollectionsPane";
 import { ipc } from "@/ipc/client";
 import { onConnectionStateChanged, onContractUpdated } from "@/ipc/events";
 import type { EnvironmentIpc, ServiceCatalogIpc } from "@/ipc/bindings";
@@ -173,11 +176,17 @@ export default function App() {
             servicesCount={servicesCount}
             historyCount={0}
           >
-            <div className="px-3 py-6 text-xs text-muted-foreground">
-              {sideTab === "services" && (connected ? "Services catalog appears here" : "Not connected")}
-              {sideTab === "history" && "History — not implemented yet"}
-              {sideTab === "saved" && "Saved — not implemented yet"}
-            </div>
+            {sideTab === "services" && (
+              <SidebarServicesPane
+                connected={connected}
+                catalog={catalog}
+                query={sideQuery}
+                selected={selected}
+                onSelect={(s) => setSelected(s)}
+              />
+            )}
+            {sideTab === "history" && <SidebarHistoryPane />}
+            {sideTab === "saved" && <SidebarCollectionsPane />}
           </Sidebar>
         )}
         <main ref={mainRef} className="flex-1 flex flex-col min-w-0 min-h-0 relative bg-background">
