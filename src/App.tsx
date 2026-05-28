@@ -5,10 +5,11 @@ import { Toolbar } from "@/features/shell/Toolbar";
 import { Sidebar, type SidebarTab } from "@/features/shell/Sidebar";
 import { ConnectionBar } from "@/features/shell/ConnectionBar";
 import { DisconnectedHero } from "@/features/shell/DisconnectedHero";
+import { MethodPicker } from "@/features/shell/MethodPicker";
 import { ipc } from "@/ipc/client";
 import { onConnectionStateChanged, onContractUpdated } from "@/ipc/events";
 import type { EnvironmentIpc, ServiceCatalogIpc } from "@/ipc/bindings";
-import type { SelectedMethod } from "@/features/shell/SelectedMethod";
+import { deriveKind, type SelectedMethod } from "@/features/shell/SelectedMethod";
 import { usePrefs } from "@/lib/use-prefs";
 import { cn } from "@/lib/cn";
 
@@ -109,6 +110,15 @@ export default function App() {
     }
   }, [connected]);
 
+  useEffect(() => {
+    if (!catalog || selected) return;
+    const svc = catalog.services[0];
+    const mth = svc?.methods[0];
+    if (svc && mth) {
+      setSelected({ service: svc.full_name, method: mth.name, kind: deriveKind(mth) });
+    }
+  }, [catalog, selected]);
+
   const servicesCount = catalog?.services.length ?? 0;
 
   async function handleConnect() {
@@ -190,6 +200,16 @@ export default function App() {
             onConnect={handleConnect}
             onDisconnect={handleDisconnect}
             onSend={handleSend}
+            pickerSlot={
+              catalog && selected ? (
+                <MethodPicker
+                  selected={selected}
+                  catalog={catalog}
+                  onSelect={(next) => setSelected(next)}
+                  className="h-7 px-1.5 -ml-0 flex-1 min-w-0 justify-start"
+                />
+              ) : undefined
+            }
           />
           {!connected ? (
             <DisconnectedHero connecting={connecting} host={host} />
