@@ -11,6 +11,10 @@ import "@/styles/globals.css";
 import App from "@/App";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { readPrefs } from "@/lib/use-prefs";
+// Side-effect import: kicks off Monaco chunk download in parallel with React
+// boot, so by the time the user picks a method the editor mounts instantly
+// instead of flashing a Suspense fallback.
+import "@/lib/monaco";
 
 const initial = readPrefs();
 document.documentElement.classList.toggle("dark", initial.theme === "dark");

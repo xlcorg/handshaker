@@ -1,5 +1,6 @@
 import { Suspense } from "react";
-import { MonacoEditor, EDITOR_OPTIONS, MONACO_THEME } from "@/lib/monaco";
+import { EDITOR_OPTIONS, MonacoEditor, monacoThemeFor } from "@/lib/monaco";
+import { usePrefs } from "@/lib/use-prefs";
 
 export interface BodyEditorProps {
   value: string;
@@ -8,19 +9,18 @@ export interface BodyEditorProps {
 
 /**
  * Request-body editor. Monaco JSON, bundled locally (see `src/lib/monaco.ts`).
- * Lazy-loaded — first render triggers a one-time ~4MB chunk fetch.
+ * The Monaco chunk is preloaded at app boot from `main.tsx`, so the Suspense
+ * fallback below is just a transparent placeholder that keeps layout stable —
+ * not a visible "loading…" UI.
  */
 export function BodyEditor({ value, onChange }: BodyEditorProps) {
+  const [prefs] = usePrefs();
   return (
-    <Suspense
-      fallback={
-        <div className="text-sm text-muted-foreground p-4">Loading editor…</div>
-      }
-    >
+    <Suspense fallback={<div className="h-full w-full bg-background" aria-hidden />}>
       <MonacoEditor
         height="100%"
         defaultLanguage="json-with-vars"
-        theme={MONACO_THEME}
+        theme={monacoThemeFor(prefs.theme)}
         value={value}
         onChange={(v) => onChange(v ?? "")}
         options={EDITOR_OPTIONS}
