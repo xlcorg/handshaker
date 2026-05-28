@@ -12,6 +12,8 @@ import { SidebarCollectionsPane } from "@/features/shell/SidebarCollectionsPane"
 import { RequestPanel, type RequestPanelHandle } from "@/features/invoke/RequestPanel";
 import type { MetadataRow } from "@/features/invoke/MetadataView";
 import { AUTH_DEFAULTS, type AuthState } from "@/features/invoke/AuthInline";
+import { ResponsePanel } from "@/features/response/ResponsePanel";
+import type { RespState } from "@/features/response/RespMeta";
 import { ipc } from "@/ipc/client";
 import { onConnectionStateChanged, onContractUpdated } from "@/ipc/events";
 import type { EnvironmentIpc, InvokeOutcomeIpc, ServiceCatalogIpc } from "@/ipc/bindings";
@@ -178,6 +180,12 @@ export default function App() {
     requestPanelRef.current?.send().catch((e) => console.error("send failed:", e));
   }
 
+  const respState: RespState =
+    sending ? "sending" :
+    invokeError ? "error" :
+    outcome ? (outcome.status_code === 0 ? "success" : "error") :
+    "idle";
+
   return (
     <div className="fixed inset-0 flex flex-col bg-background border border-border rounded-[10px] overflow-hidden">
       <Titlebar />
@@ -270,14 +278,17 @@ export default function App() {
                 </div>
               )}
               <div className={cn(prefs.split === "horizontal" ? "h-px w-full" : "w-px h-full", "bg-border")} />
-              <div className="flex-1 min-w-0 min-h-0 flex items-center justify-center text-xs text-muted-foreground">
-                Response pane placeholder · outcome={outcome ? outcome.status_code : "—"} · err={invokeError ?? "—"}
-              </div>
+              <ResponsePanel state={respState} outcome={outcome} />
             </div>
           )}
           {connError && (
-            <div className="fixed bottom-4 right-4 rounded-md border border-destructive bg-destructive/10 px-3 py-2 text-xs text-destructive shadow-md">
+            <div className="fixed bottom-16 right-4 rounded-md border border-destructive bg-destructive/10 px-3 py-2 text-xs text-destructive shadow-md">
               {connError}
+            </div>
+          )}
+          {invokeError && (
+            <div className="fixed bottom-4 right-4 z-20 max-w-md rounded-md border border-destructive bg-destructive/10 px-3 py-2 text-xs text-destructive shadow-md">
+              {invokeError}
             </div>
           )}
         </main>
