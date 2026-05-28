@@ -9,9 +9,12 @@ import { MethodPicker } from "@/features/shell/MethodPicker";
 import { SidebarServicesPane } from "@/features/shell/SidebarServicesPane";
 import { SidebarHistoryPane } from "@/features/shell/SidebarHistoryPane";
 import { SidebarCollectionsPane } from "@/features/shell/SidebarCollectionsPane";
+import { RequestPanel, type RequestPanelHandle } from "@/features/invoke/RequestPanel";
+import type { MetadataRow } from "@/features/invoke/MetadataView";
+import { AUTH_DEFAULTS, type AuthState } from "@/features/invoke/AuthInline";
 import { ipc } from "@/ipc/client";
 import { onConnectionStateChanged, onContractUpdated } from "@/ipc/events";
-import type { EnvironmentIpc, ServiceCatalogIpc } from "@/ipc/bindings";
+import type { EnvironmentIpc, InvokeOutcomeIpc, ServiceCatalogIpc } from "@/ipc/bindings";
 import { deriveKind, type SelectedMethod } from "@/features/shell/SelectedMethod";
 import { usePrefs } from "@/lib/use-prefs";
 import { cn } from "@/lib/cn";
@@ -30,10 +33,15 @@ export default function App() {
   const [host, setHost] = useState("localhost:5002");
   const [tls, setTls] = useState(false);
   const [connecting, setConnecting] = useState(false);
-  const [sending, _setSending] = useState(false);
+  const [sending, setSending] = useState(false);
   const [connError, setConnError] = useState<string | null>(null);
   const envSwitcherTriggerRef = useRef<HTMLButtonElement>(null);
   const mainRef = useRef<HTMLElement>(null);
+  const requestPanelRef = useRef<RequestPanelHandle>(null);
+  const [metadata, setMetadata] = useState<MetadataRow[]>([]);
+  const [auth, setAuth] = useState<AuthState>(AUTH_DEFAULTS);
+  const [outcome, setOutcome] = useState<InvokeOutcomeIpc | null>(null);
+  const [invokeError, setInvokeError] = useState<string | null>(null);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", prefs.theme === "dark");
@@ -122,6 +130,26 @@ export default function App() {
     }
   }, [catalog, selected]);
 
+  useEffect(() => {
+    setOutcome(null);
+    setInvokeError(null);
+    setMetadata([]);
+    setAuth(AUTH_DEFAULTS);
+  }, [selected?.service, selected?.method]);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Enter" || (!e.ctrlKey && !e.metaKey)) return;
+      if (sending || !selected) return;
+      e.preventDefault();
+      e.stopPropagation();
+      handleSend();
+    }
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- handleSend deliberately captured fresh
+  }, [sending, selected]);
+
   const servicesCount = catalog?.services.length ?? 0;
 
   async function handleConnect() {
@@ -147,7 +175,7 @@ export default function App() {
   }
 
   function handleSend() {
-    // Phase 8 wires this to RequestPanel via a ref; for now no-op.
+    requestPanelRef.current?.send().catch((e) => console.error("send failed:", e));
   }
 
   return (
@@ -224,12 +252,26 @@ export default function App() {
             <DisconnectedHero connecting={connecting} host={host} />
           ) : (
             <div className={cn("flex-1 flex min-h-0 min-w-0", prefs.split === "horizontal" ? "flex-col" : "flex-row")}>
-              <div className="flex-1 min-w-0 min-h-0 flex items-center justify-center text-xs text-muted-foreground">
-                Request pane placeholder (Phase 8)
-              </div>
+              {connected && selected ? (
+                <RequestPanel
+                  ref={requestPanelRef}
+                  selected={selected}
+                  metadata={metadata}
+                  onMetadataChange={setMetadata}
+                  auth={auth}
+                  onAuthChange={setAuth}
+                  onSending={setSending}
+                  onOutcome={(o) => { setOutcome(o); setInvokeError(null); }}
+                  onError={(m) => { setInvokeError(m); setOutcome(null); }}
+                />
+              ) : (
+                <div className="flex-1 min-w-0 min-h-0 flex items-center justify-center text-xs text-muted-foreground">
+                  Select a method to begin
+                </div>
+              )}
               <div className={cn(prefs.split === "horizontal" ? "h-px w-full" : "w-px h-full", "bg-border")} />
               <div className="flex-1 min-w-0 min-h-0 flex items-center justify-center text-xs text-muted-foreground">
-                Response pane placeholder (Phase 9)
+                Response pane placeholder · outcome={outcome ? outcome.status_code : "—"} · err={invokeError ?? "—"}
               </div>
             </div>
           )}
