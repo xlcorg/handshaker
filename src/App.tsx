@@ -1,50 +1,59 @@
 import { useEffect, useRef, useState } from "react";
-import { ConnectPanel } from "@/features/connect/ConnectPanel";
-import { CatalogList } from "@/features/connect/CatalogList";
-import { InvokePanel, type SelectedMethod } from "@/features/invoke/InvokePanel";
-import { ResponsePanel } from "@/features/response/ResponsePanel";
 import { EnvPill } from "@/features/envs/EnvPill";
-import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-} from "@/components/ui/resizable";
-import {
-  onConnectionStateChanged,
-  onContractUpdated,
-} from "@/ipc/events";
+import { Titlebar } from "@/features/shell/Titlebar";
+import { Toolbar } from "@/features/shell/Toolbar";
+import { Sidebar, type SidebarTab } from "@/features/shell/Sidebar";
 import { ipc } from "@/ipc/client";
-import type { ServiceCatalogIpc, InvokeOutcomeIpc, EnvironmentIpc } from "@/ipc/bindings";
+import { onConnectionStateChanged, onContractUpdated } from "@/ipc/events";
+import type { EnvironmentIpc, ServiceCatalogIpc } from "@/ipc/bindings";
+import type { SelectedMethod } from "@/features/shell/SelectedMethod";
+import { usePrefs } from "@/lib/use-prefs";
+import { cn } from "@/lib/cn";
 
 export default function App() {
+  const [prefs] = usePrefs();
+  const [version, setVersion] = useState("");
   const [catalog, setCatalog] = useState<ServiceCatalogIpc | null>(null);
   const [connected, setConnected] = useState(false);
-  const [version, setVersion] = useState("");
   const [selected, setSelected] = useState<SelectedMethod | null>(null);
-  const [outcome, setOutcome] = useState<InvokeOutcomeIpc | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [activeEnv, setActiveEnv] = useState<string | null>(null);
   const [envs, setEnvs] = useState<EnvironmentIpc[]>([]);
+  const [sideTab, setSideTab] = useState<SidebarTab>("services");
+  const [sideQuery, setSideQuery] = useState("");
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const envSwitcherTriggerRef = useRef<HTMLButtonElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", prefs.theme === "dark");
+  }, [prefs.theme]);
+
+  useEffect(() => {
+    const el = mainRef.current;
+    if (!el || !prefs.dots) return;
+    function onMove(e: MouseEvent) {
+      const r = el!.getBoundingClientRect();
+      el!.style.setProperty("--mx", `${((e.clientX - r.left) / r.width) * 100}%`);
+      el!.style.setProperty("--my", `${((e.clientY - r.top) / r.height) * 100}%`);
+    }
+    el.addEventListener("mousemove", onMove);
+    return () => el.removeEventListener("mousemove", onMove);
+  }, [prefs.dots]);
 
   useEffect(() => {
     ipc.appVersion().then(setVersion).catch(console.error);
   }, []);
 
   useEffect(() => {
+    ipc.envActiveGet().then(setActiveEnv).catch(console.error);
+    ipc.envList().then(setEnvs).catch(console.error);
+  }, []);
+
+  useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (!((e.metaKey || e.ctrlKey) && (e.key === "e" || e.key === "E"))) return;
-      // Skip when the user is typing in a text field — including Monaco's
-      // contenteditable host (handled by Monaco's own bindings, but we don't
-      // want to fight it here either).
-      const target = e.target as HTMLElement | null;
-      if (
-        target instanceof HTMLInputElement ||
-        target instanceof HTMLTextAreaElement ||
-        target?.isContentEditable
-      ) {
-        return;
-      }
+      const t = e.target as HTMLElement | null;
+      if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t?.isContentEditable) return;
       e.preventDefault();
       envSwitcherTriggerRef.current?.click();
     }
@@ -53,42 +62,31 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    ipc.envActiveGet().then(setActiveEnv).catch(console.error);
-  }, []);
-
-  useEffect(() => {
-    ipc.envList().then(setEnvs).catch(console.error);
-  }, []);
-
-  useEffect(() => {
-    let unlistenA: (() => void) | undefined;
-    let unlistenB: (() => void) | undefined;
-    onConnectionStateChanged((e) => setConnected(e.connected)).then(
-      (fn) => (unlistenA = fn),
-    );
-    onContractUpdated((e) => console.log("contract updated:", e.target_key)).then(
-      (fn) => (unlistenB = fn),
-    );
+    let a: (() => void) | undefined;
+    let b: (() => void) | undefined;
+    onConnectionStateChanged((e) => setConnected(e.connected)).then((fn) => (a = fn));
+    onContractUpdated((e) => console.log("contract updated:", e.target_key)).then((fn) => (b = fn));
     return () => {
-      unlistenA?.();
-      unlistenB?.();
+      a?.();
+      b?.();
     };
   }, []);
 
-  // On disconnect — clear selected + outcome.
   useEffect(() => {
     if (!connected) {
       setSelected(null);
-      setOutcome(null);
+      setCatalog(null);
     }
   }, [connected]);
 
+  const servicesCount = catalog?.services.length ?? 0;
+
   return (
-    <main className="h-screen bg-background text-foreground flex flex-col overflow-hidden">
-      <header className="px-6 py-3 border-b border-border flex items-center justify-between shrink-0">
-        <h1 className="text-base font-semibold">Handshaker</h1>
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-muted-foreground font-mono">v{version}</span>
+    <div className="fixed inset-0 flex flex-col bg-background border border-border rounded-[10px] overflow-hidden">
+      <Titlebar />
+      <Toolbar
+        version={version}
+        envSlot={
           <EnvPill
             ref={envSwitcherTriggerRef}
             envs={envs}
@@ -96,64 +94,66 @@ export default function App() {
             onEnvsChanged={async () => setEnvs(await ipc.envList())}
             onActiveEnvChanged={setActiveEnv}
           />
-        </div>
-      </header>
-      <section
-        className={`p-6 flex flex-col gap-6 shrink-0 overflow-y-auto ${
-          selected ? "max-h-[40vh]" : "flex-1"
-        }`}
-      >
-        <ConnectPanel
-          connected={connected}
-          onConnected={(c) => setCatalog(c)}
-          onDisconnected={() => setCatalog(null)}
-        />
-        {catalog && (
-          <CatalogList
-            catalog={catalog}
-            selected={selected}
-            onSelect={(m) => {
-              setSelected(m);
-              setOutcome(null);
-              setError(null);
-            }}
-          />
-        )}
-      </section>
-      {selected && (
-        <div className="flex-1 min-h-0 flex flex-col border-t border-border">
-          <ResizablePanelGroup
-            orientation="vertical"
-            className="flex-1 min-h-0 w-full"
+        }
+        onOpenSettings={() => setSettingsOpen(true)}
+      />
+      <div className="flex-1 flex min-h-0">
+        {prefs.sidebar && (
+          <Sidebar
+            tab={sideTab}
+            onTabChange={setSideTab}
+            query={sideQuery}
+            onQueryChange={setSideQuery}
+            servicesCount={servicesCount}
+            historyCount={0}
           >
-            <ResizablePanel defaultSize={50} minSize={20}>
-              <InvokePanel
-                selected={selected}
-                activeEnv={activeEnv}
-                onOutcome={(o) => {
-                  setOutcome(o);
-                  setError(null);
-                }}
-                onError={(m) => setError(m)}
-              />
-            </ResizablePanel>
-            <ResizableHandle withHandle />
-            <ResizablePanel defaultSize={50} minSize={20}>
-              {error ? (
-                <div className="p-4 text-sm text-destructive font-mono break-words h-full overflow-auto">
-                  {error}
-                </div>
-              ) : outcome ? (
-                <ResponsePanel outcome={outcome} />
-              ) : (
-                <div className="p-4 text-sm text-muted-foreground italic h-full">
-                  Press Send to invoke.
-                </div>
-              )}
-            </ResizablePanel>
-          </ResizablePanelGroup>
+            <div className="px-3 py-6 text-xs text-muted-foreground">
+              {sideTab === "services" && (connected ? "Services catalog appears here" : "Not connected")}
+              {sideTab === "history" && "History — not implemented yet"}
+              {sideTab === "saved" && "Saved — not implemented yet"}
+            </div>
+          </Sidebar>
+        )}
+        <main ref={mainRef} className="flex-1 flex flex-col min-w-0 min-h-0 relative bg-background">
+          {prefs.dots && (
+            <>
+              <div className="dots-base" />
+              <div className="dots-glow" />
+            </>
+          )}
+          <div className="h-14 flex-none flex items-center px-3.5 border-b border-border text-xs text-muted-foreground">
+            ConnectionBar placeholder · connected={String(connected)} · selected={selected ? `${selected.service}/${selected.method}` : "—"}
+          </div>
+          <div
+            className={cn(
+              "flex-1 flex min-h-0 min-w-0",
+              prefs.split === "horizontal" ? "flex-col" : "flex-row",
+            )}
+          >
+            <div className="flex-1 min-w-0 min-h-0 flex items-center justify-center text-xs text-muted-foreground">
+              Request pane placeholder (Phase 8)
+            </div>
+            <div className={cn(prefs.split === "horizontal" ? "h-px w-full" : "w-px h-full", "bg-border")} />
+            <div className="flex-1 min-w-0 min-h-0 flex items-center justify-center text-xs text-muted-foreground">
+              Response pane placeholder (Phase 9)
+            </div>
+          </div>
+        </main>
+      </div>
+      {settingsOpen && (
+        <div className="fixed bottom-4 left-4 rounded-md border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-md">
+          Settings placeholder · <button onClick={() => setSettingsOpen(false)} className="underline">close</button>
         </div>
       )}
-    </main>
+      <ReferenceSink catalog={catalog} setCatalog={setCatalog} setSelected={setSelected} />
+    </div>
   );
+}
+
+function ReferenceSink(_: {
+  catalog: ServiceCatalogIpc | null;
+  setCatalog: (c: ServiceCatalogIpc | null) => void;
+  setSelected: (s: SelectedMethod | null) => void;
+}) {
+  return null;
 }

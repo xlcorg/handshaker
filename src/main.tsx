@@ -10,8 +10,10 @@ import "@fontsource/jetbrains-mono/600.css";
 import "@/styles/globals.css";
 import App from "@/App";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { readPrefs } from "@/lib/use-prefs";
 
-document.documentElement.classList.add("dark");
+const initial = readPrefs();
+document.documentElement.classList.toggle("dark", initial.theme === "dark");
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
