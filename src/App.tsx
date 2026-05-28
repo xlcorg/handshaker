@@ -3,6 +3,8 @@ import { EnvPill } from "@/features/envs/EnvPill";
 import { Titlebar } from "@/features/shell/Titlebar";
 import { Toolbar } from "@/features/shell/Toolbar";
 import { Sidebar, type SidebarTab } from "@/features/shell/Sidebar";
+import { ConnectionBar } from "@/features/shell/ConnectionBar";
+import { DisconnectedHero } from "@/features/shell/DisconnectedHero";
 import { ipc } from "@/ipc/client";
 import { onConnectionStateChanged, onContractUpdated } from "@/ipc/events";
 import type { EnvironmentIpc, ServiceCatalogIpc } from "@/ipc/bindings";
@@ -21,6 +23,11 @@ export default function App() {
   const [sideTab, setSideTab] = useState<SidebarTab>("services");
   const [sideQuery, setSideQuery] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [host, setHost] = useState("localhost:5002");
+  const [tls, setTls] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [sending, _setSending] = useState(false);
+  const [connError, setConnError] = useState<string | null>(null);
   const envSwitcherTriggerRef = useRef<HTMLButtonElement>(null);
   const mainRef = useRef<HTMLElement>(null);
 
@@ -104,6 +111,32 @@ export default function App() {
 
   const servicesCount = catalog?.services.length ?? 0;
 
+  async function handleConnect() {
+    setConnecting(true);
+    setConnError(null);
+    try {
+      const outcome = await ipc.grpcConnect({ address: host, tls, skip_verify: false });
+      setCatalog(outcome.catalog);
+    } catch (e) {
+      const tagged = e as { type?: string; message?: string };
+      setConnError(tagged.message ?? tagged.type ?? "connection failed");
+    } finally {
+      setConnecting(false);
+    }
+  }
+
+  async function handleDisconnect() {
+    try {
+      await ipc.grpcDisconnect();
+    } catch (e) {
+      console.error("grpc_disconnect failed:", e);
+    }
+  }
+
+  function handleSend() {
+    // Phase 8 wires this to RequestPanel via a ref; for now no-op.
+  }
+
   return (
     <div className="fixed inset-0 flex flex-col bg-background border border-border rounded-[10px] overflow-hidden">
       <Titlebar />
@@ -144,23 +177,38 @@ export default function App() {
               <div className="dots-glow" />
             </>
           )}
-          <div className="h-14 flex-none flex items-center px-3.5 border-b border-border text-xs text-muted-foreground">
-            ConnectionBar placeholder · connected={String(connected)} · selected={selected ? `${selected.service}/${selected.method}` : "—"}
-          </div>
-          <div
-            className={cn(
-              "flex-1 flex min-h-0 min-w-0",
-              prefs.split === "horizontal" ? "flex-col" : "flex-row",
-            )}
-          >
-            <div className="flex-1 min-w-0 min-h-0 flex items-center justify-center text-xs text-muted-foreground">
-              Request pane placeholder (Phase 8)
+          <ConnectionBar
+            host={host}
+            onHostChange={setHost}
+            tls={tls}
+            onTlsChange={setTls}
+            connected={connected}
+            connecting={connecting}
+            busy={connecting || sending}
+            sending={sending}
+            selected={selected}
+            onConnect={handleConnect}
+            onDisconnect={handleDisconnect}
+            onSend={handleSend}
+          />
+          {!connected ? (
+            <DisconnectedHero connecting={connecting} host={host} />
+          ) : (
+            <div className={cn("flex-1 flex min-h-0 min-w-0", prefs.split === "horizontal" ? "flex-col" : "flex-row")}>
+              <div className="flex-1 min-w-0 min-h-0 flex items-center justify-center text-xs text-muted-foreground">
+                Request pane placeholder (Phase 8)
+              </div>
+              <div className={cn(prefs.split === "horizontal" ? "h-px w-full" : "w-px h-full", "bg-border")} />
+              <div className="flex-1 min-w-0 min-h-0 flex items-center justify-center text-xs text-muted-foreground">
+                Response pane placeholder (Phase 9)
+              </div>
             </div>
-            <div className={cn(prefs.split === "horizontal" ? "h-px w-full" : "w-px h-full", "bg-border")} />
-            <div className="flex-1 min-w-0 min-h-0 flex items-center justify-center text-xs text-muted-foreground">
-              Response pane placeholder (Phase 9)
+          )}
+          {connError && (
+            <div className="fixed bottom-4 right-4 rounded-md border border-destructive bg-destructive/10 px-3 py-2 text-xs text-destructive shadow-md">
+              {connError}
             </div>
-          </div>
+          )}
         </main>
       </div>
       {settingsOpen && (
@@ -168,15 +216,6 @@ export default function App() {
           Settings placeholder · <button onClick={() => setSettingsOpen(false)} className="underline">close</button>
         </div>
       )}
-      <ReferenceSink catalog={catalog} setCatalog={setCatalog} setSelected={setSelected} />
     </div>
   );
-}
-
-function ReferenceSink(_: {
-  catalog: ServiceCatalogIpc | null;
-  setCatalog: (c: ServiceCatalogIpc | null) => void;
-  setSelected: (s: SelectedMethod | null) => void;
-}) {
-  return null;
 }
