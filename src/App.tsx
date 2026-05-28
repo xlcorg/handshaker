@@ -1,50 +1,112 @@
 import { useEffect, useRef, useState } from "react";
-import { ConnectPanel } from "@/features/connect/ConnectPanel";
-import { CatalogList } from "@/features/connect/CatalogList";
-import { InvokePanel, type SelectedMethod } from "@/features/invoke/InvokePanel";
-import { ResponsePanel } from "@/features/response/ResponsePanel";
+import { isTauri } from "@tauri-apps/api/core";
 import { EnvPill } from "@/features/envs/EnvPill";
-import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-} from "@/components/ui/resizable";
-import {
-  onConnectionStateChanged,
-  onContractUpdated,
-} from "@/ipc/events";
+import { Titlebar } from "@/features/shell/Titlebar";
+import { Toolbar } from "@/features/shell/Toolbar";
+import { Sidebar, type SidebarTab } from "@/features/shell/Sidebar";
+import { ConnectionBar } from "@/features/shell/ConnectionBar";
+import { DisconnectedHero } from "@/features/shell/DisconnectedHero";
+import { MethodPicker } from "@/features/shell/MethodPicker";
+import { SidebarServicesPane } from "@/features/shell/SidebarServicesPane";
+import { SidebarHistoryPane } from "@/features/shell/SidebarHistoryPane";
+import { SidebarCollectionsPane } from "@/features/shell/SidebarCollectionsPane";
+import { RequestPanel, type RequestPanelHandle } from "@/features/invoke/RequestPanel";
+import type { MetadataRow } from "@/features/invoke/MetadataView";
+import { AUTH_DEFAULTS, type AuthState } from "@/features/invoke/AuthInline";
+import { ResponsePanel } from "@/features/response/ResponsePanel";
+import type { RespState } from "@/features/response/RespMeta";
+import { SettingsDialog } from "@/features/settings/SettingsDialog";
 import { ipc } from "@/ipc/client";
-import type { ServiceCatalogIpc, InvokeOutcomeIpc, EnvironmentIpc } from "@/ipc/bindings";
+import { onConnectionStateChanged, onContractUpdated } from "@/ipc/events";
+import type { EnvironmentIpc, InvokeOutcomeIpc, ServiceCatalogIpc } from "@/ipc/bindings";
+import { deriveKind, type SelectedMethod } from "@/features/shell/SelectedMethod";
+import { usePrefs } from "@/lib/use-prefs";
+import { cn } from "@/lib/cn";
 
 export default function App() {
+  const [prefs] = usePrefs();
+  const [version, setVersion] = useState("");
   const [catalog, setCatalog] = useState<ServiceCatalogIpc | null>(null);
   const [connected, setConnected] = useState(false);
-  const [version, setVersion] = useState("");
   const [selected, setSelected] = useState<SelectedMethod | null>(null);
-  const [outcome, setOutcome] = useState<InvokeOutcomeIpc | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [activeEnv, setActiveEnv] = useState<string | null>(null);
   const [envs, setEnvs] = useState<EnvironmentIpc[]>([]);
+  const [sideTab, setSideTab] = useState<SidebarTab>("services");
+  const [sideQuery, setSideQuery] = useState("");
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [host, setHost] = useState("localhost:5002");
+  const [tls, setTls] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [connError, setConnError] = useState<string | null>(null);
   const envSwitcherTriggerRef = useRef<HTMLButtonElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
+  const requestPanelRef = useRef<RequestPanelHandle>(null);
+  const [metadata, setMetadata] = useState<MetadataRow[]>([]);
+  const [auth, setAuth] = useState<AuthState>(AUTH_DEFAULTS);
+  const [outcome, setOutcome] = useState<InvokeOutcomeIpc | null>(null);
+  const [invokeError, setInvokeError] = useState<string | null>(null);
 
   useEffect(() => {
+    document.documentElement.classList.toggle("dark", prefs.theme === "dark");
+  }, [prefs.theme]);
+
+  useEffect(() => {
+    // density → #root font-size (NOT documentElement — keep rem === 16px
+    // so Tailwind h-8/h-12/h-14 keep their design-intended pixel sizes).
+    const fs =
+      prefs.density === "compact" ? "12.5px" :
+      prefs.density === "cozy"    ? "13.5px" :
+                                    "13px";
+    const root = document.getElementById("root");
+    if (root) root.style.fontSize = fs;
+    // Reset any documentElement.fontSize that earlier builds may have set —
+    // we want rem to track the browser default (typically 16px).
+    document.documentElement.style.fontSize = "";
+
+    // UI font
+    const ui =
+      prefs.fontUi === "geist"  ? `"Geist","Inter",ui-sans-serif,system-ui,sans-serif` :
+      prefs.fontUi === "system" ? `system-ui,-apple-system,"Segoe UI",sans-serif` :
+                                  `"Inter",ui-sans-serif,system-ui,sans-serif`;
+    document.documentElement.style.setProperty("--font-sans-override", ui);
+
+    // Mono font
+    const mn =
+      prefs.fontMono === "geist-mono" ? `"Geist Mono","JetBrains Mono",ui-monospace,monospace` :
+      prefs.fontMono === "ibm"        ? `"IBM Plex Mono","JetBrains Mono",ui-monospace,monospace` :
+                                         `"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace`;
+    document.documentElement.style.setProperty("--font-mono-override", mn);
+  }, [prefs.density, prefs.fontUi, prefs.fontMono]);
+
+  useEffect(() => {
+    const el = mainRef.current;
+    if (!el || !prefs.dots) return;
+    function onMove(e: MouseEvent) {
+      const r = el!.getBoundingClientRect();
+      el!.style.setProperty("--mx", `${((e.clientX - r.left) / r.width) * 100}%`);
+      el!.style.setProperty("--my", `${((e.clientY - r.top) / r.height) * 100}%`);
+    }
+    el.addEventListener("mousemove", onMove);
+    return () => el.removeEventListener("mousemove", onMove);
+  }, [prefs.dots]);
+
+  useEffect(() => {
+    if (!isTauri()) return;
     ipc.appVersion().then(setVersion).catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    if (!isTauri()) return;
+    ipc.envActiveGet().then(setActiveEnv).catch(console.error);
+    ipc.envList().then(setEnvs).catch(console.error);
   }, []);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (!((e.metaKey || e.ctrlKey) && (e.key === "e" || e.key === "E"))) return;
-      // Skip when the user is typing in a text field — including Monaco's
-      // contenteditable host (handled by Monaco's own bindings, but we don't
-      // want to fight it here either).
-      const target = e.target as HTMLElement | null;
-      if (
-        target instanceof HTMLInputElement ||
-        target instanceof HTMLTextAreaElement ||
-        target?.isContentEditable
-      ) {
-        return;
-      }
+      const t = e.target as HTMLElement | null;
+      if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t?.isContentEditable) return;
       e.preventDefault();
       envSwitcherTriggerRef.current?.click();
     }
@@ -53,42 +115,93 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    ipc.envActiveGet().then(setActiveEnv).catch(console.error);
-  }, []);
-
-  useEffect(() => {
-    ipc.envList().then(setEnvs).catch(console.error);
-  }, []);
-
-  useEffect(() => {
-    let unlistenA: (() => void) | undefined;
-    let unlistenB: (() => void) | undefined;
-    onConnectionStateChanged((e) => setConnected(e.connected)).then(
-      (fn) => (unlistenA = fn),
-    );
-    onContractUpdated((e) => console.log("contract updated:", e.target_key)).then(
-      (fn) => (unlistenB = fn),
-    );
+    if (!isTauri()) return;
+    let a: (() => void) | undefined;
+    let b: (() => void) | undefined;
+    onConnectionStateChanged((e) => setConnected(e.connected)).then((fn) => (a = fn));
+    onContractUpdated((e) => console.log("contract updated:", e.target_key)).then((fn) => (b = fn));
     return () => {
-      unlistenA?.();
-      unlistenB?.();
+      a?.();
+      b?.();
     };
   }, []);
 
-  // On disconnect — clear selected + outcome.
   useEffect(() => {
     if (!connected) {
       setSelected(null);
-      setOutcome(null);
+      setCatalog(null);
     }
   }, [connected]);
 
+  useEffect(() => {
+    if (!catalog || selected) return;
+    const svc = catalog.services[0];
+    const mth = svc?.methods[0];
+    if (svc && mth) {
+      setSelected({ service: svc.full_name, method: mth.name, kind: deriveKind(mth) });
+    }
+  }, [catalog, selected]);
+
+  useEffect(() => {
+    setOutcome(null);
+    setInvokeError(null);
+    setMetadata([]);
+    setAuth(AUTH_DEFAULTS);
+  }, [selected?.service, selected?.method]);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Enter" || (!e.ctrlKey && !e.metaKey)) return;
+      if (sending || !selected) return;
+      e.preventDefault();
+      e.stopPropagation();
+      handleSend();
+    }
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- handleSend deliberately captured fresh
+  }, [sending, selected]);
+
+  const servicesCount = catalog?.services.length ?? 0;
+
+  async function handleConnect() {
+    setConnecting(true);
+    setConnError(null);
+    try {
+      const outcome = await ipc.grpcConnect({ address: host, tls, skip_verify: false });
+      setCatalog(outcome.catalog);
+    } catch (e) {
+      const tagged = e as { type?: string; message?: string };
+      setConnError(tagged.message ?? tagged.type ?? "connection failed");
+    } finally {
+      setConnecting(false);
+    }
+  }
+
+  async function handleDisconnect() {
+    try {
+      await ipc.grpcDisconnect();
+    } catch (e) {
+      console.error("grpc_disconnect failed:", e);
+    }
+  }
+
+  function handleSend() {
+    requestPanelRef.current?.send().catch((e) => console.error("send failed:", e));
+  }
+
+  const respState: RespState =
+    sending ? "sending" :
+    invokeError ? "error" :
+    outcome ? (outcome.status_code === 0 ? "success" : "error") :
+    "idle";
+
   return (
-    <main className="h-screen bg-background text-foreground flex flex-col overflow-hidden">
-      <header className="px-6 py-3 border-b border-border flex items-center justify-between shrink-0">
-        <h1 className="text-base font-semibold">Handshaker</h1>
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-muted-foreground font-mono">v{version}</span>
+    <div className="fixed inset-0 flex flex-col bg-background border border-border rounded-[10px] overflow-hidden">
+      <Titlebar />
+      <Toolbar
+        version={version}
+        envSlot={
           <EnvPill
             ref={envSwitcherTriggerRef}
             envs={envs}
@@ -96,64 +209,101 @@ export default function App() {
             onEnvsChanged={async () => setEnvs(await ipc.envList())}
             onActiveEnvChanged={setActiveEnv}
           />
-        </div>
-      </header>
-      <section
-        className={`p-6 flex flex-col gap-6 shrink-0 overflow-y-auto ${
-          selected ? "max-h-[40vh]" : "flex-1"
-        }`}
-      >
-        <ConnectPanel
-          connected={connected}
-          onConnected={(c) => setCatalog(c)}
-          onDisconnected={() => setCatalog(null)}
-        />
-        {catalog && (
-          <CatalogList
-            catalog={catalog}
-            selected={selected}
-            onSelect={(m) => {
-              setSelected(m);
-              setOutcome(null);
-              setError(null);
-            }}
-          />
-        )}
-      </section>
-      {selected && (
-        <div className="flex-1 min-h-0 flex flex-col border-t border-border">
-          <ResizablePanelGroup
-            orientation="vertical"
-            className="flex-1 min-h-0 w-full"
+        }
+        onOpenSettings={() => setSettingsOpen(true)}
+      />
+      <div className="flex-1 flex min-h-0">
+        {prefs.sidebar && (
+          <Sidebar
+            tab={sideTab}
+            onTabChange={setSideTab}
+            query={sideQuery}
+            onQueryChange={setSideQuery}
+            servicesCount={servicesCount}
+            historyCount={0}
           >
-            <ResizablePanel defaultSize={50} minSize={20}>
-              <InvokePanel
+            {sideTab === "services" && (
+              <SidebarServicesPane
+                connected={connected}
+                catalog={catalog}
+                query={sideQuery}
                 selected={selected}
-                activeEnv={activeEnv}
-                onOutcome={(o) => {
-                  setOutcome(o);
-                  setError(null);
-                }}
-                onError={(m) => setError(m)}
+                onSelect={(s) => setSelected(s)}
               />
-            </ResizablePanel>
-            <ResizableHandle withHandle />
-            <ResizablePanel defaultSize={50} minSize={20}>
-              {error ? (
-                <div className="p-4 text-sm text-destructive font-mono break-words h-full overflow-auto">
-                  {error}
-                </div>
-              ) : outcome ? (
-                <ResponsePanel outcome={outcome} />
+            )}
+            {sideTab === "history" && <SidebarHistoryPane />}
+            {sideTab === "saved" && <SidebarCollectionsPane />}
+          </Sidebar>
+        )}
+        <main ref={mainRef} className="flex-1 flex flex-col min-w-0 min-h-0 relative bg-background">
+          {prefs.dots && (
+            <>
+              <div className="dots-base" />
+              <div className="dots-glow" />
+            </>
+          )}
+          <ConnectionBar
+            host={host}
+            onHostChange={setHost}
+            tls={tls}
+            onTlsChange={setTls}
+            connected={connected}
+            connecting={connecting}
+            busy={connecting || sending}
+            sending={sending}
+            selected={selected}
+            onConnect={handleConnect}
+            onDisconnect={handleDisconnect}
+            onSend={handleSend}
+            pickerSlot={
+              catalog && selected ? (
+                <MethodPicker
+                  selected={selected}
+                  catalog={catalog}
+                  onSelect={(next) => setSelected(next)}
+                  className="h-7 px-1.5 -ml-0 flex-1 min-w-0 justify-start"
+                />
+              ) : undefined
+            }
+          />
+          {!connected ? (
+            <DisconnectedHero connecting={connecting} host={host} />
+          ) : (
+            <div className={cn("flex-1 flex min-h-0 min-w-0", prefs.split === "horizontal" ? "flex-col" : "flex-row")}>
+              {connected && selected ? (
+                <RequestPanel
+                  ref={requestPanelRef}
+                  selected={selected}
+                  metadata={metadata}
+                  onMetadataChange={setMetadata}
+                  auth={auth}
+                  onAuthChange={setAuth}
+                  onSending={setSending}
+                  onOutcome={(o) => { setOutcome(o); setInvokeError(null); }}
+                  onError={(m) => { setInvokeError(m); setOutcome(null); }}
+                />
               ) : (
-                <div className="p-4 text-sm text-muted-foreground italic h-full">
-                  Press Send to invoke.
+                <div className="flex-1 min-w-0 min-h-0 flex items-center justify-center text-xs text-muted-foreground">
+                  Select a method to begin
                 </div>
               )}
-            </ResizablePanel>
-          </ResizablePanelGroup>
-        </div>
-      )}
-    </main>
+              <div className={cn(prefs.split === "horizontal" ? "h-px w-full" : "w-px h-full", "bg-border")} />
+              <ResponsePanel state={respState} outcome={outcome} />
+            </div>
+          )}
+          {connError && (
+            <div className="fixed bottom-16 right-4 rounded-md border border-destructive bg-destructive/10 px-3 py-2 text-xs text-destructive shadow-md">
+              {connError}
+            </div>
+          )}
+          {invokeError && (
+            <div className="fixed bottom-4 right-4 z-20 max-w-md rounded-md border border-destructive bg-destructive/10 px-3 py-2 text-xs text-destructive shadow-md">
+              {invokeError}
+            </div>
+          )}
+        </main>
+      </div>
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+    </div>
   );
 }
