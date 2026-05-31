@@ -83,7 +83,6 @@ mod tests {
     use super::*;
     use crate::auth::{EnvVarAuthConfig, SavedAuthConfig};
     use crate::collections::ids::{CollectionId, ItemId};
-    use crate::collections::Item;
     use uuid::Uuid;
 
     fn env(name: &str, kv: &[(&str, &str)]) -> Environment {
@@ -244,7 +243,4 @@ mod tests {
         assert!(eff.auth.is_none());
     }
 
-    // Silence unused import warning when Item is only used in other test modules.
-    #[allow(dead_code)]
-    fn _uses_item(_: &Item) {}
 }

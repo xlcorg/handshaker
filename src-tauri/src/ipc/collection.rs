@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 
 use handshaker_core::auth::{
-    AuthByEnv, AuthCredentials, EnvVarAuthConfig, OAuth2ClientCredentialsConfig, SavedAuthConfig,
+    AuthByEnv, EnvVarAuthConfig, OAuth2ClientCredentialsConfig, SavedAuthConfig,
 };
 use handshaker_core::collections::ids::{CollectionId, ItemId};
 use handshaker_core::collections::tree::ItemSnapshot;
@@ -19,13 +19,13 @@ use uuid::Uuid;
 
 // --- id parsing helpers -----------------------------------------------------
 
-fn parse_collection_id(s: &str) -> Result<CollectionId, CoreError> {
+pub(crate) fn parse_collection_id(s: &str) -> Result<CollectionId, CoreError> {
     Uuid::parse_str(s)
         .map(CollectionId)
         .map_err(|e| CoreError::InvalidTarget(format!("bad collection id `{s}`: {e}")))
 }
 
-fn parse_item_id(s: &str) -> Result<ItemId, CoreError> {
+pub(crate) fn parse_item_id(s: &str) -> Result<ItemId, CoreError> {
     Uuid::parse_str(s)
         .map(ItemId)
         .map_err(|e| CoreError::InvalidTarget(format!("bad item id `{s}`: {e}")))
@@ -244,10 +244,6 @@ impl ItemSnapshotIpc {
         }
     }
 }
-
-// `AuthCredentials` is resolve-time only (never crosses collection IPC in #1).
-// Re-exported here so #2 can build an `EffectiveRequest` DTO without re-importing.
-pub type AuthCredentialsCore = AuthCredentials;
 
 #[cfg(test)]
 mod tests {

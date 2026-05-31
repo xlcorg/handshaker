@@ -49,7 +49,6 @@ impl CollectionStore for InMemoryCollectionStore {
 mod tests {
     use super::*;
     use crate::auth::AuthByEnv;
-    use crate::collections::ids::ItemId;
     use uuid::Uuid;
 
     fn coll(id: u128, name: &str) -> Collection {
@@ -77,7 +76,4 @@ mod tests {
         s.delete(CollectionId(Uuid::from_u128(7))).unwrap(); // missing → Ok
     }
 
-    // touch ItemId so the import is used if later edits remove the only reference.
-    #[allow(dead_code)]
-    fn _uses_item_id(_: ItemId) {}
 }

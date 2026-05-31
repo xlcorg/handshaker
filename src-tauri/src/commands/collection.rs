@@ -9,25 +9,13 @@ use handshaker_core::collections::ids::{CollectionId, ItemId};
 use handshaker_core::collections::{tree, Item};
 use handshaker_core::error::CoreError;
 use tauri::State;
-use uuid::Uuid;
 
 use crate::ipc::collection::{
-    CollectionIpc, CollectionMetaIpc, ItemIpc, ItemSnapshotIpc, SavedAuthConfigIpc,
+    parse_collection_id, parse_item_id, CollectionIpc, CollectionMetaIpc, ItemIpc, ItemSnapshotIpc,
+    SavedAuthConfigIpc,
 };
 use crate::ipc::error::IpcError;
 use crate::state::AppState;
-
-fn parse_collection_id(s: &str) -> Result<CollectionId, CoreError> {
-    Uuid::parse_str(s)
-        .map(CollectionId)
-        .map_err(|e| CoreError::InvalidTarget(format!("bad collection id `{s}`: {e}")))
-}
-
-fn parse_item_id(s: &str) -> Result<ItemId, CoreError> {
-    Uuid::parse_str(s)
-        .map(ItemId)
-        .map_err(|e| CoreError::InvalidTarget(format!("bad item id `{s}`: {e}")))
-}
 
 fn parse_opt_item_id(s: Option<String>) -> Result<Option<ItemId>, CoreError> {
     s.map(|v| parse_item_id(&v)).transpose()
@@ -231,6 +219,7 @@ pub async fn auth_set_for_env(state: State<'_, AppState>, collection_id: String,
 mod tests {
     use super::*;
     use crate::ipc::collection::{AuthByEnvIpc, FolderIpc, SavedRequestIpc};
+    use uuid::Uuid;
 
     fn empty_collection_ipc(id: u128, name: &str) -> CollectionIpc {
         CollectionIpc {
