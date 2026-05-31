@@ -12,14 +12,14 @@ function EnvironmentModal({ open, onClose, initial }) {
 
   return (
     <Dialog open={open} onOpenChange={(v)=>!v && onClose()}>
-      <DialogContent className="max-w-xl">
-        <DialogHeader>
+      <DialogContent className="overflow-hidden" style={{ display: "flex", flexDirection: "column", width: "60rem", maxWidth: "calc(100vw - 2rem)", height: "660px", maxHeight: "calc(100vh - 2rem)" }}>
+        <DialogHeader className="flex-none">
           <DialogTitle>{initial ? "Edit environment" : "New environment"}</DialogTitle>
           <DialogDescription>
             Variables inject into request bodies, metadata and the host field as <code className="font-mono text-[var(--syntax-num)] px-1 rounded bg-muted text-[11.5px]">{"{{name}}"}</code>.
           </DialogDescription>
         </DialogHeader>
-        <DialogBody className="pb-2">
+        <DialogBody className="pb-2 flex-1 min-h-0">
           <div className="grid gap-2">
             <Label htmlFor="env-name" className="text-xs">Name</Label>
             <Input id="env-name" value={name} onChange={(e)=>setName(e.target.value)} placeholder="prod" className="font-mono h-9"/>
@@ -62,7 +62,7 @@ function EnvironmentModal({ open, onClose, initial }) {
             </div>
           </div>
         </DialogBody>
-        <DialogFooter>
+        <DialogFooter className="flex-none">
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <Button onClick={onClose}>{initial ? "Save" : "Create"}</Button>
         </DialogFooter>
@@ -76,12 +76,12 @@ function SettingsModal({ open, onClose, t, setTweak }) {
   const [section, setSection] = useStateM("appearance");
   return (
     <Dialog open={open} onOpenChange={(v)=>!v && onClose()}>
-      <DialogContent className="max-w-3xl p-0 overflow-hidden">
-        <DialogHeader className="border-b border-border pb-4">
+      <DialogContent className="p-0 overflow-hidden" style={{ display: "flex", flexDirection: "column", width: "52rem", maxWidth: "calc(100vw - 2rem)", height: "640px", maxHeight: "calc(100vh - 2rem)" }}>
+        <DialogHeader className="border-b border-border pb-4 flex-none">
           <DialogTitle>Settings</DialogTitle>
           <DialogDescription>Preferences sync across workspaces. Restart not required.</DialogDescription>
         </DialogHeader>
-        <div className="grid grid-cols-[180px_1fr] h-[500px] max-h-[calc(100vh-220px)]">
+        <div className="grid grid-cols-[200px_1fr] flex-1 min-h-0">
           <div className="border-r border-border p-2 flex flex-col gap-0.5 bg-muted/20 overflow-auto scroll-thin">
             {[
               ["appearance","Appearance"],
