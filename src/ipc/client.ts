@@ -1,7 +1,6 @@
 import { commands } from "./bindings";
 import type {
-  ConnectInput,
-  ConnectOutcome,
+  GrpcTargetIpc,
   ServiceCatalogIpc,
   InvokeRequest,
   InvokeOutcomeIpc,
@@ -24,34 +23,33 @@ export async function appVersion(): Promise<string> {
   return r.version;
 }
 
-export async function grpcConnect(input: ConnectInput): Promise<ConnectOutcome> {
-  const r = await commands.grpcConnect(input);
+export async function grpcDescribe(target: GrpcTargetIpc): Promise<ServiceCatalogIpc> {
+  const r = await commands.grpcDescribe(target);
   if (r.status === "error") throw r.error;
   return r.data;
 }
 
-export async function grpcDisconnect(): Promise<void> {
-  const r = await commands.grpcDisconnect();
-  if (r.status === "error") throw r.error;
-}
-
-export async function grpcRefreshContract(): Promise<ServiceCatalogIpc> {
-  const r = await commands.grpcRefreshContract();
-  if (r.status === "error") throw r.error;
-  return r.data;
-}
-
-export async function grpcInvokeUnary(req: InvokeRequest): Promise<InvokeOutcomeIpc> {
-  const r = await commands.grpcInvokeUnary(req);
+export async function grpcRefreshContract(target: GrpcTargetIpc): Promise<ServiceCatalogIpc> {
+  const r = await commands.grpcRefreshContract(target);
   if (r.status === "error") throw r.error;
   return r.data;
 }
 
 export async function grpcBuildRequestSkeleton(
+  target: GrpcTargetIpc,
   service: string,
   method: string,
 ): Promise<string> {
-  const r = await commands.grpcBuildRequestSkeleton(service, method);
+  const r = await commands.grpcBuildRequestSkeleton(target, service, method);
+  if (r.status === "error") throw r.error;
+  return r.data;
+}
+
+export async function grpcInvokeOneshot(
+  target: GrpcTargetIpc,
+  req: InvokeRequest,
+): Promise<InvokeOutcomeIpc> {
+  const r = await commands.grpcInvokeOneshot(target, req);
   if (r.status === "error") throw r.error;
   return r.data;
 }
@@ -155,10 +153,9 @@ export async function authSetForEnv(collectionId: string, itemId: string | null,
 
 export const ipc = {
   appVersion,
-  grpcConnect,
-  grpcDisconnect,
+  grpcDescribe,
   grpcRefreshContract,
-  grpcInvokeUnary,
+  grpcInvokeOneshot,
   grpcBuildRequestSkeleton,
   envList,
   envActiveGet,
