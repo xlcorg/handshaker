@@ -94,8 +94,10 @@ mod tests {
     use std::collections::HashMap;
     use std::sync::Arc;
 
+    use handshaker_core::collections::in_memory::InMemoryCollectionStore;
     use handshaker_core::env::in_memory::InMemoryEnvironmentStore;
     use handshaker_core::env::EnvironmentStore;
+    use handshaker_core::grpc::InMemoryContractCache;
     use tokio::sync::{Mutex, RwLock};
 
     /// Build an `AppState` for tests. `active` is the initial active-env value
@@ -118,6 +120,8 @@ mod tests {
             connection: Mutex::new(None),
             env_store: Arc::new(store),
             active_env: RwLock::new(active.map(|s| s.to_string())),
+            collection_store: Arc::new(InMemoryCollectionStore::new()),
+            contract_cache: Arc::new(InMemoryContractCache::new()),
         }
     }
 

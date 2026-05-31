@@ -14,6 +14,7 @@ use commands::meta::app_version;
 use commands::vars::vars_resolve;
 use specta_typescript::Typescript;
 use state::AppState;
+use tauri::Manager;
 use tauri_specta::{collect_commands, collect_events, Builder};
 
 /// Build a `tauri_specta::Builder` populated with every command and event the
@@ -69,10 +70,16 @@ pub fn run() {
     }
 
     tauri::Builder::default()
-        .manage(AppState::default())
         .invoke_handler(specta_builder.invoke_handler())
         .setup(move |app| {
             specta_builder.mount_events(app);
+            let data_dir = app
+                .path()
+                .app_data_dir()
+                .expect("resolve app_data_dir");
+            let state = AppState::with_data_dir(&data_dir)
+                .expect("initialize AppState from data dir");
+            app.manage(state);
             Ok(())
         })
         .run(tauri::generate_context!())
