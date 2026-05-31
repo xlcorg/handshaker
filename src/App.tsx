@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { EnvPill } from "@/features/envs/EnvPill";
 import { Titlebar } from "@/features/shell/Titlebar";
-import { Toolbar } from "@/features/shell/Toolbar";
 import { Sidebar, type SidebarTab } from "@/features/shell/Sidebar";
 import { ConnectionBar } from "@/features/shell/ConnectionBar";
 import { MethodPicker } from "@/features/shell/MethodPicker";
@@ -33,7 +32,6 @@ import { cn } from "@/lib/cn";
 
 export default function App() {
   const [prefs] = usePrefs();
-  const [version, setVersion] = useState("");
   const [activeEnv, setActiveEnv] = useState<string | null>(null);
   const [envs, setEnvs] = useState<EnvironmentIpc[]>([]);
   const [sideTab, setSideTab] = useState<SidebarTab>("services");
@@ -99,7 +97,6 @@ export default function App() {
 
   useEffect(() => {
     if (!isTauri()) return;
-    ipc.appVersion().then(setVersion).catch(console.error);
     ipc.envActiveGet().then(setActiveEnv).catch(console.error);
     ipc.envList().then(setEnvs).catch(console.error);
   }, []);
@@ -289,9 +286,7 @@ export default function App() {
 
   return (
     <div className="fixed inset-0 flex flex-col bg-background border border-border rounded-[10px] overflow-hidden">
-      <Titlebar />
-      <Toolbar
-        version={version}
+      <Titlebar
         envSlot={
           <EnvPill
             ref={envSwitcherTriggerRef}
