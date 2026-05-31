@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use handshaker_core::grpc::{activate, GrpcTarget, InMemoryContractCache, TonicTransport};
+use handshaker_core::grpc::{activate, ContractKey, GrpcTarget, TonicTransport};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::{AppHandle, State};
@@ -42,8 +42,7 @@ pub async fn grpc_connect(
     let target = GrpcTarget::new(input.address, input.tls, input.skip_verify)?;
     let transport = Arc::new(TonicTransport::new());
 
-    let cache = InMemoryContractCache::new();
-    let conn = activate(target, transport, &cache).await?;
+    let conn = activate(target, transport, state.contract_cache.as_ref()).await?;
     let summary: TargetSummary = (&conn.target).into();
     let key = target_key(&conn.target);
     let catalog: ServiceCatalogIpc = conn.catalog.clone().into();
@@ -103,8 +102,8 @@ pub async fn grpc_refresh_contract(
     };
 
     let transport = Arc::new(TonicTransport::new());
-    let cache = InMemoryContractCache::new();
-    let conn = activate(target, transport, &cache).await?;
+    state.contract_cache.invalidate(&ContractKey::from_target(&target));
+    let conn = activate(target, transport, state.contract_cache.as_ref()).await?;
     let catalog: ServiceCatalogIpc = conn.catalog.clone().into();
     let key = target_key(&conn.target);
 

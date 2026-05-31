@@ -4,6 +4,11 @@ pub mod commands;
 pub mod ipc;
 mod state;
 
+use commands::collection::{
+    auth_set_for_env, collection_add_item, collection_delete, collection_delete_item,
+    collection_duplicate_item, collection_get, collection_list, collection_move_item,
+    collection_rename_item, collection_restore_item, collection_set_variables, collection_upsert,
+};
 use commands::env::{env_active_get, env_active_set, env_delete, env_list, env_upsert};
 use commands::events::{ConnectionStateChanged, ContractUpdated};
 use commands::grpc::{
@@ -34,6 +39,18 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             env_upsert,
             env_delete,
             vars_resolve,
+            collection_list,
+            collection_get,
+            collection_upsert,
+            collection_delete,
+            collection_set_variables,
+            collection_add_item,
+            collection_rename_item,
+            collection_move_item,
+            collection_duplicate_item,
+            collection_delete_item,
+            collection_restore_item,
+            auth_set_for_env,
         ])
         .events(collect_events![ContractUpdated, ConnectionStateChanged])
 }
