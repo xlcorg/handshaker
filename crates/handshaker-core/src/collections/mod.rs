@@ -13,9 +13,11 @@ use crate::auth::{AuthByEnv, AuthCredentials};
 use crate::grpc::GrpcTarget;
 
 pub mod ids;
+pub mod resolve;
 pub mod tree;
 
 pub use ids::{CollectionId, ItemId};
+pub use resolve::resolve_request;
 
 /// Root entity. Carries collection-scope variables, root auth, and TLS defaults.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
