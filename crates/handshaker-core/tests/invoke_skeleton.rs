@@ -13,7 +13,8 @@ async fn skeleton_for_echo_with_deps() {
     let target = GrpcTarget::new(addr.to_string(), false, false).unwrap();
     let transport: Arc<dyn handshaker_core::grpc::transport::GrpcTransport> =
         Arc::new(TonicTransport::new());
-    let conn = activate(target, transport).await.expect("activate");
+    let cache = handshaker_core::grpc::InMemoryContractCache::new();
+    let conn = activate(target, transport, &cache).await.expect("activate");
 
     let json_str =
         build_request_skeleton(&conn, "test.EchoWithDeps", "Send").expect("skeleton");
@@ -30,7 +31,8 @@ async fn skeleton_returns_method_not_found() {
     let target = GrpcTarget::new(addr.to_string(), false, false).unwrap();
     let transport: Arc<dyn handshaker_core::grpc::transport::GrpcTransport> =
         Arc::new(TonicTransport::new());
-    let conn = activate(target, transport).await.expect("activate");
+    let cache = handshaker_core::grpc::InMemoryContractCache::new();
+    let conn = activate(target, transport, &cache).await.expect("activate");
 
     let err = build_request_skeleton(&conn, "test.Echo", "Nope").unwrap_err();
     assert!(matches!(

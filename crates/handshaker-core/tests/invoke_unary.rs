@@ -13,7 +13,8 @@ async fn echo_send_returns_pong_with_echoed_id() {
     let target = GrpcTarget::new(addr.to_string(), false, false).unwrap();
     let transport: Arc<dyn handshaker_core::grpc::transport::GrpcTransport> =
         Arc::new(TonicTransport::new());
-    let conn = activate(target, transport).await.expect("activate");
+    let cache = handshaker_core::grpc::InMemoryContractCache::new();
+    let conn = activate(target, transport, &cache).await.expect("activate");
 
     let outcome = invoke_unary(
         &conn,

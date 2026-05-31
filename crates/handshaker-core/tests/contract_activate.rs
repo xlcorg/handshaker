@@ -10,7 +10,8 @@ async fn activate_against_v1_server_yields_catalog() {
     let target = GrpcTarget::new(addr.to_string(), false, false).unwrap();
     let transport = Arc::new(TonicTransport::new());
 
-    let conn = activate(target, transport).await.expect("activate");
+    let cache = handshaker_core::grpc::InMemoryContractCache::new();
+    let conn = activate(target, transport, &cache).await.expect("activate");
 
     assert!(conn.catalog.services.iter().any(|s| s.full_name == "test.Echo"));
     let echo = conn
@@ -31,7 +32,8 @@ async fn activate_against_v1alpha_server_falls_back_and_succeeds() {
     let target = GrpcTarget::new(addr.to_string(), false, false).unwrap();
     let transport = Arc::new(TonicTransport::new());
 
-    let conn = activate(target, transport).await.expect("activate w/ fallback");
+    let cache = handshaker_core::grpc::InMemoryContractCache::new();
+    let conn = activate(target, transport, &cache).await.expect("activate w/ fallback");
 
     assert!(conn.catalog.services.iter().any(|s| s.full_name == "test.Echo"));
 }
