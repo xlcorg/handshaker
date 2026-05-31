@@ -1,142 +1,109 @@
 //! gRPC commands — thin wrappers around `handshaker_core::grpc::*`. NO business logic.
+//!
+//! Lazy connect-on-Send model (plan-06b): no held connection. The `ContractCache`
+//! holds pools/catalogs between calls; a `GrpcConnection` lives only for the duration
+//! of one `grpc_invoke_oneshot` (or a `grpc_describe` cache miss) and is dropped after.
 
 use std::sync::Arc;
 
-use handshaker_core::grpc::{activate, ContractKey, GrpcTarget, TonicTransport};
-use serde::{Deserialize, Serialize};
-use specta::Type;
+use handshaker_core::grpc::{
+    activate, build_request_skeleton_from_pool, invoke_unary, ContractKey, GrpcTarget,
+    TonicTransport,
+};
 use tauri::{AppHandle, State};
 use tauri_specta::Event;
 
-use crate::commands::events::{ConnectionStateChanged, ContractUpdated, TargetSummary};
-use crate::ipc::{IpcError, InvokeOutcomeIpc, InvokeRequest, ServiceCatalogIpc};
+use crate::commands::events::ContractUpdated;
+use crate::ipc::{GrpcTargetIpc, InvokeOutcomeIpc, InvokeRequest, IpcError, ServiceCatalogIpc};
 use crate::state::AppState;
 
-#[derive(Debug, Deserialize, Type)]
-pub struct ConnectInput {
-    pub address: String,
-    pub tls: bool,
-    pub skip_verify: bool,
-}
-
-#[derive(Debug, Serialize, Type)]
-pub struct ConnectOutcome {
-    pub target: TargetSummary,
-    pub catalog: ServiceCatalogIpc,
-}
-
 fn target_key(t: &GrpcTarget) -> String {
-    format!(
-        "{}|tls={}|skip_verify={}",
-        t.address, t.tls, t.skip_verify
-    )
+    format!("{}|tls={}|skip_verify={}", t.address, t.tls, t.skip_verify)
 }
 
+/// Cache-first contract describe. On a cache hit, returns the cached catalog
+/// WITHOUT opening a channel (auto-reflect-on-blur fires often). On a miss,
+/// `activate()` reflects + populates the cache, then the connection is dropped.
 #[tauri::command]
 #[specta::specta]
-pub async fn grpc_connect(
+pub async fn grpc_describe(
     app: AppHandle,
     state: State<'_, AppState>,
-    input: ConnectInput,
-) -> Result<ConnectOutcome, IpcError> {
-    let target = GrpcTarget::new(input.address, input.tls, input.skip_verify)?;
+    target: GrpcTargetIpc,
+) -> Result<ServiceCatalogIpc, IpcError> {
+    let target = target.into_core()?;
+    let key = ContractKey::from_target(&target);
+
+    if let Some(cached) = state.contract_cache.get(&key) {
+        return Ok(cached.catalog.into());
+    }
+
     let transport = Arc::new(TonicTransport::new());
-
     let conn = activate(target, transport, state.contract_cache.as_ref()).await?;
-    let summary: TargetSummary = (&conn.target).into();
-    let key = target_key(&conn.target);
     let catalog: ServiceCatalogIpc = conn.catalog.clone().into();
-
-    {
-        let mut slot = state.connection.lock().await;
-        *slot = Some(Arc::new(conn));
-    }
-
-    ContractUpdated {
-        target_key: key.clone(),
-    }
-    .emit(&app)
-    .ok();
-    ConnectionStateChanged {
-        connected: true,
-        target: Some(summary.clone()),
-    }
-    .emit(&app)
-    .ok();
-
-    Ok(ConnectOutcome {
-        target: summary,
-        catalog,
-    })
+    ContractUpdated { target_key: target_key(&conn.target) }
+        .emit(&app)
+        .ok();
+    Ok(catalog)
+    // conn dropped here.
 }
 
-#[tauri::command]
-#[specta::specta]
-pub async fn grpc_disconnect(
-    app: AppHandle,
-    state: State<'_, AppState>,
-) -> Result<(), IpcError> {
-    {
-        let mut slot = state.connection.lock().await;
-        *slot = None;
-    }
-    ConnectionStateChanged {
-        connected: false,
-        target: None,
-    }
-    .emit(&app)
-    .ok();
-    Ok(())
-}
-
+/// Manual refresh: invalidate the cache entry then re-reflect.
 #[tauri::command]
 #[specta::specta]
 pub async fn grpc_refresh_contract(
     app: AppHandle,
     state: State<'_, AppState>,
+    target: GrpcTargetIpc,
 ) -> Result<ServiceCatalogIpc, IpcError> {
-    let target = {
-        let slot = state.connection.lock().await;
-        let conn = slot.as_ref().ok_or(IpcError::NotConnected)?;
-        conn.target.clone()
-    };
-
+    let target = target.into_core()?;
+    state
+        .contract_cache
+        .invalidate(&ContractKey::from_target(&target));
     let transport = Arc::new(TonicTransport::new());
-    state.contract_cache.invalidate(&ContractKey::from_target(&target));
     let conn = activate(target, transport, state.contract_cache.as_ref()).await?;
     let catalog: ServiceCatalogIpc = conn.catalog.clone().into();
-    let key = target_key(&conn.target);
-
-    {
-        let mut slot = state.connection.lock().await;
-        *slot = Some(Arc::new(conn));
-    }
-
-    ContractUpdated { target_key: key }.emit(&app).ok();
+    ContractUpdated { target_key: target_key(&conn.target) }
+        .emit(&app)
+        .ok();
     Ok(catalog)
 }
 
-/// Send unary RPC through the active connection.
-///
-/// `Result<InvokeOutcomeIpc, IpcError>` — non-OK gRPC status arrives in
-/// `InvokeOutcomeIpc.status_code`, NOT as `Err`. Err is only for client-side
-/// failures (NotConnected, transport, encode/decode).
+/// Build a JSON skeleton from the cached pool. On a cache miss, activate first.
 #[tauri::command]
 #[specta::specta]
-pub async fn grpc_invoke_unary(
-    state: tauri::State<'_, crate::state::AppState>,
-    request: InvokeRequest,
-) -> Result<InvokeOutcomeIpc, crate::ipc::IpcError> {
-    let conn = {
-        let guard = state.connection.lock().await;
-        guard
-            .as_ref()
-            .ok_or(crate::ipc::IpcError::NotConnected)?
-            .clone()
-    };
-    // Mutex released — invoke can be slow, don't hold the lock.
+pub async fn grpc_build_request_skeleton(
+    state: State<'_, AppState>,
+    target: GrpcTargetIpc,
+    service: String,
+    method: String,
+) -> Result<String, IpcError> {
+    let target = target.into_core()?;
+    let key = ContractKey::from_target(&target);
 
-    let outcome = handshaker_core::grpc::invoke_unary(
+    if let Some(cached) = state.contract_cache.get(&key) {
+        return Ok(build_request_skeleton_from_pool(&cached.pool, &service, &method)?);
+    }
+    let transport = Arc::new(TonicTransport::new());
+    let conn = activate(target, transport, state.contract_cache.as_ref()).await?;
+    Ok(build_request_skeleton_from_pool(&conn.pool, &service, &method)?)
+}
+
+/// One-shot unary invoke: activate (channel required) → invoke → drop.
+///
+/// Non-OK gRPC status arrives in `InvokeOutcomeIpc.status_code`, NOT as `Err`.
+/// `Err` is only for client-side failures (transport / encode / decode).
+#[tauri::command]
+#[specta::specta]
+pub async fn grpc_invoke_oneshot(
+    state: State<'_, AppState>,
+    target: GrpcTargetIpc,
+    request: InvokeRequest,
+) -> Result<InvokeOutcomeIpc, IpcError> {
+    let target = target.into_core()?;
+    let transport = Arc::new(TonicTransport::new());
+    let conn = activate(target, transport, state.contract_cache.as_ref()).await?;
+    let outcome = invoke_unary(
         &conn,
         &request.service,
         &request.method,
@@ -145,32 +112,9 @@ pub async fn grpc_invoke_unary(
     )
     .await?;
     Ok(outcome.into())
+    // conn dropped here.
 }
 
-/// Build a JSON skeleton for the request body of the given method.
-#[tauri::command]
-#[specta::specta]
-pub async fn grpc_build_request_skeleton(
-    state: tauri::State<'_, crate::state::AppState>,
-    service: String,
-    method: String,
-) -> Result<String, crate::ipc::IpcError> {
-    let conn = {
-        let guard = state.connection.lock().await;
-        guard
-            .as_ref()
-            .ok_or(crate::ipc::IpcError::NotConnected)?
-            .clone()
-    };
-    Ok(handshaker_core::grpc::build_request_skeleton(
-        &conn,
-        &service,
-        &method,
-    )?)
-}
-
-// Smoke unit tests — we can't easily spin a Tauri app in cargo test, so only test
-// the pure helper.
 #[cfg(test)]
 mod tests {
     use super::*;
