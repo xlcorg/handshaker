@@ -4,6 +4,11 @@ pub mod commands;
 pub mod ipc;
 mod state;
 
+use commands::collection::{
+    auth_set_for_env, collection_add_item, collection_delete, collection_delete_item,
+    collection_duplicate_item, collection_get, collection_list, collection_move_item,
+    collection_rename_item, collection_restore_item, collection_set_variables, collection_upsert,
+};
 use commands::env::{env_active_get, env_active_set, env_delete, env_list, env_upsert};
 use commands::events::{ConnectionStateChanged, ContractUpdated};
 use commands::grpc::{
@@ -14,6 +19,7 @@ use commands::meta::app_version;
 use commands::vars::vars_resolve;
 use specta_typescript::Typescript;
 use state::AppState;
+use tauri::Manager;
 use tauri_specta::{collect_commands, collect_events, Builder};
 
 /// Build a `tauri_specta::Builder` populated with every command and event the
@@ -33,6 +39,18 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             env_upsert,
             env_delete,
             vars_resolve,
+            collection_list,
+            collection_get,
+            collection_upsert,
+            collection_delete,
+            collection_set_variables,
+            collection_add_item,
+            collection_rename_item,
+            collection_move_item,
+            collection_duplicate_item,
+            collection_delete_item,
+            collection_restore_item,
+            auth_set_for_env,
         ])
         .events(collect_events![ContractUpdated, ConnectionStateChanged])
 }
@@ -69,10 +87,16 @@ pub fn run() {
     }
 
     tauri::Builder::default()
-        .manage(AppState::default())
         .invoke_handler(specta_builder.invoke_handler())
         .setup(move |app| {
             specta_builder.mount_events(app);
+            let data_dir = app
+                .path()
+                .app_data_dir()
+                .expect("resolve app_data_dir");
+            let state = AppState::with_data_dir(&data_dir)
+                .expect("initialize AppState from data dir");
+            app.manage(state);
             Ok(())
         })
         .run(tauri::generate_context!())

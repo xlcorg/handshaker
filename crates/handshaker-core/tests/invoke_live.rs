@@ -28,7 +28,8 @@ async fn live_target_reflects_and_invokes_first_unary_method() {
     let target = GrpcTarget::new(address.clone(), false, false).unwrap();
     let transport: Arc<dyn handshaker_core::grpc::transport::GrpcTransport> =
         Arc::new(TonicTransport::new());
-    let conn = activate(target, transport).await.expect("activate live");
+    let cache = handshaker_core::grpc::InMemoryContractCache::new();
+    let conn = activate(target, transport, &cache).await.expect("activate live");
 
     // Find the first non-reflection unary method.
     let mut chosen: Option<(String, String)> = None;
