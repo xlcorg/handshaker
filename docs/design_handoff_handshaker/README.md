@@ -5,6 +5,11 @@ Handshaker is a desktop client for invoking gRPC services — think "Postman, bu
 
 This handoff covers the **single primary window** of the app: title bar, top toolbar, address bar, sidebar, request pane, response pane, scenario state-bar, and the in-design Tweaks panel that switches theme/density/fonts/layout.
 
+> **Recent design decisions (most load-bearing — read these first):**
+> 1. **Adding a server is address-first — there is NO "Add server" dialog.** Pressing **+** (or the sidebar's "Add server" footer) opens a *blank request draft* on the main screen (`newServer` scenario): the address bar is empty + autofocused, and the user types `host:port` and hits **Connect**. Discovery/registration happens implicitly by connecting — the server is added by virtue of answering. See **Add a server (new request draft)** below.
+> 2. **Sidebar is a servers-first collection tree** (not service/history/collections tabs). Server → folder → method/saved-request. Every server and method row has **delete** via a hover **⋯** menu *and* a **right-click context menu**.
+> 3. **Dialogs (Environment, Settings)** are flex-columns bounded to the viewport with pinned header/footer and a scrolling body; widths are set via **inline style** (see the gotcha under *Dialogs*).
+
 ## About the Design Files
 The files in this bundle are **design references created in HTML/JSX** — a high-fidelity prototype showing intended look and behavior, **not production code to copy directly**. The task is to **recreate this design in the target codebase's environment** (likely a desktop shell — Tauri, Electron, or native — using whatever component system the target uses) following its established patterns and libraries. If no environment exists yet, pick the most appropriate stack (a React + Tailwind + shadcn/ui setup would mirror the prototype most directly; a native macOS/Windows app would also be reasonable for a gRPC client).
 
@@ -39,20 +44,20 @@ The split between Request and Response panes is **vertical by default** (side-by
 
 ## Screens / Views
 
-There is one screen; behavior is driven by **scenarios**:
+There is one screen; behavior is driven by **scenarios**. The bottom state-bar exposes these as pills: `request`, `sending`, `success` (OK), `error`, `streaming` (Stream), `browse` (Browse), `newServer` (New server), `env` (Env), `settings` (Settings). The `connected` state is the default; `idle`/`connecting` are still reachable by toggling the TLS/Connect control but are no longer pills.
 
 | Scenario   | What's visible                                                                                  |
 |------------|--------------------------------------------------------------------------------------------------|
-| `idle`     | Sidebar shows "Not connected" empty state; main area shows DisconnectedHero with hint chips.    |
-| `connecting` | Hero shows spinner + "Negotiating TLS…" + host:port; Connect button becomes "Connecting".     |
-| `connected` | Sidebar lists discovered services; Request pane shows body editor; Response pane idle.        |
+| `idle`     | Main area shows DisconnectedHero with hint chips. (Reached by disconnecting; no state pill.)     |
+| `connecting` | Hero shows spinner + "Negotiating TLS…" + host:port; Connect button becomes "Connecting". (no pill) |
+| `connected` | Default. Request pane shows body editor; Response pane idle.                                   |
 | `request`   | Connected + a method selected; same as `connected` with a populated body.                     |
 | `sending`   | Send button shows spinner + "Sending"; Response pane shows "Sending request…" empty state.    |
 | `success`   | Response pane shows body / trailers / headers tabs with content; status pill = green "OK".    |
 | `error`     | Response pane shows error body; status pill = red with grpc-status code.                      |
 | `streaming` | Response pane shows incremental frames with timestamps; Cancel button visible.                |
-| `history`   | Sidebar switches to history tab.                                                              |
-| `collections` | Sidebar switches to saved/collections tab.                                                  |
+| `browse`    | Main area shows the Server browser (filter + pin methods across a server).                    |
+| `newServer` | **Blank request draft** — empty/focused address bar + NewRequestHero. The entry point for adding a server. |
 | `env`       | Environment modal open.                                                                       |
 | `settings`  | Settings modal open.                                                                          |
 
@@ -78,8 +83,8 @@ The scenario state-bar at the bottom is **a design affordance**, not a shipping 
   2. **Combined input shell** — flex-1, height 36, `rounded-md border border-input bg-background`, ring on focus-within. Contains:
      - Host input (`host:port`, mono 12.5px) at left, no border, transparent bg, `rounded-l-md`.
      - 1px vertical divider (`bg-border`, vertically inset 6px).
-     - "/" separator in muted-foreground/60, mono.
-     - Method picker button (see below) filling remaining space.
+     - Method picker button (see below) filling remaining space. (There is **no leading "/" separator** before the picker — it was removed.)
+     - When in a `newServer` draft: the input is empty + autofocused and the shell gets a `border-ring ring-1 ring-ring` highlight; the hint reads "enter a server address" → "press Connect to discover methods". **Enter** in the field triggers Connect.
      - When disconnected: host input alone + "not connected" / "negotiating…" hint in muted-foreground/70 mono 11.5px.
   3. **Send button** — primary, height 36, 88px min-width, gap 1.5. `Send` icon + "Send". When sending: spinner + "Sending". Disabled when `!selected || sending`.
   4. **Disconnect** — ghost 36×36 icon button (unlock icon, muted-foreground), tooltip "Disconnect". Only when connected.
@@ -95,9 +100,11 @@ The scenario state-bar at the bottom is **a design affordance**, not a shipping 
 - Empty state: "No methods match \"q\"".
 
 #### Sidebar
-- Width: 300px. Bottom-aligned with the address bar above. Bottom border in `tab` row only.
-- Tabs (`services` / `history` / `collections`) at top, then a search input, then content list.
-- Disconnected: "Not connected" + small explainer + "Import .proto" outline button.
+- Width: 300px. Header row: filter input (leading filter icon) + **“+” add-server icon button** (tooltip "Add server" → opens a `newServer` draft) + an overflow **⋯** menu (Reveal active method / Expand all / Collapse all / Import collection… / Export collection…).
+- Body: a **servers-first collection tree**. Each **server** is a top-level row (medium weight); expanding it reveals **folders** (muted) and **method / saved-request** rows (mono). Saved requests show their name; methods show the method name, with an HTTP verb tag (colored) for HTTP servers and no tag for gRPC. Collapsed by default — only the active server (and its active folder) start open.
+- Footer: full-width outline **“Add server”** button → opens a `newServer` draft.
+- **Row delete (new):** hovering a server or method row reveals a trailing **⋯** button; **right-clicking** the row opens the same menu *at the cursor*. The menu has a single destructive **“Delete”** item (red, stays red on hover via a tinted `bg-destructive/10` highlight). Delete removes that server (or method/saved request) from the tree; a folder that becomes empty after a delete is hidden. Implementation detail in the prototype: the ⋯ button is wrapped so it is positioned over the *row only* (not the expanded subtree) and the context menu is a fixed-position floating list that closes on outside-click / Esc / scroll.
+- Disconnected: main area (not the sidebar) shows the DisconnectedHero.
 
 #### Request pane
 - Pane head (40px): underline tabs `[Body] [Metadata 3] [Auth bearer]` on the left + ghost icon buttons (Beautify / Word wrap / Copy) on the right. Backdrop blur, semi-transparent bg.
@@ -120,9 +127,28 @@ The scenario state-bar at the bottom is **a design affordance**, not a shipping 
 #### Tweaks panel
 - The Tweaks panel is **a design-time affordance**. Ship the values it produces (theme, density, etc) wired into real settings/prefs UI; don't ship the panel itself.
 
+#### Add a server (new request draft) — `newServer`
+There is **no modal** for adding a server. The flow is browser-address-bar-like:
+1. User clicks **+** (sidebar header), the footer **“Add server”** button, or the `New server` state pill.
+2. App enters `newServer`: `selected` is cleared, `host` is reset to `""`, the address bar is autofocused + ring-highlighted, and the main area renders **`NewRequestHero`** (centered: a `+` icon tile, “New request” title, and one line — *“Type a server address in the bar above and hit Connect. Handshaker runs reflection and lists every method.”* — plus a `↑ address bar · ↵ to connect` hint).
+3. User types `host:port` and presses **Connect** (or Enter). In production this fires gRPC reflection; on success the server + its methods are added to the tree and the app moves to `connected`.
+- Connect is **disabled while the draft address is empty**.
+- `NewRequestHero` intentionally has **no “Recent addresses” list and no `.proto` copy** (both were removed at the client's request). If you reintroduce a reflection-failure path, surface the `.proto`/descriptor fallback there.
+
+#### Dialogs (Environment + Settings)
+Both modals share `Dialog` / `DialogContent` from `shadcn.jsx`. Key rules learned during iteration — keep them:
+- **Size with inline `style`, not `max-w-*` classes.** `DialogContent` has a base `max-w-lg`; due to CSS source-order, an added `max-w-4xl`/`max-w-xl` class does **not** win, so the dialog silently stays small. Set `width` + `maxWidth: calc(100vw - 2rem)` (and for Settings a fixed `height` + `maxHeight: calc(100vh - 2rem)`) via inline style.
+  - **Environment**: `width: 60rem`, `height: 660px` (~1.5× the default), bounded to viewport.
+  - **Settings**: `width: 52rem`, `height: 640px`, bounded to viewport.
+- **Bound to the viewport + flex column** so header and footer never clip: `display:flex; flexDirection:column` on `DialogContent`, `flex-none` header/footer, and a `flex-1 min-h-0` scrolling body. (Settings: a `flex-1 min-h-0` two-column grid `[200px_1fr]`; left = section nav, right = scrolling pane. This keeps the dialog height **constant across sections** — it must not resize when you switch sections.)
+- `DialogContent` carries **`text-foreground`** (so titles/inputs are full-contrast, not dim) **and `border-border`** (a plain `border` without a color class inherits `currentColor`, which `text-foreground` would turn white). Keep both.
+- `DialogBody` is `grid gap-4 content-start overflow-y-auto overflow-x-hidden` — `content-start` prevents sparse content from stretching its rows into big gaps when the dialog is taller than the content.
+
 ## Interactions & behavior
 
-- **Connect / Disconnect**: address bar "Connect" → `connecting` scenario → after fake latency → `connected`. "Disconnect" → `idle`. In real impl: trigger gRPC reflection, populate services.
+- **Connect / Disconnect**: address bar "Connect" → `connecting` scenario → after fake latency → `connected`. Toggling the TLS/lock control while connected → `idle`. From a `newServer` draft, Connect (or Enter in the address field) runs reflection against the typed host and adds the server. In real impl: trigger gRPC reflection, populate the tree.
+- **Add a server**: + / "Add server" / `New server` pill → `newServer` draft (see above). No dialog.
+- **Delete a server / method**: hover ⋯ or right-click the row → **Delete**. Removes it from the tree (prototype tracks removed ids in local state; production deletes from the collection store). Empty folders auto-hide.
 - **Method picker**: opening focuses the search input after 10ms. Up/down arrows + Enter would be the natural keyboard nav (not implemented in prototype). Esc closes. Selecting a method sets the body editor to the body template for `${svc}/${mth}`.
 - **Send**: primary button in address bar. Disabled when no method or while sending. Unary methods → `sending` → `success` after 750ms (in production: until gRPC unary call resolves). Streaming methods → `streaming` (push frames as they arrive).
 - **Cancel** (streaming): outline destructive button in response pane head → back to `connected`.
@@ -270,7 +296,7 @@ See `data.js`. Highlights:
 - `app.jsx` — App root, scenario state, Titlebar, Toolbar, **ConnectionBar (address bar)**, DisconnectedHero, StateBar.
 - `panels.jsx` — RequestPanel, ResponsePanel, **MethodPicker**, **UnderlineTabs**, MetadataView, KVTable, CodeView, StreamView, ErrorBody, RespMeta, tokenizer.
 - `sidebar.jsx` — Sidebar with services/history/collections tabs.
-- `modals.jsx` — Environment modal, Settings modal.
+- `modals.jsx` — Environment modal, Settings modal. (The old **AddServerModal was removed** — adding a server is now the `newServer` draft on the main screen.)
 - `shadcn.jsx` — shadcn-style primitives (Button, Input, Badge, Tabs, Dialog, DropdownMenu, Tooltip, Switch, Separator, cn util). The boxy `Tabs/TabsList/TabsTrigger` here is **unused for pane heads** — pane heads use `UnderlineTabs` from `panels.jsx` instead. Keep boxy tabs around for any future use that wants pill-style.
 - `icons.jsx` — Inline SVG icon set.
 - `data.js` — Fixture data (services, bodies, responses, environments, history, collections).
@@ -279,7 +305,10 @@ See `data.js`. Highlights:
 
 ## Notes for the implementer
 
-- The **address bar pattern (TLS + host + method picker + Send all in one row)** and the **Linear/Vercel-style underline tabs** are the two recent design decisions. Preserve them — they're load-bearing for the look.
+- **Adding a server is address-first** (a `newServer` draft on the main screen) — there is **no Add-server dialog**. Don't reintroduce one unless asked.
+- **Server/method rows are deletable** via both a hover **⋯** menu and a **right-click context menu** (single red **Delete** item). The context menu opens at the cursor and closes on outside-click / Esc / scroll.
+- **Dialog sizing must use inline `style`** (width/height + viewport-bounded max), because the base `max-w-lg` beats utility `max-w-*` classes by source order. Settings height must stay **constant across sections**. Keep `text-foreground` + `border-border` on `DialogContent`.
+- The **address bar pattern (TLS + host + method picker + Send all in one row)** and the **Linear/Vercel-style underline tabs** are load-bearing for the look. The leading "/" before the method picker was **removed** — keep it gone.
 - The MethodPicker dropdown should be **searchable** and **keyboard-navigable** (arrows + Enter + Esc) in production. The prototype only wires the click path.
 - Status pills in `RespMeta` are tinted with the `--ok / --warn / --destructive / --stream` tokens — keep those four semantic colors consistent everywhere status surfaces (kind dots, badges, pills).
 - Don't ship the `StateBar` at the bottom — it's a design-review-only switcher for scenarios.

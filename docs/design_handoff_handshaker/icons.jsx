@@ -17,6 +17,7 @@ const Icons = {
     </svg>
   ),
   Search: (p) => <Icon {...p}><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></Icon>,
+  Filter: (p) => <Icon {...p}><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></Icon>,
   Lock: (p) => <Icon {...p}><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></Icon>,
   Unlock: (p) => <Icon {...p}><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-2"/></Icon>,
   Plus: (p) => <Icon {...p}><path d="M12 5v14M5 12h14"/></Icon>,
@@ -45,6 +46,7 @@ const Icons = {
   Moon: (p) => <Icon {...p}><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></Icon>,
   Trash: (p) => <Icon {...p}><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></Icon>,
   Upload: (p) => <Icon {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></Icon>,
+  Download: (p) => <Icon {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></Icon>,
   Copy: (p) => <Icon {...p}><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></Icon>,
   Wrap: (p) => <Icon {...p}><path d="M3 6h18M3 12h13a3 3 0 0 1 0 6h-2M3 18h7"/><path d="m18 15-3 3 3 3"/></Icon>,
   Beautify: (p) => <Icon {...p}><path d="M3 6h12M3 12h18M3 18h9"/></Icon>,
@@ -55,7 +57,18 @@ const Icons = {
   ),
   AlertCircle: (p) => <Icon {...p}><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></Icon>,
   CheckCircle: (p) => <Icon {...p}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></Icon>,
+  Check: (p) => <Icon {...p}><path d="M20 6 9 17l-5-5"/></Icon>,
   Activity: (p) => <Icon {...p}><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></Icon>,
+  Star: (p) => <Icon {...p}><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14l-5-4.87 6.91-1.01z"/></Icon>,
+  StarFill: ({ size = 14, color = "currentColor" }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={color} stroke="none"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14l-5-4.87 6.91-1.01z"/></svg>
+  ),
+  CornerDownLeft: (p) => <Icon {...p}><path d="m9 10-5 5 5 5"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/></Icon>,
+  Command: (p) => <Icon {...p}><path d="M15 6a3 3 0 1 0 3 3v6a3 3 0 1 0-3-3H9a3 3 0 1 0 3 3V9a3 3 0 1 0-3 3z"/></Icon>,
+  More: ({ size = 14, ...p }) => <Icon size={size} fill="currentColor" stroke="none" {...p}><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></Icon>,
+  Collapse: (p) => <Icon {...p}><path d="m8 5 4 4 4-4"/><path d="m8 19 4-4 4 4"/></Icon>,
+  Pencil: (p) => <Icon {...p}><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></Icon>,
+  Target: (p) => <Icon {...p}><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></Icon>,
 };
 
 window.Icons = Icons;
