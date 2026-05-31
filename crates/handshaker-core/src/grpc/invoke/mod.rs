@@ -29,7 +29,7 @@ pub struct UnaryOutcome {
     pub elapsed_ms: u64,
 }
 
-/// Build a pretty-printed JSON skeleton for a method's input message.
+/// Build a JSON skeleton for the request body of the given method.
 ///
 /// Used by the UI when the user clicks a method in the catalog — populates the request
 /// body editor with default values.
@@ -38,8 +38,20 @@ pub fn build_request_skeleton(
     service: &str,
     method: &str,
 ) -> Result<String, CoreError> {
-    let svc = connection
-        .pool
+    build_request_skeleton_from_pool(&connection.pool, service, method)
+}
+
+/// Build a pretty-printed JSON skeleton for a method's input message, from a pool.
+///
+/// Pool-based variant so callers without a live `GrpcConnection` (e.g. the lazy
+/// connect-on-Send command surface) can build a skeleton straight from a cached
+/// descriptor pool.
+pub fn build_request_skeleton_from_pool(
+    pool: &prost_reflect::DescriptorPool,
+    service: &str,
+    method: &str,
+) -> Result<String, CoreError> {
+    let svc = pool
         .get_service_by_name(service)
         .ok_or_else(|| CoreError::ServiceNotFound {
             service: service.to_string(),
@@ -231,6 +243,20 @@ mod tests {
             pool,
             catalog,
         }
+    }
+
+    #[test]
+    fn skeleton_from_pool_builds_for_known_method() {
+        let pool = fixture_pool();
+        let s = build_request_skeleton_from_pool(&pool, "test.Echo", "Send").expect("skeleton");
+        assert!(s.contains("\"id\""), "got {s}");
+    }
+
+    #[test]
+    fn skeleton_from_pool_unknown_service_errors() {
+        let pool = fixture_pool();
+        let err = build_request_skeleton_from_pool(&pool, "no.Such", "Send").unwrap_err();
+        assert!(matches!(err, CoreError::ServiceNotFound { .. }), "got {err:?}");
     }
 
     #[tokio::test]
