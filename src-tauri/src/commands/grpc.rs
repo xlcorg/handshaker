@@ -17,8 +17,11 @@ use crate::commands::events::ContractUpdated;
 use crate::ipc::{GrpcTargetIpc, InvokeOutcomeIpc, InvokeRequest, IpcError, ServiceCatalogIpc};
 use crate::state::AppState;
 
+/// Stable string key for the `ContractUpdated` event. Mirrors `ContractKey`'s
+/// key-space (address + tls only; `skip_verify` is intentionally excluded —
+/// it does not change the contract).
 fn target_key(t: &GrpcTarget) -> String {
-    format!("{}|tls={}|skip_verify={}", t.address, t.tls, t.skip_verify)
+    format!("{}|tls={}", t.address, t.tls)
 }
 
 /// Cache-first contract describe. On a cache hit, returns the cached catalog
@@ -93,6 +96,7 @@ pub async fn grpc_build_request_skeleton(
 ///
 /// Non-OK gRPC status arrives in `InvokeOutcomeIpc.status_code`, NOT as `Err`.
 /// `Err` is only for client-side failures (transport / encode / decode).
+/// The descriptor pool is reused from the `ContractCache` when present; only the channel is opened fresh per call.
 #[tauri::command]
 #[specta::specta]
 pub async fn grpc_invoke_oneshot(
