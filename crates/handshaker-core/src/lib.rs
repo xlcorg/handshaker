@@ -6,6 +6,7 @@
 pub mod env;
 pub mod error;
 pub mod grpc;
+pub mod persist;
 pub mod vars;
 
 pub use error::CoreError;
