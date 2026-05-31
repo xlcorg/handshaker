@@ -101,6 +101,10 @@ export const RequestPanel = forwardRef<RequestPanelHandle, RequestPanelProps>(fu
           onError(`Bearer token var cycle: ${r.cycle_chain.join(" → ")}`);
           return;
         }
+        if (!r.resolved.trim()) {
+          onError(`Bearer token variable "${auth.bearerTokenVar.trim()}" resolved to an empty value`);
+          return;
+        }
         meta["authorization"] = `Bearer ${r.resolved}`;
       } catch (e) {
         const tagged = e as { type?: string; message?: string };
@@ -117,6 +121,10 @@ export const RequestPanel = forwardRef<RequestPanelHandle, RequestPanelProps>(fu
         }
         if (r.cycle_chain) {
           onError(`API key var cycle: ${r.cycle_chain.join(" → ")}`);
+          return;
+        }
+        if (!r.resolved.trim()) {
+          onError(`API key variable "${auth.apiValueVar.trim()}" resolved to an empty value`);
           return;
         }
         const headerKey = auth.apiHeader.trim() || "x-api-key";
