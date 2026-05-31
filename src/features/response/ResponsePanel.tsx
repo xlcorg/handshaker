@@ -42,7 +42,7 @@ export function ResponsePanel({ state, outcome }: ResponsePanelProps) {
       </div>
       {state === "idle" && (
         <EmptyState
-          icon={<Activity className="size-4" />}
+          icon={<Activity className="size-[18px]" />}
           title="Awaiting first call"
           desc="Hit Send to invoke. Response body, trailers and timing will appear here."
         />
