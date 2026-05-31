@@ -25,7 +25,7 @@ export type RequestTabState = {
 export function mkTab(init: Partial<RequestTabState> = {}): RequestTabState {
   return {
     id: newId(),
-    draft: init.draft ?? emptyDraft(),
+    draft: init.draft ?? emptyDraft(""),
     selected: init.selected ?? null,
     catalog: init.catalog ?? null,
     scenario: init.scenario ?? "newServer",
