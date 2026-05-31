@@ -5,7 +5,7 @@
 use crate::error::CoreError;
 
 use super::ids::ItemId;
-use super::{Folder, Item};
+use super::Item;
 
 /// A removed item plus where it lived, for undo (`collection_restore_item`).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -181,7 +181,7 @@ fn reassign_ids(item: &mut Item) -> ItemId {
 mod tests {
     use super::*;
     use crate::auth::AuthByEnv;
-    use crate::collections::SavedRequest;
+    use crate::collections::{Folder, SavedRequest};
     use std::collections::HashMap;
     use uuid::Uuid;
 
