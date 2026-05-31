@@ -110,6 +110,102 @@ async varsResolve(template: string) : Promise<Result<ResolutionReportIpc, IpcErr
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async collectionList() : Promise<Result<CollectionMetaIpc[], IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("collection_list") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async collectionGet(id: string) : Promise<Result<CollectionIpc, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("collection_get", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async collectionUpsert(collection: CollectionIpc) : Promise<Result<null, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("collection_upsert", { collection }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async collectionDelete(id: string) : Promise<Result<null, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("collection_delete", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async collectionSetVariables(id: string, vars: Partial<{ [key in string]: string }>) : Promise<Result<null, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("collection_set_variables", { id, vars }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async collectionAddItem(collectionId: string, parentId: string | null, item: ItemIpc) : Promise<Result<null, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("collection_add_item", { collectionId, parentId, item }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async collectionRenameItem(collectionId: string, itemId: string, name: string) : Promise<Result<null, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("collection_rename_item", { collectionId, itemId, name }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async collectionMoveItem(collectionId: string, itemId: string, newParentId: string | null, position: number) : Promise<Result<null, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("collection_move_item", { collectionId, itemId, newParentId, position }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async collectionDuplicateItem(collectionId: string, itemId: string) : Promise<Result<string, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("collection_duplicate_item", { collectionId, itemId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async collectionDeleteItem(collectionId: string, itemId: string) : Promise<Result<ItemSnapshotIpc | null, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("collection_delete_item", { collectionId, itemId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async collectionRestoreItem(collectionId: string, snapshot: ItemSnapshotIpc, parentId: string | null, position: number) : Promise<Result<null, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("collection_restore_item", { collectionId, snapshot, parentId, position }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async authSetForEnv(collectionId: string, itemId: string | null, envName: string, config: SavedAuthConfigIpc | null) : Promise<Result<null, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("auth_set_for_env", { collectionId, itemId, envName, config }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -131,6 +227,12 @@ contractUpdated: "contract-updated"
 /** user-defined types **/
 
 export type AppVersion = { version: string }
+export type AuthByEnvIpc = { configs: Partial<{ [key in string]: SavedAuthConfigIpc }> }
+export type CollectionIpc = { id: string; name: string; items: ItemIpc[]; variables: Partial<{ [key in string]: string }>; auth_by_env: AuthByEnvIpc; default_tls: boolean; skip_tls_verify: boolean }
+/**
+ * Lightweight list entry (id + name only) for `collection_list`.
+ */
+export type CollectionMetaIpc = { id: string; name: string }
 export type ConnectInput = { address: string; tls: boolean; skip_verify: boolean }
 export type ConnectOutcome = { target: TargetSummary; catalog: ServiceCatalogIpc }
 /**
@@ -146,6 +248,7 @@ export type ContractUpdated = {
  */
 target_key: string }
 export type EnvironmentIpc = { name: string; variables: Partial<{ [key in string]: string }> }
+export type FolderIpc = { id: string; name: string; items: ItemIpc[]; auth_by_env: AuthByEnvIpc }
 export type InvokeOutcomeIpc = { status_code: number; status_message: string; response_json: string | null; trailing_metadata: Partial<{ [key in string]: string }>; 
 /**
  * Elapsed time in milliseconds. Capped at u32::MAX (~49 days) for
@@ -153,9 +256,16 @@ export type InvokeOutcomeIpc = { status_code: number; status_message: string; re
  */
 elapsed_ms: number }
 export type InvokeRequest = { service: string; method: string; request_json: string; metadata: Partial<{ [key in string]: string }> }
-export type IpcError = { type: "InvalidTarget"; message: string } | { type: "NotConnected" } | { type: "ReflectionDisabled"; hint: string } | { type: "Reflection"; message: string } | { type: "DescriptorBuild"; message: string } | { type: "ServiceNotFound"; service: string } | { type: "MethodNotFound"; service: string; method: string } | { type: "EncodeRequest"; message: string } | { type: "DecodeResponse"; message: string } | { type: "UnresolvedVariable"; name: string } | { type: "VariableCycle"; chain: string[] } | { type: "Transport"; message: string } | { type: "Auth"; message: string } | { type: "GrpcStatus"; code: number; message: string } | { type: "NotImplemented"; message: string }
+export type IpcError = { type: "InvalidTarget"; message: string } | { type: "NotConnected" } | { type: "ReflectionDisabled"; hint: string } | { type: "Reflection"; message: string } | { type: "DescriptorBuild"; message: string } | { type: "ServiceNotFound"; service: string } | { type: "MethodNotFound"; service: string; method: string } | { type: "EncodeRequest"; message: string } | { type: "DecodeResponse"; message: string } | { type: "UnresolvedVariable"; name: string } | { type: "VariableCycle"; chain: string[] } | { type: "Transport"; message: string } | { type: "Auth"; message: string } | { type: "GrpcStatus"; code: number; message: string } | { type: "NotImplemented"; message: string } | { type: "Persistence"; message: string }
+export type ItemIpc = ({ type: "folder" } & FolderIpc) | ({ type: "request" } & SavedRequestIpc)
+/**
+ * Undo payload returned by `collection_delete_item`.
+ */
+export type ItemSnapshotIpc = { item: ItemIpc; parent_id: string | null; position: number }
 export type MethodEntryIpc = { name: string; path: string; input_message: string; output_message: string; client_streaming: boolean; server_streaming: boolean }
 export type ResolutionReportIpc = { resolved: string; unresolved_vars: string[]; cycle_chain: string[] | null }
+export type SavedAuthConfigIpc = { kind: "none" } | { kind: "env_var"; env_var: string; header_name: string; prefix: string } | { kind: "oauth_2_client_credentials"; token_url: string; client_id: string; client_secret_env_var: string; scopes: string[] }
+export type SavedRequestIpc = { id: string; name: string; address_template: string; service: string; method: string; body_template: string; metadata: Partial<{ [key in string]: string }>; auth_by_env: AuthByEnvIpc; tls_override: boolean | null }
 export type ServiceCatalogIpc = { services: ServiceEntryIpc[] }
 export type ServiceEntryIpc = { full_name: string; methods: MethodEntryIpc[] }
 export type TargetSummary = { address: string; tls: boolean; skip_verify: boolean }
