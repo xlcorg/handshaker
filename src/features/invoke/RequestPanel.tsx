@@ -40,10 +40,17 @@ export const RequestPanel = forwardRef<RequestPanelHandle, RequestPanelProps>(fu
     let cancelled = false;
     (async () => {
       try {
-        const skeleton = await ipc.grpcBuildRequestSkeleton(target, selected.service, selected.method);
+        const ar = await ipc.varsResolve(target.address);
+        if (ar.unresolved_vars.length > 0 || ar.cycle_chain) return; // address not resolvable yet — keep current body
+        const skeleton = await ipc.grpcBuildRequestSkeleton(
+          { address: ar.resolved, tls: target.tls, skip_verify: false },
+          selected.service,
+          selected.method,
+        );
         if (cancelled) return;
         setBody(skeleton);
       } catch (e) {
+        if (cancelled) return;
         const tagged = e as { type?: string; message?: string };
         onError(tagged.message ?? tagged.type ?? "failed to load skeleton");
       }

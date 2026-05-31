@@ -127,6 +127,7 @@ export default function App() {
       setReflectNote(null);
       return;
     }
+    if (!isTauri()) return;
     let resolved: string;
     try {
       const r = await ipc.varsResolve(address);
