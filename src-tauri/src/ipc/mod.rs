@@ -1,4 +1,5 @@
 pub mod catalog;
+pub mod collection;
 pub mod env;
 pub mod error;
 pub mod invoke;
