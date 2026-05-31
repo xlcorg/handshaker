@@ -180,6 +180,7 @@ export default function App() {
     const svc = catalog.services[0];
     const mth = svc?.methods[0];
     setSelected(svc && mth ? { service: svc.full_name, method: mth.name, kind: deriveKind(mth) } : null);
+    // only re-pick when the catalog changes; reading stale `selected` is safe (the stillThere check falls through to auto-pick).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [catalog]);
 
@@ -389,6 +390,7 @@ export default function App() {
         defaultName={selected ? selected.method : "request"}
         onSave={doSave}
         onCreateCollection={collections.createCollection}
+        originBound={draft.origin != null}
       />
 
       <AlertDialog open={guard.open} onOpenChange={(o) => setGuard((g) => ({ ...g, open: o }))}>

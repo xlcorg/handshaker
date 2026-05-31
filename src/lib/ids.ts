@@ -12,6 +12,7 @@ function randomBytes(n: number): Uint8Array {
 export function newId(): string {
   const ts = Date.now(); // ms since epoch (48-bit)
   const bytes = randomBytes(16);
+  // Date.now() (~41-bit ms) fits safely; Math.floor + & 0xff stay within Int32 range per byte.
   bytes[0] = Math.floor(ts / 2 ** 40) & 0xff;
   bytes[1] = Math.floor(ts / 2 ** 32) & 0xff;
   bytes[2] = Math.floor(ts / 2 ** 24) & 0xff;
