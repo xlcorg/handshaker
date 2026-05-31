@@ -18,6 +18,8 @@ export type { VarRow } from "./VariablesBlock";
 export { TlsBlock } from "./TlsBlock";
 export type { TlsState } from "./TlsBlock";
 
+export { CollectionOverview } from "./CollectionOverview";
+
 export { AuthBlock } from "./AuthBlock";
 export type {
   AuthType,

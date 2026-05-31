@@ -6,6 +6,7 @@ import { ConnectionBar } from "@/features/shell/ConnectionBar";
 import { NewRequestHero, DisconnectedHero } from "@/features/shell/Heroes";
 import { MethodPicker } from "@/features/shell/MethodPicker";
 import { CollectionsSidebar } from "@/features/collections/tree/CollectionsSidebar";
+import { CollectionOverview } from "@/features/collections/overview";
 import { RequestPanel, type RequestPanelHandle } from "@/features/invoke/RequestPanel";
 import { ResponsePanel } from "@/features/response/ResponsePanel";
 import type { RespState } from "@/features/response/RespMeta";
@@ -100,6 +101,14 @@ export default function App() {
     ipc.envActiveGet().then(setActiveEnv).catch(console.error);
     ipc.envList().then(setEnvs).catch(console.error);
   }, []);
+
+  // Ensure the open collection is loaded when routing into the overview.
+  const openCollectionId = active.scenario === "collection" ? active.openCollectionId : null;
+  useEffect(() => {
+    if (openCollectionId === null) return;
+    if (collections.byId[openCollectionId]) return;
+    collections.load(openCollectionId).catch(() => undefined);
+  }, [openCollectionId, collections.byId, collections.load]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -413,9 +422,28 @@ export default function App() {
           ) : scenario === "idle" || scenario === "connecting" ? (
             <DisconnectedHero scenario={scenario} host={active.draft.address} />
           ) : scenario === "collection" ? (
-            <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground">
-              Collection
-            </div>
+            active.openCollectionId && collections.byId[active.openCollectionId] ? (
+              <CollectionOverview
+                collection={collections.byId[active.openCollectionId]}
+                environments={envs}
+                onClose={() =>
+                  T.patchActive({
+                    scenario: active.catalog ? "connected" : "newServer",
+                    openCollectionId: null,
+                  })
+                }
+                onSelectRequest={(req) => handleSelectRequest(active.openCollectionId!, req)}
+                onChanged={() => collections.load(active.openCollectionId!).catch(() => undefined)}
+                onDeleted={async () => {
+                  await collections.loadAll();
+                  T.patchActive({ scenario: "newServer", openCollectionId: null });
+                }}
+              />
+            ) : (
+              <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground">
+                Loading…
+              </div>
+            )
           ) : (
             <>
               <div
