@@ -14,7 +14,7 @@ import { ResponsePanel } from "@/features/response/ResponsePanel";
 import type { RespState } from "@/features/response/RespMeta";
 import { SettingsDialog } from "@/features/settings/SettingsDialog";
 import { ipc } from "@/ipc/client";
-import type { EnvironmentIpc, GrpcTargetIpc, InvokeOutcomeIpc } from "@/ipc/bindings";
+import type { EnvironmentIpc, GrpcTargetIpc } from "@/ipc/bindings";
 import { deriveKind, type SelectedMethod } from "@/features/shell/SelectedMethod";
 import { useCollections } from "@/features/collections/useCollections";
 import { SaveRequestDialog } from "@/features/collections/SaveRequestDialog";
@@ -51,14 +51,12 @@ export default function App() {
   const mainRef = useRef<HTMLElement>(null);
   const requestPanelRef = useRef<RequestPanelHandle>(null);
   const pendingCloseRef = useRef<string | null>(null);
+  const sendingTabIdRef = useRef<string | null>(null);
 
   // --- Per-tab setters (write through patchActive on the active tab) -------
   const setDraft = (u: DraftRequest | ((d: DraftRequest) => DraftRequest)) =>
     T.patchActive((t) => ({ draft: typeof u === "function" ? u(t.draft) : u }));
   const setSelected = (s: SelectedMethod | null) => T.patchActive({ selected: s });
-  const setOutcome = (o: InvokeOutcomeIpc | null) => T.patchActive({ outcome: o });
-  const setInvokeError = (m: string | null) => T.patchActive({ invokeError: m });
-  const setSending = (s: boolean) => T.patchActive({ sending: s });
 
   const target: GrpcTargetIpc = { address: draft.address, tls: draft.tls, skip_verify: false };
 
@@ -233,6 +231,7 @@ export default function App() {
   const servicesCount = catalog?.services.length ?? 0;
 
   function handleSend() {
+    sendingTabIdRef.current = active.id;
     requestPanelRef.current?.send().catch((e) => console.error("send failed:", e));
   }
 
@@ -394,15 +393,15 @@ export default function App() {
                     }
                     onRequestSave={() => setSaveOpen(true)}
                     onNewRequest={T.newTab}
-                    onSending={setSending}
-                    onOutcome={(o) => {
-                      setOutcome(o);
-                      setInvokeError(null);
-                    }}
-                    onError={(m) => {
-                      setInvokeError(m);
-                      setOutcome(null);
-                    }}
+                    onSending={(v) =>
+                      T.patchTab(sendingTabIdRef.current ?? active.id, { sending: v })
+                    }
+                    onOutcome={(o) =>
+                      T.patchTab(sendingTabIdRef.current ?? active.id, { outcome: o, invokeError: null })
+                    }
+                    onError={(m) =>
+                      T.patchTab(sendingTabIdRef.current ?? active.id, { invokeError: m, outcome: null })
+                    }
                   />
                 ) : (
                   <div className="flex-1 min-w-0 min-h-0 flex items-center justify-center text-xs text-muted-foreground">
