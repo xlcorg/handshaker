@@ -4,6 +4,7 @@ import { EnvPill } from "@/features/envs/EnvPill";
 import { Titlebar } from "@/features/shell/Titlebar";
 import { Sidebar, type SidebarTab } from "@/features/shell/Sidebar";
 import { ConnectionBar } from "@/features/shell/ConnectionBar";
+import { NewRequestHero, DisconnectedHero } from "@/features/shell/Heroes";
 import { MethodPicker } from "@/features/shell/MethodPicker";
 import { SidebarServicesPane } from "@/features/shell/SidebarServicesPane";
 import { SidebarHistoryPane } from "@/features/shell/SidebarHistoryPane";
@@ -43,6 +44,9 @@ export default function App() {
   const T = useTabs();
   const active = T.active;
   const { draft, selected, catalog, scenario, sending, outcome, invokeError, reflectNote } = active;
+  const isDraft = scenario === "newServer";
+  const isConnecting = scenario === "connecting";
+  const isConnected = scenario !== "newServer" && scenario !== "idle" && scenario !== "connecting";
 
   const collections = useCollections();
   const envSwitcherTriggerRef = useRef<HTMLButtonElement>(null);
@@ -114,38 +118,63 @@ export default function App() {
   }, []);
 
   // describe: writes to a captured tab id so a mid-fetch tab switch can't clobber another tab.
-  async function describe(id: string, address: string, tls: boolean) {
+  // Returns true on a reachable catalog, false otherwise (so Connect can pick a scenario).
+  async function describe(id: string, address: string, tls: boolean): Promise<boolean> {
     if (!address.trim()) {
       T.patchTab(id, { catalog: null, reflectNote: null });
-      return;
+      return false;
     }
-    if (!isTauri()) return;
+    if (!isTauri()) return false;
     let resolved: string;
     try {
       const r = await ipc.varsResolve(address);
       if (r.unresolved_vars.length > 0) {
         T.patchTab(id, { reflectNote: `Unresolved: ${r.unresolved_vars.join(", ")}`, catalog: null });
-        return;
+        return false;
       }
       if (r.cycle_chain) {
         T.patchTab(id, { reflectNote: `Variable cycle: ${r.cycle_chain.join(" → ")}`, catalog: null });
-        return;
+        return false;
       }
       resolved = r.resolved;
     } catch {
-      return;
+      return false;
     }
     try {
       const cat = await ipc.grpcDescribe({ address: resolved, tls, skip_verify: false });
       T.patchTab(id, { catalog: cat, reflectNote: null });
+      return true;
     } catch (e) {
       const t = e as { type?: string; message?: string };
       T.patchTab(id, { reflectNote: t.message ?? t.type ?? "reflection failed", catalog: null });
+      return false;
     }
   }
 
+  // Explicit Connect / Disconnect from the address bar.
+  const onConnect = () => {
+    const id = active.id;
+    const addr = active.draft.address.trim();
+    // Connected → disconnect.
+    if (active.scenario !== "idle" && active.scenario !== "newServer") {
+      T.patchTab(id, { scenario: "idle" });
+      return;
+    }
+    if (!addr) return;
+    T.patchTab(id, { scenario: "connecting", reflectNote: null });
+    describe(id, active.draft.address, active.draft.tls)
+      .then((ok) => {
+        T.patchTab(id, { scenario: ok ? "connected" : "newServer" });
+      })
+      .catch(() => {
+        T.patchTab(id, { scenario: "newServer" });
+      });
+  };
+
   useEffect(() => {
     if (!isTauri()) return;
+    // Draft / disconnected / connecting tabs wait for an explicit Connect.
+    if (active.scenario === "newServer" || active.scenario === "idle" || active.scenario === "connecting") return;
     const id = active.id;
     const addr = active.draft.address;
     const tls = active.draft.tls;
@@ -154,7 +183,7 @@ export default function App() {
     }, 400);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active.id, active.draft.address, active.draft.tls]);
+  }, [active.id, active.draft.address, active.draft.tls, active.scenario]);
 
   // catalog → auto-pick selected (guarded with captured id)
   useEffect(() => {
@@ -179,16 +208,6 @@ export default function App() {
     // only re-pick when the active tab's catalog changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active.id, active.catalog]);
-
-  // scenario sync: leave "collection" tabs alone (Phase 4 owns them). Otherwise
-  // show the newServer placeholder until a catalog is reachable, then the panes.
-  useEffect(() => {
-    const id = active.id;
-    if (active.scenario === "collection") return;
-    const next = active.catalog ? "connected" : "newServer";
-    if (active.scenario !== next) T.patchTab(id, { scenario: next });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active.id, active.scenario, active.catalog]);
 
   // selected change → reset outcome + sync draft.service/method/kind.
   // Guarded against tab switches: only fires when the active tab's draft is
@@ -340,7 +359,18 @@ export default function App() {
             onHostChange={(next) => setDraft((d) => ({ ...d, address: next }))}
             onHostCommit={() => describe(active.id, draft.address, draft.tls)}
             tls={draft.tls}
-            onTlsChange={(next) => setDraft((d) => ({ ...d, tls: next }))}
+            onTlsChange={(next) => {
+              const id = active.id;
+              T.patchTab(id, (t) => ({
+                draft: { ...t.draft, tls: next },
+                // Switching TLS on a live connection drops it back to disconnected.
+                ...(isConnected ? { scenario: "idle" as const } : {}),
+              }));
+            }}
+            draft={isDraft}
+            connecting={isConnecting}
+            connected={isConnected}
+            onConnect={onConnect}
             sending={sending}
             selected={selected}
             onSend={handleSend}
@@ -359,9 +389,9 @@ export default function App() {
             }
           />
           {scenario === "newServer" ? (
-            <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground">
-              New request — enter an address
-            </div>
+            <NewRequestHero />
+          ) : scenario === "idle" || scenario === "connecting" ? (
+            <DisconnectedHero scenario={scenario} host={active.draft.address} />
           ) : scenario === "collection" ? (
             <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground">
               Collection
