@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Layers,
   Upload,
@@ -95,6 +95,14 @@ function collectTargets(items: ItemIpc[], acc: Set<string>): Set<string> {
   return acc;
 }
 
+// Map a collection's variable record to editable buffer rows. Stable enough for
+// a fresh edit session — ids only need to be unique within the current buffer.
+function entriesToRows(vars: Record<string, string | undefined>): VarRow[] {
+  return Object.entries(vars)
+    .filter((e): e is [string, string] => e[1] !== undefined)
+    .map(([k, v], i) => ({ id: `v${i}`, k, v }));
+}
+
 interface RowsProps {
   nodes: ItemIpc[];
   depth: number;
@@ -182,14 +190,22 @@ export function CollectionOverview({
     () => [...collectTargets(collection.items, new Set<string>())],
     [collection.items],
   );
-  const varEntries = Object.entries(collection.variables).filter(
-    (e): e is [string, string] => e[1] !== undefined,
-  );
+  // Local edit buffer for variable rows. Re-init ONLY when the collection id
+  // changes, so a persist→reload of the SAME collection doesn't clobber an
+  // in-progress edit (e.g. a transient empty row or a half-renamed key).
+  const [varRows, setVarRows] = useState<VarRow[]>(() => entriesToRows(collection.variables));
+  useEffect(() => {
+    setVarRows(entriesToRows(collection.variables));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collection.id]);
+
+  // Hint reflects the live buffer: rows with a non-empty trimmed key.
+  const varCount = varRows.filter((r) => r.k.trim()).length;
 
   const tabs: COTabItem[] = [
     { value: "overview", label: "Overview" },
     { value: "auth", label: "Authorization" },
-    { value: "variables", label: "Variables", hint: varEntries.length || null },
+    { value: "variables", label: "Variables", hint: varCount || null },
     { value: "settings", label: "Settings" },
   ];
 
@@ -255,8 +271,6 @@ export function CollectionOverview({
       .then(onChanged)
       .catch((e) => console.error("set auth failed:", e));
   };
-
-  const varRows: VarRow[] = varEntries.map(([k, v], i) => ({ id: `v${i}`, k, v }));
 
   const confirmDelete = () => {
     void ipc
@@ -381,7 +395,13 @@ export function CollectionOverview({
               title="Variables"
               desc="Collection-wide key/value pairs, reusable as {{name}} inside requests."
             >
-              <VariablesBlock rows={varRows} onChange={persistVars} />
+              <VariablesBlock
+                rows={varRows}
+                onChange={(next) => {
+                  setVarRows(next);
+                  persistVars(next);
+                }}
+              />
             </COBlock>
           )}
 
