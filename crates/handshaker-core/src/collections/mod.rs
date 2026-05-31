@@ -12,12 +12,18 @@ use serde::{Deserialize, Serialize};
 use crate::auth::{AuthByEnv, AuthCredentials};
 use crate::grpc::GrpcTarget;
 
+pub mod file_store;
 pub mod ids;
+pub mod in_memory;
 pub mod resolve;
+pub mod store;
 pub mod tree;
 
+pub use file_store::FileCollectionStore;
 pub use ids::{CollectionId, ItemId};
+pub use in_memory::InMemoryCollectionStore;
 pub use resolve::resolve_request;
+pub use store::CollectionStore;
 
 /// Root entity. Carries collection-scope variables, root auth, and TLS defaults.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
