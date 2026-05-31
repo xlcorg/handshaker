@@ -1,27 +1,24 @@
-import { Key, Upload } from "lucide-react";
+import { Key } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ToggleGroup } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/cn";
+import { EnvVarField } from "@/features/collections/overview/EnvVarField";
 
-export type AuthKind = "none" | "bearer" | "basic" | "mtls" | "api";
+export type AuthKind = "none" | "bearer" | "apikey" | "basic" | "mtls";
 
 export interface AuthState {
   kind: AuthKind;
-  bearerToken: string;
-  basicUser: string;
-  basicPass: string;
-  apiHeader: string;
-  apiValue: string;
+  bearerTokenVar: string; // env-var NAME, e.g. PROD_API_TOKEN (no braces)
+  apiHeader: string;      // e.g. x-api-key
+  apiValueVar: string;    // env-var NAME
 }
 
 export const AUTH_DEFAULTS: AuthState = {
   kind: "none",
-  bearerToken: "",
-  basicUser: "",
-  basicPass: "",
+  bearerTokenVar: "",
   apiHeader: "x-api-key",
-  apiValue: "",
+  apiValueVar: "",
 };
 
 export interface AuthInlineProps {
@@ -41,21 +38,22 @@ export function AuthInline({ value, onChange }: AuthInlineProps) {
         options={[
           { value: "none", label: "None" },
           { value: "bearer", label: "Bearer" },
-          { value: "basic", label: "Basic" },
-          { value: "mtls", label: "mTLS" },
-          { value: "api", label: "API key" },
+          { value: "apikey", label: "API key" },
         ]}
       />
+      {value.kind === "none" && (
+        <div className="text-xs text-muted-foreground py-1">
+          No authentication will be attached to this request.
+        </div>
+      )}
       {value.kind === "bearer" && (
         <>
-          <Field label="Token">
-            <Input
-              value={value.bearerToken}
-              onChange={(e) => patch("bearerToken", e.target.value)}
-              placeholder="{{accessToken}}"
-              className="font-mono text-[12.5px]"
-            />
-          </Field>
+          <EnvVarField
+            label="Token"
+            value={value.bearerTokenVar}
+            onChange={(v) => patch("bearerTokenVar", v)}
+            placeholder="BEARER_TOKEN_VAR"
+          />
           <Field label="Metadata key">
             <FieldDisplay mono>authorization</FieldDisplay>
           </Field>
@@ -64,47 +62,30 @@ export function AuthInline({ value, onChange }: AuthInlineProps) {
           </Field>
         </>
       )}
-      {value.kind === "basic" && (
-        <>
-          <Field label="Username">
-            <Input value={value.basicUser} onChange={(e) => patch("basicUser", e.target.value)} className="font-mono text-[12.5px]" />
-          </Field>
-          <Field label="Password">
-            <Input type="password" value={value.basicPass} onChange={(e) => patch("basicPass", e.target.value)} className="font-mono text-[12.5px]" />
-          </Field>
-          <p className="text-[11px] text-muted-foreground">
-            Basic auth is UI-only for now and won't be attached to the outgoing request.
-          </p>
-        </>
-      )}
-      {value.kind === "api" && (
+      {value.kind === "apikey" && (
         <>
           <Field label="Header name">
-            <Input value={value.apiHeader} onChange={(e) => patch("apiHeader", e.target.value)} className="font-mono text-[12.5px]" />
+            <Input
+              value={value.apiHeader}
+              onChange={(e) => patch("apiHeader", e.target.value)}
+              className="font-mono text-[12.5px]"
+            />
           </Field>
-          <Field label="Value">
-            <Input value={value.apiValue} onChange={(e) => patch("apiValue", e.target.value)} placeholder="{{apiKey}}" className="font-mono text-[12.5px]" />
-          </Field>
-          <p className="text-[11px] text-muted-foreground">
-            API-key auth is UI-only for now and won't be attached to the outgoing request.
-          </p>
+          <EnvVarField
+            label="Value"
+            value={value.apiValueVar}
+            onChange={(v) => patch("apiValueVar", v)}
+            placeholder="API_KEY_VAR"
+          />
         </>
       )}
-      {value.kind === "mtls" && (
-        <>
-          <Field label="Client certificate"><CertZone empty desc="Drop client.crt or click to choose" /></Field>
-          <Field label="Client key"><CertZone empty desc="Drop client.key or click to choose" /></Field>
-          <Field label="Root CA (optional)"><CertZone empty desc="Drop ca.pem or click to choose" /></Field>
-          <p className="text-[11px] text-muted-foreground">
-            mTLS is UI-only for now and won't be applied to the channel.
-          </p>
-        </>
-      )}
-      {value.kind === "none" && (
-        <div className="text-xs text-muted-foreground py-1">
-          No authentication will be attached to this request.
-        </div>
-      )}
+      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-1">
+        <Key className="size-3 shrink-0" />
+        <span>
+          Secrets are referenced by environment-variable name — the value lives in the
+          environment, never in the request.
+        </span>
+      </div>
     </div>
   );
 }
@@ -122,23 +103,6 @@ function FieldDisplay({ mono, children }: { mono?: boolean; children: React.Reac
   return (
     <div className={cn("h-9 px-3 rounded-md border border-input bg-background flex items-center text-sm", mono && "font-mono text-[12.5px]")}>
       {children}
-    </div>
-  );
-}
-
-function CertZone({ name, desc, empty }: { name?: string; desc: string; empty?: boolean }) {
-  return (
-    <div className={cn(
-      "flex items-center gap-3 p-3.5 rounded-md border bg-card",
-      empty ? "border-dashed border-border" : "border-border",
-    )}>
-      <div className="h-7 w-7 rounded-md border border-border flex items-center justify-center text-muted-foreground">
-        {empty ? <Upload className="size-3.5" /> : <Key className="size-3.5" />}
-      </div>
-      <div className="flex-1 min-w-0">
-        {name && <div className="font-mono text-xs text-foreground">{name}</div>}
-        <div className={cn("text-[11px] text-muted-foreground", name && "mt-0.5")}>{desc}</div>
-      </div>
     </div>
   );
 }
