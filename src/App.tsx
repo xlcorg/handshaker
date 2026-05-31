@@ -2,24 +2,22 @@ import { useEffect, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { EnvPill } from "@/features/envs/EnvPill";
 import { Titlebar } from "@/features/shell/Titlebar";
-import { Sidebar, type SidebarTab } from "@/features/shell/Sidebar";
 import { ConnectionBar } from "@/features/shell/ConnectionBar";
 import { NewRequestHero, DisconnectedHero } from "@/features/shell/Heroes";
 import { MethodPicker } from "@/features/shell/MethodPicker";
-import { SidebarServicesPane } from "@/features/shell/SidebarServicesPane";
-import { SidebarHistoryPane } from "@/features/shell/SidebarHistoryPane";
-import { SidebarCollectionsPane } from "@/features/shell/SidebarCollectionsPane";
+import { CollectionsSidebar } from "@/features/collections/tree/CollectionsSidebar";
 import { RequestPanel, type RequestPanelHandle } from "@/features/invoke/RequestPanel";
 import { ResponsePanel } from "@/features/response/ResponsePanel";
 import type { RespState } from "@/features/response/RespMeta";
 import { SettingsDialog } from "@/features/settings/SettingsDialog";
 import { ipc } from "@/ipc/client";
-import type { EnvironmentIpc, GrpcTargetIpc } from "@/ipc/bindings";
+import type { EnvironmentIpc, GrpcTargetIpc, SavedRequestIpc } from "@/ipc/bindings";
 import { deriveKind, type SelectedMethod } from "@/features/shell/SelectedMethod";
 import { useCollections } from "@/features/collections/useCollections";
 import { SaveRequestDialog } from "@/features/collections/SaveRequestDialog";
 import {
   draftToSavedRequest,
+  loadIntoDraft,
   replaceRequestInItems,
   savedRequestItem,
   type DraftRequest,
@@ -35,8 +33,6 @@ export default function App() {
   const [prefs] = usePrefs();
   const [activeEnv, setActiveEnv] = useState<string | null>(null);
   const [envs, setEnvs] = useState<EnvironmentIpc[]>([]);
-  const [sideTab, setSideTab] = useState<SidebarTab>("services");
-  const [sideQuery, setSideQuery] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [saveOpen, setSaveOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -244,7 +240,38 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sending, selected]);
 
-  const servicesCount = catalog?.services.length ?? 0;
+  // --- Collections sidebar handlers ---------------------------------------
+  function handleSelectRequest(collectionId: string, req: SavedRequestIpc) {
+    T.patchActive({
+      draft: loadIntoDraft(req, { collectionId, itemId: req.id }),
+      selected:
+        req.service && req.method
+          ? { service: req.service, method: req.method, kind: "unary" }
+          : null,
+      scenario: "connected",
+      outcome: null,
+      invokeError: null,
+      reflectNote: null,
+    });
+  }
+
+  async function handleNewCollection() {
+    await collections.createCollection("New collection");
+    await collections.loadAll();
+  }
+
+  async function handleDeleteItem(collectionId: string, itemId: string) {
+    await collections.deleteItem(collectionId, itemId);
+  }
+
+  async function handleRenameItem(collectionId: string, itemId: string, name: string) {
+    await collections.renameItem(collectionId, itemId, name);
+  }
+
+  async function handleDeleteCollection(collectionId: string) {
+    await ipc.collectionDelete(collectionId);
+    await collections.loadAll();
+  }
 
   function handleSend() {
     sendingTabIdRef.current = active.id;
@@ -326,26 +353,19 @@ export default function App() {
       />
       <div className="flex-1 flex min-h-0">
         {prefs.sidebar && (
-          <Sidebar
-            tab={sideTab}
-            onTabChange={setSideTab}
-            query={sideQuery}
-            onQueryChange={setSideQuery}
-            servicesCount={servicesCount}
-            historyCount={0}
-          >
-            {sideTab === "services" && (
-              <SidebarServicesPane
-                connected={catalog != null}
-                catalog={catalog}
-                query={sideQuery}
-                selected={selected}
-                onSelect={(s) => setSelected(s)}
-              />
-            )}
-            {sideTab === "history" && <SidebarHistoryPane />}
-            {sideTab === "saved" && <SidebarCollectionsPane />}
-          </Sidebar>
+          <CollectionsSidebar
+            tree={collections.tree}
+            activeItemId={active.draft.origin?.itemId ?? null}
+            onSelectRequest={handleSelectRequest}
+            onOpenCollection={(id) =>
+              T.patchActive({ scenario: "collection", openCollectionId: id })
+            }
+            onNewRequest={T.newTab}
+            onNewCollection={handleNewCollection}
+            onDeleteItem={handleDeleteItem}
+            onRenameItem={handleRenameItem}
+            onDeleteCollection={handleDeleteCollection}
+          />
         )}
         <main ref={mainRef} className="flex-1 flex flex-col min-w-0 min-h-0 relative bg-background">
           {prefs.dots && (

@@ -38,10 +38,16 @@ function FloatingMenu({ items, pos, onClose }: FloatingMenuProps) {
       onClose();
     }
 
-    document.addEventListener("pointerdown", onPointerDown, true);
+    // Defer the outside-pointerdown listener by one tick so the click that
+    // opened the menu can't immediately close it.
+    const id = setTimeout(
+      () => document.addEventListener("pointerdown", onPointerDown, true),
+      0,
+    );
     document.addEventListener("keydown", onKeyDown);
     document.addEventListener("scroll", onScroll, true);
     return () => {
+      clearTimeout(id);
       document.removeEventListener("pointerdown", onPointerDown, true);
       document.removeEventListener("keydown", onKeyDown);
       document.removeEventListener("scroll", onScroll, true);
@@ -128,7 +134,7 @@ export function RowMenu({ items, children, className, padRight = 4 }: RowMenuPro
   const openAtCursor = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     const x = Math.min(e.clientX, window.innerWidth - 184);
-    const y = Math.min(e.clientY, window.innerHeight - 8);
+    const y = Math.min(e.clientY, window.innerHeight - 260);
     setMenuPos({ x, y });
   }, []);
 
