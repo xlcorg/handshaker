@@ -34,6 +34,8 @@ pub enum CoreError {
     GrpcStatus { code: i32, message: String },
     #[error("not implemented (MVP): {0}")]
     NotImplemented(String),
+    #[error("persistence error: {0}")]
+    Persistence(String),
 }
 
 #[cfg(test)]

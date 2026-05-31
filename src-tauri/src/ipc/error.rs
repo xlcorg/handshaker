@@ -22,6 +22,7 @@ pub enum IpcError {
     Auth { message: String },
     GrpcStatus { code: i32, message: String },
     NotImplemented { message: String },
+    Persistence { message: String },
 }
 
 impl From<CoreError> for IpcError {
@@ -44,6 +45,7 @@ impl From<CoreError> for IpcError {
             CoreError::Auth(m) => IpcError::Auth { message: m },
             CoreError::GrpcStatus { code, message } => IpcError::GrpcStatus { code, message },
             CoreError::NotImplemented(m) => IpcError::NotImplemented { message: m },
+            CoreError::Persistence(m) => IpcError::Persistence { message: m },
         }
     }
 }
@@ -74,9 +76,10 @@ mod tests {
             CoreError::Auth("a".into()),
             CoreError::GrpcStatus { code: 1, message: "m".into() },
             CoreError::NotImplemented("n".into()),
+            CoreError::Persistence("p".into()),
         ];
 
-        assert_eq!(cases.len(), 15, "Update this test when CoreError variants change");
+        assert_eq!(cases.len(), 16, "Update this test when CoreError variants change");
 
         for c in cases {
             // Smoke test: From impl must succeed for every variant. If a future CoreError variant

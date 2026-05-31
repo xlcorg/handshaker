@@ -29,7 +29,11 @@ prost-reflect.workspace = true     # features ["serde"] from workspace
 # Plan #4 — Env + Vars
 regex.workspace = true
 
+# Plan #6 — Collections
+uuid = { workspace = true }
+
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tonic-health.workspace = true
 tower = "0.5"
+tempfile.workspace = true

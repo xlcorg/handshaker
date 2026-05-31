@@ -30,6 +30,10 @@ tonic-health = "0.14"   # dev-only filler service for bare-server integration te
 # Plan #4 — Env + Vars
 regex = "1"
 
+# Plan #6 — Collections
+uuid = { version = "1", features = ["v7", "serde"] }
+tempfile = "3"
+
 # Tauri runtime + bindings generator
 tauri = { version = "2.11", features = [] }
 tauri-build = { version = "2", features = [] }
