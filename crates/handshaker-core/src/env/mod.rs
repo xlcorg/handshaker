@@ -7,11 +7,13 @@
 use std::collections::HashMap;
 
 use crate::error::CoreError;
+use serde::{Deserialize, Serialize};
 
+pub mod file_store;
 pub mod in_memory;
 
 /// Named variable set.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Environment {
     /// Unique identifier; must match `^[a-zA-Z_][a-zA-Z0-9_-]*$`.
     pub name: String,
