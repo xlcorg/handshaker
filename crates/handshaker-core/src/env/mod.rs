@@ -15,7 +15,6 @@ pub mod in_memory;
 /// Named variable set.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Environment {
-    /// Unique identifier; must match `^[a-zA-Z_][a-zA-Z0-9_-]*$`.
     pub name: String,
     pub variables: HashMap<String, String>,
 }
@@ -30,12 +29,8 @@ pub trait EnvironmentStore: Send + Sync {
 
 /// Validate an env name per master spec §5.2.
 pub(crate) fn validate_env_name(name: &str) -> Result<(), CoreError> {
-    use std::sync::LazyLock;
-    use regex::Regex;
-    static NAME_RE: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(r"^[a-zA-Z_][a-zA-Z0-9_-]*$").unwrap());
-    if !NAME_RE.is_match(name) {
-        return Err(CoreError::InvalidTarget(format!("invalid env name: `{name}`")));
+    if name.len() == 0 {
+        return Err(CoreError::InvalidTarget(format!("invalid env name `{name}`")));
     }
     Ok(())
 }

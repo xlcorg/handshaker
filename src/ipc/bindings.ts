@@ -13,51 +13,51 @@ export const commands = {
 async appVersion() : Promise<AppVersion> {
     return await TAURI_INVOKE("app_version");
 },
-async grpcConnect(input: ConnectInput) : Promise<Result<ConnectOutcome, IpcError>> {
+/**
+ * Cache-first contract describe. On a cache hit, returns the cached catalog
+ * WITHOUT opening a channel (auto-reflect-on-blur fires often). On a miss,
+ * `activate()` reflects + populates the cache, then the connection is dropped.
+ */
+async grpcDescribe(target: GrpcTargetIpc) : Promise<Result<ServiceCatalogIpc, IpcError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("grpc_connect", { input }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async grpcDisconnect() : Promise<Result<null, IpcError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("grpc_disconnect") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async grpcRefreshContract() : Promise<Result<ServiceCatalogIpc, IpcError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("grpc_refresh_contract") };
+    return { status: "ok", data: await TAURI_INVOKE("grpc_describe", { target }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
 },
 /**
- * Send unary RPC through the active connection.
+ * Manual refresh: invalidate the cache entry then re-reflect.
+ */
+async grpcRefreshContract(target: GrpcTargetIpc) : Promise<Result<ServiceCatalogIpc, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("grpc_refresh_contract", { target }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Build a JSON skeleton from the cached pool. On a cache miss, activate first.
+ */
+async grpcBuildRequestSkeleton(target: GrpcTargetIpc, service: string, method: string) : Promise<Result<string, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("grpc_build_request_skeleton", { target, service, method }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * One-shot unary invoke: activate (channel required) → invoke → drop.
  * 
- * `Result<InvokeOutcomeIpc, IpcError>` — non-OK gRPC status arrives in
- * `InvokeOutcomeIpc.status_code`, NOT as `Err`. Err is only for client-side
- * failures (NotConnected, transport, encode/decode).
+ * Non-OK gRPC status arrives in `InvokeOutcomeIpc.status_code`, NOT as `Err`.
+ * `Err` is only for client-side failures (transport / encode / decode).
+ * The descriptor pool is reused from the `ContractCache` when present; only the channel is opened fresh per call.
  */
-async grpcInvokeUnary(request: InvokeRequest) : Promise<Result<InvokeOutcomeIpc, IpcError>> {
+async grpcInvokeOneshot(target: GrpcTargetIpc, request: InvokeRequest) : Promise<Result<InvokeOutcomeIpc, IpcError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("grpc_invoke_unary", { request }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Build a JSON skeleton for the request body of the given method.
- */
-async grpcBuildRequestSkeleton(service: string, method: string) : Promise<Result<string, IpcError>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("grpc_build_request_skeleton", { service, method }) };
+    return { status: "ok", data: await TAURI_INVOKE("grpc_invoke_oneshot", { target, request }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -213,10 +213,8 @@ async authSetForEnv(collectionId: string, itemId: string | null, envName: string
 
 
 export const events = __makeEvents__<{
-connectionStateChanged: ConnectionStateChanged,
 contractUpdated: ContractUpdated
 }>({
-connectionStateChanged: "connection-state-changed",
 contractUpdated: "contract-updated"
 })
 
@@ -233,14 +231,8 @@ export type CollectionIpc = { id: string; name: string; items: ItemIpc[]; variab
  * Lightweight list entry (id + name only) for `collection_list`.
  */
 export type CollectionMetaIpc = { id: string; name: string }
-export type ConnectInput = { address: string; tls: boolean; skip_verify: boolean }
-export type ConnectOutcome = { target: TargetSummary; catalog: ServiceCatalogIpc }
 /**
- * Emitted on connect / disconnect.
- */
-export type ConnectionStateChanged = { connected: boolean; target: TargetSummary | null }
-/**
- * Emitted whenever the active connection's contract has been (re)built.
+ * Emitted whenever a target's contract has been (re)built (describe / refresh).
  */
 export type ContractUpdated = { 
 /**
@@ -249,6 +241,7 @@ export type ContractUpdated = {
 target_key: string }
 export type EnvironmentIpc = { name: string; variables: Partial<{ [key in string]: string }> }
 export type FolderIpc = { id: string; name: string; items: ItemIpc[]; auth_by_env: AuthByEnvIpc }
+export type GrpcTargetIpc = { address: string; tls: boolean; skip_verify: boolean }
 export type InvokeOutcomeIpc = { status_code: number; status_message: string; response_json: string | null; trailing_metadata: Partial<{ [key in string]: string }>; 
 /**
  * Elapsed time in milliseconds. Capped at u32::MAX (~49 days) for
@@ -268,7 +261,6 @@ export type SavedAuthConfigIpc = { kind: "none" } | { kind: "env_var"; env_var: 
 export type SavedRequestIpc = { id: string; name: string; address_template: string; service: string; method: string; body_template: string; metadata: Partial<{ [key in string]: string }>; auth_by_env: AuthByEnvIpc; tls_override: boolean | null }
 export type ServiceCatalogIpc = { services: ServiceEntryIpc[] }
 export type ServiceEntryIpc = { full_name: string; methods: MethodEntryIpc[] }
-export type TargetSummary = { address: string; tls: boolean; skip_verify: boolean }
 
 /** tauri-specta globals **/
 

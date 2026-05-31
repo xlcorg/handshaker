@@ -18,9 +18,7 @@ const SCENARIOS = [
   { id: "sending",    label: "Sending" },
   { id: "success",    label: "OK" },
   { id: "error",      label: "Error" },
-  { id: "streaming",  label: "Stream" },
   { id: "browse",     label: "Browse" },
-  { id: "newServer",  label: "New server" },
   { id: "env",        label: "Env" },
   { id: "settings",   label: "Settings" },
 ];
@@ -32,21 +30,77 @@ function App() {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const D = window.HS_DATA;
 
-  const [scenario, setScenario] = useS("connected");
   const [query, setQuery] = useS("");
-  const [selected, setSelected] = useS(DEFAULT_SEL);
-  const [host, setHost] = useS(() => D.findServer(DEFAULT_SEL.serverId)?.host || "localhost:5002");
-  const [tls, setTls] = useS(true);
 
+  // ── request tabs ── every open request is a tab with its own state
+  const mkTab = (init = {}) => ({
+    id: Math.random().toString(36).slice(2, 9),
+    selected: init.selected ?? null,
+    host: init.host ?? "",
+    tls: init.tls ?? true,
+    scenario: init.scenario ?? "connected",
+    requestTab: "body",
+    responseTab: "body",
+    streamFrames: [],
+    browseServerId: init.browseServerId ?? null,
+    dirty: false,
+  });
+
+  const [tabs, setTabs] = useS(() => [mkTab({
+    selected: DEFAULT_SEL,
+    host: D.findServer(DEFAULT_SEL.serverId)?.host || "localhost:5002",
+    scenario: "connected",
+  })]);
+  const [activeId, setActiveId] = useS(null);
+  const active = tabs.find((x) => x.id === activeId) || tabs[0];
+  const aid = active.id;
+
+  const patchTab = (id, p) =>
+    setTabs((ts) => ts.map((x) => (x.id === id ? { ...x, ...(typeof p === "function" ? p(x) : p) } : x)));
+  const patch = (p) => patchTab(aid, p);
+
+  // global UI (shared across tabs)
   const [env, setEnv] = useS(D.environments[0]);
   const [envOpen, setEnvOpen] = useS(false);
   const [envModalOpen, setEnvModalOpen] = useS(false);
   const [settingsOpen, setSettingsOpen] = useS(false);
-  const [browseServerId, setBrowseServerId] = useS(DEFAULT_SEL.serverId);
+  const [openCollectionId, setOpenCollectionId] = useS(null);
 
-  const [requestTab, setRequestTab] = useS("body");
-  const [responseTab, setResponseTab] = useS("body");
-  const [streamFrames, setStreamFrames] = useS([]);
+  // per-tab field shims — the rest of the component reads/writes the active tab
+  const selected = active.selected;
+  const setSelected = (v) => patch((p) => ({ selected: typeof v === "function" ? v(p.selected) : v }));
+  const host = active.host;
+  const setHost = (v) => patch((p) => ({ host: typeof v === "function" ? v(p.host) : v, dirty: true }));
+  const tls = active.tls;
+  const setTls = (v) => patch((p) => ({ tls: typeof v === "function" ? v(p.tls) : v, dirty: true }));
+  const scenario = active.scenario;
+  const setScenario = (v) => patch((p) => ({ scenario: typeof v === "function" ? v(p.scenario) : v }));
+  const requestTab = active.requestTab;
+  const setRequestTab = (v) => patch((p) => ({ requestTab: typeof v === "function" ? v(p.requestTab) : v }));
+  const responseTab = active.responseTab;
+  const setResponseTab = (v) => patch((p) => ({ responseTab: typeof v === "function" ? v(p.responseTab) : v }));
+  const streamFrames = active.streamFrames;
+  const setStreamFrames = (v) => patch((p) => ({ streamFrames: typeof v === "function" ? v(p.streamFrames) : v }));
+  const browseServerId = active.browseServerId || DEFAULT_SEL.serverId;
+  const setBrowseServerId = (v) => patch((p) => ({ browseServerId: typeof v === "function" ? v(p.browseServerId) : v }));
+
+  // open a brand-new request in its own tab
+  const newTab = () => {
+    const tab = mkTab({ scenario: "newServer", host: "", tls: true, selected: null });
+    setTabs((ts) => [...ts, tab]);
+    setActiveId(tab.id);
+  };
+  const closeTab = (id) => {
+    const idx = tabs.findIndex((x) => x.id === id);
+    if (tabs.length === 1) { const nt = mkTab({ scenario: "newServer" }); setTabs([nt]); setActiveId(nt.id); return; }
+    const next = tabs.filter((x) => x.id !== id);
+    setTabs(next);
+    if (id === aid) setActiveId((next[idx] || next[idx - 1] || next[0]).id);
+  };
+
+  // closing a tab with unsaved edits asks first
+  const [closing, setClosing] = useS(null);
+  const requestClose = (tab) => { if (tab.dirty) setClosing(tab); else closeTab(tab.id); };
 
   // derived
   const activeServer = D.findServer(selected?.serverId) || D.servers[0];
@@ -54,12 +108,16 @@ function App() {
   const selKind = selDef?.kind;
   const isStreaming = !!(selDef && activeServer?.proto !== "http" && selKind && selKind !== "unary");
 
-  // pick a method (from tree or picker): switch active host + connect
+  // pick a method (from tree or picker): update the active tab
   const selectMethod = (sel) => {
     const srv = D.findServer(sel.serverId);
-    setSelected({ serverId: sel.serverId, svc: sel.svc, mth: sel.mth, savedName: sel.savedName });
-    if (srv) { setHost(srv.host); setTls(srv.tls !== false); }
-    setScenario((sc) => (sc === "request" ? "request" : "connected"));
+    patch((p) => ({
+      selected: { serverId: sel.serverId, svc: sel.svc, mth: sel.mth, savedName: sel.savedName },
+      host: srv ? srv.host : p.host,
+      tls: srv ? srv.tls !== false : p.tls,
+      scenario: p.scenario === "request" ? "request" : "connected",
+      dirty: false,
+    }));
   };
 
   // cursor tracking for dotted bg
@@ -75,57 +133,47 @@ function App() {
     return () => el.removeEventListener("mousemove", move);
   }, []);
 
-  // scenario presets
-  useE(() => {
-    const offModals = () => { setEnvModalOpen(false); setSettingsOpen(false); };
-    switch (scenario) {
-      case "idle":
-      case "connecting":
-        offModals(); break;
-      case "connected":
-        offModals();
-        if (!selected) setSelected(DEFAULT_SEL);
-        setRequestTab("body"); setResponseTab("body"); break;
-      case "request":
-        offModals(); setRequestTab("body"); break;
-      case "sending":
-      case "success":
-        offModals(); setResponseTab("body");
-        if (!selected) { setSelected(DEFAULT_SEL); setHost(D.findServer("users").host); } break;
-      case "error":
-        offModals();
-        setSelected({ serverId: "users", svc: "UsersService", mth: "Authenticate" });
-        setHost(D.findServer("users").host); setTls(true);
-        setResponseTab("body"); break;
-      case "streaming":
-        offModals();
-        setSelected({ serverId: "orders", svc: "OrderService", mth: "StreamUpdates" });
-        setHost(D.findServer("orders").host); setTls(true);
-        setStreamFrames([
-          { body: '{ "orderId": "ord_8f2a91", "op": "created", "status": "PENDING" }', size: 76, t: 12 },
-          { body: '{ "orderId": "ord_8f2a91", "op": "updated", "status": "PAID" }', size: 71, t: 248 },
-          { body: '{ "orderId": "ord_91b7c0", "op": "created", "status": "PENDING" }', size: 76, t: 519 },
-          { body: '{ "orderId": "ord_8f2a91", "op": "updated", "status": "FULFILLED" }', size: 78, t: 802 },
-        ]);
-        break;
-      case "browse":
-      case "server":
-        offModals(); setBrowseServerId((id) => id || selected?.serverId || "orders"); break;
-      case "newServer":
-        offModals();
-        setSelected(null); setHost(""); setTls(true);
-        setRequestTab("body"); setResponseTab("body"); break;
-      case "env":       setEnvModalOpen(true); break;
-      case "settings":  setSettingsOpen(true); break;
-    }
-  }, [scenario]);
+  // demo state switcher — applies a scenario preset to the ACTIVE tab
+  const STREAM_FRAMES = [
+    { body: '{ "orderId": "ord_8f2a91", "op": "created", "status": "PENDING" }', size: 76, t: 12 },
+    { body: '{ "orderId": "ord_8f2a91", "op": "updated", "status": "PAID" }', size: 71, t: 248 },
+    { body: '{ "orderId": "ord_91b7c0", "op": "created", "status": "PENDING" }', size: 76, t: 519 },
+    { body: '{ "orderId": "ord_8f2a91", "op": "updated", "status": "FULFILLED" }', size: 78, t: 802 },
+  ];
+  const applyScenario = (sc) => {
+    setEnvModalOpen(false); setSettingsOpen(false);
+    if (sc === "env") { setEnvModalOpen(true); return; }
+    if (sc === "settings") { setSettingsOpen(true); return; }
+    patch((p) => {
+      switch (sc) {
+        case "idle":
+        case "connecting":  return { scenario: sc };
+        case "connected":   return { scenario: sc, selected: p.selected || DEFAULT_SEL, requestTab: "body", responseTab: "body", dirty: false };
+        case "request":     return { scenario: sc, requestTab: "body" };
+        case "sending":
+        case "success":     return { scenario: sc, responseTab: "body", selected: p.selected || DEFAULT_SEL, host: p.host || D.findServer("users").host };
+        case "error":       return { scenario: "error", selected: { serverId: "users", svc: "UsersService", mth: "Authenticate" }, host: D.findServer("users").host, tls: true, responseTab: "body", dirty: false };
+        case "streaming":   return { scenario: "streaming", selected: { serverId: "orders", svc: "OrderService", mth: "StreamUpdates" }, host: D.findServer("orders").host, tls: true, streamFrames: STREAM_FRAMES, dirty: false };
+        case "browse":
+        case "server":      return { scenario: sc, browseServerId: p.browseServerId || p.selected?.serverId || "orders" };
+        case "newServer":   return { scenario: "newServer", selected: null, host: "", tls: true, requestTab: "body", responseTab: "body", dirty: false };
+        default:            return { scenario: sc };
+      }
+    });
+  };
 
   const onSend = () => {
     if (!selected) return;
     if (isStreaming) setScenario("streaming");
-    else { setScenario("sending"); setTimeout(() => setScenario("success"), 750); }
+    else { setScenario("sending"); const id = aid; setTimeout(() => patchTab(id, (p) => (p.scenario === "sending" ? { scenario: "success" } : p)), 750); }
   };
   const onCancel = () => setScenario("connected");
+  const onConnect = () => {
+    if (connected) { setScenario("idle"); return; }
+    setScenario("connecting");
+    const id = aid;
+    setTimeout(() => patchTab(id, (p) => (p.scenario === "connecting" ? { scenario: "connected" } : p)), 850);
+  };
 
   // theme + fonts + accent
   useE(() => {
@@ -178,25 +226,23 @@ function App() {
         body, .font-sans { font-family: var(--font-sans-override, 'Inter', ui-sans-serif, system-ui, sans-serif) !important; }
         .font-mono, code, kbd { font-family: var(--font-mono-override, 'JetBrains Mono', ui-monospace, monospace) !important; }
       `}</style>
-      <Titlebar/>
-      <Toolbar
+      <Titlebar
+        t={t} setTweak={setTweak} onOpenSettings={() => setSettingsOpen(true)}
         env={env} envOpen={envOpen} setEnvOpen={setEnvOpen}
         onEnvSelect={(e) => { setEnv(e); setEnvOpen(false); }}
         onNewEnv={() => { setEnvOpen(false); setEnvModalOpen(true); }}
-        onOpenSettings={() => setSettingsOpen(true)}
         envs={D.environments}
-        t={t} setTweak={setTweak}
       />
 
       <div className="flex-1 flex min-h-0">
         {t.sidebar && (
           <Sidebar
-            collection={D.collection}
+            collections={D.collections}
             selected={selected}
             onSelect={selectMethod}
-            onBrowseServer={(id) => { setBrowseServerId(id); setScenario("browse"); }}
-            onOpenServer={(id) => { setBrowseServerId(id); setScenario("server"); }}
-            onAddServer={() => setScenario("newServer")}
+            onOpenCollection={(node) => { setOpenCollectionId(node.id); setScenario("collection"); }}
+            onAddServer={newTab}
+            onAddCollection={() => {}}
             onImport={() => {}}
             onExport={() => {}}
             query={query} setQuery={setQuery}
@@ -204,6 +250,7 @@ function App() {
         )}
         <main ref={mainRef} className="flex-1 flex flex-col min-w-0 min-h-0 relative bg-background">
           {t.dots && (<><div className="dots-base"/><div className="dots-glow"/></>)}
+          <RequestTabs tabs={tabs} activeId={aid} onActivate={setActiveId} onClose={requestClose} onNew={newTab}/>
           <ConnectionBar
             tls={tls} setTls={setTls}
             host={host} setHost={setHost}
@@ -211,7 +258,7 @@ function App() {
             connected={connected}
             connecting={scenario === "connecting"}
             draft={draft}
-            onToggle={() => setScenario(connected ? "idle" : "connecting")}
+            onToggle={onConnect}
             selected={selForPanel}
             services={activeServer ? activeServer.services : []}
             onSelect={(s) => selectMethod({ serverId: activeServer.id, svc: s.svc, mth: s.mth })}
@@ -232,6 +279,13 @@ function App() {
               onClose={() => setScenario("connected")}
               onSelectMethod={(sel) => selectMethod(sel)}
             />
+          ) : scenario === "collection" ? (
+            <CollectionOverview
+              collection={D.collections.find((c) => c.id === openCollectionId)}
+              onClose={() => setScenario("connected")}
+              onSelectMethod={(sel) => selectMethod(sel)}
+              onExport={() => {}}
+            />
           ) : scenario === "browse" ? (
             <ServerBrowser
               server={browseServer}
@@ -246,6 +300,7 @@ function App() {
                 body={body}
                 requestTab={requestTab} setRequestTab={setRequestTab}
                 auth={{ kind: "bearer" }}
+                onEdit={() => patch({ dirty: true })}
               />
               <div className={cn(t.split === "horizontal" ? "h-px w-full" : "w-px h-full", "bg-border flex-none")}/>
               <ResponsePanel
@@ -261,15 +316,22 @@ function App() {
 
       <EnvironmentModal
         open={envModalOpen}
-        onClose={() => { setEnvModalOpen(false); if (scenario === "env") setScenario("connected"); }}
+        onClose={() => setEnvModalOpen(false)}
       />
       <SettingsModal
         open={settingsOpen}
-        onClose={() => { setSettingsOpen(false); if (scenario === "settings") setScenario("connected"); }}
+        onClose={() => setSettingsOpen(false)}
         t={t} setTweak={setTweak}
       />
 
-      <StateBar scenario={scenario} setScenario={setScenario}/>
+      <StateBar current={envModalOpen ? "env" : settingsOpen ? "settings" : scenario} onPick={applyScenario}/>
+
+      <CloseConfirm
+        tab={closing}
+        onCancel={() => setClosing(null)}
+        onDiscard={() => { closeTab(closing.id); setClosing(null); }}
+        onSave={() => { patchTab(closing.id, { dirty: false }); closeTab(closing.id); setClosing(null); }}
+      />
 
       <TweaksPanel>
         <TweakSection label="Theme"/>
@@ -291,33 +353,17 @@ function App() {
 }
 
 /* ─────────── Titlebar ─────────── */
-function Titlebar() {
+function Titlebar({ t, setTweak, onOpenSettings, env, envOpen, setEnvOpen, onEnvSelect, onNewEnv, envs }) {
   return (
-    <div className="tb-drag h-8 flex-none flex items-center px-2.5 gap-2.5 bg-card border-b border-border select-none">
-      <span className="flex items-center gap-1.5 text-[11.5px] font-medium text-muted-foreground">
-        <Icons.Logo size={13} className="text-foreground/85"/>
-      </span>
-      <span className="flex-1"/>
-      <div className="tb-nodrag flex items-center gap-0.5">
-        <Tooltip content="Minimize" side="left"><button className="h-5 w-6 rounded-sm inline-flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground"><Icons.Min size={11}/></button></Tooltip>
-        <Tooltip content="Maximize" side="left"><button className="h-5 w-6 rounded-sm inline-flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground"><Icons.Max size={9}/></button></Tooltip>
-        <Tooltip content="Close" side="left"><button className="h-5 w-6 rounded-sm inline-flex items-center justify-center text-muted-foreground hover:bg-destructive hover:text-destructive-foreground"><Icons.X size={11}/></button></Tooltip>
-      </div>
-    </div>
-  );
-}
-
-/* ─────────── Toolbar ─────────── */
-function Toolbar({ env, envOpen, setEnvOpen, onEnvSelect, onNewEnv, onOpenSettings, envs, t, setTweak }) {
-  return (
-    <div className="h-12 flex-none flex items-center px-3.5 gap-2.5 border-b border-border bg-background/85 backdrop-blur-sm relative z-40">
-      <div className="flex items-center gap-2.5">
-        <div className="flex items-center gap-2">
-          <span className="text-[14px] font-semibold tracking-tight text-foreground">Handshaker</span>
-        </div>
+    <div className="tb-drag h-9 flex-none flex items-center px-2.5 gap-2.5 bg-card border-b border-border select-none relative z-40">
+      <div className="tb-nodrag flex items-center gap-2.5 min-w-0">
+        <span className="flex items-center gap-1.5">
+          <Icons.Logo size={13} className="text-foreground/85"/>
+          <span className="text-[13px] font-semibold tracking-tight text-foreground">Handshaker</span>
+        </span>
         <DropdownMenu open={envOpen} onOpenChange={setEnvOpen}>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-2 h-8 pl-2.5 pr-2 text-xs font-normal">
+            <Button variant="outline" size="sm" className="gap-2 h-6 pl-2 pr-1.5 text-[11.5px] font-normal">
               <span className="h-1.5 w-1.5 rounded-full" style={{background: env.color}}/>
               {env.name}
               <Icons.ChevronDown size={11} className="opacity-50"/>
@@ -338,24 +384,116 @@ function Toolbar({ env, envOpen, setEnvOpen, onEnvSelect, onNewEnv, onOpenSettin
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      <div className="ml-auto flex items-center gap-1.5">
-        <Tooltip content="Toggle sidebar">
-          <Button variant="ghost" size="icon-sm" onClick={()=>setTweak('sidebar', !t.sidebar)}>
-            <Icons.PanelLeft size={14}/>
-          </Button>
+      <span className="flex-1"/>
+      <div className="tb-nodrag flex items-center gap-0.5 mr-1.5">
+        <Tooltip content="Toggle sidebar" side="bottom">
+          <button onClick={()=>setTweak('sidebar', !t.sidebar)} className="h-5 w-6 rounded-sm inline-flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground"><Icons.PanelLeft size={13}/></button>
         </Tooltip>
-        <Tooltip content={t.theme === "dark" ? "Light mode" : "Dark mode"}>
-          <Button variant="ghost" size="icon-sm" onClick={()=>setTweak('theme', t.theme==="dark"?"light":"dark")}>
-            {t.theme === "dark" ? <Icons.Sun size={14}/> : <Icons.Moon size={14}/>}
-          </Button>
+        <Tooltip content={t.theme === "dark" ? "Light mode" : "Dark mode"} side="bottom">
+          <button onClick={()=>setTweak('theme', t.theme==="dark"?"light":"dark")} className="h-5 w-6 rounded-sm inline-flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground">{t.theme === "dark" ? <Icons.Sun size={13}/> : <Icons.Moon size={13}/>}</button>
         </Tooltip>
-        <Tooltip content="Settings">
-          <Button variant="ghost" size="icon-sm" onClick={onOpenSettings}>
-            <Icons.Settings size={14}/>
-          </Button>
+        <Tooltip content="Settings" side="bottom">
+          <button onClick={onOpenSettings} className="h-5 w-6 rounded-sm inline-flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground"><Icons.Settings size={13}/></button>
         </Tooltip>
       </div>
+      <span className="h-3.5 w-px bg-border"/>
+      <div className="tb-nodrag flex items-center gap-0.5 ml-1.5">
+        <Tooltip content="Minimize" side="left"><button className="h-5 w-6 rounded-sm inline-flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground"><Icons.Min size={11}/></button></Tooltip>
+        <Tooltip content="Maximize" side="left"><button className="h-5 w-6 rounded-sm inline-flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground"><Icons.Max size={9}/></button></Tooltip>
+        <Tooltip content="Close" side="left"><button className="h-5 w-6 rounded-sm inline-flex items-center justify-center text-muted-foreground hover:bg-destructive hover:text-destructive-foreground"><Icons.X size={11}/></button></Tooltip>
+      </div>
     </div>
+  );
+}
+
+/* ─────────── Toolbar (folded into Titlebar) ─────────── */
+function RequestTabs({ tabs, activeId, onActivate, onClose, onNew }) {
+  const D = window.HS_DATA;
+  return (
+    <div className="h-9 flex-none flex items-stretch border-b border-border bg-card/50 relative z-30 select-none">
+      <div className="flex items-stretch overflow-x-auto scroll-hide min-w-0">
+        {tabs.map((tab) => {
+          const act = tab.id === activeId;
+          const srv = tab.selected ? D.findServer(tab.selected.serverId) : null;
+          const label = tab.selected
+            ? (tab.selected.savedName || tab.selected.mth)
+            : (tab.host && tab.host.trim() ? tab.host.trim() : "New request");
+          const def = tab.selected ? D.findMethod(tab.selected.serverId, tab.selected.svc, tab.selected.mth) : null;
+          const stream = def && def.kind && def.kind !== "unary";
+          return (
+            <div
+              key={tab.id}
+              role="tab"
+              aria-selected={act}
+              onClick={() => onActivate(tab.id)}
+              onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); onClose(tab); } }}
+              className={cn(
+                "group/tab relative flex items-center gap-2 pl-3 pr-1.5 h-full min-w-[132px] max-w-[210px] border-r border-border cursor-pointer transition-colors",
+                act ? "bg-background" : "bg-transparent hover:bg-accent/40",
+              )}
+            >
+              {act && <span aria-hidden className="absolute left-0 right-0 top-0 h-[1.5px] bg-foreground"/>}
+              {!srv && (
+                <span className="flex-none text-muted-foreground/70"><Icons.Plus size={11}/></span>
+              )}
+              <span className={cn(
+                "truncate flex-1 text-[12px] font-mono",
+                act ? "text-foreground" : "text-muted-foreground group-hover/tab:text-foreground",
+              )}>{label}</span>
+              {stream && <span className="h-1.5 w-1.5 rounded-full bg-stream flex-none"/>}
+              <button
+                onClick={(e) => { e.stopPropagation(); onClose(tab); }}
+                aria-label={tab.dirty ? "Unsaved changes — close tab" : "Close tab"}
+                className={cn(
+                  "group/close h-5 w-5 flex-none inline-flex items-center justify-center rounded transition-[opacity,color,background-color] hover:bg-accent text-muted-foreground/70 hover:text-foreground",
+                  (act || tab.dirty) ? "opacity-100" : "opacity-0 group-hover/tab:opacity-100",
+                )}
+              >
+                {tab.dirty ? (
+                  <>
+                    <span aria-hidden className="h-[7px] w-[7px] rounded-full bg-foreground/80 group-hover/close:hidden"/>
+                    <Icons.X size={11} className="hidden group-hover/close:block"/>
+                  </>
+                ) : (
+                  <Icons.X size={11}/>
+                )}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+      <Tooltip content="New request">
+        <button
+          onClick={onNew}
+          aria-label="New request"
+          className="flex-none h-full w-9 inline-flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent/50 border-r border-border transition-colors"
+        >
+          <Icons.Plus size={14}/>
+        </button>
+      </Tooltip>
+    </div>
+  );
+}
+
+/* ─────────── Close-tab confirmation ─────────── */
+function CloseConfirm({ tab, onCancel, onDiscard, onSave }) {
+  const label = tab && (tab.selected ? (tab.selected.savedName || tab.selected.mth) : (tab.host && tab.host.trim() ? tab.host.trim() : "New request"));
+  return (
+    <Dialog open={!!tab} onOpenChange={(o) => { if (!o) onCancel(); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader className="pb-5">
+          <DialogTitle>Unsaved changes</DialogTitle>
+          <DialogDescription>
+            “{label}” has edits that haven’t been saved yet. Close it anyway?
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="ghost" size="sm" onClick={onCancel}>Cancel</Button>
+          <Button variant="outline" size="sm" onClick={onDiscard} className="text-destructive hover:bg-destructive/10 hover:text-destructive">Discard</Button>
+          <Button size="sm" onClick={onSave}>Save &amp; close</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -479,7 +617,7 @@ function NewRequestHero() {
 }
 
 /* ─────────── State bar ─────────── */
-function StateBar({ scenario, setScenario }) {
+function StateBar({ current, onPick }) {
   return (
     <div
       className="fixed left-1/2 bottom-4 -translate-x-1/2 z-[100] flex items-center gap-0.5 rounded-full border bg-popover/95 backdrop-blur-md p-1 shadow-lg scroll-hide overflow-x-auto"
@@ -489,10 +627,10 @@ function StateBar({ scenario, setScenario }) {
       {SCENARIOS.map(s => (
         <button
           key={s.id}
-          onClick={()=>setScenario(s.id)}
+          onClick={()=>onPick(s.id)}
           className={cn(
             "h-7 px-3 rounded-full text-[11.5px] transition-colors flex-none",
-            scenario===s.id ? "bg-accent text-foreground" : "text-muted-foreground hover:text-foreground",
+            current===s.id ? "bg-accent text-foreground" : "text-muted-foreground hover:text-foreground",
           )}
         >{s.label}</button>
       ))}

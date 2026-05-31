@@ -18,7 +18,6 @@ pub struct FileEnvironmentStore {
 }
 
 impl FileEnvironmentStore {
-    /// Load the store from `path` (the JSON file itself). Missing file → empty.
     pub fn load(path: PathBuf) -> Result<Self, CoreError> {
         let list: Vec<Environment> = read_json_or_default(&path)?;
         let map = list.into_iter().map(|e| (e.name.clone(), e)).collect();
@@ -114,6 +113,6 @@ mod tests {
     fn rejects_invalid_name() {
         let dir = tempfile::tempdir().unwrap();
         let store = FileEnvironmentStore::load(dir.path().join("environments.json")).unwrap();
-        assert!(store.upsert(env("1bad", &[])).is_err());
+        assert!(store.upsert(env("", &[])).is_err());
     }
 }

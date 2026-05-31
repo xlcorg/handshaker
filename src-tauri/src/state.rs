@@ -8,12 +8,10 @@ use handshaker_core::env::file_store::FileEnvironmentStore;
 use handshaker_core::env::in_memory::InMemoryEnvironmentStore;
 use handshaker_core::env::EnvironmentStore;
 use handshaker_core::error::CoreError;
-use handshaker_core::grpc::{ContractCache, GrpcConnection, InMemoryContractCache};
-use tokio::sync::{Mutex, RwLock};
+use handshaker_core::grpc::{ContractCache, InMemoryContractCache};
+use tokio::sync::RwLock;
 
 pub struct AppState {
-    /// At most one active gRPC connection per spec §4.
-    pub connection: Mutex<Option<Arc<GrpcConnection>>>,
     /// Environment store. Cold boot: empty.
     pub env_store: Arc<dyn EnvironmentStore>,
     /// Active environment name; `None` ≡ "No environment" (Postman-style).
@@ -25,10 +23,8 @@ pub struct AppState {
 }
 
 impl Default for AppState {
-    /// In-memory everything. Used by tests.
     fn default() -> Self {
         Self {
-            connection: Mutex::new(None),
             env_store: Arc::new(InMemoryEnvironmentStore::new()),
             active_env: RwLock::new(None),
             collection_store: Arc::new(InMemoryCollectionStore::new()),
@@ -38,13 +34,11 @@ impl Default for AppState {
 }
 
 impl AppState {
-    /// Production constructor: file-backed env + collection stores rooted at `data_dir`.
-    /// The contract cache is always in-memory (session-only).
-    pub fn with_data_dir(data_dir: &Path) -> Result<Self, CoreError> {
-        let env_store = FileEnvironmentStore::load(data_dir.join("environments.json"))?;
+    pub fn load(data_dir: &Path) -> Result<Self, CoreError> {
+        let environment_file = data_dir.join("environments.json");
+        let env_store = FileEnvironmentStore::load(environment_file)?;
         let collection_store = FileCollectionStore::load(data_dir.join("collections"))?;
         Ok(Self {
-            connection: Mutex::new(None),
             env_store: Arc::new(env_store),
             active_env: RwLock::new(None),
             collection_store: Arc::new(collection_store),

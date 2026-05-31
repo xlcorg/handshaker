@@ -10,10 +10,9 @@ use commands::collection::{
     collection_rename_item, collection_restore_item, collection_set_variables, collection_upsert,
 };
 use commands::env::{env_active_get, env_active_set, env_delete, env_list, env_upsert};
-use commands::events::{ConnectionStateChanged, ContractUpdated};
+use commands::events::ContractUpdated;
 use commands::grpc::{
-    grpc_build_request_skeleton, grpc_connect, grpc_disconnect, grpc_invoke_unary,
-    grpc_refresh_contract,
+    grpc_build_request_skeleton, grpc_describe, grpc_invoke_oneshot, grpc_refresh_contract,
 };
 use commands::meta::app_version;
 use commands::vars::vars_resolve;
@@ -28,11 +27,10 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
     Builder::<tauri::Wry>::new()
         .commands(collect_commands![
             app_version,
-            grpc_connect,
-            grpc_disconnect,
+            grpc_describe,
             grpc_refresh_contract,
-            grpc_invoke_unary,
             grpc_build_request_skeleton,
+            grpc_invoke_oneshot,
             env_list,
             env_active_get,
             env_active_set,
@@ -52,7 +50,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             collection_restore_item,
             auth_set_for_env,
         ])
-        .events(collect_events![ContractUpdated, ConnectionStateChanged])
+        .events(collect_events![ContractUpdated])
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -94,7 +92,7 @@ pub fn run() {
                 .path()
                 .app_data_dir()
                 .expect("resolve app_data_dir");
-            let state = AppState::with_data_dir(&data_dir)
+            let state = AppState::load(&data_dir)
                 .expect("initialize AppState from data dir");
             app.manage(state);
             Ok(())

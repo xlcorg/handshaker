@@ -64,7 +64,7 @@ function UnderlineTabs({ value, onChange, items }) {
 }
 
 /* ─────────── Request panel ─────────── */
-function RequestPanel({ selected, body, requestTab, setRequestTab, auth }) {
+function RequestPanel({ selected, body, requestTab, setRequestTab, auth, onEdit }) {
   if (!selected) {
     return (
       <Pane>
@@ -90,14 +90,14 @@ function RequestPanel({ selected, body, requestTab, setRequestTab, auth }) {
           ]}
         />
         <div className="ml-auto flex items-center gap-0.5">
-          <Tooltip content="Beautify"><Button variant="ghost" size="icon-sm"><Icons.Beautify size={14}/></Button></Tooltip>
+          <Tooltip content="Beautify"><Button variant="ghost" size="icon-sm" onClick={onEdit}><Icons.Beautify size={14}/></Button></Tooltip>
           <Tooltip content="Word wrap"><Button variant="ghost" size="icon-sm"><Icons.Wrap size={14}/></Button></Tooltip>
           <Tooltip content="Copy"><Button variant="ghost" size="icon-sm"><Icons.Copy size={14}/></Button></Tooltip>
         </div>
       </PaneHead>
       {requestTab === "body" && <CodeView lines={body}/>}
-      {requestTab === "metadata" && <MetadataView/>}
-      {requestTab === "auth" && <AuthInline auth={auth}/>}
+      {requestTab === "metadata" && <MetadataView onEdit={onEdit}/>}
+      {requestTab === "auth" && <AuthInline auth={auth} onEdit={onEdit}/>}
     </Pane>
   );
 }
@@ -205,7 +205,7 @@ function MethodKindDot({ kind }) {
   return <span className={cn("h-1.5 w-1.5 rounded-full flex-none", colors[kind] || colors.unary)}/>;
 }
 
-function MetadataView() {
+function MetadataView({ onEdit }) {
   const rows = [
     { k: "x-request-id", v: "{{requestId}}", varStr: true },
     { k: "x-tenant", v: "acme-eu" },
@@ -224,7 +224,7 @@ function MetadataView() {
             <div className="px-3 h-8 flex items-center font-mono text-xs">{r.k}</div>
             <div className={cn("px-3 h-8 flex items-center font-mono text-xs", r.varStr && "text-[var(--syntax-num)]")}>{r.v}</div>
             <div className="flex items-center justify-center">
-              <Button variant="ghost" size="icon-sm" className="h-6 w-6 text-muted-foreground hover:text-destructive">
+              <Button variant="ghost" size="icon-sm" onClick={onEdit} className="h-6 w-6 text-muted-foreground hover:text-destructive">
                 <Icons.Trash size={11}/>
               </Button>
             </div>
@@ -233,18 +233,18 @@ function MetadataView() {
         <div className="grid grid-cols-[1fr_1.6fr_28px]">
           <div className="px-3 h-8 flex items-center text-xs text-muted-foreground">Add key…</div>
           <div/>
-          <div className="flex items-center justify-center text-muted-foreground"><Icons.Plus size={11}/></div>
+          <button onClick={onEdit} className="flex items-center justify-center text-muted-foreground hover:text-foreground"><Icons.Plus size={11}/></button>
         </div>
       </div>
     </div>
   );
 }
 
-function AuthInline({ auth }) {
+function AuthInline({ auth, onEdit }) {
   const [tab, setTab] = useStateP(auth?.kind || "bearer");
   return (
     <div className="p-4 grid gap-4 overflow-auto scroll-thin">
-      <ToggleGroup value={tab} onValueChange={setTab} options={[
+      <ToggleGroup value={tab} onValueChange={(v)=>{ setTab(v); onEdit && onEdit(); }} options={[
         { value: "none", label: "None" },
         { value: "bearer", label: "Bearer" },
         { value: "basic", label: "Basic" },

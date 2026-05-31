@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
-import { AlignLeft, Copy, WrapText } from "lucide-react";
+import { AlignLeft, Copy, FilePlus, Save, WrapText } from "lucide-react";
 import { BodyEditor } from "@/features/invoke/BodyEditor";
 import { MetadataView, type MetadataRow } from "@/features/invoke/MetadataView";
 import { AuthInline, type AuthState } from "@/features/invoke/AuthInline";
@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import { UnderlineTabs } from "@/components/ui/underline-tabs";
 import { ipc } from "@/ipc/client";
-import type { InvokeOutcomeIpc } from "@/ipc/bindings";
+import type { GrpcTargetIpc, InvokeOutcomeIpc } from "@/ipc/bindings";
 import type { SelectedMethod } from "@/features/shell/SelectedMethod";
 
 export interface RequestPanelHandle {
@@ -16,10 +16,14 @@ export interface RequestPanelHandle {
 
 export interface RequestPanelProps {
   selected: SelectedMethod;
+  target: GrpcTargetIpc;
   metadata: MetadataRow[];
   onMetadataChange: (next: MetadataRow[]) => void;
   auth: AuthState;
   onAuthChange: (next: AuthState) => void;
+  onDirty: () => void;
+  onRequestSave: () => void;
+  onNewRequest: () => void;
   onSending: (sending: boolean) => void;
   onOutcome: (o: InvokeOutcomeIpc) => void;
   onError: (msg: string) => void;
@@ -28,7 +32,7 @@ export interface RequestPanelProps {
 type RequestTab = "body" | "metadata" | "auth";
 
 export const RequestPanel = forwardRef<RequestPanelHandle, RequestPanelProps>(function RequestPanel(props, ref) {
-  const { selected, metadata, onMetadataChange, auth, onAuthChange, onSending, onOutcome, onError } = props;
+  const { selected, target, metadata, onMetadataChange, auth, onAuthChange, onDirty, onRequestSave, onNewRequest, onSending, onOutcome, onError } = props;
   const [tab, setTab] = useState<RequestTab>("body");
   const [body, setBody] = useState<string>("{}");
 
@@ -36,10 +40,17 @@ export const RequestPanel = forwardRef<RequestPanelHandle, RequestPanelProps>(fu
     let cancelled = false;
     (async () => {
       try {
-        const skeleton = await ipc.grpcBuildRequestSkeleton(selected.service, selected.method);
+        const ar = await ipc.varsResolve(target.address);
+        if (ar.unresolved_vars.length > 0 || ar.cycle_chain) return; // address not resolvable yet — keep current body
+        const skeleton = await ipc.grpcBuildRequestSkeleton(
+          { address: ar.resolved, tls: target.tls, skip_verify: false },
+          selected.service,
+          selected.method,
+        );
         if (cancelled) return;
         setBody(skeleton);
       } catch (e) {
+        if (cancelled) return;
         const tagged = e as { type?: string; message?: string };
         onError(tagged.message ?? tagged.type ?? "failed to load skeleton");
       }
@@ -47,10 +58,10 @@ export const RequestPanel = forwardRef<RequestPanelHandle, RequestPanelProps>(fu
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- onError is a fresh closure each parent render; we only want method changes to retrigger.
-  }, [selected.service, selected.method]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onError is a fresh closure each parent render; we only want method/address changes to retrigger.
+  }, [selected.service, selected.method, target.address, target.tls]);
 
-  useImperativeHandle(ref, () => ({ send }), [body, metadata, auth, selected]);
+  useImperativeHandle(ref, () => ({ send }), [body, metadata, auth, selected, target]);
 
   async function send() {
     try {
@@ -92,14 +103,35 @@ export const RequestPanel = forwardRef<RequestPanelHandle, RequestPanelProps>(fu
       }
     }
 
+    let resolvedAddr: string;
+    try {
+      const ar = await ipc.varsResolve(target.address);
+      if (ar.unresolved_vars.length > 0) {
+        onError(`Address has unresolved vars: ${ar.unresolved_vars.join(", ")}`);
+        return;
+      }
+      if (ar.cycle_chain) {
+        onError(`Address cycle: ${ar.cycle_chain.join(" → ")}`);
+        return;
+      }
+      resolvedAddr = ar.resolved;
+    } catch (e) {
+      const t = e as { type?: string; message?: string };
+      onError(t.message ?? t.type ?? "resolve failed");
+      return;
+    }
+
     onSending(true);
     try {
-      const outcome = await ipc.grpcInvokeUnary({
-        service: selected.service,
-        method: selected.method,
-        request_json: resolved,
-        metadata: meta,
-      });
+      const outcome = await ipc.grpcInvokeOneshot(
+        { address: resolvedAddr, tls: target.tls, skip_verify: false },
+        {
+          service: selected.service,
+          method: selected.method,
+          request_json: resolved,
+          metadata: meta,
+        },
+      );
       onOutcome(outcome);
     } catch (e) {
       const tagged = e as { type?: string; message?: string };
@@ -124,6 +156,16 @@ export const RequestPanel = forwardRef<RequestPanelHandle, RequestPanelProps>(fu
           ]}
         />
         <div className="ml-auto flex items-center gap-0.5">
+          <Tooltip content="Save request">
+            <Button type="button" variant="ghost" size="icon-sm" onClick={onRequestSave}>
+              <Save className="size-3.5" />
+            </Button>
+          </Tooltip>
+          <Tooltip content="New request">
+            <Button type="button" variant="ghost" size="icon-sm" onClick={onNewRequest}>
+              <FilePlus className="size-3.5" />
+            </Button>
+          </Tooltip>
           <Tooltip content="Beautify">
             <Button type="button" variant="ghost" size="icon-sm" onClick={() => {
               try {
@@ -149,11 +191,11 @@ export const RequestPanel = forwardRef<RequestPanelHandle, RequestPanelProps>(fu
       </div>
       {tab === "body" && (
         <div className="flex-1 min-h-0">
-          <BodyEditor value={body} onChange={setBody} />
+          <BodyEditor value={body} onChange={(v) => { onDirty(); setBody(v); }} />
         </div>
       )}
-      {tab === "metadata" && <MetadataView rows={metadata} onChange={onMetadataChange} />}
-      {tab === "auth" && <AuthInline value={auth} onChange={onAuthChange} />}
+      {tab === "metadata" && <MetadataView rows={metadata} onChange={(next) => { onDirty(); onMetadataChange(next); }} />}
+      {tab === "auth" && <AuthInline value={auth} onChange={(next) => { onDirty(); onAuthChange(next); }} />}
     </div>
   );
 });

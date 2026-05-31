@@ -143,6 +143,84 @@ window.HS_DATA = {
     ],
   },
 
+  /* ───────────────── collections-first navigation ─────────────────
+     The sidebar tree. Primary entity = collection. Each collection holds a
+     recursive structure of folders and requests. A *request* references a
+     server method by { serverId, svc, mth }; its target (server address) is
+     resolved from the registry — so one collection freely mixes servers.
+     A request with a `name` is a user-saved request; without one it's a bare
+     pinned method (label = method name). No server level in the tree. */
+  collections: [
+    { type: "collection", id: "checkout", name: "Checkout flow",
+      description: "End-to-end checkout requests across Orders, Inventory and the public gateway. Use the {{merchantId}} and {{baseUrl}} variables; auth is configured per environment below.",
+      variables: [
+        { id: "v1", k: "baseUrl",    v: "orders.api.example.com:443" },
+        { id: "v2", k: "merchantId", v: "mrc_07" },
+        { id: "v3", k: "apiVersion", v: "v1" },
+      ],
+      tls: { enabled: true, skipVerify: false },
+      authByEnv: {
+        prod:    { type: "bearer", bearer: { tokenVar: "PROD_API_TOKEN" } },
+        staging: { type: "basic",  basic: { userVar: "STG_BASIC_USER", passVar: "STG_BASIC_PASS" } },
+        local:   { type: "none" },
+      },
+      children: [
+      { type: "folder", id: "co-smoke", name: "Smoke tests", children: [
+        { type: "request", id: "rq-create", serverId: "orders", svc: "OrderService", mth: "Create", name: "Create test order" },
+        { type: "request", id: "rq-cancel", serverId: "orders", svc: "OrderService", mth: "Cancel", name: "Cancel last order" },
+      ] },
+      { type: "folder", id: "co-reads", name: "Read paths", children: [
+        { type: "request", id: "rq-merch", serverId: "orders", svc: "OrderService", mth: "GetByMerchant" },
+        { type: "folder", id: "co-bycust", name: "By customer", children: [
+          { type: "request", id: "rq-listcust", serverId: "orders", svc: "OrderService", mth: "ListByCustomer" },
+          { type: "request", id: "rq-watch", serverId: "inventory", svc: "StockService", mth: "WatchLevels" },
+        ] },
+      ] },
+      { type: "folder", id: "co-drafts", name: "Drafts", children: [
+        { type: "request", id: "rq-bulk", serverId: "orders", svc: "OrderService", mth: "BulkImport", name: "Bulk import draft" },
+      ] },
+      { type: "request", id: "rq-refund", serverId: "gateway", svc: "", mth: "/v1/charges/{id}/refund", name: "Refund a charge" },
+    ] },
+
+    { type: "collection", id: "identity", name: "Identity & Access",
+      description: "Auth and user-lookup flows. Bearer token in prod and staging; no credentials locally.",
+      variables: [
+        { id: "iv1", k: "userId", v: "usr_4421" },
+      ],
+      tls: { enabled: true, skipVerify: false },
+      authByEnv: {
+        prod:    { type: "bearer", bearer: { tokenVar: "IDP_ACCESS_TOKEN" } },
+        staging: { type: "bearer", bearer: { tokenVar: "IDP_ACCESS_TOKEN_STG" } },
+        local:   { type: "none" },
+      },
+      children: [
+      { type: "request", id: "rq-getuser", serverId: "users", svc: "UsersService", mth: "GetByOrderId" },
+      { type: "request", id: "rq-auth", serverId: "users", svc: "UsersService", mth: "Authenticate", name: "Auth as QA user" },
+    ] },
+
+    { type: "collection", id: "edge", name: "Edge / REST",
+      description: "Public REST gateway endpoints used in edge smoke tests.",
+      variables: [],
+      tls: { enabled: true, skipVerify: true },
+      authByEnv: {
+        prod:    { type: "apikey", apikey: { valueVar: "GATEWAY_API_KEY" } },
+        staging: { type: "apikey", apikey: { valueVar: "GATEWAY_API_KEY_STG" } },
+        local:   { type: "none" },
+      },
+      children: [
+      { type: "request", id: "rq-getorder", serverId: "gateway", svc: "", mth: "/v1/orders/{id}" },
+      { type: "request", id: "rq-charge", serverId: "gateway", svc: "", mth: "/v1/charges" },
+      { type: "request", id: "rq-customer", serverId: "gateway", svc: "", mth: "/v1/customers/{id}" },
+    ] },
+
+    { type: "collection", id: "sandbox", name: "Sandbox",
+      description: "",
+      variables: [],
+      tls: { enabled: true, skipVerify: false },
+      authByEnv: { prod: { type: "none" }, staging: { type: "none" }, local: { type: "none" } },
+      children: [] },
+  ],
+
   environments: [
     { name: "prod",    color: "#6cd697", host: "api.example.com", vars: 5 },
     { name: "staging", color: "#e5c07a", host: "api.staging.example.com", vars: 5 },
