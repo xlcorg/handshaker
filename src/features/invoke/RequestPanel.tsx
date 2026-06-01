@@ -64,6 +64,19 @@ export const RequestPanel = forwardRef<RequestPanelHandle, RequestPanelProps>(fu
   useImperativeHandle(ref, () => ({ send }), [body, metadata, auth, selected, target]);
 
   async function send() {
+    // Flip to the sending state up front so the previous response is cleared
+    // immediately on click (respState becomes "sending"), rather than lingering
+    // through the validation/resolve round-trips below. The outer finally
+    // guarantees we always leave the sending state, even on an early return.
+    onSending(true);
+    try {
+      await runSend();
+    } finally {
+      onSending(false);
+    }
+  }
+
+  async function runSend() {
     try {
       JSON.parse(body);
     } catch (e) {
@@ -154,7 +167,6 @@ export const RequestPanel = forwardRef<RequestPanelHandle, RequestPanelProps>(fu
       return;
     }
 
-    onSending(true);
     try {
       const outcome = await ipc.grpcInvokeOneshot(
         { address: resolvedAddr, tls: target.tls, skip_verify: false },
@@ -169,8 +181,6 @@ export const RequestPanel = forwardRef<RequestPanelHandle, RequestPanelProps>(fu
     } catch (e) {
       const tagged = e as { type?: string; message?: string };
       onError(tagged.message ?? tagged.type ?? "invoke failed");
-    } finally {
-      onSending(false);
     }
   }
 

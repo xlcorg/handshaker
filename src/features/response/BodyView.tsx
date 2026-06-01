@@ -21,6 +21,7 @@ export function BodyView({ json }: BodyViewProps) {
         theme={monacoThemeFor(prefs.theme)}
         value={json}
         options={READ_ONLY_OPTIONS}
+        loading={null}
       />
     </Suspense>
   );
