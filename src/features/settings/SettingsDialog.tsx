@@ -3,19 +3,17 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { AppearancePane } from "./AppearancePane";
 import { EditorPane } from "./EditorPane";
 import { NetworkPane } from "./NetworkPane";
-import { ProtoPane } from "./ProtoPane";
 import { KeyboardPane } from "./KeyboardPane";
 import { DataPane } from "./DataPane";
 import { AboutPane } from "./AboutPane";
 import { cn } from "@/lib/cn";
 
-type Section = "appearance" | "editor" | "network" | "proto" | "keyboard" | "data" | "about";
+type Section = "appearance" | "editor" | "network" | "keyboard" | "data" | "about";
 
 const SECTIONS: Array<[Section, string]> = [
   ["appearance", "Appearance"],
   ["editor", "Editor"],
   ["network", "Network"],
-  ["proto", "Proto sources"],
   ["keyboard", "Keyboard"],
   ["data", "Data & sync"],
   ["about", "About"],
@@ -37,7 +35,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
             Preferences persist locally. Restart not required.
           </p>
         </div>
-        <div className="grid grid-cols-[180px_1fr] h-[500px] max-h-[calc(100vh-220px)]">
+        <div className="grid grid-cols-[180px_1fr] h-[700px] max-h-[calc(100vh-20px)]">
           <div className="border-r border-border p-2 flex flex-col gap-0.5 bg-muted/20 overflow-auto scroll-thin">
             {SECTIONS.map(([k, l]) => (
               <button
@@ -59,7 +57,6 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
             {section === "appearance" && <AppearancePane />}
             {section === "editor" && <EditorPane />}
             {section === "network" && <NetworkPane />}
-            {section === "proto" && <ProtoPane />}
             {section === "keyboard" && <KeyboardPane />}
             {section === "data" && <DataPane />}
             {section === "about" && <AboutPane />}

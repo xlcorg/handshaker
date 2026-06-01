@@ -99,7 +99,7 @@ export function CollectionsSidebar({
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Filter collections & requests"
+            placeholder="Filter"
             className="h-8 pl-7 pr-2 text-xs"
           />
         </div>

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { EnvPill } from "@/features/envs/EnvPill";
 import { Titlebar } from "@/features/shell/Titlebar";
 import { ConnectionBar } from "@/features/shell/ConnectionBar";
@@ -27,11 +28,11 @@ import { useTabs } from "@/features/tabs/useTabs";
 import { RequestTabs } from "@/features/tabs/RequestTabs";
 import { CloseConfirm } from "@/features/tabs/CloseConfirm";
 import { newId } from "@/lib/ids";
-import { usePrefs } from "@/lib/use-prefs";
+import { usePrefs, readPrefs, clampZoom, ZOOM_STEP } from "@/lib/use-prefs";
 import { cn } from "@/lib/cn";
 
 export default function App() {
-  const [prefs] = usePrefs();
+  const [prefs, setPref] = usePrefs();
   const [activeEnv, setActiveEnv] = useState<string | null>(null);
   const [envs, setEnvs] = useState<EnvironmentIpc[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -120,6 +121,43 @@ export default function App() {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // Apply the persisted zoom to the webview on mount and whenever it changes.
+  // Native WebView2 zoom can't be persisted (no change event to capture), so
+  // we drive zoom ourselves and keep the factor in prefs (localStorage).
+  useEffect(() => {
+    if (!isTauri()) return;
+    getCurrentWebview().setZoom(prefs.zoom).catch(console.error);
+  }, [prefs.zoom]);
+
+  // Zoom controls, browser/Postman-style: Ctrl/Cmd +/- steps, Ctrl/Cmd+0 reset,
+  // Ctrl/Cmd+wheel (also trackpad pinch). Reads live prefs via readPrefs() so the
+  // empty-dep listener never closes over a stale factor.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      let next: number | null = null;
+      if (e.key === "=" || e.key === "+") next = clampZoom(readPrefs().zoom + ZOOM_STEP);
+      else if (e.key === "-" || e.key === "_") next = clampZoom(readPrefs().zoom - ZOOM_STEP);
+      else if (e.key === "0") next = 1;
+      if (next === null) return;
+      e.preventDefault();
+      setPref("zoom", next);
+    }
+    function onWheel(e: WheelEvent) {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      e.preventDefault();
+      const dir = e.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP;
+      setPref("zoom", clampZoom(readPrefs().zoom + dir));
+    }
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("wheel", onWheel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // describe: writes to a captured tab id so a mid-fetch tab switch can't clobber another tab.
