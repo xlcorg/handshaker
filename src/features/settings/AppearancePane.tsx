@@ -35,7 +35,7 @@ export function AppearancePane() {
       <SettingsGroup title="Layout">
         <SettingsRow
           title="Sidebar"
-          hint="Show services / history / saved panel."
+          hint="Show the collections sidebar."
           control={<Switch checked={prefs.sidebar} onCheckedChange={(v) => setPref("sidebar", v)} />}
         />
         <SettingsRow
