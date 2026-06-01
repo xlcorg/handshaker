@@ -14,6 +14,8 @@ export interface Prefs {
   fontUi: FontUi;
   fontMono: FontMono;
   dots: boolean;
+  /** Webview zoom factor (1 = 100%). Persisted; applied via webview.setZoom. */
+  zoom: number;
 }
 
 export const PREFS_DEFAULTS: Prefs = {
@@ -24,7 +26,17 @@ export const PREFS_DEFAULTS: Prefs = {
   fontUi: "inter",
   fontMono: "jetbrains",
   dots: true,
+  zoom: 1,
 };
+
+export const ZOOM_MIN = 0.5;
+export const ZOOM_MAX = 3;
+export const ZOOM_STEP = 0.1;
+
+/** Clamp to [ZOOM_MIN, ZOOM_MAX] and snap to one decimal to avoid float drift. */
+export function clampZoom(z: number): number {
+  return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(z * 10) / 10));
+}
 
 const STORAGE_KEY = "handshaker.prefs.v1";
 
