@@ -24,6 +24,7 @@ export function BodyEditor({ value, onChange }: BodyEditorProps) {
         value={value}
         onChange={(v) => onChange(v ?? "")}
         options={EDITOR_OPTIONS}
+        loading={null}
       />
     </Suspense>
   );

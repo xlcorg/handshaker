@@ -2,66 +2,60 @@ import { useEffect, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { EnvPill } from "@/features/envs/EnvPill";
 import { Titlebar } from "@/features/shell/Titlebar";
-import { Toolbar } from "@/features/shell/Toolbar";
-import { Sidebar, type SidebarTab } from "@/features/shell/Sidebar";
 import { ConnectionBar } from "@/features/shell/ConnectionBar";
+import { NewRequestHero, DisconnectedHero } from "@/features/shell/Heroes";
 import { MethodPicker } from "@/features/shell/MethodPicker";
-import { SidebarServicesPane } from "@/features/shell/SidebarServicesPane";
-import { SidebarHistoryPane } from "@/features/shell/SidebarHistoryPane";
-import { SidebarCollectionsPane } from "@/features/shell/SidebarCollectionsPane";
+import { CollectionsSidebar } from "@/features/collections/tree/CollectionsSidebar";
+import { CollectionOverview } from "@/features/collections/overview";
 import { RequestPanel, type RequestPanelHandle } from "@/features/invoke/RequestPanel";
 import { ResponsePanel } from "@/features/response/ResponsePanel";
 import type { RespState } from "@/features/response/RespMeta";
 import { SettingsDialog } from "@/features/settings/SettingsDialog";
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
 import { ipc } from "@/ipc/client";
-import type { EnvironmentIpc, GrpcTargetIpc, InvokeOutcomeIpc, ServiceCatalogIpc } from "@/ipc/bindings";
+import type { EnvironmentIpc, GrpcTargetIpc, SavedRequestIpc } from "@/ipc/bindings";
 import { deriveKind, type SelectedMethod } from "@/features/shell/SelectedMethod";
 import { useCollections } from "@/features/collections/useCollections";
 import { SaveRequestDialog } from "@/features/collections/SaveRequestDialog";
 import {
   draftToSavedRequest,
-  emptyDraft,
+  loadIntoDraft,
   replaceRequestInItems,
   savedRequestItem,
   type DraftRequest,
 } from "@/features/collections/draft";
+import { useTabs } from "@/features/tabs/useTabs";
+import { RequestTabs } from "@/features/tabs/RequestTabs";
+import { CloseConfirm } from "@/features/tabs/CloseConfirm";
 import { newId } from "@/lib/ids";
 import { usePrefs } from "@/lib/use-prefs";
 import { cn } from "@/lib/cn";
 
 export default function App() {
   const [prefs] = usePrefs();
-  const [version, setVersion] = useState("");
-  const [catalog, setCatalog] = useState<ServiceCatalogIpc | null>(null);
-  const [selected, setSelected] = useState<SelectedMethod | null>(null);
   const [activeEnv, setActiveEnv] = useState<string | null>(null);
   const [envs, setEnvs] = useState<EnvironmentIpc[]>([]);
-  const [sideTab, setSideTab] = useState<SidebarTab>("services");
-  const [sideQuery, setSideQuery] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
-
-  const [draft, setDraft] = useState<DraftRequest>(emptyDraft());
-  const [sending, setSending] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [reflectNote, setReflectNote] = useState<string | null>(null);
-  const [outcome, setOutcome] = useState<InvokeOutcomeIpc | null>(null);
-  const [invokeError, setInvokeError] = useState<string | null>(null);
   const [saveOpen, setSaveOpen] = useState(false);
-  const [guard, setGuard] = useState<{ open: boolean; next: () => void }>({ open: false, next: () => {} });
+  const [refreshing, setRefreshing] = useState(false);
+
+  const T = useTabs();
+  const active = T.active;
+  const { draft, selected, catalog, scenario, sending, outcome, invokeError, reflectNote } = active;
+  const isDraft = scenario === "newServer";
+  const isConnecting = scenario === "connecting";
+  const isConnected = scenario !== "newServer" && scenario !== "idle" && scenario !== "connecting";
 
   const collections = useCollections();
   const envSwitcherTriggerRef = useRef<HTMLButtonElement>(null);
   const mainRef = useRef<HTMLElement>(null);
   const requestPanelRef = useRef<RequestPanelHandle>(null);
+  const pendingCloseRef = useRef<string | null>(null);
+  const sendingTabIdRef = useRef<string | null>(null);
+
+  // --- Per-tab setters (write through patchActive on the active tab) -------
+  const setDraft = (u: DraftRequest | ((d: DraftRequest) => DraftRequest)) =>
+    T.patchActive((t) => ({ draft: typeof u === "function" ? u(t.draft) : u }));
+  const setSelected = (s: SelectedMethod | null) => T.patchActive({ selected: s });
 
   const target: GrpcTargetIpc = { address: draft.address, tls: draft.tls, skip_verify: false };
 
@@ -104,10 +98,17 @@ export default function App() {
 
   useEffect(() => {
     if (!isTauri()) return;
-    ipc.appVersion().then(setVersion).catch(console.error);
     ipc.envActiveGet().then(setActiveEnv).catch(console.error);
     ipc.envList().then(setEnvs).catch(console.error);
   }, []);
+
+  // Ensure the open collection is loaded when routing into the overview.
+  const openCollectionId = active.scenario === "collection" ? active.openCollectionId : null;
+  useEffect(() => {
+    if (openCollectionId === null) return;
+    if (collections.byId[openCollectionId]) return;
+    collections.load(openCollectionId).catch(() => undefined);
+  }, [openCollectionId, collections.byId, collections.load]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -121,81 +122,119 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  async function describe(address: string, tls: boolean) {
+  // describe: writes to a captured tab id so a mid-fetch tab switch can't clobber another tab.
+  // Returns true on a reachable catalog, false otherwise (so Connect can pick a scenario).
+  async function describe(id: string, address: string, tls: boolean): Promise<boolean> {
     if (!address.trim()) {
-      setCatalog(null);
-      setReflectNote(null);
-      return;
+      T.patchTab(id, { catalog: null, reflectNote: null });
+      return false;
     }
-    if (!isTauri()) return;
+    if (!isTauri()) return false;
     let resolved: string;
     try {
       const r = await ipc.varsResolve(address);
       if (r.unresolved_vars.length > 0) {
-        setReflectNote(`Unresolved: ${r.unresolved_vars.join(", ")}`);
-        setCatalog(null);
-        return;
+        T.patchTab(id, { reflectNote: `Unresolved: ${r.unresolved_vars.join(", ")}`, catalog: null });
+        return false;
       }
       if (r.cycle_chain) {
-        setReflectNote(`Variable cycle: ${r.cycle_chain.join(" → ")}`);
-        setCatalog(null);
-        return;
+        T.patchTab(id, { reflectNote: `Variable cycle: ${r.cycle_chain.join(" → ")}`, catalog: null });
+        return false;
       }
       resolved = r.resolved;
     } catch {
-      return;
+      return false;
     }
     try {
       const cat = await ipc.grpcDescribe({ address: resolved, tls, skip_verify: false });
-      setCatalog(cat);
-      setReflectNote(null);
+      T.patchTab(id, { catalog: cat, reflectNote: null });
+      return true;
     } catch (e) {
       const t = e as { type?: string; message?: string };
-      setReflectNote(t.message ?? t.type ?? "reflection failed");
-      setCatalog(null);
+      T.patchTab(id, { reflectNote: t.message ?? t.type ?? "reflection failed", catalog: null });
+      return false;
     }
   }
 
-  useEffect(() => {
-    if (!isTauri()) return;
-    const addr = draft.address;
-    const tls = draft.tls;
-    const id = setTimeout(() => {
-      describe(addr, tls).catch(() => undefined);
-    }, 400);
-    return () => clearTimeout(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft.address, draft.tls]);
-
-  useEffect(() => {
-    if (!catalog) {
-      setSelected(null);
+  // Explicit Connect / Disconnect from the address bar.
+  const onConnect = () => {
+    const id = active.id;
+    const addr = active.draft.address.trim();
+    // Connected → disconnect.
+    if (active.scenario !== "idle" && active.scenario !== "newServer") {
+      T.patchTab(id, { scenario: "idle" });
       return;
     }
-    if (selected) {
-      const stillThere = catalog.services.some(
-        (s) => s.full_name === selected.service && s.methods.some((m) => m.name === selected.method),
+    if (!addr) return;
+    T.patchTab(id, { scenario: "connecting", reflectNote: null });
+    describe(id, active.draft.address, active.draft.tls)
+      .then((ok) => {
+        T.patchTab(id, { scenario: ok ? "connected" : "newServer" });
+      })
+      .catch(() => {
+        T.patchTab(id, { scenario: "newServer" });
+      });
+  };
+
+  useEffect(() => {
+    if (!isTauri()) return;
+    // Draft / disconnected / connecting tabs wait for an explicit Connect.
+    if (active.scenario === "newServer" || active.scenario === "idle" || active.scenario === "connecting") return;
+    const id = active.id;
+    const addr = active.draft.address;
+    const tls = active.draft.tls;
+    const timer = setTimeout(() => {
+      describe(id, addr, tls).catch(() => undefined);
+    }, 400);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active.id, active.draft.address, active.draft.tls, active.scenario]);
+
+  // catalog → auto-pick selected (guarded with captured id)
+  useEffect(() => {
+    const id = active.id;
+    const cat = active.catalog;
+    const sel = active.selected;
+    if (!cat) {
+      if (sel) T.patchTab(id, { selected: null });
+      return;
+    }
+    if (sel) {
+      const stillThere = cat.services.some(
+        (s) => s.full_name === sel.service && s.methods.some((m) => m.name === sel.method),
       );
       if (stillThere) return;
     }
-    const svc = catalog.services[0];
+    const svc = cat.services[0];
     const mth = svc?.methods[0];
-    setSelected(svc && mth ? { service: svc.full_name, method: mth.name, kind: deriveKind(mth) } : null);
-    // only re-pick when the catalog changes; reading stale `selected` is safe (the stillThere check falls through to auto-pick).
+    T.patchTab(id, {
+      selected: svc && mth ? { service: svc.full_name, method: mth.name, kind: deriveKind(mth) } : null,
+    });
+    // only re-pick when the active tab's catalog changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [catalog]);
+  }, [active.id, active.catalog]);
 
+  // selected change → reset outcome + sync draft.service/method/kind.
+  // Guarded against tab switches: only fires when the active tab's draft is
+  // out of sync with its selection (i.e. a genuine selection change), so
+  // switching back to a tab does not wipe its completed response.
   useEffect(() => {
-    setOutcome(null);
-    setInvokeError(null);
-    setDraft((d) => ({
-      ...d,
-      service: selected?.service ?? null,
-      method: selected?.method ?? null,
-      kind: selected?.kind ?? null,
+    const id = active.id;
+    const sel = active.selected;
+    const d = active.draft;
+    if ((sel?.service ?? null) === d.service && (sel?.method ?? null) === d.method) return;
+    T.patchTab(id, (t) => ({
+      outcome: null,
+      invokeError: null,
+      draft: {
+        ...t.draft,
+        service: sel?.service ?? null,
+        method: sel?.method ?? null,
+        kind: sel?.kind ?? null,
+      },
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected?.service, selected?.method]);
+  }, [active.id, active.selected?.service, active.selected?.method]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -210,46 +249,62 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sending, selected]);
 
-  const servicesCount = catalog?.services.length ?? 0;
+  // --- Collections sidebar handlers ---------------------------------------
+  function handleSelectRequest(collectionId: string, req: SavedRequestIpc) {
+    T.patchActive({
+      draft: loadIntoDraft(req, { collectionId, itemId: req.id }),
+      selected:
+        req.service && req.method
+          ? { service: req.service, method: req.method, kind: "unary" }
+          : null,
+      scenario: "connected",
+      outcome: null,
+      invokeError: null,
+      reflectNote: null,
+    });
+  }
+
+  async function handleNewCollection() {
+    await collections.createCollection("New collection");
+    await collections.loadAll();
+  }
+
+  async function handleDeleteItem(collectionId: string, itemId: string) {
+    await collections.deleteItem(collectionId, itemId);
+  }
+
+  async function handleRenameItem(collectionId: string, itemId: string, name: string) {
+    await collections.renameItem(collectionId, itemId, name);
+  }
+
+  async function handleDeleteCollection(collectionId: string) {
+    await ipc.collectionDelete(collectionId);
+    await collections.loadAll();
+  }
 
   function handleSend() {
+    sendingTabIdRef.current = active.id;
     requestPanelRef.current?.send().catch((e) => console.error("send failed:", e));
   }
 
   async function handleRefresh() {
     if (!draft.address.trim()) return;
+    const id = active.id;
     setRefreshing(true);
     try {
       const r = await ipc.varsResolve(draft.address);
       if (r.unresolved_vars.length > 0 || r.cycle_chain) {
-        setReflectNote("address has unresolved variables");
+        T.patchTab(id, { reflectNote: "address has unresolved variables" });
         return;
       }
       const cat = await ipc.grpcRefreshContract({ address: r.resolved, tls: draft.tls, skip_verify: false });
-      setCatalog(cat);
-      setReflectNote(null);
+      T.patchTab(id, { catalog: cat, reflectNote: null });
     } catch (e) {
       const t = e as { type?: string; message?: string };
-      setReflectNote(t.message ?? t.type ?? "refresh failed");
+      T.patchTab(id, { reflectNote: t.message ?? t.type ?? "refresh failed" });
     } finally {
       setRefreshing(false);
     }
-  }
-
-  function confirmReplaceIfDirty(next: () => void) {
-    if (draft.dirty) {
-      setGuard({ open: true, next });
-    } else {
-      next();
-    }
-  }
-
-  function newDraft() {
-    confirmReplaceIfDirty(() => {
-      setDraft(emptyDraft(draft.address));
-      setOutcome(null);
-      setInvokeError(null);
-    });
   }
 
   async function doSave(args: { collectionId: string; parentId: string | null; name: string }) {
@@ -265,6 +320,20 @@ export default function App() {
       await collections.addRequest(args.collectionId, args.parentId, savedRequestItem(saved));
       setDraft((d) => ({ ...d, origin: { collectionId: args.collectionId, itemId: id }, dirty: false }));
     }
+    const pending = pendingCloseRef.current;
+    if (pending) {
+      pendingCloseRef.current = null;
+      T.closeTab(pending);
+    }
+  }
+
+  function handleSaveAndClose() {
+    const closing = T.closing;
+    if (!closing) return;
+    T.setActiveId(closing.id);
+    pendingCloseRef.current = closing.id;
+    setSaveOpen(true);
+    T.setClosing(null);
   }
 
   const respState: RespState =
@@ -272,9 +341,7 @@ export default function App() {
 
   return (
     <div className="fixed inset-0 flex flex-col bg-background border border-border rounded-[10px] overflow-hidden">
-      <Titlebar />
-      <Toolbar
-        version={version}
+      <Titlebar
         envSlot={
           <EnvPill
             ref={envSwitcherTriggerRef}
@@ -288,26 +355,19 @@ export default function App() {
       />
       <div className="flex-1 flex min-h-0">
         {prefs.sidebar && (
-          <Sidebar
-            tab={sideTab}
-            onTabChange={setSideTab}
-            query={sideQuery}
-            onQueryChange={setSideQuery}
-            servicesCount={servicesCount}
-            historyCount={0}
-          >
-            {sideTab === "services" && (
-              <SidebarServicesPane
-                connected={catalog != null}
-                catalog={catalog}
-                query={sideQuery}
-                selected={selected}
-                onSelect={(s) => setSelected(s)}
-              />
-            )}
-            {sideTab === "history" && <SidebarHistoryPane />}
-            {sideTab === "saved" && <SidebarCollectionsPane />}
-          </Sidebar>
+          <CollectionsSidebar
+            tree={collections.tree}
+            activeItemId={active.draft.origin?.itemId ?? null}
+            onSelectRequest={handleSelectRequest}
+            onOpenCollection={(id) =>
+              T.patchActive({ scenario: "collection", openCollectionId: id })
+            }
+            onNewRequest={T.newTab}
+            onNewCollection={handleNewCollection}
+            onDeleteItem={handleDeleteItem}
+            onRenameItem={handleRenameItem}
+            onDeleteCollection={handleDeleteCollection}
+          />
         )}
         <main ref={mainRef} className="flex-1 flex flex-col min-w-0 min-h-0 relative bg-background">
           {prefs.dots && (
@@ -316,12 +376,30 @@ export default function App() {
               <div className="dots-glow" />
             </>
           )}
+          <RequestTabs
+            tabs={T.tabs}
+            activeId={T.activeId}
+            onActivate={T.setActiveId}
+            onClose={T.requestClose}
+            onNew={T.newTab}
+          />
           <ConnectionBar
             host={draft.address}
             onHostChange={(next) => setDraft((d) => ({ ...d, address: next }))}
-            onHostCommit={() => describe(draft.address, draft.tls)}
+            onHostCommit={() => describe(active.id, draft.address, draft.tls)}
             tls={draft.tls}
-            onTlsChange={(next) => setDraft((d) => ({ ...d, tls: next }))}
+            onTlsChange={(next) => {
+              const id = active.id;
+              T.patchTab(id, (t) => ({
+                draft: { ...t.draft, tls: next },
+                // Switching TLS on a live connection drops it back to disconnected.
+                ...(isConnected ? { scenario: "idle" as const } : {}),
+              }));
+            }}
+            draft={isDraft}
+            connecting={isConnecting}
+            connected={isConnected}
+            onConnect={onConnect}
             sending={sending}
             selected={selected}
             onSend={handleSend}
@@ -339,46 +417,79 @@ export default function App() {
               ) : undefined
             }
           />
-          <div
-            className={cn(
-              "flex-1 flex min-h-0 min-w-0",
-              prefs.split === "horizontal" ? "flex-col" : "flex-row",
-            )}
-          >
-            {selected ? (
-              <RequestPanel
-                ref={requestPanelRef}
-                selected={selected}
-                target={target}
-                metadata={draft.metadata}
-                onMetadataChange={(next) => setDraft((d) => ({ ...d, metadata: next }))}
-                auth={draft.auth}
-                onAuthChange={(next) => setDraft((d) => ({ ...d, auth: next }))}
-                onDirty={() => setDraft((d) => (d.dirty ? d : { ...d, dirty: true }))}
-                onRequestSave={() => setSaveOpen(true)}
-                onNewRequest={newDraft}
-                onSending={setSending}
-                onOutcome={(o) => {
-                  setOutcome(o);
-                  setInvokeError(null);
-                }}
-                onError={(m) => {
-                  setInvokeError(m);
-                  setOutcome(null);
+          {scenario === "newServer" ? (
+            <NewRequestHero />
+          ) : scenario === "idle" || scenario === "connecting" ? (
+            <DisconnectedHero scenario={scenario} host={active.draft.address} />
+          ) : scenario === "collection" ? (
+            active.openCollectionId && collections.byId[active.openCollectionId] ? (
+              <CollectionOverview
+                collection={collections.byId[active.openCollectionId]}
+                environments={envs}
+                onClose={() =>
+                  T.patchActive({
+                    scenario: active.catalog ? "connected" : "newServer",
+                    openCollectionId: null,
+                  })
+                }
+                onSelectRequest={(req) => handleSelectRequest(active.openCollectionId!, req)}
+                onChanged={() => collections.load(active.openCollectionId!).catch(() => undefined)}
+                onDeleted={async () => {
+                  await collections.loadAll();
+                  T.patchActive({ scenario: "newServer", openCollectionId: null });
                 }}
               />
             ) : (
-              <div className="flex-1 min-w-0 min-h-0 flex items-center justify-center text-xs text-muted-foreground">
-                Select a method to begin
+              <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground">
+                Loading…
               </div>
-            )}
-            <div className={cn(prefs.split === "horizontal" ? "h-px w-full" : "w-px h-full", "bg-border")} />
-            <ResponsePanel state={respState} outcome={outcome} />
-          </div>
-          {invokeError && (
-            <div className="fixed bottom-4 right-4 z-20 max-w-md rounded-md border border-destructive bg-destructive/10 px-3 py-2 text-xs text-destructive shadow-md">
-              {invokeError}
-            </div>
+            )
+          ) : (
+            <>
+              <div
+                className={cn(
+                  "flex-1 flex min-h-0 min-w-0",
+                  prefs.split === "horizontal" ? "flex-col" : "flex-row",
+                )}
+              >
+                {selected ? (
+                  <RequestPanel
+                    ref={requestPanelRef}
+                    selected={selected}
+                    target={target}
+                    metadata={draft.metadata}
+                    onMetadataChange={(next) => setDraft((d) => ({ ...d, metadata: next }))}
+                    auth={draft.auth}
+                    onAuthChange={(next) => setDraft((d) => ({ ...d, auth: next }))}
+                    onDirty={() =>
+                      T.patchActive((t) => (t.draft.dirty ? {} : { draft: { ...t.draft, dirty: true } }))
+                    }
+                    onRequestSave={() => setSaveOpen(true)}
+                    onNewRequest={T.newTab}
+                    onSending={(v) =>
+                      T.patchTab(sendingTabIdRef.current ?? active.id, { sending: v })
+                    }
+                    onOutcome={(o) =>
+                      T.patchTab(sendingTabIdRef.current ?? active.id, { outcome: o, invokeError: null })
+                    }
+                    onError={(m) =>
+                      T.patchTab(sendingTabIdRef.current ?? active.id, { invokeError: m, outcome: null })
+                    }
+                  />
+                ) : (
+                  <div className="flex-1 min-w-0 min-h-0 flex items-center justify-center text-xs text-muted-foreground">
+                    Select a method to begin
+                  </div>
+                )}
+                <div className={cn(prefs.split === "horizontal" ? "h-px w-full" : "w-px h-full", "bg-border")} />
+                <ResponsePanel state={respState} outcome={outcome} />
+              </div>
+              {invokeError && (
+                <div className="fixed bottom-4 right-4 z-20 max-w-md rounded-md border border-destructive bg-destructive/10 px-3 py-2 text-xs text-destructive shadow-md">
+                  {invokeError}
+                </div>
+              )}
+            </>
           )}
         </main>
       </div>
@@ -394,39 +505,15 @@ export default function App() {
         originBound={draft.origin != null}
       />
 
-      <AlertDialog open={guard.open} onOpenChange={(o) => setGuard((g) => ({ ...g, open: o }))}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Unsaved changes</AlertDialogTitle>
-            <AlertDialogDescription>
-              You have unsaved edits in the current request. Save them, discard them, or cancel?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <Button variant="outline" onClick={() => setGuard((g) => ({ ...g, open: false }))}>
-              Cancel
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={() => {
-                const next = guard.next;
-                setGuard({ open: false, next: () => {} });
-                next();
-              }}
-            >
-              Discard
-            </Button>
-            <Button
-              onClick={() => {
-                setGuard({ open: false, next: () => {} });
-                setSaveOpen(true);
-              }}
-            >
-              Save…
-            </Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <CloseConfirm
+        tab={T.closing}
+        onCancel={() => T.setClosing(null)}
+        onDiscard={() => {
+          T.closeTab(T.closing!.id);
+          T.setClosing(null);
+        }}
+        onSave={handleSaveAndClose}
+      />
 
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
     </div>

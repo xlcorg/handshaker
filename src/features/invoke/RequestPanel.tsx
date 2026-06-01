@@ -64,6 +64,19 @@ export const RequestPanel = forwardRef<RequestPanelHandle, RequestPanelProps>(fu
   useImperativeHandle(ref, () => ({ send }), [body, metadata, auth, selected, target]);
 
   async function send() {
+    // Flip to the sending state up front so the previous response is cleared
+    // immediately on click (respState becomes "sending"), rather than lingering
+    // through the validation/resolve round-trips below. The outer finally
+    // guarantees we always leave the sending state, even on an early return.
+    onSending(true);
+    try {
+      await runSend();
+    } finally {
+      onSending(false);
+    }
+  }
+
+  async function runSend() {
     try {
       JSON.parse(body);
     } catch (e) {
@@ -90,16 +103,49 @@ export const RequestPanel = forwardRef<RequestPanelHandle, RequestPanelProps>(fu
 
     const meta: Record<string, string> = {};
     for (const r of metadata) if (r.k.trim()) meta[r.k.trim()] = r.v;
-    if (auth.kind === "bearer" && auth.bearerToken.trim()) {
+    if (auth.kind === "bearer" && auth.bearerTokenVar.trim()) {
       try {
-        const r = await ipc.varsResolve(auth.bearerToken);
+        const r = await ipc.varsResolve(`{{${auth.bearerTokenVar.trim()}}}`);
         if (r.unresolved_vars.length > 0) {
-          onError(`Bearer token has unresolved vars: ${r.unresolved_vars.join(", ")}`);
+          onError(`Bearer token var "${auth.bearerTokenVar}" is not defined in the active environment`);
+          return;
+        }
+        if (r.cycle_chain) {
+          onError(`Bearer token var cycle: ${r.cycle_chain.join(" → ")}`);
+          return;
+        }
+        if (!r.resolved.trim()) {
+          onError(`Bearer token variable "${auth.bearerTokenVar.trim()}" resolved to an empty value`);
           return;
         }
         meta["authorization"] = `Bearer ${r.resolved}`;
-      } catch {
-        meta["authorization"] = `Bearer ${auth.bearerToken}`;
+      } catch (e) {
+        const tagged = e as { type?: string; message?: string };
+        onError(tagged.message ?? tagged.type ?? "bearer token resolve failed");
+        return;
+      }
+    }
+    if (auth.kind === "apikey" && auth.apiValueVar.trim()) {
+      try {
+        const r = await ipc.varsResolve(`{{${auth.apiValueVar.trim()}}}`);
+        if (r.unresolved_vars.length > 0) {
+          onError(`API key var "${auth.apiValueVar}" is not defined in the active environment`);
+          return;
+        }
+        if (r.cycle_chain) {
+          onError(`API key var cycle: ${r.cycle_chain.join(" → ")}`);
+          return;
+        }
+        if (!r.resolved.trim()) {
+          onError(`API key variable "${auth.apiValueVar.trim()}" resolved to an empty value`);
+          return;
+        }
+        const headerKey = auth.apiHeader.trim() || "x-api-key";
+        meta[headerKey] = r.resolved;
+      } catch (e) {
+        const tagged = e as { type?: string; message?: string };
+        onError(tagged.message ?? tagged.type ?? "api key resolve failed");
+        return;
       }
     }
 
@@ -121,7 +167,6 @@ export const RequestPanel = forwardRef<RequestPanelHandle, RequestPanelProps>(fu
       return;
     }
 
-    onSending(true);
     try {
       const outcome = await ipc.grpcInvokeOneshot(
         { address: resolvedAddr, tls: target.tls, skip_verify: false },
@@ -136,8 +181,6 @@ export const RequestPanel = forwardRef<RequestPanelHandle, RequestPanelProps>(fu
     } catch (e) {
       const tagged = e as { type?: string; message?: string };
       onError(tagged.message ?? tagged.type ?? "invoke failed");
-    } finally {
-      onSending(false);
     }
   }
 
