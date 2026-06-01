@@ -353,13 +353,6 @@ export default function App() {
         }
         onOpenSettings={() => setSettingsOpen(true)}
       />
-      <RequestTabs
-        tabs={T.tabs}
-        activeId={T.activeId}
-        onActivate={T.setActiveId}
-        onClose={T.requestClose}
-        onNew={T.newTab}
-      />
       <div className="flex-1 flex min-h-0">
         {prefs.sidebar && (
           <CollectionsSidebar
@@ -383,6 +376,13 @@ export default function App() {
               <div className="dots-glow" />
             </>
           )}
+          <RequestTabs
+            tabs={T.tabs}
+            activeId={T.activeId}
+            onActivate={T.setActiveId}
+            onClose={T.requestClose}
+            onNew={T.newTab}
+          />
           <ConnectionBar
             host={draft.address}
             onHostChange={(next) => setDraft((d) => ({ ...d, address: next }))}
