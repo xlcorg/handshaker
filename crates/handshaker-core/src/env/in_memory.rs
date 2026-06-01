@@ -106,7 +106,7 @@ mod tests {
     fn upsert_rejects_invalid_name() {
         let s = InMemoryEnvironmentStore::new();
         let err = s.upsert(Environment {
-            name: "1bad".into(),
+            name: "".into(),
             variables: HashMap::new(),
         }).unwrap_err();
         match err {

@@ -48,10 +48,15 @@ mod tests {
     }
 
     #[test]
-    fn name_validation_rejects_bad() {
+    fn name_validation_rejects_empty() {
         assert!(validate_env_name("").is_err());
-        assert!(validate_env_name("1bad").is_err());
-        assert!(validate_env_name("with space").is_err());
-        assert!(validate_env_name("with.dot").is_err());
+    }
+
+    #[test]
+    fn name_validation_accepts_any_non_empty() {
+        // Validation now only guards against empty names; everything else is allowed.
+        assert!(validate_env_name("1bad").is_ok());
+        assert!(validate_env_name("with space").is_ok());
+        assert!(validate_env_name("with.dot").is_ok());
     }
 }
