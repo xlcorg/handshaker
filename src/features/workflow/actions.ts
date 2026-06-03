@@ -60,12 +60,12 @@ export async function sendStep(step: {
 }
 
 function errorToMessage(e: unknown): string {
-  if (e && typeof e === "object") {
-    if ("message" in e && typeof (e as { message: unknown }).message === "string") {
-      return (e as { message: string }).message;
-    }
-    if ("data" in e) return String((e as { data: unknown }).data);
-  }
   if (e instanceof Error) return e.message;
+  if (e && typeof e === "object") {
+    const obj = e as Record<string, unknown>;
+    if (typeof obj.message === "string") return obj.message;
+    if (typeof obj.data === "string") return obj.data;
+    if (typeof obj.type === "string") return obj.type;
+  }
   return String(e);
 }

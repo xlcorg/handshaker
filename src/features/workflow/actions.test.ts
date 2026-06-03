@@ -80,6 +80,20 @@ describe("sendStep", () => {
     if (res.kind === "error") expect(res.message).toContain("refused");
   });
 
+  it("falls back to the IpcError type for messageless variants", async () => {
+    vi.mocked(ipc.grpcInvokeOneshot).mockRejectedValue({ type: "NotConnected" });
+    const res = await sendStep({
+      address: "h:443",
+      tls: true,
+      service: "S",
+      method: "M",
+      requestJson: "{}",
+      metadata: [],
+    });
+    expect(res.kind).toBe("error");
+    if (res.kind === "error") expect(res.message).toBe("NotConnected");
+  });
+
   it("omits disabled and empty-key metadata rows", async () => {
     vi.mocked(ipc.grpcInvokeOneshot).mockResolvedValue({
       status_code: 0,
