@@ -55,6 +55,10 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       setLoading(true);
       try {
         await describeService(s);
+      } catch {
+        // Reflection failed — leave the method stage (empty list); the palette
+        // has no error surface yet (tracked as a follow-up). Swallow so the
+        // user-initiated action doesn't become an unhandled rejection.
       } finally {
         setLoading(false);
       }
