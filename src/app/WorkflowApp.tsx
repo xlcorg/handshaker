@@ -1,25 +1,29 @@
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { useEffect, useState } from "react";
+import { Kbd } from "@/components/ui/kbd";
 import { FocusView } from "@/features/workflow/FocusView";
-import { workflowStore, useActiveWorkflow } from "@/features/workflow/store";
-import { addStep } from "@/features/workflow/reducers";
-import { createStepFromMethod } from "@/features/workflow/actions";
+import { useActiveWorkflow } from "@/features/workflow/store";
+import { Sidebar } from "@/features/catalog/Sidebar";
+import { CommandPalette } from "@/features/catalog/CommandPalette";
+import { ServicePanel } from "@/features/catalog/ServicePanel";
+import type { CatalogService } from "@/features/catalog/model";
 
 export function WorkflowApp() {
   const wf = useActiveWorkflow();
-  const [open, setOpen] = useState(wf.steps.length === 0);
-  const [address, setAddress] = useState("");
-  const [service, setService] = useState("");
-  const [method, setMethod] = useState("");
-  const [tls, setTls] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [panelServiceId, setPanelServiceId] = useState<string | null>(null);
 
-  const create = async () => {
-    if (!address || !service || !method) return;
-    const step = await createStepFromMethod({ address, tls }, service, method);
-    workflowStore.update((w) => addStep(w, step));
-    setOpen(false);
-  };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
+        e.preventDefault();
+        setPaletteOpen((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const openService = (svc: CatalogService) => setPanelServiceId(svc.id);
 
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
@@ -27,25 +31,27 @@ export function WorkflowApp() {
         <span className="font-semibold">⚡ Handshaker</span>
         <span className="text-muted-foreground">{wf.name}</span>
         <div className="flex-1" />
-        <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
-          + New call
-        </Button>
+        <button
+          type="button"
+          onClick={() => setPaletteOpen(true)}
+          className="flex items-center gap-1 rounded border border-border px-2 py-0.5 text-xs text-muted-foreground hover:bg-accent"
+        >
+          <Kbd>⌘K</Kbd>
+        </button>
       </div>
-      {open ? (
-        <div className="flex items-center gap-2 border-b border-border bg-muted/30 p-3">
-          <Input placeholder="host:port" value={address} onChange={(e) => setAddress(e.target.value)} className="w-64 font-mono" />
-          <Input placeholder="pkg.Service" value={service} onChange={(e) => setService(e.target.value)} className="w-56 font-mono" />
-          <Input placeholder="Method" value={method} onChange={(e) => setMethod(e.target.value)} className="w-44 font-mono" />
-          <label className="flex items-center gap-1.5 text-xs text-muted-foreground select-none">
-            <input type="checkbox" checked={tls} onChange={(e) => setTls(e.target.checked)} />
-            TLS
-          </label>
-          <Button size="sm" onClick={create}>Create</Button>
+
+      <div className="flex min-h-0 flex-1">
+        <Sidebar onOpenService={openService} onOpenPalette={() => setPaletteOpen(true)} />
+        <div className="min-h-0 flex-1">
+          {panelServiceId ? (
+            <ServicePanel serviceId={panelServiceId} onClose={() => setPanelServiceId(null)} />
+          ) : (
+            <FocusView />
+          )}
         </div>
-      ) : null}
-      <div className="min-h-0 flex-1">
-        <FocusView />
       </div>
+
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </div>
   );
 }
