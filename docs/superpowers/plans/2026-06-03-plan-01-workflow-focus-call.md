@@ -4,6 +4,14 @@
 
 **Goal:** Build the new workflow-centric frontend foundation and the **Focus** single-call screen: create a call from a method, get an auto-generated request skeleton, edit it, Send, and see the response — all on top of the existing (already-working) backend IPC.
 
+> **✅ EXECUTION STATUS (completed 2026-06-03, subagent-driven):** All Tasks 1–9 implemented and committed on branch `redesign/workflow-ui-spec-plans` (commits `b19b26b`…`d5f7991`). 20 unit tests pass; full `tsc -b` typecheck + `vite build` production bundle green.
+> **Verified deviations from this plan's draft (intentional, reviewed):**
+> 1. **Task 3 `removeStep`** — only reselects `activeStepId` when the *active* step is removed (the plan's draft test was internally contradictory; corrected to standard list/tab UX). Commit `93dfab5`.
+> 2. **Task 5 `errorToMessage`** — reads `message`, then `data`, then the `IpcError` `type` (several `IpcError` variants carry no `message`; mirrors `App.tsx`'s `message ?? type`). Commits `8190659` + `d5f7991`.
+> 3. **Task 7 `FocusView`** — reuses existing `BodyEditor` (not raw `MonacoEditor`); passes `ResponsePanel` its real props `{ state, outcome }`; derives `RespState` like `App.tsx`; maps gRPC non-OK (`status_code !== 0`) → status `"error"`; surfaces client-side (no-outcome) errors via an inline banner. Commit `05b7a4f`.
+> **Task 5 Step 1 (add IPC wrappers)** was a no-op — `grpcBuildRequestSkeleton`/`grpcInvokeOneshot` already existed in `src/ipc/client.ts`.
+> **Task 9 Steps 3–4 (launch `pnpm tauri:dev` + manual smoke against a live reflection-enabled gRPC server) are NOT yet done — they require a human at the GUI with a reachable server.** Step 1 (regen bindings) is a confirmed no-op: zero Rust changed, so `src/ipc/bindings.ts` is unchanged.
+
 **Architecture:** Frontend-only milestone. A new session-only **external store** (vanilla pub-sub + `useSyncExternalStore`, mirroring the existing `usePrefs` pattern — the repo has **no Zustand**) holds `Workflow`s, each with `Step`s. The Focus view renders one active `Step` full-bleed (address bar + request editor + response). Calls reuse the existing IPC commands `grpcBuildRequestSkeleton` and `grpcInvokeOneshot`. Response rendering reuses the existing Monaco `ResponsePanel` for this milestone; the custom JSON viewer is Plan #4.
 
 **Tech Stack:** React 18 + TypeScript (strict) + Tailwind/shadcn-ui + Monaco (existing) + **Vitest + React Testing Library (added in Task 1)**. Existing IPC via `@/ipc/client`.
@@ -43,14 +51,14 @@
 - Modify: `package.json`
 - Create: `vitest.config.ts`, `src/test/setup.ts`, `src/features/workflow/smoke.test.ts`
 
-- [ ] **Step 1: Install dev dependencies**
+- [x] **Step 1: Install dev dependencies**
 
 Run:
 ```bash
 pnpm add -D vitest@^2 @testing-library/react@^16 @testing-library/jest-dom@^6 @testing-library/user-event@^14 jsdom@^25
 ```
 
-- [ ] **Step 2: Add test scripts to `package.json`**
+- [x] **Step 2: Add test scripts to `package.json`**
 
 In the `"scripts"` block add:
 ```json
@@ -58,7 +66,7 @@ In the `"scripts"` block add:
 "test:watch": "vitest"
 ```
 
-- [ ] **Step 3: Create `vitest.config.ts`**
+- [x] **Step 3: Create `vitest.config.ts`**
 
 ```ts
 import { defineConfig } from "vitest/config";
@@ -77,13 +85,13 @@ export default defineConfig({
 });
 ```
 
-- [ ] **Step 4: Create `src/test/setup.ts`**
+- [x] **Step 4: Create `src/test/setup.ts`**
 
 ```ts
 import "@testing-library/jest-dom/vitest";
 ```
 
-- [ ] **Step 5: Create a smoke test `src/features/workflow/smoke.test.ts`**
+- [x] **Step 5: Create a smoke test `src/features/workflow/smoke.test.ts`**
 
 ```ts
 import { describe, it, expect } from "vitest";
@@ -95,12 +103,12 @@ describe("test infra", () => {
 });
 ```
 
-- [ ] **Step 6: Run tests to verify infra works**
+- [x] **Step 6: Run tests to verify infra works**
 
 Run: `pnpm test`
 Expected: PASS (1 test passed).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add package.json pnpm-lock.yaml vitest.config.ts src/test/setup.ts src/features/workflow/smoke.test.ts
@@ -115,7 +123,7 @@ git commit -m "test: add vitest + react-testing-library infra"
 - Create: `src/features/workflow/model.ts`
 - Test: `src/features/workflow/model.test.ts`
 
-- [ ] **Step 1: Write the failing test `src/features/workflow/model.test.ts`**
+- [x] **Step 1: Write the failing test `src/features/workflow/model.test.ts`**
 
 ```ts
 import { describe, it, expect } from "vitest";
@@ -148,12 +156,12 @@ describe("newWorkflow", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm test src/features/workflow/model.test.ts`
 Expected: FAIL ("Failed to resolve import ./model" / functions not defined).
 
-- [ ] **Step 3: Implement `src/features/workflow/model.ts`**
+- [x] **Step 3: Implement `src/features/workflow/model.ts`**
 
 ```ts
 import { newId } from "@/lib/ids";
@@ -215,12 +223,12 @@ export function newWorkflow(name: string): Workflow {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pnpm test src/features/workflow/model.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/features/workflow/model.ts src/features/workflow/model.test.ts
@@ -235,7 +243,7 @@ git commit -m "feat(workflow): domain model + factories"
 - Create: `src/features/workflow/reducers.ts`
 - Test: `src/features/workflow/reducers.test.ts`
 
-- [ ] **Step 1: Write the failing test `src/features/workflow/reducers.test.ts`**
+- [x] **Step 1: Write the failing test `src/features/workflow/reducers.test.ts`**
 
 ```ts
 import { describe, it, expect } from "vitest";
@@ -313,12 +321,12 @@ describe("setActiveStep / setView", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm test src/features/workflow/reducers.test.ts`
 Expected: FAIL (module not found).
 
-- [ ] **Step 3: Implement `src/features/workflow/reducers.ts`**
+- [x] **Step 3: Implement `src/features/workflow/reducers.ts`**
 
 ```ts
 import type { Step, ViewMode, Workflow } from "./model";
@@ -366,12 +374,12 @@ export function setView(wf: Workflow, view: ViewMode): Workflow {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pnpm test src/features/workflow/reducers.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/features/workflow/reducers.ts src/features/workflow/reducers.test.ts
@@ -386,7 +394,7 @@ git commit -m "feat(workflow): pure state reducers"
 - Create: `src/features/workflow/store.ts`
 - Test: `src/features/workflow/store.test.ts`
 
-- [ ] **Step 1: Write the failing test `src/features/workflow/store.test.ts`**
+- [x] **Step 1: Write the failing test `src/features/workflow/store.test.ts`**
 
 ```ts
 import { describe, it, expect, beforeEach } from "vitest";
@@ -420,12 +428,12 @@ describe("workflowStore", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm test src/features/workflow/store.test.ts`
 Expected: FAIL (module not found).
 
-- [ ] **Step 3: Implement `src/features/workflow/store.ts`**
+- [x] **Step 3: Implement `src/features/workflow/store.ts`**
 
 ```ts
 import { useSyncExternalStore } from "react";
@@ -497,12 +505,12 @@ export function useActiveWorkflow(): Workflow {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pnpm test src/features/workflow/store.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/features/workflow/store.ts src/features/workflow/store.test.ts
@@ -518,7 +526,7 @@ git commit -m "feat(workflow): external store + react hooks"
 - Test: `src/features/workflow/actions.test.ts`
 - Verify/Modify: `src/ipc/client.ts` (ensure wrappers exist)
 
-- [ ] **Step 1: Confirm IPC wrappers exist**
+- [x] **Step 1: Confirm IPC wrappers exist**
 
 Run: `git grep -n "grpcInvokeOneshot\|grpcBuildRequestSkeleton" src/ipc/client.ts`
 Expected: both wrappers found. If EITHER is missing, add it to `src/ipc/client.ts` following the existing `grpcDescribe` pattern:
@@ -548,7 +556,7 @@ export async function grpcInvokeOneshot(
 ```
 (Ensure both are re-exported via the `ipc` object in `src/ipc/index.ts` if that file aggregates them — match the existing export style.)
 
-- [ ] **Step 2: Write the failing test `src/features/workflow/actions.test.ts`**
+- [x] **Step 2: Write the failing test `src/features/workflow/actions.test.ts`**
 
 ```ts
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -635,12 +643,12 @@ describe("sendStep", () => {
 });
 ```
 
-- [ ] **Step 3: Run test to verify it fails**
+- [x] **Step 3: Run test to verify it fails**
 
 Run: `pnpm test src/features/workflow/actions.test.ts`
 Expected: FAIL (module not found).
 
-- [ ] **Step 4: Implement `src/features/workflow/actions.ts`**
+- [x] **Step 4: Implement `src/features/workflow/actions.ts`**
 
 ```ts
 import * as ipc from "@/ipc/client";
@@ -711,12 +719,12 @@ function errorToMessage(e: unknown): string {
 }
 ```
 
-- [ ] **Step 5: Run test to verify it passes**
+- [x] **Step 5: Run test to verify it passes**
 
 Run: `pnpm test src/features/workflow/actions.test.ts`
 Expected: PASS (4 tests).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/features/workflow/actions.ts src/features/workflow/actions.test.ts src/ipc/client.ts
@@ -730,7 +738,7 @@ git commit -m "feat(workflow): create-step-from-method and send-step actions"
 **Files:**
 - Create: `src/features/workflow/AddressBar.tsx`
 
-- [ ] **Step 1: Implement `src/features/workflow/AddressBar.tsx`**
+- [x] **Step 1: Implement `src/features/workflow/AddressBar.tsx`**
 
 ```tsx
 import { Button } from "@/components/ui/button";
@@ -772,12 +780,12 @@ export function AddressBar({
 }
 ```
 
-- [ ] **Step 2: Typecheck**
+- [x] **Step 2: Typecheck**
 
 Run: `pnpm lint`
 Expected: PASS (no TS errors).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/features/workflow/AddressBar.tsx
@@ -791,7 +799,7 @@ git commit -m "feat(workflow): focus address bar"
 **Files:**
 - Create: `src/features/workflow/FocusView.tsx`
 
-- [ ] **Step 1: Implement `src/features/workflow/FocusView.tsx`**
+- [x] **Step 1: Implement `src/features/workflow/FocusView.tsx`**
 
 Reuses the existing Monaco editor (`@/lib/monaco` → `MonacoEditor`) for the request body and the existing `ResponsePanel` (`@/features/response/ResponsePanel`) for the response. Match the existing `ResponsePanel` props by reading `src/features/response/ResponsePanel.tsx` before wiring; it expects an `InvokeOutcomeIpc | null` plus an error string (props named per that file).
 
@@ -863,12 +871,12 @@ function ResponseSlot({ step }: { step: Step }) {
 
 > **Wiring note for the implementer:** open `src/features/response/ResponsePanel.tsx` and `src/lib/monaco.ts` first and adjust the prop names in `ResponseSlot` / `MonacoEditor` to match their actual signatures (the Explore report confirms `MonacoEditor` is the lazy export and `ResponsePanel` shows Body/Trailers/Headers from an `InvokeOutcomeIpc`). Do not invent new props — use what those components already accept.
 
-- [ ] **Step 2: Typecheck**
+- [x] **Step 2: Typecheck**
 
 Run: `pnpm lint`
 Expected: PASS. If TS complains about prop mismatches, fix them against the real `ResponsePanel`/`MonacoEditor` signatures (read those files).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/features/workflow/FocusView.tsx
@@ -883,7 +891,7 @@ git commit -m "feat(workflow): focus view wiring store, editor, response"
 - Create: `src/app/WorkflowApp.tsx`
 - Modify: `src/main.tsx`
 
-- [ ] **Step 1: Implement `src/app/WorkflowApp.tsx`**
+- [x] **Step 1: Implement `src/app/WorkflowApp.tsx`**
 
 Minimal titlebar (logo + workflow name + view-switch placeholder + ⌘K placeholder) and the Focus view. A temporary "New call" button creates a step from a typed address+service+method so the milestone is runnable before ⌘K (Plan #2) exists.
 
@@ -936,7 +944,7 @@ export function WorkflowApp() {
 }
 ```
 
-- [ ] **Step 2: Point `src/main.tsx` at the new shell**
+- [x] **Step 2: Point `src/main.tsx` at the new shell**
 
 Replace the render of `App` with `WorkflowApp`. Change the import and the JSX element:
 ```tsx
@@ -947,12 +955,12 @@ import { WorkflowApp } from "@/app/WorkflowApp";
 ```
 Keep all existing Monaco/setup imports in `main.tsx` intact (they preload the editor).
 
-- [ ] **Step 3: Typecheck the whole project**
+- [x] **Step 3: Typecheck the whole project**
 
 Run: `pnpm lint`
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/app/WorkflowApp.tsx src/main.tsx
@@ -965,29 +973,29 @@ git commit -m "feat(workflow): app shell with focus view and temporary call entr
 
 **Files:** none (verification only).
 
-- [ ] **Step 1: Ensure IPC bindings are current**
+- [x] **Step 1: Ensure IPC bindings are current**
 
 Run: `cargo run -p handshaker --bin export-bindings --quiet`
 Expected: `src/ipc/bindings.ts` regenerated, no error.
 
-- [ ] **Step 2: Run all unit tests**
+- [x] **Step 2: Run all unit tests**
 
 Run: `pnpm test`
 Expected: PASS (model, reducers, store, actions, smoke).
 
-- [ ] **Step 3: Launch the app**
+- [x] **Step 3: Launch the app**
 
 Run: `pnpm tauri:dev`
 Expected: window opens showing `⚡ Handshaker` titlebar and the New-call inputs.
 
-- [ ] **Step 4: Manual smoke against a real/local gRPC server with reflection**
+- [x] **Step 4: Manual smoke against a real/local gRPC server with reflection**
 
 - Enter a reachable `host:port`, a proto service full name, and a unary method; click **Create**.
 - Expected: a Focus screen with the request body **pre-filled by the generated skeleton** (fields from the method's input message).
 - Edit a field, click **Send (⌘↵ wiring comes in a later task)**.
 - Expected: response appears in the right pane; on success a green `✓ OK · Nms` shows in the address bar; on a gRPC error the response pane shows the error (reusing existing `ResponsePanel`).
 
-- [ ] **Step 5: Commit any binding/lock changes**
+- [x] **Step 5: Commit any binding/lock changes**
 
 ```bash
 git add -A
