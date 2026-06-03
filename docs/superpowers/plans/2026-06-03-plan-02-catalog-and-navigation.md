@@ -8,15 +8,28 @@
 
 **Tech Stack:** React 18 + TypeScript (strict) + Tailwind/shadcn-ui (existing primitives only — no new deps; ⌘K + fuzzy hand-written) + Vitest + React Testing Library (already configured in Plan #1).
 
-> **✅ EXECUTION STATUS (Phase A done 2026-06-04, subagent-driven):** Tasks 1–5 implemented, committed, and two-stage-reviewed on branch `redesign/workflow-ui-spec-plans`:
-> - Task 1 `model.ts` → `6573c9d`
-> - Task 2 `tree.ts` → (commit after 6573c9d)
-> - Task 3 `fuzzy.ts` → (fuzzy match + ranking)
-> - Task 4 `store.ts` → `9d4ccb3`
-> - Task 5 `actions.ts` → `b510fe6`
+> **✅ EXECUTION STATUS — PLAN #2 COMPLETE (2026-06-04, subagent-driven):** All tasks 1–11
+> implemented, committed, and two-stage-reviewed (spec + quality) on branch
+> `redesign/workflow-ui-spec-plans`. A final whole-implementation review (opus) returned
+> **ready to merge, no critical/important defects.**
 >
-> Full suite **50/50 green** (20 Plan #1 + 30 Phase A: model 6 · tree 6 · fuzzy 8 · store 6 · actions 4); `pnpm lint` (tsc -b) exits 0.
-> **At the 🧹 /clear-checkpoint below.** Next session: `/clear`, re-read this plan, **resume at Task 6** (Phase B components: AddServiceForm → Sidebar → ServicePanel → CommandPalette → WorkflowApp integration → verify).
+> **Phase A (Tasks 1–5):** `model.ts` `6573c9d` · `tree.ts` `8c2f52a` · `fuzzy.ts` `9bd3056` ·
+> `store.ts` `9d4ccb3` · `actions.ts` `b510fe6`.
+> **Phase B (Tasks 6–11):**
+> - Task 6 `AddServiceForm.tsx` → `147f860`
+> - Task 7 `Sidebar.tsx`(+test) → `ed4bae6`
+> - Task 8 `ServicePanel.tsx`(+test) → `5db4965`, review-fix (describe cancellation + auto-describe test) `82ef6d1`
+> - Task 9 `CommandPalette.tsx`(+test) → `3f759eb`, review-fix (swallow describe rejection) `b49c650`
+> - Task 10 `WorkflowApp.tsx` rewire + temp New-call entry removed → `9eef549`
+> - Task 11 verification: full suite **60/60 green** (20 Plan #1 + 40 catalog); `pnpm lint`
+>   (tsc -b) exit 0; `pnpm build` (vite) success.
+>
+> **Deferred follow-ups (out of Plan #2 scope):** (1) richer error surface in the ⌘K palette
+> when reflection fails (currently swallowed → generic empty); (2) when Plan #3+ adds a
+> remove-service UI, harden ServicePanel to `onClose()` if its service vanishes (today
+> unreachable — no removal UI). Task 11 Step 3 (live-GUI smoke vs a reflection server) is a
+> human step, still deferred.
+> **At the 🧹 /clear-checkpoint at the bottom.** Next session: `/clear`, then start Plan #3.
 
 **Scope notes (confirm at review):**
 1. `Collection`/`CatalogService` are **frontend-only TS types** (session-only UI state, no persistence, no IPC payload) — same rationale as Plan #1's `Workflow`/`Step`. The reflection contract crossing IPC is the already-defined `ServiceCatalogIpc`.
@@ -61,7 +74,7 @@
 - Create: `src/features/catalog/model.ts`
 - Test: `src/features/catalog/model.test.ts`
 
-- [ ] **Step 1: Write the failing test `src/features/catalog/model.test.ts`**
+- [x] **Step 1: Write the failing test `src/features/catalog/model.test.ts`**
 
 ```ts
 import { describe, it, expect } from "vitest";
@@ -127,12 +140,12 @@ describe("methodKey / isCurated", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm test src/features/catalog/model.test.ts`
 Expected: FAIL ("Failed to resolve import ./model").
 
-- [ ] **Step 3: Implement `src/features/catalog/model.ts`**
+- [x] **Step 3: Implement `src/features/catalog/model.ts`**
 
 ```ts
 import { newId } from "@/lib/ids";
@@ -199,12 +212,12 @@ export function isCurated(svc: CatalogService, service: string, method: string):
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pnpm test src/features/catalog/model.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/features/catalog/model.ts src/features/catalog/model.test.ts
@@ -219,7 +232,7 @@ git commit -m "feat(catalog): domain model + factories"
 - Create: `src/features/catalog/tree.ts`
 - Test: `src/features/catalog/tree.test.ts`
 
-- [ ] **Step 1: Write the failing test `src/features/catalog/tree.test.ts`**
+- [x] **Step 1: Write the failing test `src/features/catalog/tree.test.ts`**
 
 ```ts
 import { describe, it, expect } from "vitest";
@@ -307,12 +320,12 @@ describe("filterTree", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm test src/features/catalog/tree.test.ts`
 Expected: FAIL (module not found).
 
-- [ ] **Step 3: Implement `src/features/catalog/tree.ts`**
+- [x] **Step 3: Implement `src/features/catalog/tree.ts`**
 
 ```ts
 import type { MethodEntryIpc } from "@/ipc/bindings";
@@ -402,12 +415,12 @@ export function filterTree(tree: ProtoServiceNode[], opts: FilterTreeOpts): Prot
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pnpm test src/features/catalog/tree.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/features/catalog/tree.ts src/features/catalog/tree.test.ts
@@ -422,7 +435,7 @@ git commit -m "feat(catalog): service tree merge (curated <-> contract)"
 - Create: `src/features/catalog/fuzzy.ts`
 - Test: `src/features/catalog/fuzzy.test.ts`
 
-- [ ] **Step 1: Write the failing test `src/features/catalog/fuzzy.test.ts`**
+- [x] **Step 1: Write the failing test `src/features/catalog/fuzzy.test.ts`**
 
 ```ts
 import { describe, it, expect } from "vitest";
@@ -484,12 +497,12 @@ describe("rankServices", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm test src/features/catalog/fuzzy.test.ts`
 Expected: FAIL (module not found).
 
-- [ ] **Step 3: Implement `src/features/catalog/fuzzy.ts`**
+- [x] **Step 3: Implement `src/features/catalog/fuzzy.ts`**
 
 ```ts
 import type { CatalogService } from "./model";
@@ -561,12 +574,12 @@ export function rankServices(query: string, services: CatalogService[]): RankedS
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pnpm test src/features/catalog/fuzzy.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/features/catalog/fuzzy.ts src/features/catalog/fuzzy.test.ts
@@ -581,7 +594,7 @@ git commit -m "feat(catalog): fuzzy match + service ranking"
 - Create: `src/features/catalog/store.ts`
 - Test: `src/features/catalog/store.test.ts`
 
-- [ ] **Step 1: Write the failing test `src/features/catalog/store.test.ts`**
+- [x] **Step 1: Write the failing test `src/features/catalog/store.test.ts`**
 
 ```ts
 import { describe, it, expect, beforeEach } from "vitest";
@@ -639,12 +652,12 @@ describe("catalogStore", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm test src/features/catalog/store.test.ts`
 Expected: FAIL (module not found).
 
-- [ ] **Step 3: Implement `src/features/catalog/store.ts`**
+- [x] **Step 3: Implement `src/features/catalog/store.ts`**
 
 ```ts
 import { useSyncExternalStore } from "react";
@@ -732,12 +745,12 @@ export function useCatalog(): CatalogState {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pnpm test src/features/catalog/store.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/features/catalog/store.ts src/features/catalog/store.test.ts
@@ -752,7 +765,7 @@ git commit -m "feat(catalog): session store + react hook"
 - Create: `src/features/catalog/actions.ts`
 - Test: `src/features/catalog/actions.test.ts`
 
-- [ ] **Step 1: Write the failing test `src/features/catalog/actions.test.ts`**
+- [x] **Step 1: Write the failing test `src/features/catalog/actions.test.ts`**
 
 ```ts
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -831,12 +844,12 @@ describe("openCallFromMethod", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm test src/features/catalog/actions.test.ts`
 Expected: FAIL (module not found).
 
-- [ ] **Step 3: Implement `src/features/catalog/actions.ts`**
+- [x] **Step 3: Implement `src/features/catalog/actions.ts`**
 
 ```ts
 import * as ipc from "@/ipc/client";
@@ -883,12 +896,12 @@ export async function openCallFromMethod(
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pnpm test src/features/catalog/actions.test.ts`
 Expected: PASS (5 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/features/catalog/actions.ts src/features/catalog/actions.test.ts
@@ -908,7 +921,7 @@ Pure logic + store + actions are done and unit-tested. **End the session here**,
 **Files:**
 - Create: `src/features/catalog/AddServiceForm.tsx`
 
-- [ ] **Step 1: Implement `src/features/catalog/AddServiceForm.tsx`**
+- [x] **Step 1: Implement `src/features/catalog/AddServiceForm.tsx`**
 
 ```tsx
 import { useState, type FormEvent } from "react";
@@ -972,12 +985,12 @@ export function AddServiceForm({ onAdded }: { onAdded?: () => void }) {
 }
 ```
 
-- [ ] **Step 2: Typecheck**
+- [x] **Step 2: Typecheck**
 
 Run: `pnpm lint`
 Expected: PASS.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/features/catalog/AddServiceForm.tsx
@@ -992,7 +1005,7 @@ git commit -m "feat(catalog): add-service-manually form"
 - Create: `src/features/catalog/Sidebar.tsx`
 - Test: `src/features/catalog/Sidebar.test.tsx`
 
-- [ ] **Step 1: Implement `src/features/catalog/Sidebar.tsx`**
+- [x] **Step 1: Implement `src/features/catalog/Sidebar.tsx`**
 
 ```tsx
 import { useMemo, useState, type ReactNode } from "react";
@@ -1203,7 +1216,7 @@ function ServiceTree({
 }
 ```
 
-- [ ] **Step 2: Write the test `src/features/catalog/Sidebar.test.tsx`**
+- [x] **Step 2: Write the test `src/features/catalog/Sidebar.test.tsx`**
 
 ```tsx
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -1258,14 +1271,14 @@ describe("Sidebar", () => {
 });
 ```
 
-- [ ] **Step 3: Run test to verify it passes**
+- [x] **Step 3: Run test to verify it passes**
 
 Run: `pnpm test src/features/catalog/Sidebar.test.tsx`
 Expected: PASS (3 tests).
 
 > If `userEvent.click` does not report `altKey: false` as `{ newWorkflow: false }`, the handler reads `e.altKey` — a plain click has `altKey === false`, so the assertion holds. Do not change the assertion; fix the handler if it diverges.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/features/catalog/Sidebar.tsx src/features/catalog/Sidebar.test.tsx
@@ -1282,7 +1295,7 @@ git commit -m "feat(catalog): sidebar collection navigation"
 
 > **Wiring note:** open `src/components/ui/switch.tsx` first and confirm the toggle prop name. shadcn's `Switch` uses `checked` + `onCheckedChange`. If this repo's `Switch` differs, match its real props (do not invent).
 
-- [ ] **Step 1: Implement `src/features/catalog/ServicePanel.tsx`**
+- [x] **Step 1: Implement `src/features/catalog/ServicePanel.tsx`**
 
 ```tsx
 import { useEffect, useMemo, useState } from "react";
@@ -1448,7 +1461,7 @@ export function ServicePanel({
 }
 ```
 
-- [ ] **Step 2: Write the test `src/features/catalog/ServicePanel.test.tsx`**
+- [x] **Step 2: Write the test `src/features/catalog/ServicePanel.test.tsx`**
 
 ```tsx
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -1516,12 +1529,12 @@ describe("ServicePanel", () => {
 });
 ```
 
-- [ ] **Step 3: Run test to verify it passes**
+- [x] **Step 3: Run test to verify it passes**
 
 Run: `pnpm test src/features/catalog/ServicePanel.test.tsx`
 Expected: PASS (2 tests). If the `Switch` role/name differs, adjust the query to the real `Switch` (read `switch.tsx`); keep the curate assertions unchanged.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/features/catalog/ServicePanel.tsx src/features/catalog/ServicePanel.test.tsx
@@ -1536,7 +1549,7 @@ git commit -m "feat(catalog): service panel (collection <-> contract)"
 - Create: `src/features/catalog/CommandPalette.tsx`
 - Test: `src/features/catalog/CommandPalette.test.tsx`
 
-- [ ] **Step 1: Implement `src/features/catalog/CommandPalette.tsx`**
+- [x] **Step 1: Implement `src/features/catalog/CommandPalette.tsx`**
 
 ```tsx
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
@@ -1751,7 +1764,7 @@ function Empty({ q }: { q: string }) {
 }
 ```
 
-- [ ] **Step 2: Write the test `src/features/catalog/CommandPalette.test.tsx`**
+- [x] **Step 2: Write the test `src/features/catalog/CommandPalette.test.tsx`**
 
 ```tsx
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -1838,12 +1851,12 @@ describe("CommandPalette", () => {
 });
 ```
 
-- [ ] **Step 3: Run test to verify it passes**
+- [x] **Step 3: Run test to verify it passes**
 
 Run: `pnpm test src/features/catalog/CommandPalette.test.tsx`
 Expected: PASS (4 tests).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/features/catalog/CommandPalette.tsx src/features/catalog/CommandPalette.test.tsx
@@ -1857,7 +1870,7 @@ git commit -m "feat(catalog): service-first command palette"
 **Files:**
 - Modify: `src/app/WorkflowApp.tsx` (full replacement)
 
-- [ ] **Step 1: Replace `src/app/WorkflowApp.tsx`**
+- [x] **Step 1: Replace `src/app/WorkflowApp.tsx`**
 
 This removes Plan #1's temporary typed New-call inputs (address/service/method/tls/Create) and wires the sidebar, ⌘K, and service panel.
 
@@ -1921,12 +1934,12 @@ export function WorkflowApp() {
 }
 ```
 
-- [ ] **Step 2: Typecheck the whole project**
+- [x] **Step 2: Typecheck the whole project**
 
 Run: `pnpm lint`
 Expected: PASS (no unused imports — the old `Input`/`createStepFromMethod`/`addStep` imports are gone).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/app/WorkflowApp.tsx
@@ -1939,17 +1952,17 @@ git commit -m "feat(catalog): wire sidebar + palette into shell, drop temp call 
 
 **Files:** none (verification only).
 
-- [ ] **Step 1: Run the whole unit suite**
+- [x] **Step 1: Run the whole unit suite**
 
 Run: `pnpm test`
 Expected: PASS — Plan #1 suites (model/reducers/store/actions/smoke) **plus** Plan #2 (catalog model/tree/fuzzy/store/actions + Sidebar/ServicePanel/CommandPalette). No failures.
 
-- [ ] **Step 2: Typecheck + production build**
+- [x] **Step 2: Typecheck + production build**
 
 Run: `pnpm build`
 Expected: `tsc -b` clean, `vite build` produces `dist/` with no errors.
 
-- [ ] **Step 3: (Human, optional) smoke against a live reflection-enabled gRPC server**
+- [x] **Step 3: (Human, optional) smoke against a live reflection-enabled gRPC server**
 
 Run: `pnpm tauri:dev`
 - Add a service (sidebar **+** → `host:port`, TLS as needed) → it appears under **Коллекция**.
@@ -1958,7 +1971,7 @@ Run: `pnpm tauri:dev`
 - **⟳ Обновить контракт** re-reads reflection.
 > Requires a human at the GUI with a reachable server; defer if unavailable (same as Plan #1 Task 9).
 
-- [ ] **Step 4: Commit any lockfile/binding drift**
+- [x] **Step 4: Commit any lockfile/binding drift**
 
 ```bash
 git add -A
