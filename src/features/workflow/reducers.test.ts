@@ -41,14 +41,20 @@ describe("updateStep", () => {
 });
 
 describe("removeStep", () => {
-  it("removes and reselects the previous step", () => {
-    const wf = wfWith(1, 2, 3);
-    const mid = wf.steps[1].id;
-    const next = removeStep(wf, mid);
-    expect(next.steps.map((s) => s.method)).toEqual(["M1", "M3"]);
-    expect(next.activeStepId).toBe(next.steps[0].id);
+  it("reselects the previous step when the active step is removed", () => {
+    const wf = wfWith(1, 2, 3); // active = M3
+    const next = removeStep(wf, wf.steps[2].id);
+    expect(next.steps.map((s) => s.method)).toEqual(["M1", "M2"]);
+    expect(next.activeStepId).toBe(next.steps[1].id); // reselects M2
   });
-  it("clears active when last step removed", () => {
+  it("leaves active unchanged when a non-active step is removed", () => {
+    const wf = wfWith(1, 2, 3); // active = M3
+    const activeId = wf.activeStepId;
+    const next = removeStep(wf, wf.steps[0].id); // remove M1
+    expect(next.steps.map((s) => s.method)).toEqual(["M2", "M3"]);
+    expect(next.activeStepId).toBe(activeId); // still M3
+  });
+  it("clears active when the last step is removed", () => {
     const wf = wfWith(1);
     const next = removeStep(wf, wf.steps[0].id);
     expect(next.steps).toEqual([]);

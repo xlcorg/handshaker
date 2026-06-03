@@ -18,7 +18,10 @@ export function removeStep(wf: Workflow, id: string): Workflow {
   const idx = wf.steps.findIndex((s) => s.id === id);
   if (idx < 0) return wf;
   const steps = wf.steps.filter((s) => s.id !== id);
-  const activeStepId = steps.length === 0 ? null : steps[Math.max(0, idx - 1)].id;
+  let activeStepId = wf.activeStepId;
+  if (wf.activeStepId === id) {
+    activeStepId = steps.length === 0 ? null : steps[Math.max(0, idx - 1)].id;
+  }
   return { ...wf, steps, activeStepId };
 }
 
