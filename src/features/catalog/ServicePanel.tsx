@@ -31,14 +31,22 @@ export function ServicePanel({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     const s = catalogStore.getService(serviceId);
     if (s && s.contract === null) {
       setLoading(true);
       setError(null);
       describeService(s)
-        .catch((e) => setError(msg(e)))
-        .finally(() => setLoading(false));
+        .catch((e) => {
+          if (!cancelled) setError(msg(e));
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
     }
+    return () => {
+      cancelled = true;
+    };
   }, [serviceId]);
 
   const tree = useMemo(

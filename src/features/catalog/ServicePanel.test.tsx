@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 vi.mock("./actions", () => ({
@@ -10,7 +10,7 @@ vi.mock("./actions", () => ({
 
 import { ServicePanel } from "./ServicePanel";
 import { catalogStore } from "./store";
-import { refreshContract } from "./actions";
+import { describeService, refreshContract } from "./actions";
 import type { ServiceCatalogIpc, MethodEntryIpc } from "@/ipc/bindings";
 
 function method(name: string): MethodEntryIpc {
@@ -49,6 +49,15 @@ describe("ServicePanel", () => {
     ]);
     // now it offers create-call (●)
     expect(screen.getByRole("button", { name: "create-call-Get" })).toBeInTheDocument();
+  });
+
+  it("auto-describes the service when its contract is null on open", async () => {
+    vi.mocked(describeService).mockResolvedValue(contract);
+    const svc = catalogStore.addService({ address: "h:443" });
+    // do NOT preload a contract — the effect should fetch it
+    render(<ServicePanel serviceId={svc.id} onClose={() => {}} />);
+    expect(screen.getByText(/Загрузка контракта/)).toBeInTheDocument();
+    await waitFor(() => expect(describeService).toHaveBeenCalledWith(svc));
   });
 
   it("calls refreshContract from the toolbar button", async () => {
