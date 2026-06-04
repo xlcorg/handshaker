@@ -111,6 +111,14 @@ async varsResolve(template: string) : Promise<Result<ResolutionReportIpc, IpcErr
     else return { status: "error", error: e  as any };
 }
 },
+async authResolve(config: SavedAuthConfigIpc) : Promise<Result<AuthCredentialsIpc | null, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("auth_resolve", { config }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async collectionList() : Promise<Result<CollectionMetaIpc[], IpcError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("collection_list") };
@@ -226,6 +234,7 @@ contractUpdated: "contract-updated"
 
 export type AppVersion = { version: string }
 export type AuthByEnvIpc = { configs: Partial<{ [key in string]: SavedAuthConfigIpc }> }
+export type AuthCredentialsIpc = { header_name: string; header_value: string }
 export type CollectionIpc = { id: string; name: string; items: ItemIpc[]; variables: Partial<{ [key in string]: string }>; auth_by_env: AuthByEnvIpc; default_tls: boolean; skip_tls_verify: boolean }
 /**
  * Lightweight list entry (id + name only) for `collection_list`.

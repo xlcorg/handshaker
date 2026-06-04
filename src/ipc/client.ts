@@ -11,6 +11,7 @@ import type {
   ItemIpc,
   ItemSnapshotIpc,
   SavedAuthConfigIpc,
+  AuthCredentialsIpc,
 } from "./bindings";
 
 /**
@@ -151,6 +152,14 @@ export async function authSetForEnv(collectionId: string, itemId: string | null,
   if (r.status === "error") throw r.error;
 }
 
+export async function authResolve(
+  config: SavedAuthConfigIpc,
+): Promise<AuthCredentialsIpc | null> {
+  const r = await commands.authResolve(config);
+  if (r.status === "error") throw r.error;
+  return r.data;
+}
+
 export const ipc = {
   appVersion,
   grpcDescribe,
@@ -175,4 +184,5 @@ export const ipc = {
   collectionDeleteItem,
   collectionRestoreItem,
   authSetForEnv,
+  authResolve,
 };

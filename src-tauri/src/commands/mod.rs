@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod collection;
 pub mod env;
 pub mod events;
