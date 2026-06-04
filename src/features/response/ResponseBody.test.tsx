@@ -49,6 +49,14 @@ describe("ResponseBody", () => {
     expect(screen.getByText("1/2")).toBeInTheDocument(); // two value matches
   });
 
+  it("resets search state when the response json changes", async () => {
+    const { rerender } = render(<ResponseBody json={`{"a":1}`} />);
+    fireEvent.keyDown(window, { key: "f", ctrlKey: true });
+    expect(await screen.findByRole("textbox")).toBeInTheDocument();
+    rerender(<ResponseBody json={`{"b":2}`} />);
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+  });
+
   it("degrades for payloads over the threshold and offers download", async () => {
     const user = userEvent.setup();
     const big = JSON.stringify({ blob: "x".repeat(3 * 1024 * 1024) }); // > 2 MB

@@ -31,13 +31,6 @@ function kindOf(v: unknown): JsonKind {
 }
 
 export function parseJsonTree(json: string): JsonTree {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(json);
-  } catch (e) {
-    return { rootId: null, nodes: {}, order: [], error: (e as Error).message };
-  }
-
   const nodes: Record<string, JsonNode> = {};
   const order: string[] = [];
   let counter = 0;
@@ -69,8 +62,13 @@ export function parseJsonTree(json: string): JsonTree {
     return id;
   };
 
-  const rootId = build(parsed, null, null, null, 0);
-  return { rootId, nodes, order, error: null };
+  try {
+    const parsed = JSON.parse(json);
+    const rootId = build(parsed, null, null, null, 0);
+    return { rootId, nodes, order, error: null };
+  } catch (e) {
+    return { rootId: null, nodes: {}, order: [], error: (e as Error).message };
+  }
 }
 
 export function flattenVisible(tree: JsonTree, collapsed: ReadonlySet<string>): JsonNode[] {

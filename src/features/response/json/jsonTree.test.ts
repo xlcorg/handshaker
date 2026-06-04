@@ -44,6 +44,11 @@ describe("parseJsonTree", () => {
     expect(t.order.length).toBe(4);
     expect(t.order[0]).toBe(t.rootId);
   });
+
+  it("does not throw on pathologically deep nesting (returns a tree or an error)", () => {
+    const deep = "[".repeat(50000) + "1" + "]".repeat(50000);
+    expect(() => parseJsonTree(deep)).not.toThrow();
+  });
 });
 
 describe("flattenVisible", () => {

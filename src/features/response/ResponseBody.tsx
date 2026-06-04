@@ -32,6 +32,15 @@ export function ResponseBody({ json }: ResponseBodyProps) {
   // Reset the active match when the result set changes.
   useEffect(() => { setActiveIndex(0); }, [query]);
 
+  // Reset view state when the response changes (switch step / re-run) — positional
+  // node ids from a prior tree must not leak onto a new one.
+  useEffect(() => {
+    setCollapsed(new Set());
+    setSearchOpen(false);
+    setQuery("");
+    setActiveIndex(0);
+  }, [json]);
+
   // Auto-expand the path to the active match so it is visible.
   useEffect(() => {
     if (!activeMatchId) return;

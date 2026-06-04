@@ -33,7 +33,7 @@ export function JsonTree({
     const idx = rows.findIndex((r) => r.id === scrollToId);
     if (idx >= 0) virtualizer.scrollToIndex(idx, { align: "center" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scrollToId]);
+  }, [scrollToId, rows.length]);
 
   return (
     <div ref={parentRef} role="tree" className="min-h-0 flex-1 overflow-auto scroll-thin">
