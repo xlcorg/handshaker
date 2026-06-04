@@ -1,6 +1,9 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { workflowStore } from "./store";
 import { newStep } from "./model";
+
+const envActiveSet = vi.fn().mockResolvedValue(undefined);
+vi.mock("@/ipc/client", () => ({ envActiveSet: (n: string | null) => envActiveSet(n) }));
 
 beforeEach(() => workflowStore.reset());
 
@@ -25,5 +28,26 @@ describe("workflowStore", () => {
     const wf = workflowStore.createWorkflow("second");
     expect(workflowStore.getState().activeWorkflowId).toBe(wf.id);
     expect(workflowStore.getState().workflows).toHaveLength(2);
+  });
+});
+
+describe("workflow env sync", () => {
+  beforeEach(() => { workflowStore.reset(); envActiveSet.mockClear(); });
+
+  it("setWorkflowEnv updates active workflow and pushes to backend", () => {
+    workflowStore.setWorkflowEnv("prod");
+    expect(workflowStore.activeWorkflow().envName).toBe("prod");
+    expect(envActiveSet).toHaveBeenCalledWith("prod");
+  });
+
+  it("switching workflows re-syncs backend to that workflow's env", () => {
+    workflowStore.setWorkflowEnv("prod");            // current wf → prod
+    const wf2 = workflowStore.createWorkflow("wf-2"); // new wf (envName null) becomes active
+    envActiveSet.mockClear();
+    workflowStore.setActiveWorkflow(
+      workflowStore.getState().workflows[0].id,       // back to first wf
+    );
+    expect(envActiveSet).toHaveBeenLastCalledWith("prod");
+    expect(wf2.envName).toBeNull();
   });
 });

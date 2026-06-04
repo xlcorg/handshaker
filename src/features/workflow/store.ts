@@ -1,5 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { newWorkflow, type Workflow } from "./model";
+import { setWorkflowEnv as setWorkflowEnvReducer } from "./reducers";
+import { envActiveSet } from "@/ipc/client";
 
 export interface WorkflowState {
   workflows: Workflow[];
@@ -49,11 +51,16 @@ export const workflowStore = {
     emit();
     return wf;
   },
+  setWorkflowEnv(name: string | null) {
+    workflowStore.update((w) => setWorkflowEnvReducer(w, name));
+    void envActiveSet(name);
+  },
   setActiveWorkflow(id: string) {
-    if (state.workflows.some((w) => w.id === id)) {
-      state = { ...state, activeWorkflowId: id };
-      emit();
-    }
+    const next = state.workflows.find((w) => w.id === id);
+    if (!next) return;
+    state = { ...state, activeWorkflowId: id };
+    emit();
+    void envActiveSet(next.envName);
   },
 };
 
