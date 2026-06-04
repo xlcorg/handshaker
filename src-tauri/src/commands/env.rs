@@ -121,6 +121,7 @@ mod tests {
             active_env: RwLock::new(active.map(|s| s.to_string())),
             collection_store: Arc::new(InMemoryCollectionStore::new()),
             contract_cache: Arc::new(InMemoryContractCache::new()),
+            in_flight: std::sync::Mutex::new(std::collections::HashMap::new()),
         }
     }
 

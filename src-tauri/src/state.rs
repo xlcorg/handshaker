@@ -1,7 +1,8 @@
 //! Tauri-side app state. Fields land per plans #2-#6.
 
+use std::collections::HashMap;
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use handshaker_core::collections::{CollectionStore, FileCollectionStore, InMemoryCollectionStore};
 use handshaker_core::env::file_store::FileEnvironmentStore;
@@ -9,7 +10,11 @@ use handshaker_core::env::in_memory::InMemoryEnvironmentStore;
 use handshaker_core::env::EnvironmentStore;
 use handshaker_core::error::CoreError;
 use handshaker_core::grpc::{ContractCache, InMemoryContractCache};
-use tokio::sync::RwLock;
+use tokio::sync::{Notify, RwLock};
+
+/// Per-request cancel registry: `request_id` → `Notify` fired by `grpc_cancel`.
+/// std `Mutex` — locked only for insert/remove/lookup, never across `.await`.
+pub type InFlight = Mutex<HashMap<String, Arc<Notify>>>;
 
 pub struct AppState {
     /// Environment store. Cold boot: empty.
@@ -20,6 +25,8 @@ pub struct AppState {
     pub collection_store: Arc<dyn CollectionStore>,
     /// Descriptor cache (plan #6). Session-only, not persisted.
     pub contract_cache: Arc<dyn ContractCache>,
+    /// In-flight gRPC requests: `request_id` → cancellation `Notify`.
+    pub in_flight: InFlight,
 }
 
 impl Default for AppState {
@@ -29,6 +36,7 @@ impl Default for AppState {
             active_env: RwLock::new(None),
             collection_store: Arc::new(InMemoryCollectionStore::new()),
             contract_cache: Arc::new(InMemoryContractCache::new()),
+            in_flight: Mutex::new(HashMap::new()),
         }
     }
 }
@@ -43,6 +51,18 @@ impl AppState {
             active_env: RwLock::new(None),
             collection_store: Arc::new(collection_store),
             contract_cache: Arc::new(InMemoryContractCache::new()),
+            in_flight: Mutex::new(HashMap::new()),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_has_empty_in_flight_registry() {
+        let s = AppState::default();
+        assert!(s.in_flight.lock().unwrap().is_empty());
     }
 }
