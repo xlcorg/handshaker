@@ -1,4 +1,5 @@
 import { commands } from "./bindings";
+import { newId } from "@/lib/ids";
 import type {
   GrpcTargetIpc,
   ServiceCatalogIpc,
@@ -51,8 +52,9 @@ export async function grpcInvokeOneshot(
   req: InvokeRequest,
   // The workflow Send path passes an explicit request id (for cancel) and the
   // user's deadline pref. Defaults serve callers with no cancel/timeout surface
-  // (the legacy invoke UI): "" never matches a cancel; 30_000ms is the pref default.
-  requestId = "",
+  // (the legacy invoke UI): a fresh id keeps each call's registry entry unique
+  // (so concurrent calls never collide on a shared key); 30_000ms is the pref default.
+  requestId = newId(),
   timeoutMs = 30_000,
 ): Promise<InvokeOutcomeIpc> {
   const r = await commands.grpcInvokeOneshot(target, req, requestId, timeoutMs);
