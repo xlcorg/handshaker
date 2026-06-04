@@ -4,9 +4,11 @@ import type { Step } from "./model";
 export function AddressBar({
   step,
   onSend,
+  onCancel,
 }: {
   step: Step;
   onSend: () => void;
+  onCancel: () => void;
 }) {
   const sending = step.status === "sending";
   return (
@@ -28,6 +30,11 @@ export function AddressBar({
       ) : null}
       {step.status === "error" ? (
         <span className="text-xs text-destructive">✕ error</span>
+      ) : null}
+      {sending ? (
+        <Button size="sm" variant="outline" onClick={onCancel}>
+          ✕ Cancel
+        </Button>
       ) : null}
       <Button size="sm" onClick={onSend} disabled={sending}>
         {sending ? "Sending…" : "▶ Send"}
