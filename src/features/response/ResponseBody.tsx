@@ -16,7 +16,8 @@ export interface ResponseBodyProps {
 
 export function ResponseBody({ json }: ResponseBodyProps) {
   const degraded = useMemo(() => shouldDegrade(json), [json]);
-  const tree = useMemo(() => parseJsonTree(json), [json]);
+  // In degrade mode the tree is never rendered — don't parse the huge payload.
+  const tree = useMemo(() => (degraded ? parseJsonTree("{}") : parseJsonTree(json)), [json, degraded]);
 
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   const [searchOpen, setSearchOpen] = useState(false);
