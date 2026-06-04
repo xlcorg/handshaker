@@ -32,7 +32,7 @@ struct PersistedContract {
 
 /// `<canonical-key>` hex-encoded (stable, reversible, filesystem-safe) + `.json`.
 /// Canonical key = `"{tls}|{address}"`; hex avoids `:` / `/` in addresses.
-pub fn key_filename(key: &ContractKey) -> String {
+fn key_filename(key: &ContractKey) -> String {
     let canonical = format!("{}|{}", key.tls, key.address);
     let mut name = canonical.bytes().fold(String::with_capacity(canonical.len() * 2), |mut s, b| {
         let _ = write!(s, "{b:02x}");
@@ -124,10 +124,10 @@ impl ContractCache for FileContractCache {
 
     fn invalidate(&self, key: &ContractKey) {
         let path = self.file_path(key);
-        if path.exists() {
-            if let Err(e) = fs::remove_file(&path) {
-                eprintln!("contract cache: failed to remove {}: {e}", path.display());
-            }
+        match fs::remove_file(&path) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => eprintln!("contract cache: failed to remove {}: {e}", path.display()),
         }
         self.inner.write().expect("contract cache poisoned").remove(key);
     }
@@ -244,6 +244,7 @@ mod tests {
 
         let reloaded = FileContractCache::load(dir.path().to_path_buf()).unwrap();
         assert!(reloaded.get(&key("good:1", false)).is_some());
+        assert!(reloaded.get(&key("good:1", false)).unwrap().pool.get_service_by_name("test.Echo").is_some());
     }
 
     #[test]
