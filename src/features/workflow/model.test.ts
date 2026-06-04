@@ -16,6 +16,21 @@ describe("newStep", () => {
   });
 });
 
+describe("newStep — serviceId and metadata", () => {
+  it("newStep defaults serviceId to null and metadata to []", () => {
+    const s = newStep({ address: "h", tls: false, service: "S", method: "M" });
+    expect(s.serviceId).toBeNull();
+    expect(s.metadata).toEqual([]);
+  });
+
+  it("newStep carries provided serviceId and metadata", () => {
+    const rows = [{ key: "x", value: "1", enabled: true }];
+    const s = newStep({ address: "h", tls: false, service: "S", method: "M", serviceId: "svc-1", metadata: rows });
+    expect(s.serviceId).toBe("svc-1");
+    expect(s.metadata).toEqual(rows);
+  });
+});
+
 describe("newWorkflow", () => {
   it("creates a workflow with no steps, focus view, no active step", () => {
     const wf = newWorkflow("incident");

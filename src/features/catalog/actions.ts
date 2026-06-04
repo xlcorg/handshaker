@@ -27,8 +27,7 @@ export async function refreshContract(svc: CatalogService): Promise<ServiceCatal
 /**
  * Create a call from a catalog method and open it in Focus.
  * `newWorkflow` (⌥↵) starts a fresh workflow first.
- * NOTE: skipVerify/auth are NOT wired into the invoke path yet (Plan #5) —
- * `createStepFromMethod` only takes {address, tls}.
+ * NOTE: skipVerify is not yet propagated into the invoke path.
  */
 export async function openCallFromMethod(
   svc: CatalogService,
@@ -37,6 +36,11 @@ export async function openCallFromMethod(
   opts: { newWorkflow?: boolean } = {},
 ): Promise<void> {
   if (opts.newWorkflow) workflowStore.createWorkflow(method);
-  const step = await createStepFromMethod({ address: svc.address, tls: svc.tls }, service, method);
+  const step = await createStepFromMethod(
+    { address: svc.address, tls: svc.tls },
+    service,
+    method,
+    { serviceId: svc.id, defaultMetadata: svc.defaultMetadata },
+  );
   workflowStore.update((w) => setView(addStep(w, step), "focus"));
 }

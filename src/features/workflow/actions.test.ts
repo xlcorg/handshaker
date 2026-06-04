@@ -47,6 +47,19 @@ describe("createStepFromMethod", () => {
     );
     expect(step.requestJson).toBe("{}");
   });
+
+  it("seeds metadata (deep copy) from service defaultMetadata and records serviceId", async () => {
+    vi.mocked(ipc.grpcBuildRequestSkeleton).mockResolvedValue("{}");
+    const defaults = [{ key: "x-tenant", value: "{{tenant}}", enabled: true }];
+    const step = await createStepFromMethod(
+      { address: "h:443", tls: true }, "S", "M",
+      { serviceId: "svc-1", defaultMetadata: defaults },
+    );
+    expect(step.serviceId).toBe("svc-1");
+    expect(step.metadata).toEqual(defaults);
+    expect(step.metadata).not.toBe(defaults);       // deep copy: array identity differs
+    expect(step.metadata[0]).not.toBe(defaults[0]); // and row identity differs
+  });
 });
 
 describe("sendStep", () => {

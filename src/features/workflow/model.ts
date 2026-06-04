@@ -16,6 +16,7 @@ export interface Step {
   tls: boolean;
   service: string; // proto service full name, e.g. "payments.v1.PaymentService"
   method: string; // method name, e.g. "GetPayment"
+  serviceId: string | null; // origin catalog service, for live auth lookup at Send
   requestJson: string; // editable request body (skeleton-prefilled)
   metadata: MetadataRow[];
   status: StepStatus;
@@ -38,6 +39,8 @@ export function newStep(init: {
   service: string;
   method: string;
   requestJson?: string;
+  metadata?: MetadataRow[];
+  serviceId?: string | null;
 }): Step {
   return {
     id: newId(),
@@ -45,8 +48,9 @@ export function newStep(init: {
     tls: init.tls,
     service: init.service,
     method: init.method,
+    serviceId: init.serviceId ?? null,
     requestJson: init.requestJson ?? "{}",
-    metadata: [],
+    metadata: init.metadata ?? [],
     status: "draft",
     outcome: null,
     error: null,

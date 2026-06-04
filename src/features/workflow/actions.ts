@@ -12,6 +12,7 @@ export async function createStepFromMethod(
   target: CallTargetInit,
   service: string,
   method: string,
+  opts: { serviceId?: string | null; defaultMetadata?: MetadataRow[] } = {},
 ): Promise<Step> {
   let requestJson = "{}";
   try {
@@ -23,7 +24,15 @@ export async function createStepFromMethod(
   } catch {
     requestJson = "{}";
   }
-  return newStep({ address: target.address, tls: target.tls, service, method, requestJson });
+  return newStep({
+    address: target.address,
+    tls: target.tls,
+    service,
+    method,
+    requestJson,
+    serviceId: opts.serviceId ?? null,
+    metadata: (opts.defaultMetadata ?? []).map((r) => ({ ...r })), // deep copy → editable
+  });
 }
 
 export type SendResult =
