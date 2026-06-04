@@ -5,6 +5,9 @@
 //! of one `grpc_invoke_oneshot` (or a `grpc_describe` cache miss) and is dropped after.
 
 use std::sync::Arc;
+use std::time::Duration;
+
+use tokio::sync::Notify;
 
 use handshaker_core::grpc::{
     activate, build_request_skeleton_from_pool, invoke_unary, ContractKey, GrpcTarget,
@@ -15,7 +18,7 @@ use tauri_specta::Event;
 
 use crate::commands::events::ContractUpdated;
 use crate::ipc::{GrpcTargetIpc, InvokeOutcomeIpc, InvokeRequest, IpcError, ServiceCatalogIpc};
-use crate::state::AppState;
+use crate::state::{AppState, InFlight};
 
 /// Stable string key for the `ContractUpdated` event. Mirrors `ContractKey`'s
 /// key-space (address + tls only; `skip_verify` is intentionally excluded —
@@ -92,6 +95,55 @@ pub async fn grpc_build_request_skeleton(
     Ok(build_request_skeleton_from_pool(&conn.pool, &service, &method)?)
 }
 
+/// Sentinel transport messages classified on the frontend (Transport(msg) reuse — see the
+/// Phase C decision). Kept as the C2<->C5/C6 contract.
+const CANCELLED_MSG: &str = "request cancelled";
+fn timed_out_msg(ms: u32) -> String {
+    format!("request timed out after {ms}ms")
+}
+
+/// Removes the in-flight registry entry on scope exit (success / timeout / cancel / panic).
+struct DeregisterGuard<'a> {
+    map: &'a InFlight,
+    id: String,
+}
+impl Drop for DeregisterGuard<'_> {
+    fn drop(&mut self) {
+        if let Ok(mut g) = self.map.lock() {
+            g.remove(&self.id);
+        }
+    }
+}
+
+/// Race a unit of `work` against (a) a per-request cancel `Notify` and (b) a timeout.
+/// Testable seam: the command builds `work` from the real activate+invoke; tests pass a
+/// synthetic future. Generic over `T` so tests need no `InvokeOutcomeIpc` and no network.
+pub(crate) async fn race_cancel_timeout<T, F>(
+    in_flight: &InFlight,
+    request_id: String,
+    timeout_ms: u32,
+    work: F,
+) -> Result<T, IpcError>
+where
+    F: std::future::Future<Output = Result<T, IpcError>>,
+{
+    let notify = Arc::new(Notify::new());
+    in_flight
+        .lock()
+        .expect("in_flight registry poisoned")
+        .insert(request_id.clone(), notify.clone());
+    let _guard = DeregisterGuard { map: in_flight, id: request_id };
+
+    tokio::select! {
+        biased;
+        _ = notify.notified() => Err(IpcError::Transport { message: CANCELLED_MSG.to_string() }),
+        r = tokio::time::timeout(Duration::from_millis(timeout_ms as u64), work) => match r {
+            Ok(inner) => inner,
+            Err(_) => Err(IpcError::Transport { message: timed_out_msg(timeout_ms) }),
+        },
+    }
+}
+
 /// One-shot unary invoke: activate (channel required) → invoke → drop.
 ///
 /// Non-OK gRPC status arrives in `InvokeOutcomeIpc.status_code`, NOT as `Err`.
@@ -103,20 +155,45 @@ pub async fn grpc_invoke_oneshot(
     state: State<'_, AppState>,
     target: GrpcTargetIpc,
     request: InvokeRequest,
+    request_id: String,
+    timeout_ms: u32,
 ) -> Result<InvokeOutcomeIpc, IpcError> {
     let target = target.into_core()?;
-    let transport = Arc::new(TonicTransport::new());
-    let conn = activate(target, transport, state.contract_cache.as_ref()).await?;
-    let outcome = invoke_unary(
-        &conn,
-        &request.service,
-        &request.method,
-        &request.request_json,
-        request.metadata,
-    )
-    .await?;
-    Ok(outcome.into())
-    // conn dropped here.
+    let cache = state.contract_cache.clone();
+    let work = async move {
+        let transport = Arc::new(TonicTransport::new());
+        let conn = activate(target, transport, cache.as_ref()).await?;
+        let outcome = invoke_unary(
+            &conn,
+            &request.service,
+            &request.method,
+            &request.request_json,
+            request.metadata,
+        )
+        .await?;
+        Ok::<InvokeOutcomeIpc, IpcError>(outcome.into())
+    };
+    race_cancel_timeout(&state.in_flight, request_id, timeout_ms, work).await
+}
+
+/// Fire the cancel `Notify` for an in-flight `request_id`. No-op if unknown (already
+/// finished or never started). Uses `notify_one()` so a cancel racing the `select!` first
+/// poll still stores a permit.
+#[tauri::command]
+#[specta::specta]
+pub async fn grpc_cancel(
+    state: State<'_, AppState>,
+    request_id: String,
+) -> Result<(), IpcError> {
+    if let Some(n) = state
+        .in_flight
+        .lock()
+        .expect("in_flight registry poisoned")
+        .get(&request_id)
+    {
+        n.notify_one();
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -135,5 +212,68 @@ mod tests {
         let a = GrpcTarget::new("api.prod:8443", true, false).unwrap();
         let b = GrpcTarget::new("api.prod:8443", false, false).unwrap();
         assert_ne!(target_key(&a), target_key(&b));
+    }
+
+    use crate::ipc::IpcError;
+    use crate::state::InFlight;
+    use std::collections::HashMap;
+    use std::time::Duration;
+
+    fn empty_in_flight() -> InFlight {
+        std::sync::Mutex::new(HashMap::new())
+    }
+
+    #[tokio::test]
+    async fn race_passes_through_success_and_cleans_up() {
+        let m = empty_in_flight();
+        let r = race_cancel_timeout(&m, "id1".to_string(), 1000, async {
+            Ok::<i32, IpcError>(7)
+        })
+        .await;
+        assert_eq!(r.unwrap(), 7);
+        assert!(m.lock().unwrap().is_empty(), "registry entry removed on success");
+    }
+
+    #[tokio::test]
+    async fn race_times_out_when_work_exceeds_budget() {
+        let m = empty_in_flight();
+        let work = async {
+            tokio::time::sleep(Duration::from_secs(10)).await;
+            Ok::<i32, IpcError>(1)
+        };
+        match race_cancel_timeout(&m, "id2".to_string(), 50, work).await {
+            Err(IpcError::Transport { message }) => assert!(message.contains("timed out"), "{message}"),
+            other => panic!("expected timeout Transport, got {other:?}"),
+        }
+        assert!(m.lock().unwrap().is_empty(), "registry entry removed on timeout");
+    }
+
+    #[tokio::test]
+    async fn race_cancels_when_notified_and_cleans_up() {
+        let m = empty_in_flight();
+        let id = "cancel-me".to_string();
+        let work = std::future::pending::<Result<i32, IpcError>>();
+
+        // Concurrent canceller on the same task (no spawn -> no 'static bound): wait until
+        // the race registers its Notify, then fire notify_one().
+        let canceller = async {
+            loop {
+                if let Some(n) = m.lock().unwrap().get(&id).cloned() {
+                    n.notify_one();
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        };
+
+        let (raced, _) = tokio::join!(
+            race_cancel_timeout(&m, id.clone(), 60_000, work),
+            canceller,
+        );
+        match raced {
+            Err(IpcError::Transport { message }) => assert!(message.contains("cancelled"), "{message}"),
+            other => panic!("expected cancelled Transport, got {other:?}"),
+        }
+        assert!(m.lock().unwrap().is_empty(), "registry entry removed on cancel");
     }
 }
