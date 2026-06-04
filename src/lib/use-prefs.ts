@@ -16,6 +16,8 @@ export interface Prefs {
   dots: boolean;
   /** Webview zoom factor (1 = 100%). Persisted; applied via webview.setZoom. */
   zoom: number;
+  /** Per-request deadline in ms, applied backend-side via tokio timeout. */
+  requestTimeoutMs: number;
 }
 
 export const PREFS_DEFAULTS: Prefs = {
@@ -27,6 +29,7 @@ export const PREFS_DEFAULTS: Prefs = {
   fontMono: "jetbrains",
   dots: true,
   zoom: 1,
+  requestTimeoutMs: 30000,
 };
 
 export const ZOOM_MIN = 0.5;
@@ -36,6 +39,14 @@ export const ZOOM_STEP = 0.1;
 /** Clamp to [ZOOM_MIN, ZOOM_MAX] and snap to one decimal to avoid float drift. */
 export function clampZoom(z: number): number {
   return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(z * 10) / 10));
+}
+
+export const TIMEOUT_MIN_MS = 1000;
+
+/** Floor to TIMEOUT_MIN_MS and round to an integer ms (rejects NaN/sub-second input). */
+export function clampTimeoutMs(ms: number): number {
+  if (!Number.isFinite(ms)) return TIMEOUT_MIN_MS;
+  return Math.max(TIMEOUT_MIN_MS, Math.round(ms));
 }
 
 const STORAGE_KEY = "handshaker.prefs.v1";
