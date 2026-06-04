@@ -47,7 +47,7 @@ fn collection_tree_survives_restart() {
         skip_tls_verify: false,
         pinned: false,
         description: None,
-        created_at: 0,
+        created_at: 0.0,
     };
 
     // Add a request under the folder, then persist.

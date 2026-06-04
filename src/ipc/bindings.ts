@@ -220,9 +220,17 @@ async collectionRestoreItem(collectionId: string, snapshot: ItemSnapshotIpc, par
     else return { status: "error", error: e  as any };
 }
 },
-async authSetForEnv(collectionId: string, itemId: string | null, envName: string, config: SavedAuthConfigIpc | null) : Promise<Result<null, IpcError>> {
+async collectionSetNodeAuth(collectionId: string, itemId: string | null, config: SavedAuthConfigIpc) : Promise<Result<null, IpcError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("auth_set_for_env", { collectionId, itemId, envName, config }) };
+    return { status: "ok", data: await TAURI_INVOKE("collection_set_node_auth", { collectionId, itemId, config }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async collectionBumpUsage(collectionId: string, itemId: string, usedAt: number) : Promise<Result<null, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("collection_bump_usage", { collectionId, itemId, usedAt }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -246,9 +254,8 @@ contractUpdated: "contract-updated"
 /** user-defined types **/
 
 export type AppVersion = { version: string }
-export type AuthByEnvIpc = { configs: Partial<{ [key in string]: SavedAuthConfigIpc }> }
 export type AuthCredentialsIpc = { header_name: string; header_value: string }
-export type CollectionIpc = { id: string; name: string; items: ItemIpc[]; variables: Partial<{ [key in string]: string }>; auth_by_env: AuthByEnvIpc; default_tls: boolean; skip_tls_verify: boolean }
+export type CollectionIpc = { id: string; name: string; items: ItemIpc[]; variables: Partial<{ [key in string]: string }>; auth: SavedAuthConfigIpc; default_tls: boolean; skip_tls_verify: boolean; pinned: boolean; description: string | null; created_at: number }
 /**
  * Lightweight list entry (id + name only) for `collection_list`.
  */
@@ -262,7 +269,7 @@ export type ContractUpdated = {
  */
 target_key: string }
 export type EnvironmentIpc = { name: string; variables: Partial<{ [key in string]: string }> }
-export type FolderIpc = { id: string; name: string; items: ItemIpc[]; auth_by_env: AuthByEnvIpc }
+export type FolderIpc = { id: string; name: string; items: ItemIpc[] }
 export type GrpcTargetIpc = { address: string; tls: boolean; skip_verify: boolean }
 export type InvokeOutcomeIpc = { status_code: number; status_message: string; response_json: string | null; trailing_metadata: Partial<{ [key in string]: string }>; 
 /**
@@ -277,10 +284,11 @@ export type ItemIpc = ({ type: "folder" } & FolderIpc) | ({ type: "request" } & 
  * Undo payload returned by `collection_delete_item`.
  */
 export type ItemSnapshotIpc = { item: ItemIpc; parent_id: string | null; position: number }
+export type MetadataRowIpc = { key: string; value: string; enabled: boolean }
 export type MethodEntryIpc = { name: string; path: string; input_message: string; output_message: string; client_streaming: boolean; server_streaming: boolean }
 export type ResolutionReportIpc = { resolved: string; unresolved_vars: string[]; cycle_chain: string[] | null }
 export type SavedAuthConfigIpc = { kind: "none" } | { kind: "env_var"; env_var: string; header_name: string; prefix: string } | { kind: "oauth_2_client_credentials"; token_url: string; client_id: string; client_secret_env_var: string; scopes: string[] }
-export type SavedRequestIpc = { id: string; name: string; address_template: string; service: string; method: string; body_template: string; metadata: Partial<{ [key in string]: string }>; auth_by_env: AuthByEnvIpc; tls_override: boolean | null }
+export type SavedRequestIpc = { id: string; name: string; address_template: string; service: string; method: string; body_template: string; metadata: MetadataRowIpc[]; auth: SavedAuthConfigIpc; tls_override: boolean | null; last_used_at: number | null; use_count: number }
 export type ServiceCatalogIpc = { services: ServiceEntryIpc[] }
 export type ServiceEntryIpc = { full_name: string; methods: MethodEntryIpc[] }
 

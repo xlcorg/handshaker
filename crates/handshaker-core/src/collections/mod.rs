@@ -35,7 +35,7 @@ pub struct MetadataRow {
 }
 
 /// Root entity. Carries collection-scope variables, root auth, and TLS defaults.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Collection {
     pub id: CollectionId,
     pub name: String,
@@ -46,11 +46,11 @@ pub struct Collection {
     pub skip_tls_verify: bool,
     pub pinned: bool,
     pub description: Option<String>,
-    pub created_at: i64, // epoch ms, set by frontend
+    pub created_at: f64, // epoch ms, set by frontend
 }
 
 /// A node in the tree.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum Item {
     Folder(Folder),
@@ -58,7 +58,7 @@ pub enum Item {
 }
 
 /// User grouping. Pure organization — no auth, no variables (master §5.2, spec §7).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Folder {
     pub id: ItemId,
     pub name: String,
@@ -67,7 +67,7 @@ pub struct Folder {
 }
 
 /// A saved request: address template + service/method + body/metadata templates.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SavedRequest {
     pub id: ItemId,
     pub name: String,
@@ -78,7 +78,7 @@ pub struct SavedRequest {
     pub metadata: Vec<MetadataRow>,
     pub auth: SavedAuthConfig,
     pub tls_override: Option<bool>,
-    pub last_used_at: Option<i64>, // epoch ms
+    pub last_used_at: Option<f64>, // epoch ms
     pub use_count: u32,
 }
 
@@ -156,7 +156,7 @@ mod model_tests {
             skip_tls_verify: false,
             pinned: true,
             description: Some("d".into()),
-            created_at: 1_700_000_000_000,
+            created_at: 1_700_000_000_000.0,
         };
         assert!(c.pinned);
         assert_eq!(c.description.as_deref(), Some("d"));

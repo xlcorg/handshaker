@@ -62,7 +62,7 @@ mod tests {
             skip_tls_verify: false,
             pinned: false,
             description: None,
-            created_at: 0,
+            created_at: 0.0,
         }
     }
 

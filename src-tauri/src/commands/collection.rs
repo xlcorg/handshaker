@@ -144,7 +144,7 @@ impl AppState {
         &self,
         collection_id: &str,
         item_id: &str,
-        used_at: i64,
+        used_at: f64,
     ) -> Result<(), CoreError> {
         let cid = parse_collection_id(collection_id)?;
         let iid = parse_item_id(item_id)?;
@@ -239,7 +239,7 @@ pub async fn collection_set_node_auth(state: State<'_, AppState>, collection_id:
 
 #[tauri::command]
 #[specta::specta]
-pub async fn collection_bump_usage(state: State<'_, AppState>, collection_id: String, item_id: String, used_at: i64) -> Result<(), IpcError> {
+pub async fn collection_bump_usage(state: State<'_, AppState>, collection_id: String, item_id: String, used_at: f64) -> Result<(), IpcError> {
     state.collection_bump_usage_impl(&collection_id, &item_id, used_at).map_err(IpcError::from)
 }
 
@@ -260,7 +260,7 @@ mod tests {
             skip_tls_verify: false,
             pinned: false,
             description: None,
-            created_at: 0,
+            created_at: 0.0,
         }
     }
 
@@ -394,14 +394,14 @@ mod tests {
         let state = AppState::default();
         state.collection_upsert_impl(empty_collection_ipc(1, "c")).unwrap();
         state.collection_add_item_impl(&cid(1), None, request_ipc(20, "r")).unwrap();
-        state.collection_bump_usage_impl(&cid(1), &cid(20), 555).unwrap();
-        state.collection_bump_usage_impl(&cid(1), &cid(20), 777).unwrap();
+        state.collection_bump_usage_impl(&cid(1), &cid(20), 555.0).unwrap();
+        state.collection_bump_usage_impl(&cid(1), &cid(20), 777.0).unwrap();
         let got = state.collection_get_impl(&cid(1)).unwrap();
         let req = match &got.items[0] {
             ItemIpc::Request(r) => r,
             _ => panic!(),
         };
-        assert_eq!(req.last_used_at, Some(777));
+        assert_eq!(req.last_used_at, Some(777.0));
         assert_eq!(req.use_count, 2);
     }
 }

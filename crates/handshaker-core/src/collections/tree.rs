@@ -8,7 +8,7 @@ use super::ids::ItemId;
 use super::Item;
 
 /// A removed item plus where it lived, for undo (`collection_restore_item`).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ItemSnapshot {
     pub item: Item,
     /// Parent folder id, or `None` if it was a root child.

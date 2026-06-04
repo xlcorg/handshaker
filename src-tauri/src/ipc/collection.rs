@@ -120,7 +120,7 @@ pub struct SavedRequestIpc {
     pub metadata: Vec<MetadataRowIpc>,
     pub auth: SavedAuthConfigIpc,
     pub tls_override: Option<bool>,
-    pub last_used_at: Option<i64>,
+    pub last_used_at: Option<f64>,
     pub use_count: u32,
 }
 
@@ -195,7 +195,7 @@ pub struct CollectionIpc {
     pub skip_tls_verify: bool,
     pub pinned: bool,
     pub description: Option<String>,
-    pub created_at: i64,
+    pub created_at: f64,
 }
 
 impl CollectionIpc {
@@ -282,7 +282,7 @@ mod tests {
                     ],
                     auth: SavedAuthConfig::None,
                     tls_override: Some(true),
-                    last_used_at: Some(123),
+                    last_used_at: Some(123.0),
                     use_count: 4,
                 })],
             })],
@@ -292,7 +292,7 @@ mod tests {
             skip_tls_verify: false,
             pinned: true,
             description: Some("d".into()),
-            created_at: 1_700_000_000_000,
+            created_at: 1_700_000_000_000.0,
         }
     }
 
@@ -323,7 +323,7 @@ mod tests {
             skip_tls_verify: false,
             pinned: false,
             description: None,
-            created_at: 0,
+            created_at: 0.0,
         };
         assert!(matches!(ipc.into_core().unwrap_err(), CoreError::InvalidTarget(_)));
     }
