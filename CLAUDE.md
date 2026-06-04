@@ -4,16 +4,28 @@ Handshaker — десктопный gRPC-клиент (Tauri 2 + React 18 + Rust
 Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src-tauri` (IPC) ·
 `src` (React-фронтенд).
 
-## Active work — Workflow-центричный редизайн UI
+## Active work — Рефакторинг коллекции сервисов (Postman-style библиотека)
 
-- **Спец:** `docs/superpowers/specs/2026-06-03-workflow-centric-ui-redesign-design.md`
-- **Планы реализации:** `docs/superpowers/plans/2026-06-03-plan-0{1..5}-*.md`.
-  Plan #1, #2, #3 и #4 — **завершены** (см. статус-баннеры вверху план-файлов). Активный —
-  **plan-05** — оутлайн, детализировать до TDD перед исполнением.
-  Продолжать с **первой невыполненной задачи** активного плана; режим —
-  **subagent-driven**. Источник истины по статусу — баннер план-файла, не эта строка.
-- Стратегия: полная замена UI, shell с нуля, без миграции данных; workflow'ы —
-  только в сессии (in-memory).
+- **Спец:** `docs/superpowers/specs/2026-06-05-service-collection-sidebar-refactor-design.md`
+- **Планы реализации:** `docs/superpowers/plans/2026-06-05-plan-0N-*.md` — несколько
+  файлов по 8 фазам §16 спека (бэкенд → маппинг → workflow-модель → сайдбар →
+  create/save → overview+⌘K → DnD → зачистка). Детализировать до TDD перед
+  исполнением; режим — **subagent-driven**. Источник истины по статусу — баннер
+  план-файла, не эта строка.
+- Суть: заменить выводимое каталог-дерево (`CatalogService`/curated/`catalogStore`)
+  на персистентную пользователь-редактируемую библиотеку поверх `CollectionIpc`-бэкенда
+  (с точечными правками бэкенда: metadata-rows, single-auth, pinned/usage,
+  персист контракт-кэша). Лист = сохранённый вызов; create — request-first.
+
+### Завершённый предшественник — Workflow-центричный редизайн UI (#1–#5)
+
+- Спек и планы #1–#5 + #4b — **завершены** («🎉 Redesign feature-complete»), перенесены
+  в `docs/superpowers/{specs,plans}/archive/`. Это база, поверх которой идёт текущий
+  рефакторинг. Старый shell `src/App.tsx` и легаси `src/features/collections/*` —
+  мёртвый код, удаляются в фазе 8 текущего плана.
+- Стратегия редизайна была: полная замена UI, shell с нуля, без миграции данных.
+  Текущий рефакторинг **вводит персист** для библиотеки реквестов (поверх уже
+  персистентного `CollectionIpc`).
 
 ## Build / test
 
