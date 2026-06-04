@@ -10,9 +10,12 @@
 
 - **Branch:** `redesign/workflow-ui-spec-plans`
 - **Depends on:** Plans #1–#4 (all complete; 151/151 tests green at start of #5).
-- **Status:** Phase A detailed to full TDD (execution-ready). Phases B & C are
-  detailed task breakdowns — **expand to full TDD at their /clear-checkpoint
-  before executing** (project cadence: detail-on-reach).
+- **Status:** ✅ **Phase A COMPLETE** (2026-06-04, subagent-driven). Env-on-workflow +
+  `{{var}}` resolution implemented, reviewed, review-fixes applied. 175/175 tests green,
+  `pnpm lint` clean, `pnpm build` success. Commits: `d73d292`…`4dfd261` (A1+A2, A3, A4, A5,
+  A6+A7, review-fix). Active: **Phase B**. Phases B & C are detailed task breakdowns —
+  **expand to full TDD at their /clear-checkpoint before executing** (project cadence:
+  detail-on-reach).
 - **Mode:** subagent-driven (default).
 - **Build/test commands** (from repo root, PowerShell):
   - Frontend unit tests: `pnpm test` (vitest run) · single file: `pnpm test <path>`
@@ -695,9 +698,12 @@ git commit -m "feat(workflow): mount env switcher in titlebar"
 
 ### Phase A — final review
 
-- [ ] Run `pnpm test` (all green), `pnpm lint` (exit 0), `pnpm build` (success).
-- [ ] Use `superpowers:requesting-code-review` on the Phase A diff.
-- [ ] Update the EXECUTION STATUS banner: Phase A complete + commit range.
+- [x] Run `pnpm test` (175/175 green), `pnpm lint` (exit 0), `pnpm build` (success).
+- [x] Final code review on the Phase A diff → found I1 (uncaught resolver throw leaving
+      step stuck on "sending") + M3 (createWorkflow didn't sync backend env); both fixed in
+      `4dfd261`. M2 (DRY vs legacy `EnvPill`) deferred — `EnvPill` lives only in the
+      unmounted legacy `App.tsx`; fold into that dead-code cleanup. M4/M5 noted (minor).
+- [x] EXECUTION STATUS banner updated: Phase A complete + commit range.
 
 ## 🧹 /clear-checkpoint — end Phase A. Start a fresh session for Phase B.
 
