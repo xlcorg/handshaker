@@ -50,4 +50,21 @@ describe("catalogStore", () => {
     expect(catalogStore.getService(svc.id)?.contract).toBe(contract);
     expect(catalogStore.getService(svc.id)?.contractFetchedAt).toBe(1234);
   });
+
+  it("setServiceAuth patches the service auth config", () => {
+    const svc = catalogStore.addService({ address: "h" });
+    catalogStore.setServiceAuth(svc.id, {
+      kind: "env_var", env_var: "TOK", header_name: "authorization", prefix: "Bearer ",
+    });
+    expect(catalogStore.getService(svc.id)?.auth).toEqual({
+      kind: "env_var", env_var: "TOK", header_name: "authorization", prefix: "Bearer ",
+    });
+  });
+
+  it("setServiceDefaultMetadata patches the default metadata rows", () => {
+    const svc = catalogStore.addService({ address: "h" });
+    const rows = [{ key: "x-tenant", value: "{{tenant}}", enabled: true }];
+    catalogStore.setServiceDefaultMetadata(svc.id, rows);
+    expect(catalogStore.getService(svc.id)?.defaultMetadata).toEqual(rows);
+  });
 });

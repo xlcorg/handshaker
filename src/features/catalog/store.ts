@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
-import type { ServiceCatalogIpc } from "@/ipc/bindings";
+import type { ServiceCatalogIpc, SavedAuthConfigIpc } from "@/ipc/bindings";
+import type { MetadataRow } from "@/features/workflow/model";
 import {
   newCatalogService,
   newCollection,
@@ -75,6 +76,12 @@ export const catalogStore = {
   },
   setContract(id: string, contract: ServiceCatalogIpc, fetchedAt: number) {
     patchService(id, (s) => ({ ...s, contract, contractFetchedAt: fetchedAt }));
+  },
+  setServiceAuth(id: string, config: SavedAuthConfigIpc) {
+    patchService(id, (s) => ({ ...s, auth: config }));
+  },
+  setServiceDefaultMetadata(id: string, rows: MetadataRow[]) {
+    patchService(id, (s) => ({ ...s, defaultMetadata: rows }));
   },
 };
 

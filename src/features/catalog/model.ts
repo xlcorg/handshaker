@@ -1,5 +1,6 @@
 import { newId } from "@/lib/ids";
-import type { ServiceCatalogIpc } from "@/ipc/bindings";
+import type { ServiceCatalogIpc, SavedAuthConfigIpc } from "@/ipc/bindings";
+import type { MetadataRow } from "@/features/workflow/model";
 
 /** A curated method (●) — a proto service + method the team actively uses. */
 export interface CuratedMethod {
@@ -20,6 +21,8 @@ export interface CatalogService {
   curated: CuratedMethod[]; // ● methods
   contract: ServiceCatalogIpc | null; // session reflection cache
   contractFetchedAt: number | null; // epoch ms of last reflection read
+  auth: SavedAuthConfigIpc; // service-level auth, applied to all its steps (spec §6)
+  defaultMetadata: MetadataRow[]; // inherited (deep-copied) into new steps
 }
 
 export interface Collection {
@@ -50,6 +53,8 @@ export function newCatalogService(init: {
     curated: [],
     contract: null,
     contractFetchedAt: null,
+    auth: { kind: "none" },
+    defaultMetadata: [],
   };
 }
 

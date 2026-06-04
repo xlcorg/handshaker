@@ -59,3 +59,9 @@ describe("methodKey / isCurated", () => {
     expect(isCurated(s, "p.v1.S", "List")).toBe(false);
   });
 });
+
+it("newCatalogService defaults auth to none and defaultMetadata to empty", () => {
+  const svc = newCatalogService({ address: "h:443" });
+  expect(svc.auth).toEqual({ kind: "none" });
+  expect(svc.defaultMetadata).toEqual([]);
+});
