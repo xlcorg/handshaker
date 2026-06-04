@@ -13,9 +13,10 @@
 - **Status:** ✅ **Phase A COMPLETE** (2026-06-04, subagent-driven). Env-on-workflow +
   `{{var}}` resolution implemented, reviewed, review-fixes applied. 175/175 tests green,
   `pnpm lint` clean, `pnpm build` success. Commits: `d73d292`…`4dfd261` (A1+A2, A3, A4, A5,
-  A6+A7, review-fix). Active: **Phase B**. Phases B & C are detailed task breakdowns —
-  **expand to full TDD at their /clear-checkpoint before executing** (project cadence:
-  detail-on-reach).
+  A6+A7, review-fix). Active: **Phase B** — now **expanded to full TDD (tasks B1–B9)** and
+  ready to execute; Key Decision #2 (auth via new `auth_resolve` IPC, not collection-bound
+  `auth_set_for_env`) **confirmed** at the checkpoint. Phase C remains an outline —
+  expand to full TDD at its /clear-checkpoint (project cadence: detail-on-reach).
 - **Mode:** subagent-driven (default).
 - **Build/test commands** (from repo root, PowerShell):
   - Frontend unit tests: `pnpm test` (vitest run) · single file: `pnpm test <path>`
@@ -752,37 +753,1249 @@ git commit -m "feat(workflow): mount env switcher in titlebar"
   do not couple to the legacy component).
 - Modify: `src/features/workflow/CallPanel.tsx` — render `RequestTabs` in the left pane
   instead of the bare `BodyEditor`.
-- Create: `src/features/catalog/ServiceAuthEditor.tsx` + `ServiceMetadataEditor.tsx` — edit
-  service auth (None / EnvVar fields: env var, header, prefix / OAuth2 fields) and default
-  metadata; mount both in `ServicePanel`.
+- Create: `src/features/catalog/ServiceAuthEditor.tsx` — edit service auth (None / EnvVar
+  fields: env var, header, prefix / OAuth2 read-only "not implemented" note). For default
+  metadata, **reuse `MetadataEditor`** (no separate `ServiceMetadataEditor` — DRY) bound to
+  `setServiceDefaultMetadata`.
 - Modify: `src/features/catalog/ServicePanel.tsx` — add Auth + Default-metadata sections.
 
-## Tasks (TDD intentions)
+## Checkpoint decision — confirmed (Key Decision #2)
 
-- **B1 — `AuthCredentialsIpc` + `From`.** Core test already covers `resolve_auth`; add a
-  Tauri-side unit test that `AuthCredentialsIpc::from(core)` maps fields 1:1.
-- **B2 — `auth_resolve` command.** Test (core-level, in `handshaker-core/src/auth`):
-  `resolve_auth(None) → Ok(None)`; `EnvVar` with a set OS var → header
-  `prefix + value`; `EnvVar` with missing var → `CoreError::Auth`;
-  `OAuth2 → CoreError::NotImplemented`. (Use `std::env::set_var` in a serialized test.)
-  Register in `lib.rs`; regenerate bindings; add `authResolve` to `client.ts`.
-- **B3 — Service auth model + store.** Tests: factory default `auth = { kind: "none" }`;
-  `setServiceAuth` patches; `setServiceDefaultMetadata` patches.
-- **B4 — Apply auth at Send.** Tests in `actions.test.ts`: when service auth is EnvVar,
-  `CallPanel`/send path injects `header_name → header_value` into invoke metadata; `none`
-  injects nothing; OAuth2 surfaces a NotImplemented step error and does not invoke.
-  (Test the pure merge: extend `sendStep` to take `authHeader?` and assert it lands in the
-  metadata map alongside resolved rows; auth header is **not** `{{var}}`-resolved — it is
-  already final from `auth_resolve`.)
-- **B5 — Default metadata inheritance.** Test `createStepFromMethod` copies the service's
-  `defaultMetadata` (deep copy, editable) into the new step and records `serviceId`.
-- **B6 — `MetadataEditor` + `RequestTabs`.** Component tests: editing a row calls back with
-  the new `MetadataRow[]`; toggling `enabled`; add/remove row. Tabs switch panes; the
-  Request pane keeps the Monaco editor (mock it in tests as in Plan #3).
-- **B7 — Service auth/metadata editors in `ServicePanel`.** Tests: changing auth kind shows
-  the right fields and calls `setServiceAuth`; editing default metadata calls
-  `setServiceDefaultMetadata`. Auth tab in the call editor renders the inherited service
-  auth read-only.
+**Auth routes through a new `auth_resolve` IPC + frontend service storage, NOT the
+collection-bound `auth_set_for_env`.** Confirmed sound at this checkpoint: the redesigned
+UI has no collections (`auth_set_for_env` needs `collection_id` + `item_id`), so reusing it
+is impossible without inventing phantom collections. Core `resolve_auth` already exists and
+is fully tested (`crates/handshaker-core/src/auth/mod.rs`), so the new command is a thin
+total wrapper — no new external-library behaviour to verify. `SavedAuthConfigIpc` already
+exists in `src-tauri/src/ipc/collection.rs`; we reuse it as the command input.
+
+> **TS shape of `SavedAuthConfigIpc`** (from current `bindings.ts`, drives every frontend
+> task below):
+> `{ kind: "none" } | { kind: "env_var"; env_var: string; header_name: string; prefix: string }`
+> `| { kind: "oauth_2_client_credentials"; token_url: string; client_id: string; client_secret_env_var: string; scopes: string[] }`.
+> Note the OAuth2 tag is `oauth_2_client_credentials` (specta snake_case of `Oauth2…`).
+
+## Tasks (full TDD)
+
+> Conventions for every task: run the named test first and watch it FAIL before
+> implementing (TDD). Frontend tests run via `pnpm test <path>`; Rust via `cargo test -p …`.
+> After **any** Rust IPC change (B2) regenerate bindings before touching frontend code.
+
+---
+
+### Task B1: `AuthCredentialsIpc` DTO + `from_core`
+
+**Files:**
+- Create: `src-tauri/src/ipc/auth.rs`
+- Modify: `src-tauri/src/ipc/mod.rs`
+
+- [ ] **Step 1 — Write the failing test + module.** Create `src-tauri/src/ipc/auth.rs`:
+
+```rust
+//! IPC DTO for resolved auth credentials (Plan #5, Phase B). Total conversion
+//! from core `AuthCredentials` — a single resolved header to attach to a request.
+
+use handshaker_core::auth::AuthCredentials;
+use serde::{Deserialize, Serialize};
+use specta::Type;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct AuthCredentialsIpc {
+    pub header_name: String,
+    pub header_value: String,
+}
+
+impl AuthCredentialsIpc {
+    pub fn from_core(c: AuthCredentials) -> Self {
+        Self { header_name: c.header_name, header_value: c.header_value }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn from_core_maps_fields_one_to_one() {
+        let core = AuthCredentials {
+            header_name: "authorization".into(),
+            header_value: "Bearer x".into(),
+        };
+        let ipc = AuthCredentialsIpc::from_core(core);
+        assert_eq!(ipc.header_name, "authorization");
+        assert_eq!(ipc.header_value, "Bearer x");
+    }
+}
+```
+
+Register the module in `src-tauri/src/ipc/mod.rs` — add `pub mod auth;` (after `pub mod
+target;`) and `pub use auth::AuthCredentialsIpc;` (after the existing `pub use target::…`).
+
+- [ ] **Step 2 — Run, expect pass.** `cargo test -p handshaker ipc::auth`
+  Expected: PASS (1 test). (Module is new, so this also confirms it compiles + is wired.)
+
+- [ ] **Step 3 — Commit.**
+
+```bash
+git add src-tauri/src/ipc/auth.rs src-tauri/src/ipc/mod.rs
+git commit -m "feat(ipc): AuthCredentialsIpc DTO with from_core"
+```
+
+---
+
+### Task B2: `auth_resolve` command + bindings + client wrapper
+
+**Files:**
+- Create: `src-tauri/src/commands/auth.rs`
+- Modify: `src-tauri/src/commands/mod.rs`
+- Modify: `src-tauri/src/lib.rs`
+- Regenerate: `src/ipc/bindings.ts`
+- Modify: `src/ipc/client.ts`
+
+- [ ] **Step 1 — Write the failing command + tests.** Create `src-tauri/src/commands/auth.rs`:
+
+```rust
+//! Auth-resolution IPC command (Plan #5, Phase B). Thin total wrapper over core
+//! `resolve_auth`: `None → Ok(None)`, `EnvVar` reads the OS env var at call time
+//! (never persists plaintext, master §10), `OAuth2 → NotImplemented`.
+
+use handshaker_core::auth::resolve_auth;
+
+use crate::ipc::auth::AuthCredentialsIpc;
+use crate::ipc::collection::SavedAuthConfigIpc;
+use crate::ipc::error::IpcError;
+
+#[tauri::command]
+#[specta::specta]
+pub async fn auth_resolve(
+    config: SavedAuthConfigIpc,
+) -> Result<Option<AuthCredentialsIpc>, IpcError> {
+    let core = config.into_core();
+    let creds = resolve_auth(&core).map_err(IpcError::from)?;
+    Ok(creds.map(AuthCredentialsIpc::from_core))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn none_resolves_to_no_header() {
+        assert!(auth_resolve(SavedAuthConfigIpc::None).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn env_var_resolves_to_prefixed_header() {
+        let var = "HANDSHAKER_TEST_AUTH_RESOLVE_CMD";
+        std::env::set_var(var, "tok123");
+        let cfg = SavedAuthConfigIpc::EnvVar {
+            env_var: var.into(),
+            header_name: "authorization".into(),
+            prefix: "Bearer ".into(),
+        };
+        let out = auth_resolve(cfg).await.unwrap().unwrap();
+        assert_eq!(out.header_name, "authorization");
+        assert_eq!(out.header_value, "Bearer tok123");
+        std::env::remove_var(var);
+    }
+
+    #[tokio::test]
+    async fn oauth2_is_not_implemented() {
+        let cfg = SavedAuthConfigIpc::Oauth2ClientCredentials {
+            token_url: "https://idp/token".into(),
+            client_id: "cid".into(),
+            client_secret_env_var: "SECRET".into(),
+            scopes: vec![],
+        };
+        assert!(matches!(auth_resolve(cfg).await.unwrap_err(), IpcError::NotImplemented { .. }));
+    }
+}
+```
+
+Register the module in `src-tauri/src/commands/mod.rs` — add `pub mod auth;` (first line,
+alphabetical).
+
+- [ ] **Step 2 — Run, expect pass.** `cargo test -p handshaker commands::auth`
+  Expected: PASS (3 tests). (`env_var_resolves…` uses a unique OS var name so it won't race
+  the core-level auth tests.)
+
+- [ ] **Step 3 — Register the command.** In `src-tauri/src/lib.rs`, add the import
+  `use commands::auth::auth_resolve;` (above `use commands::collection::…`) and add
+  `auth_resolve,` to the `collect_commands![…]` list (e.g. right after `vars_resolve,`).
+
+- [ ] **Step 4 — Regenerate bindings.** From repo root:
+
+```bash
+cargo run -p handshaker --bin export-bindings
+```
+
+Expected: `src/ipc/bindings.ts` now contains `async authResolve(config: SavedAuthConfigIpc)
+: Promise<Result<AuthCredentialsIpc | null, IpcError>>` and an
+`export type AuthCredentialsIpc = { header_name: string; header_value: string }`.
+
+- [ ] **Step 5 — Add the client wrapper.** In `src/ipc/client.ts`:
+  - extend the type import block with `AuthCredentialsIpc`,
+  - add the wrapper (e.g. after `varsResolve`):
+
+```ts
+export async function authResolve(
+  config: SavedAuthConfigIpc,
+): Promise<AuthCredentialsIpc | null> {
+  const r = await commands.authResolve(config);
+  if (r.status === "error") throw r.error;
+  return r.data;
+}
+```
+
+  - add `authResolve,` to the `export const ipc = { … }` object.
+
+- [ ] **Step 6 — Typecheck.** `pnpm lint` → exit 0.
+
+- [ ] **Step 7 — Commit.**
+
+```bash
+git add src-tauri/src/commands/auth.rs src-tauri/src/commands/mod.rs src-tauri/src/lib.rs src/ipc/bindings.ts src/ipc/client.ts
+git commit -m "feat(auth): auth_resolve IPC wrapping core resolve_auth"
+```
+
+---
+
+### Task B3: Service `auth` + `defaultMetadata` on the catalog model + store
+
+**Files:**
+- Modify: `src/features/catalog/model.ts`
+- Modify: `src/features/catalog/store.ts`
+- Test: `src/features/catalog/model.test.ts`
+- Test: `src/features/catalog/store.test.ts`
+
+- [ ] **Step 1 — Failing tests (model).** Append to `model.test.ts`:
+
+```ts
+it("newCatalogService defaults auth to none and defaultMetadata to empty", () => {
+  const svc = newCatalogService({ address: "h:443" });
+  expect(svc.auth).toEqual({ kind: "none" });
+  expect(svc.defaultMetadata).toEqual([]);
+});
+```
+
+(Ensure `newCatalogService` is imported in `model.test.ts`; add it to the existing import
+if absent.)
+
+- [ ] **Step 2 — Failing tests (store).** Append to `store.test.ts`:
+
+```ts
+it("setServiceAuth patches the service auth config", () => {
+  const svc = catalogStore.addService({ address: "h" });
+  catalogStore.setServiceAuth(svc.id, {
+    kind: "env_var", env_var: "TOK", header_name: "authorization", prefix: "Bearer ",
+  });
+  expect(catalogStore.getService(svc.id)?.auth).toEqual({
+    kind: "env_var", env_var: "TOK", header_name: "authorization", prefix: "Bearer ",
+  });
+});
+
+it("setServiceDefaultMetadata patches the default metadata rows", () => {
+  const svc = catalogStore.addService({ address: "h" });
+  const rows = [{ key: "x-tenant", value: "{{tenant}}", enabled: true }];
+  catalogStore.setServiceDefaultMetadata(svc.id, rows);
+  expect(catalogStore.getService(svc.id)?.defaultMetadata).toEqual(rows);
+});
+```
+
+- [ ] **Step 3 — Run, expect fail.**
+  `pnpm test src/features/catalog/model.test.ts src/features/catalog/store.test.ts`
+  → FAIL (`auth`/`defaultMetadata` undefined; setters not functions).
+
+- [ ] **Step 4 — Implement (model.ts).** Add imports + fields + factory defaults:
+
+```ts
+import type { ServiceCatalogIpc, SavedAuthConfigIpc } from "@/ipc/bindings";
+import type { MetadataRow } from "@/features/workflow/model";
+```
+
+```ts
+export interface CatalogService {
+  // …existing fields…
+  auth: SavedAuthConfigIpc; // service-level auth, applied to all its steps (spec §6)
+  defaultMetadata: MetadataRow[]; // inherited (deep-copied) into new steps
+}
+```
+
+In `newCatalogService`, add to the returned object:
+
+```ts
+    auth: { kind: "none" },
+    defaultMetadata: [],
+```
+
+- [ ] **Step 5 — Implement (store.ts).** Add to the `catalogStore` object (after
+  `setContract`):
+
+```ts
+  setServiceAuth(id: string, config: SavedAuthConfigIpc) {
+    patchService(id, (s) => ({ ...s, auth: config }));
+  },
+  setServiceDefaultMetadata(id: string, rows: MetadataRow[]) {
+    patchService(id, (s) => ({ ...s, defaultMetadata: rows }));
+  },
+```
+
+Add the imports at the top of `store.ts`:
+
+```ts
+import type { ServiceCatalogIpc, SavedAuthConfigIpc } from "@/ipc/bindings";
+import type { MetadataRow } from "@/features/workflow/model";
+```
+
+- [ ] **Step 6 — Run, expect pass.** `pnpm test src/features/catalog` then `pnpm lint`.
+
+- [ ] **Step 7 — Commit.**
+
+```bash
+git add src/features/catalog/model.ts src/features/catalog/store.ts src/features/catalog/model.test.ts src/features/catalog/store.test.ts
+git commit -m "feat(catalog): service-level auth + defaultMetadata on model + store"
+```
+
+---
+
+### Task B4: `Step.serviceId` + default-metadata inheritance into new steps
+
+**Files:**
+- Modify: `src/features/workflow/model.ts`
+- Modify: `src/features/workflow/actions.ts`
+- Modify: `src/features/catalog/actions.ts`
+- Test: `src/features/workflow/model.test.ts`
+- Test: `src/features/workflow/actions.test.ts`
+
+- [ ] **Step 1 — Failing test (model).** Append to `model.test.ts`:
+
+```ts
+it("newStep defaults serviceId to null and metadata to []", () => {
+  const s = newStep({ address: "h", tls: false, service: "S", method: "M" });
+  expect(s.serviceId).toBeNull();
+  expect(s.metadata).toEqual([]);
+});
+
+it("newStep carries provided serviceId and metadata", () => {
+  const rows = [{ key: "x", value: "1", enabled: true }];
+  const s = newStep({ address: "h", tls: false, service: "S", method: "M", serviceId: "svc-1", metadata: rows });
+  expect(s.serviceId).toBe("svc-1");
+  expect(s.metadata).toEqual(rows);
+});
+```
+
+- [ ] **Step 2 — Failing test (actions).** Append to `actions.test.ts` (inside the
+  `describe("createStepFromMethod", …)` block):
+
+```ts
+it("seeds metadata (deep copy) from service defaultMetadata and records serviceId", async () => {
+  vi.mocked(ipc.grpcBuildRequestSkeleton).mockResolvedValue("{}");
+  const defaults = [{ key: "x-tenant", value: "{{tenant}}", enabled: true }];
+  const step = await createStepFromMethod(
+    { address: "h:443", tls: true }, "S", "M",
+    { serviceId: "svc-1", defaultMetadata: defaults },
+  );
+  expect(step.serviceId).toBe("svc-1");
+  expect(step.metadata).toEqual(defaults);
+  expect(step.metadata).not.toBe(defaults);       // deep copy: array identity differs
+  expect(step.metadata[0]).not.toBe(defaults[0]); // and row identity differs
+});
+```
+
+- [ ] **Step 3 — Run, expect fail.**
+  `pnpm test src/features/workflow/model.test.ts src/features/workflow/actions.test.ts`
+  → FAIL (`serviceId` undefined; `createStepFromMethod` ignores opts).
+
+- [ ] **Step 4 — Implement (model.ts).** Add `serviceId` to `Step` and extend `newStep`:
+
+```ts
+export interface Step {
+  id: string;
+  address: string;
+  tls: boolean;
+  service: string;
+  method: string;
+  serviceId: string | null; // origin catalog service, for live auth lookup at Send
+  requestJson: string;
+  metadata: MetadataRow[];
+  status: StepStatus;
+  outcome: InvokeOutcomeIpc | null;
+  error: string | null;
+}
+
+export function newStep(init: {
+  address: string;
+  tls: boolean;
+  service: string;
+  method: string;
+  requestJson?: string;
+  metadata?: MetadataRow[];
+  serviceId?: string | null;
+}): Step {
+  return {
+    id: newId(),
+    address: init.address,
+    tls: init.tls,
+    service: init.service,
+    method: init.method,
+    serviceId: init.serviceId ?? null,
+    requestJson: init.requestJson ?? "{}",
+    metadata: init.metadata ?? [],
+    status: "draft",
+    outcome: null,
+    error: null,
+  };
+}
+```
+
+- [ ] **Step 5 — Implement (workflow/actions.ts).** Extend `createStepFromMethod`:
+
+```ts
+export async function createStepFromMethod(
+  target: CallTargetInit,
+  service: string,
+  method: string,
+  opts: { serviceId?: string | null; defaultMetadata?: MetadataRow[] } = {},
+): Promise<Step> {
+  let requestJson = "{}";
+  try {
+    requestJson = await ipc.grpcBuildRequestSkeleton(
+      { address: target.address, tls: target.tls, skip_verify: false },
+      service,
+      method,
+    );
+  } catch {
+    requestJson = "{}";
+  }
+  return newStep({
+    address: target.address,
+    tls: target.tls,
+    service,
+    method,
+    requestJson,
+    serviceId: opts.serviceId ?? null,
+    metadata: (opts.defaultMetadata ?? []).map((r) => ({ ...r })), // deep copy → editable
+  });
+}
+```
+
+- [ ] **Step 6 — Implement (catalog/actions.ts).** In `openCallFromMethod`, pass the service
+  id + default metadata, and update the stale comment:
+
+```ts
+  const step = await createStepFromMethod(
+    { address: svc.address, tls: svc.tls },
+    service,
+    method,
+    { serviceId: svc.id, defaultMetadata: svc.defaultMetadata },
+  );
+```
+
+  (Remove the `NOTE: skipVerify/auth are NOT wired…` comment line that says auth is unwired —
+  it is being wired now.)
+
+- [ ] **Step 7 — Run, expect pass.** `pnpm test src/features/workflow src/features/catalog`
+  then `pnpm lint`.
+
+- [ ] **Step 8 — Commit.**
+
+```bash
+git add src/features/workflow/model.ts src/features/workflow/actions.ts src/features/catalog/actions.ts src/features/workflow/model.test.ts src/features/workflow/actions.test.ts
+git commit -m "feat(workflow): step.serviceId + inherit service defaultMetadata into new steps"
+```
+
+---
+
+### Task B5: Apply resolved auth at Send (`sendStep` merge + `resolveStepAuthHeader`)
+
+**Files:**
+- Modify: `src/features/workflow/actions.ts`
+- Test: `src/features/workflow/actions.test.ts`
+
+`sendStep` gains an optional final `authHeader` that is merged into the invoke metadata map
+**verbatim** (it is already final from `auth_resolve` — NOT `{{var}}`-resolved). A pure
+helper `resolveStepAuthHeader` looks up the origin service's auth and resolves it (so
+`CallPanel` stays thin and testable without Monaco).
+
+- [ ] **Step 1 — Failing tests.** Append to `actions.test.ts`. First add `authResolve` to the
+  mocked client at the top of the file (extend the existing `vi.mock("@/ipc/client", …)`):
+
+```ts
+vi.mock("@/ipc/client", () => ({
+  grpcBuildRequestSkeleton: vi.fn(),
+  grpcInvokeOneshot: vi.fn(),
+  varsResolve: vi.fn(),
+  authResolve: vi.fn(),
+}));
+```
+
+Then add the tests:
+
+```ts
+import { resolveStepAuthHeader } from "./actions";
+
+describe("sendStep authHeader merge", () => {
+  beforeEach(() => {
+    vi.mocked(ipc.grpcInvokeOneshot).mockResolvedValue({
+      status_code: 0, status_message: "OK", response_json: "{}", trailing_metadata: {}, elapsed_ms: 1,
+    });
+  });
+
+  it("merges the auth header verbatim alongside resolved metadata rows", async () => {
+    await sendStep(
+      { address: "h:443", tls: true, service: "S", method: "M", requestJson: "{}",
+        metadata: [{ key: "x", value: "1", enabled: true }] },
+      { key: "authorization", value: "Bearer {{notresolved}}" }, // verbatim: no var resolution
+    );
+    expect(ipc.grpcInvokeOneshot).toHaveBeenCalledWith(
+      { address: "h:443", tls: true, skip_verify: false },
+      { service: "S", method: "M", request_json: "{}",
+        metadata: { x: "1", authorization: "Bearer {{notresolved}}" } },
+    );
+  });
+
+  it("injects nothing when no authHeader is given", async () => {
+    await sendStep({ address: "h:443", tls: true, service: "S", method: "M", requestJson: "{}", metadata: [] });
+    expect(ipc.grpcInvokeOneshot).toHaveBeenCalledWith(
+      { address: "h:443", tls: true, skip_verify: false },
+      { service: "S", method: "M", request_json: "{}", metadata: {} },
+    );
+  });
+});
+
+describe("resolveStepAuthHeader", () => {
+  const getNone = () => ({ auth: { kind: "none" as const } });
+
+  it("returns kind 'none' when serviceId is null", async () => {
+    const r = await resolveStepAuthHeader(null, () => undefined, ipc.authResolve);
+    expect(r.kind).toBe("none");
+    expect(ipc.authResolve).not.toHaveBeenCalled();
+  });
+
+  it("returns kind 'none' when the service auth is none", async () => {
+    const r = await resolveStepAuthHeader("svc-1", getNone, ipc.authResolve);
+    expect(r.kind).toBe("none");
+    expect(ipc.authResolve).not.toHaveBeenCalled();
+  });
+
+  it("returns a header when EnvVar auth resolves", async () => {
+    vi.mocked(ipc.authResolve).mockResolvedValue({ header_name: "authorization", header_value: "Bearer t" });
+    const svc = { auth: { kind: "env_var" as const, env_var: "TOK", header_name: "authorization", prefix: "Bearer " } };
+    const r = await resolveStepAuthHeader("svc-1", () => svc, ipc.authResolve);
+    expect(r).toEqual({ kind: "header", header: { key: "authorization", value: "Bearer t" } });
+  });
+
+  it("returns kind 'error' when authResolve throws (OAuth2 NotImplemented)", async () => {
+    vi.mocked(ipc.authResolve).mockRejectedValue({ type: "NotImplemented", message: "oauth2 token fetch" });
+    const svc = { auth: { kind: "oauth_2_client_credentials" as const, token_url: "u", client_id: "c", client_secret_env_var: "S", scopes: [] } };
+    const r = await resolveStepAuthHeader("svc-1", () => svc, ipc.authResolve);
+    expect(r.kind).toBe("error");
+    if (r.kind === "error") expect(r.message).toContain("oauth2");
+  });
+});
+```
+
+- [ ] **Step 2 — Run, expect fail.** `pnpm test src/features/workflow/actions.test.ts`
+  → FAIL (`sendStep` takes no `authHeader`; `resolveStepAuthHeader` not exported).
+
+- [ ] **Step 3 — Implement.** In `actions.ts` add the import and helper, and extend
+  `sendStep`:
+
+```ts
+import type { InvokeOutcomeIpc, SavedAuthConfigIpc, AuthCredentialsIpc } from "@/ipc/bindings";
+```
+
+```ts
+export type AuthHeader = { key: string; value: string };
+
+export type AuthHeaderResult =
+  | { kind: "none" }
+  | { kind: "header"; header: AuthHeader }
+  | { kind: "error"; message: string };
+
+export async function resolveStepAuthHeader(
+  serviceId: string | null,
+  getService: (id: string) => { auth: SavedAuthConfigIpc } | undefined,
+  authResolve: (c: SavedAuthConfigIpc) => Promise<AuthCredentialsIpc | null>,
+): Promise<AuthHeaderResult> {
+  if (!serviceId) return { kind: "none" };
+  const svc = getService(serviceId);
+  if (!svc || svc.auth.kind === "none") return { kind: "none" };
+  try {
+    const creds = await authResolve(svc.auth);
+    if (!creds) return { kind: "none" };
+    return { kind: "header", header: { key: creds.header_name, value: creds.header_value } };
+  } catch (e) {
+    return { kind: "error", message: errorToMessage(e) };
+  }
+}
+```
+
+Extend `sendStep` (add the `authHeader` param and merge it verbatim after the resolved rows):
+
+```ts
+export async function sendStep(
+  step: {
+    address: string;
+    tls: boolean;
+    service: string;
+    method: string;
+    requestJson: string;
+    metadata: MetadataRow[];
+  },
+  authHeader?: AuthHeader | null,
+): Promise<SendResult> {
+  try {
+    const r = await resolveStepTemplates(step, ipc.varsResolve);
+    if (!r.ok) return { kind: "unresolved", unresolved: r.unresolved, cycle: r.cycle };
+    const metadata: Record<string, string> = {};
+    for (const m of r.request.metadata) metadata[m.key] = m.value;
+    if (authHeader) metadata[authHeader.key] = authHeader.value; // verbatim, not {{var}}-resolved
+    const outcome = await ipc.grpcInvokeOneshot(
+      { address: r.request.address, tls: step.tls, skip_verify: false },
+      { service: step.service, method: step.method, request_json: r.request.requestJson, metadata },
+    );
+    return { kind: "ok", outcome };
+  } catch (e) {
+    return { kind: "error", message: errorToMessage(e) };
+  }
+}
+```
+
+- [ ] **Step 4 — Run, expect pass.** `pnpm test src/features/workflow/actions.test.ts`
+  then `pnpm lint`.
+
+- [ ] **Step 5 — Commit.**
+
+```bash
+git add src/features/workflow/actions.ts src/features/workflow/actions.test.ts
+git commit -m "feat(workflow): resolve + merge service auth header at Send"
+```
+
+---
+
+### Task B6: `MetadataEditor` over the workflow `MetadataRow` shape
+
+**Files:**
+- Create: `src/features/workflow/MetadataEditor.tsx`
+- Test: `src/features/workflow/MetadataEditor.test.tsx`
+
+A fresh editor over `MetadataRow { key, value, enabled }` (the legacy `invoke/MetadataView`
+uses `{ k, v }` and has no `enabled` — do **not** reuse it). Controlled component:
+`{ rows, onChange }`.
+
+- [ ] **Step 1 — Failing test.** Create `MetadataEditor.test.tsx`:
+
+```tsx
+import { describe, it, expect, vi } from "vitest";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { MetadataEditor } from "./MetadataEditor";
+
+const rows = [{ key: "x-tenant", value: "acme", enabled: true }];
+
+describe("MetadataEditor", () => {
+  it("edits a key and calls back with the new rows", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<MetadataEditor rows={rows} onChange={onChange} />);
+    await user.type(screen.getByLabelText("metadata-key-0"), "!");
+    expect(onChange).toHaveBeenLastCalledWith([{ key: "x-tenant!", value: "acme", enabled: true }]);
+  });
+
+  it("toggles enabled", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<MetadataEditor rows={rows} onChange={onChange} />);
+    await user.click(screen.getByLabelText("metadata-enabled-0"));
+    expect(onChange).toHaveBeenLastCalledWith([{ key: "x-tenant", value: "acme", enabled: false }]);
+  });
+
+  it("adds a row", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<MetadataEditor rows={rows} onChange={onChange} />);
+    await user.click(screen.getByRole("button", { name: /add/i }));
+    expect(onChange).toHaveBeenLastCalledWith([...rows, { key: "", value: "", enabled: true }]);
+  });
+
+  it("removes a row", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<MetadataEditor rows={rows} onChange={onChange} />);
+    await user.click(screen.getByLabelText("metadata-remove-0"));
+    expect(onChange).toHaveBeenLastCalledWith([]);
+  });
+});
+```
+
+> Note: `userEvent.type` with `"!"` fires one `onChange` whose batched value is the full
+> string; the editor must apply the patch against the row prop (controlled), so the asserted
+> call is the new full key. Keep each input controlled (`value={row.key}`).
+
+- [ ] **Step 2 — Run, expect fail.** `pnpm test src/features/workflow/MetadataEditor.test.tsx`
+  → FAIL (module not found).
+
+- [ ] **Step 3 — Implement.** Create `MetadataEditor.tsx` (model on `invoke/MetadataView`
+  but with the `{key,value,enabled}` shape + an enable checkbox; aria-labels carry the row
+  index for test targeting):
+
+```tsx
+import { Plus, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import type { MetadataRow } from "./model";
+
+export interface MetadataEditorProps {
+  rows: MetadataRow[];
+  onChange: (next: MetadataRow[]) => void;
+}
+
+export function MetadataEditor({ rows, onChange }: MetadataEditorProps) {
+  const updateRow = (i: number, patch: Partial<MetadataRow>) =>
+    onChange(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  const removeRow = (i: number) => onChange(rows.filter((_, j) => j !== i));
+  const addRow = () => onChange([...rows, { key: "", value: "", enabled: true }]);
+
+  return (
+    <div className="p-3.5">
+      <div className="overflow-hidden rounded-md border border-border bg-card">
+        <div className="grid grid-cols-[28px_1fr_1.6fr_28px] border-b border-border bg-muted/30">
+          <div />
+          <div className="px-3 py-1.5 label-cap">Key</div>
+          <div className="px-3 py-1.5 label-cap">Value</div>
+          <div />
+        </div>
+        {rows.map((row, i) => (
+          <div key={i} className="grid grid-cols-[28px_1fr_1.6fr_28px] border-b border-border/60 last:border-0">
+            <div className="flex items-center justify-center">
+              <input
+                type="checkbox"
+                checked={row.enabled}
+                aria-label={`metadata-enabled-${i}`}
+                onChange={(e) => updateRow(i, { enabled: e.target.checked })}
+              />
+            </div>
+            <div className="flex h-8 items-center px-3">
+              <input
+                value={row.key}
+                aria-label={`metadata-key-${i}`}
+                onChange={(e) => updateRow(i, { key: e.target.value })}
+                placeholder="x-request-id"
+                className="w-full bg-transparent font-mono text-xs placeholder:text-muted-foreground focus:outline-none"
+              />
+            </div>
+            <div className="flex h-8 items-center px-3">
+              <input
+                value={row.value}
+                aria-label={`metadata-value-${i}`}
+                onChange={(e) => updateRow(i, { value: e.target.value })}
+                placeholder="value or {{var}}"
+                className="w-full bg-transparent font-mono text-xs placeholder:text-muted-foreground focus:outline-none"
+              />
+            </div>
+            <div className="flex items-center justify-center">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                aria-label={`metadata-remove-${i}`}
+                onClick={() => removeRow(i)}
+                className="text-muted-foreground hover:text-destructive"
+              >
+                <Trash2 className="size-2.5" />
+              </Button>
+            </div>
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={addRow}
+          aria-label="add metadata row"
+          className="grid w-full grid-cols-[28px_1fr_1.6fr_28px] text-left transition-colors hover:bg-accent/40"
+        >
+          <div />
+          <div className="flex h-8 items-center px-3 text-xs text-muted-foreground">Add key…</div>
+          <div />
+          <div className="flex items-center justify-center text-muted-foreground">
+            <Plus className="size-2.5" />
+          </div>
+        </button>
+      </div>
+    </div>
+  );
+}
+```
+
+> Verify `size="icon-xs"` exists on the `Button` variant (it is used by `invoke/MetadataView`,
+> so it does). If `userEvent.type("!")` produces a multi-call assertion mismatch, switch the
+> first test to `fireEvent.change(input, { target: { value: "x-tenant!" } })` and assert the
+> single resulting `onChange`.
+
+- [ ] **Step 4 — Run, expect pass.** `pnpm test src/features/workflow/MetadataEditor.test.tsx`.
+
+- [ ] **Step 5 — Commit.**
+
+```bash
+git add src/features/workflow/MetadataEditor.tsx src/features/workflow/MetadataEditor.test.tsx
+git commit -m "feat(workflow): MetadataEditor over {key,value,enabled} rows"
+```
+
+---
+
+### Task B7: `RequestTabs` — Request / Metadata / Auth sub-tabs (spec §4.3)
+
+**Files:**
+- Create: `src/features/workflow/RequestTabs.tsx`
+- Test: `src/features/workflow/RequestTabs.test.tsx`
+
+Sub-tabs for the call editor. **Request** = the existing `BodyEditor`; **Metadata** =
+`MetadataEditor` over the step's metadata; **Auth** = read-only view of the inherited
+service auth (spec: auth lives only on the service — no per-step override). Local `useState`
+tab (matches the codebase's lightweight `ViewSwitcher` style; no new dependency).
+
+Props: `{ step, serviceAuth, onBody, onMetadata }`.
+
+- [ ] **Step 1 — Failing test.** Create `RequestTabs.test.tsx` (mock `BodyEditor` so Monaco
+  never loads in jsdom — same approach Plan #3 used for Monaco):
+
+```tsx
+import { describe, it, expect, vi } from "vitest";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+
+vi.mock("@/features/invoke/BodyEditor", () => ({
+  BodyEditor: ({ value }: { value: string }) => <div data-testid="body-editor">{value}</div>,
+}));
+
+import { RequestTabs } from "./RequestTabs";
+import { newStep } from "./model";
+
+function setup(authKind: "none" | "env_var" = "none") {
+  const step = { ...newStep({ address: "h", tls: false, service: "S", method: "M", requestJson: '{"a":1}' }),
+    metadata: [{ key: "x", value: "1", enabled: true }] };
+  const serviceAuth =
+    authKind === "none"
+      ? { kind: "none" as const }
+      : { kind: "env_var" as const, env_var: "TOK", header_name: "authorization", prefix: "Bearer " };
+  return { step, serviceAuth, onBody: vi.fn(), onMetadata: vi.fn() };
+}
+
+describe("RequestTabs", () => {
+  it("shows the Request (body) pane by default", () => {
+    const p = setup();
+    render(<RequestTabs {...p} />);
+    expect(screen.getByTestId("body-editor")).toHaveTextContent('{"a":1}');
+  });
+
+  it("switches to the Metadata pane", async () => {
+    const user = userEvent.setup();
+    const p = setup();
+    render(<RequestTabs {...p} />);
+    await user.click(screen.getByRole("tab", { name: /metadata/i }));
+    expect(screen.getByLabelText("metadata-key-0")).toHaveValue("x");
+  });
+
+  it("Auth pane renders the inherited service auth read-only", async () => {
+    const user = userEvent.setup();
+    const p = setup("env_var");
+    render(<RequestTabs {...p} />);
+    await user.click(screen.getByRole("tab", { name: /auth/i }));
+    expect(screen.getByText(/env_var/i)).toBeInTheDocument();
+    expect(screen.getByText(/TOK/)).toBeInTheDocument();
+    // read-only: no editable inputs in the Auth pane
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+  });
+});
+```
+
+- [ ] **Step 2 — Run, expect fail.** `pnpm test src/features/workflow/RequestTabs.test.tsx`
+  → FAIL (module not found).
+
+- [ ] **Step 3 — Implement.** Create `RequestTabs.tsx`:
+
+```tsx
+import { useState } from "react";
+import { BodyEditor } from "@/features/invoke/BodyEditor";
+import { cn } from "@/lib/cn";
+import type { SavedAuthConfigIpc } from "@/ipc/bindings";
+import { MetadataEditor } from "./MetadataEditor";
+import type { MetadataRow, Step } from "./model";
+
+type Tab = "request" | "metadata" | "auth";
+
+export interface RequestTabsProps {
+  step: Step;
+  serviceAuth: SavedAuthConfigIpc;
+  onBody: (value: string) => void;
+  onMetadata: (rows: MetadataRow[]) => void;
+}
+
+export function RequestTabs({ step, serviceAuth, onBody, onMetadata }: RequestTabsProps) {
+  const [tab, setTab] = useState<Tab>("request");
+  const tabs: { id: Tab; label: string }[] = [
+    { id: "request", label: "Request" },
+    { id: "metadata", label: "Metadata" },
+    { id: "auth", label: "Auth" },
+  ];
+  return (
+    <div className="flex h-full flex-col">
+      <div role="tablist" className="flex flex-none gap-1 border-b border-border px-2 py-1">
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            aria-selected={tab === t.id}
+            onClick={() => setTab(t.id)}
+            className={cn(
+              "rounded px-2 py-0.5 text-xs",
+              tab === t.id ? "bg-accent text-foreground" : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <div className="min-h-0 flex-1 overflow-auto">
+        {tab === "request" ? <BodyEditor value={step.requestJson} onChange={onBody} /> : null}
+        {tab === "metadata" ? <MetadataEditor rows={step.metadata} onChange={onMetadata} /> : null}
+        {tab === "auth" ? <AuthReadOnly auth={serviceAuth} /> : null}
+      </div>
+    </div>
+  );
+}
+
+function AuthReadOnly({ auth }: { auth: SavedAuthConfigIpc }) {
+  return (
+    <div className="space-y-2 p-3.5 text-xs">
+      <div className="text-muted-foreground">
+        Auth наследуется от сервиса (настраивается в панели сервиса).
+      </div>
+      <div className="rounded-md border border-border bg-card p-3 font-mono">
+        <div>kind: {auth.kind}</div>
+        {auth.kind === "env_var" ? (
+          <>
+            <div>env_var: {auth.env_var}</div>
+            <div>header: {auth.header_name}</div>
+            <div>prefix: {auth.prefix}</div>
+          </>
+        ) : null}
+        {auth.kind === "oauth_2_client_credentials" ? (
+          <div className="text-destructive">OAuth2 — не реализовано (master §5.4)</div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+```
+
+> Confirm `@/lib/cn` exists (used by `invoke/MetadataView`). It does.
+
+- [ ] **Step 4 — Run, expect pass.** `pnpm test src/features/workflow/RequestTabs.test.tsx`.
+
+- [ ] **Step 5 — Commit.**
+
+```bash
+git add src/features/workflow/RequestTabs.tsx src/features/workflow/RequestTabs.test.tsx
+git commit -m "feat(workflow): Request/Metadata/Auth sub-tabs (spec §4.3)"
+```
+
+---
+
+### Task B8: `ServiceAuthEditor` + default-metadata section in `ServicePanel`
+
+**Files:**
+- Create: `src/features/catalog/ServiceAuthEditor.tsx`
+- Test: `src/features/catalog/ServiceAuthEditor.test.tsx`
+- Modify: `src/features/catalog/ServicePanel.tsx`
+- Test: `src/features/catalog/ServicePanel.test.tsx`
+
+`ServiceAuthEditor` is a controlled `{ value: SavedAuthConfigIpc, onChange }` control: a
+kind selector (none / env_var / oauth_2_client_credentials) plus the fields for the chosen
+kind. `ServicePanel` mounts it (→ `setServiceAuth`) and a `MetadataEditor` for default
+metadata (→ `setServiceDefaultMetadata`).
+
+- [ ] **Step 1 — Failing test (ServiceAuthEditor).** Create `ServiceAuthEditor.test.tsx`:
+
+```tsx
+import { describe, it, expect, vi } from "vitest";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { ServiceAuthEditor } from "./ServiceAuthEditor";
+
+describe("ServiceAuthEditor", () => {
+  it("switching kind to env_var emits an env_var config with empty fields", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<ServiceAuthEditor value={{ kind: "none" }} onChange={onChange} />);
+    await user.selectOptions(screen.getByLabelText("auth-kind"), "env_var");
+    expect(onChange).toHaveBeenLastCalledWith({
+      kind: "env_var", env_var: "", header_name: "authorization", prefix: "Bearer ",
+    });
+  });
+
+  it("editing the env var name emits an updated config", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(
+      <ServiceAuthEditor
+        value={{ kind: "env_var", env_var: "", header_name: "authorization", prefix: "Bearer " }}
+        onChange={onChange}
+      />,
+    );
+    await user.type(screen.getByLabelText("auth-env-var"), "T");
+    expect(onChange).toHaveBeenLastCalledWith({
+      kind: "env_var", env_var: "T", header_name: "authorization", prefix: "Bearer ",
+    });
+  });
+});
+```
+
+- [ ] **Step 2 — Run, expect fail.** → FAIL (module not found).
+
+- [ ] **Step 3 — Implement `ServiceAuthEditor.tsx`:**
+
+```tsx
+import type { SavedAuthConfigIpc } from "@/ipc/bindings";
+
+export interface ServiceAuthEditorProps {
+  value: SavedAuthConfigIpc;
+  onChange: (next: SavedAuthConfigIpc) => void;
+}
+
+const ENV_VAR_DEFAULT: SavedAuthConfigIpc = {
+  kind: "env_var",
+  env_var: "",
+  header_name: "authorization",
+  prefix: "Bearer ",
+};
+
+const OAUTH_DEFAULT: SavedAuthConfigIpc = {
+  kind: "oauth_2_client_credentials",
+  token_url: "",
+  client_id: "",
+  client_secret_env_var: "",
+  scopes: [],
+};
+
+export function ServiceAuthEditor({ value, onChange }: ServiceAuthEditorProps) {
+  const onKind = (kind: SavedAuthConfigIpc["kind"]) => {
+    if (kind === "none") onChange({ kind: "none" });
+    else if (kind === "env_var") onChange(ENV_VAR_DEFAULT);
+    else onChange(OAUTH_DEFAULT);
+  };
+
+  return (
+    <div className="space-y-2 text-xs">
+      <label className="flex items-center gap-2">
+        <span className="text-muted-foreground">Auth</span>
+        <select
+          aria-label="auth-kind"
+          value={value.kind}
+          onChange={(e) => onKind(e.target.value as SavedAuthConfigIpc["kind"])}
+          className="h-7 rounded border border-border bg-background px-2"
+        >
+          <option value="none">None</option>
+          <option value="env_var">Env var (Bearer)</option>
+          <option value="oauth_2_client_credentials">OAuth2 (client credentials)</option>
+        </select>
+      </label>
+
+      {value.kind === "env_var" ? (
+        <div className="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-1 font-mono">
+          <span className="text-muted-foreground">env var</span>
+          <input
+            aria-label="auth-env-var"
+            value={value.env_var}
+            onChange={(e) => onChange({ ...value, env_var: e.target.value })}
+            placeholder="API_TOKEN"
+            className="h-7 rounded border border-border bg-background px-2"
+          />
+          <span className="text-muted-foreground">header</span>
+          <input
+            aria-label="auth-header-name"
+            value={value.header_name}
+            onChange={(e) => onChange({ ...value, header_name: e.target.value })}
+            className="h-7 rounded border border-border bg-background px-2"
+          />
+          <span className="text-muted-foreground">prefix</span>
+          <input
+            aria-label="auth-prefix"
+            value={value.prefix}
+            onChange={(e) => onChange({ ...value, prefix: e.target.value })}
+            className="h-7 rounded border border-border bg-background px-2"
+          />
+        </div>
+      ) : null}
+
+      {value.kind === "oauth_2_client_credentials" ? (
+        <div className="text-destructive">OAuth2 — не реализовано (master §5.4)</div>
+      ) : null}
+    </div>
+  );
+}
+```
+
+- [ ] **Step 4 — Run, expect pass.** `pnpm test src/features/catalog/ServiceAuthEditor.test.tsx`.
+
+- [ ] **Step 5 — Failing test (ServicePanel wiring).** Append to `ServicePanel.test.tsx`:
+
+```tsx
+it("editing service auth kind persists via setServiceAuth", async () => {
+  const user = userEvent.setup();
+  const svc = catalogStore.addService({ address: "h:443" });
+  catalogStore.setContract(svc.id, contract, 1);
+  render(<ServicePanel serviceId={svc.id} onClose={() => {}} />);
+  await user.selectOptions(screen.getByLabelText("auth-kind"), "env_var");
+  expect(catalogStore.getService(svc.id)?.auth.kind).toBe("env_var");
+});
+
+it("editing default metadata persists via setServiceDefaultMetadata", async () => {
+  const user = userEvent.setup();
+  const svc = catalogStore.addService({ address: "h:443" });
+  catalogStore.setContract(svc.id, contract, 1);
+  render(<ServicePanel serviceId={svc.id} onClose={() => {}} />);
+  await user.click(screen.getByRole("button", { name: /add metadata row/i }));
+  expect(catalogStore.getService(svc.id)?.defaultMetadata).toEqual([
+    { key: "", value: "", enabled: true },
+  ]);
+});
+```
+
+- [ ] **Step 6 — Run, expect fail.** `pnpm test src/features/catalog/ServicePanel.test.tsx`
+  → FAIL (controls not mounted).
+
+- [ ] **Step 7 — Implement (ServicePanel.tsx).** Import the editors + store setters and add
+  an Auth + Default-metadata section. Insert this block **inside** the scrollable body, after
+  the methods tree `</div>` that closes the tree map area (i.e. just before the final
+  closing `</div></div>` of the panel — keep it within the `overflow-auto` container or add
+  a sibling section above it):
+
+```tsx
+import { ServiceAuthEditor } from "./ServiceAuthEditor";
+import { MetadataEditor } from "@/features/workflow/MetadataEditor";
+```
+
+```tsx
+<div className="border-t border-border px-4 py-3 space-y-3">
+  <div className="label-cap">Auth (на весь сервис)</div>
+  <ServiceAuthEditor
+    value={svc.auth}
+    onChange={(cfg) => catalogStore.setServiceAuth(svc.id, cfg)}
+  />
+  <div className="label-cap">Default metadata</div>
+  <MetadataEditor
+    rows={svc.defaultMetadata}
+    onChange={(rows) => catalogStore.setServiceDefaultMetadata(svc.id, rows)}
+  />
+</div>
+```
+
+  (`useCatalog()` is already subscribed at the top of `ServicePanel`, so `svc.auth` /
+  `svc.defaultMetadata` re-render on change.)
+
+- [ ] **Step 8 — Run, expect pass.** `pnpm test src/features/catalog/ServicePanel.test.tsx`
+  then `pnpm lint`.
+
+- [ ] **Step 9 — Commit.**
+
+```bash
+git add src/features/catalog/ServiceAuthEditor.tsx src/features/catalog/ServiceAuthEditor.test.tsx src/features/catalog/ServicePanel.tsx src/features/catalog/ServicePanel.test.tsx
+git commit -m "feat(catalog): service auth + default-metadata editors in ServicePanel"
+```
+
+---
+
+### Task B9: Wire `RequestTabs` + auth-at-Send into `CallPanel`
+
+**Files:**
+- Modify: `src/features/workflow/CallPanel.tsx`
+
+`CallPanel` renders `RequestTabs` instead of the bare `BodyEditor`, and on Send resolves the
+service auth header (via `resolveStepAuthHeader`) before calling `sendStep`. An auth error
+(OAuth2 NotImplemented / missing env var) becomes a step error and does **not** invoke.
+No new render test (Monaco doesn't run in jsdom — the logic is already covered by the pure
+helpers in B5; this task is wiring + the full-suite/lint/build gate).
+
+- [ ] **Step 1 — Implement (CallPanel.tsx).** Replace the body/editor wiring:
+
+```tsx
+import { ResponsePanel } from "@/features/response/ResponsePanel";
+import type { RespState } from "@/features/response/RespMeta";
+import { catalogStore } from "@/features/catalog/store";
+import { authResolve } from "@/ipc/client";
+import { AddressBar } from "./AddressBar";
+import { RequestTabs } from "./RequestTabs";
+import { workflowStore } from "./store";
+import { updateStep } from "./reducers";
+import { resolveStepAuthHeader, sendStep, stepPatchFromSendResult } from "./actions";
+import type { MetadataRow, Step } from "./model";
+
+export function CallPanel({ step }: { step: Step }) {
+  const onBody = (value: string) =>
+    workflowStore.update((w) => updateStep(w, step.id, { requestJson: value }));
+  const onMetadata = (rows: MetadataRow[]) =>
+    workflowStore.update((w) => updateStep(w, step.id, { metadata: rows }));
+
+  const onSend = async () => {
+    workflowStore.update((w) => updateStep(w, step.id, { status: "sending", error: null }));
+    const auth = await resolveStepAuthHeader(
+      step.serviceId,
+      (id) => catalogStore.getService(id),
+      authResolve,
+    );
+    if (auth.kind === "error") {
+      workflowStore.update((w) =>
+        updateStep(w, step.id, { status: "error", outcome: null, error: auth.message }),
+      );
+      return;
+    }
+    const res = await sendStep(step, auth.kind === "header" ? auth.header : null);
+    workflowStore.update((w) => updateStep(w, step.id, stepPatchFromSendResult(res)));
+  };
+
+  const serviceAuth = (step.serviceId && catalogStore.getService(step.serviceId)?.auth) || { kind: "none" as const };
+
+  return (
+    <div className="flex h-full flex-col">
+      <AddressBar step={step} onSend={onSend} />
+      <div className="flex min-h-0 flex-1">
+        <div className="min-w-0 flex-1 border-r border-border">
+          <RequestTabs step={step} serviceAuth={serviceAuth} onBody={onBody} onMetadata={onMetadata} />
+        </div>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <ResponseSlot step={step} />
+        </div>
+      </div>
+    </div>
+  );
+}
+```
+
+  Keep the existing `ResponseSlot` function below unchanged.
+
+> `catalogStore.getService(id)` returns `CatalogService | undefined`; the `|| { kind: "none" }`
+> guard covers an orphaned `serviceId` (service deleted after the step was created).
+
+- [ ] **Step 2 — Full gate.** `pnpm test` (all green, ≥ new totals) · `pnpm lint` (exit 0) ·
+  `pnpm build` (success) · `cargo test -p handshaker` (auth IPC tests green).
+
+- [ ] **Step 3 — Commit.**
+
+```bash
+git add src/features/workflow/CallPanel.tsx
+git commit -m "feat(workflow): wire RequestTabs + service auth into CallPanel send"
+```
+
+---
+
+### Phase B — final review
+
+- [ ] Run full suite + typecheck + build + Rust tests (see B9 gate); paste results into the
+  status banner.
+- [ ] Code review on the Phase B diff (use `superpowers:requesting-code-review`). Address
+  findings; log deferrals in this banner.
+- [ ] Update the EXECUTION STATUS banner: Phase B complete + commit range; set Active = Phase C.
 
 ## 🧹 /clear-checkpoint — end Phase B. Start a fresh session for Phase C.
 
