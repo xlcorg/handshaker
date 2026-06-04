@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 
 import {
   Dialog,
@@ -16,6 +16,20 @@ import { ipc } from "@/ipc/client";
 import type { EnvironmentIpc } from "@/ipc/bindings";
 
 import { VariablesTable } from "./VariablesTable";
+
+/** Read the target env's variables from the env list. `null` (create mode) ⇒ empty. */
+function loadVars(originalName: string | null, envs: EnvironmentIpc[]): Record<string, string> {
+  if (originalName === null) return {};
+  const cur = envs.find((e) => e.name === originalName);
+  const out: Record<string, string> = {};
+  if (cur) {
+    // Defensive coerce — tauri-specta emits Partial<Record<...>> for HashMap.
+    for (const [k, v] of Object.entries(cur.variables)) {
+      if (typeof v === "string") out[k] = v;
+    }
+  }
+  return out;
+}
 
 export interface EnvEditorDialogProps {
   open: boolean;
@@ -40,37 +54,14 @@ export function EnvEditorDialog({
 }: EnvEditorDialogProps) {
   const isCreate = originalName === null;
   const [name, setName] = useState<string>(originalName ?? "");
-  const [vars, setVars] = useState<Record<string, string>>({});
+  // Load variables synchronously at mount so the (uncontrolled) VariablesTable seeds
+  // its rows from the correct value on its first render. Both callers mount this dialog
+  // fresh per open (`{editor && <EnvEditorDialog open .../>}`), so a mount-time
+  // initializer is sufficient — and, running once, it also can't be clobbered by a
+  // background parent refetch of `envs`.
+  const [vars, setVars] = useState<Record<string, string>>(() => loadVars(originalName, envs));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  // Snapshot of `envs` kept fresh each render. The reload effect reads
-  // through this ref instead of depending on `envs` directly, so background
-  // refetches by the parent cannot clobber the user's in-progress edits.
-  const envsRef = useRef<EnvironmentIpc[]>(envs);
-  envsRef.current = envs;
-
-  // Reload state whenever the dialog opens or the target env changes.
-  useEffect(() => {
-    if (!open) return;
-    setError(null);
-    setName(originalName ?? "");
-    if (originalName === null) {
-      setVars({});
-      return;
-    }
-    // Edit mode: load variables for originalName from the snapshot taken when
-    // the dialog opened. We deliberately do NOT depend on `envs` to avoid
-    // overwriting the user's in-progress edits if the parent refetches.
-    const cur = envsRef.current.find((e) => e.name === originalName);
-    const loaded: Record<string, string> = {};
-    if (cur) {
-      // Defensive coerce — tauri-specta emits Partial<Record<...>> for HashMap.
-      for (const [k, v] of Object.entries(cur.variables)) {
-        if (typeof v === "string") loaded[k] = v;
-      }
-    }
-    setVars(loaded);
-  }, [open, originalName]);
 
   const trimmedName = name.trim();
   const nameEmpty = trimmedName.length === 0;

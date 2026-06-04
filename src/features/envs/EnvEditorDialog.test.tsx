@@ -35,6 +35,21 @@ describe("EnvEditorDialog name validation", () => {
     expect(screen.getByRole("button", { name: /create/i })).toBeDisabled();
   });
 
+  it("shows existing variables when editing", () => {
+    render(
+      <EnvEditorDialog
+        open
+        originalName="prod"
+        activeEnv="prod"
+        envs={[{ name: "prod", variables: { host: "api:443" } }]}
+        onOpenChange={() => {}}
+        onSaved={() => {}}
+      />,
+    );
+    expect(screen.getByDisplayValue("host")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("api:443")).toBeInTheDocument();
+  });
+
   it("still blocks duplicate names", async () => {
     const user = userEvent.setup();
     render(
