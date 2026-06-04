@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Activity } from "lucide-react";
-import { BodyView } from "./BodyView";
+import { ResponseBody } from "./ResponseBody";
 import { EmptyState } from "./EmptyState";
-import { ErrorBody } from "./ErrorBody";
+import { ErrorView } from "./ErrorView";
 import { KVTable, type KVRow } from "./KVTable";
 import { RespMeta, type RespState } from "./RespMeta";
 import { UnderlineTabs } from "@/components/ui/underline-tabs";
@@ -55,11 +55,11 @@ export function ResponsePanel({ state, outcome }: ResponsePanelProps) {
         />
       )}
       {state === "success" && outcome && tab === "body" && outcome.response_json !== null && (
-        <BodyView json={outcome.response_json} />
+        <ResponseBody json={outcome.response_json} />
       )}
       {state === "success" && outcome && tab === "trailers" && <KVTable rows={trailers} />}
       {state === "success" && outcome && tab === "headers" && <KVTable rows={headers} />}
-      {isError && outcome && tab === "body" && <ErrorBody outcome={outcome} />}
+      {isError && outcome && tab === "body" && <ErrorView outcome={outcome} />}
       {isError && outcome && tab === "trailers" && <KVTable rows={trailers} />}
       {isError && outcome && tab === "headers" && <KVTable rows={headers} />}
     </div>
