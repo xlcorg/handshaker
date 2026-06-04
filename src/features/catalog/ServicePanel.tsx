@@ -5,6 +5,8 @@ import { Switch } from "@/components/ui/switch";
 import { catalogStore, useCatalog } from "./store";
 import { buildServiceTree, filterTree } from "./tree";
 import { describeService, openCallFromMethod, refreshContract } from "./actions";
+import { ServiceAuthEditor } from "./ServiceAuthEditor";
+import { MetadataEditor } from "@/features/workflow/MetadataEditor";
 
 function msg(e: unknown): string {
   if (e instanceof Error) return e.message;
@@ -163,6 +165,19 @@ export function ServicePanel({
             ))}
           </div>
         ))}
+      </div>
+
+      <div className="border-t border-border px-4 py-3 space-y-3">
+        <div className="label-cap">Auth (на весь сервис)</div>
+        <ServiceAuthEditor
+          value={svc.auth}
+          onChange={(cfg) => catalogStore.setServiceAuth(svc.id, cfg)}
+        />
+        <div className="label-cap">Default metadata</div>
+        <MetadataEditor
+          rows={svc.defaultMetadata}
+          onChange={(rows) => catalogStore.setServiceDefaultMetadata(svc.id, rows)}
+        />
       </div>
     </div>
   );

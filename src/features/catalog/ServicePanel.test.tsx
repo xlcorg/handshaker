@@ -69,4 +69,24 @@ describe("ServicePanel", () => {
     await user.click(screen.getByRole("button", { name: /Обновить контракт/ }));
     expect(refreshContract).toHaveBeenCalled();
   });
+
+  it("editing service auth kind persists via setServiceAuth", async () => {
+    const user = userEvent.setup();
+    const svc = catalogStore.addService({ address: "h:443" });
+    catalogStore.setContract(svc.id, contract, 1);
+    render(<ServicePanel serviceId={svc.id} onClose={() => {}} />);
+    await user.selectOptions(screen.getByLabelText("auth-kind"), "env_var");
+    expect(catalogStore.getService(svc.id)?.auth.kind).toBe("env_var");
+  });
+
+  it("editing default metadata persists via setServiceDefaultMetadata", async () => {
+    const user = userEvent.setup();
+    const svc = catalogStore.addService({ address: "h:443" });
+    catalogStore.setContract(svc.id, contract, 1);
+    render(<ServicePanel serviceId={svc.id} onClose={() => {}} />);
+    await user.click(screen.getByRole("button", { name: /add metadata row/i }));
+    expect(catalogStore.getService(svc.id)?.defaultMetadata).toEqual([
+      { key: "", value: "", enabled: true },
+    ]);
+  });
 });
