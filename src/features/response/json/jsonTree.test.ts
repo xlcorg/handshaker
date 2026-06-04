@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseJsonTree, flattenVisible } from "./jsonTree";
+import { parseJsonTree } from "./jsonTree";
 
 describe("parseJsonTree", () => {
   it("returns an error tree for invalid JSON", () => {
@@ -48,23 +48,5 @@ describe("parseJsonTree", () => {
   it("does not throw on pathologically deep nesting (returns a tree or an error)", () => {
     const deep = "[".repeat(50000) + "1" + "]".repeat(50000);
     expect(() => parseJsonTree(deep)).not.toThrow();
-  });
-});
-
-describe("flattenVisible", () => {
-  it("hides descendants of collapsed containers", () => {
-    const t = parseJsonTree(`{"a":{"b":1},"c":2}`);
-    const root = t.nodes[t.rootId!];
-    const a = t.nodes[root.childIds.find((id) => t.nodes[id].key === "a")!];
-    const allVisible = flattenVisible(t, new Set());
-    expect(allVisible.map((n) => n.id)).toEqual(t.order); // nothing collapsed → full order
-    const collapsed = flattenVisible(t, new Set([a.id]));
-    // a is still shown, but a.b is hidden
-    expect(collapsed.some((n) => n.id === a.id)).toBe(true);
-    expect(collapsed.some((n) => t.nodes[n.id].key === "b")).toBe(false);
-  });
-
-  it("returns [] for an error tree", () => {
-    expect(flattenVisible(parseJsonTree("oops"), new Set())).toEqual([]);
   });
 });

@@ -30,7 +30,7 @@ describe("ResponsePanel", () => {
   it("renders the custom JSON tree for a successful body", () => {
     render(<ResponsePanel state="success" outcome={ok} />);
     expect(screen.getByRole("tree")).toBeInTheDocument();
-    expect(screen.getByText("id")).toBeInTheDocument();
+    expect(screen.getByText(`"id"`)).toBeInTheDocument();
     expect(screen.getByText(`"echo"`)).toBeInTheDocument();
   });
   it("renders the Postman-style error face for a non-OK status", () => {

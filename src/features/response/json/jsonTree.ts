@@ -70,15 +70,3 @@ export function parseJsonTree(json: string): JsonTree {
     return { rootId: null, nodes: {}, order: [], error: (e as Error).message };
   }
 }
-
-export function flattenVisible(tree: JsonTree, collapsed: ReadonlySet<string>): JsonNode[] {
-  if (tree.rootId === null) return [];
-  const out: JsonNode[] = [];
-  const walk = (id: string) => {
-    const node = tree.nodes[id];
-    out.push(node);
-    if (!collapsed.has(id)) for (const c of node.childIds) walk(c);
-  };
-  walk(tree.rootId);
-  return out;
-}
