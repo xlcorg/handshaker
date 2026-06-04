@@ -6,6 +6,7 @@ import { LedgerView } from "@/features/workflow/LedgerView";
 import { ListView } from "@/features/workflow/ListView";
 import { ViewSwitcher } from "@/features/workflow/ViewSwitcher";
 import { WorkflowSelector } from "@/features/workflow/WorkflowSelector";
+import { WorkflowEnvControl } from "@/features/workflow/WorkflowEnvControl";
 import { useActiveWorkflow } from "@/features/workflow/store";
 import type { ViewMode } from "@/features/workflow/model";
 import { Sidebar } from "@/features/catalog/Sidebar";
@@ -53,9 +54,7 @@ export function WorkflowApp() {
       <div className="flex h-9 items-center gap-3 border-b border-border px-3 text-sm">
         <span className="font-semibold">⚡ Handshaker</span>
         <WorkflowSelector />
-        <span className="rounded bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
-          env: default
-        </span>
+        <WorkflowEnvControl />
         <div className="flex-1" />
         <ViewSwitcher />
         <button

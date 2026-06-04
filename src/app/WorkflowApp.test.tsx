@@ -19,6 +19,11 @@ vi.mock("@/features/catalog/CommandPalette", () => ({
 vi.mock("@/features/workflow/FocusView", () => ({
   FocusView: () => <div>FOCUS</div>,
 }));
+// Stub IPC so WorkflowEnvControl's envList() on mount doesn't hit a real backend.
+vi.mock("@/ipc/client", () => ({
+  envList: vi.fn().mockResolvedValue([]),
+  envActiveSet: vi.fn().mockResolvedValue(undefined),
+}));
 
 import { WorkflowApp } from "./WorkflowApp";
 import { workflowStore } from "@/features/workflow/store";
@@ -63,13 +68,19 @@ describe("WorkflowApp shell", () => {
 });
 
 describe("WorkflowApp titlebar + view dispatch", () => {
-  it("renders the workflow selector, env pill and view switcher", () => {
+  it("renders the workflow selector, env control and view switcher", async () => {
     render(<WorkflowApp />);
     expect(screen.getByRole("button", { name: /workflow-1/ })).toBeInTheDocument();
-    expect(screen.getByText(/env:/i)).toBeInTheDocument();
+    expect(await screen.findByText(/No environment/i)).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "Лента" })).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "Список" })).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "Фокус" })).toBeInTheDocument();
+  });
+
+  it("renders the workflow env control instead of the static chip", async () => {
+    render(<WorkflowApp />);
+    expect(screen.queryByText("env: default")).not.toBeInTheDocument();
+    expect(await screen.findByText(/No environment/i)).toBeInTheDocument();
   });
 
   it("defaults to Focus (the mocked FocusView) and switches to the real List view", async () => {
