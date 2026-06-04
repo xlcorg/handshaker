@@ -4,10 +4,11 @@ vi.mock("@/ipc/client", () => ({
   grpcBuildRequestSkeleton: vi.fn(),
   grpcInvokeOneshot: vi.fn(),
   varsResolve: vi.fn(),
+  authResolve: vi.fn(),
 }));
 
 import * as ipc from "@/ipc/client";
-import { createStepFromMethod, sendStep, stepPatchFromSendResult } from "./actions";
+import { createStepFromMethod, sendStep, stepPatchFromSendResult, resolveStepAuthHeader } from "./actions";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -204,5 +205,65 @@ describe("stepPatchFromSendResult", () => {
   });
   it("error → error with message", () => {
     expect(stepPatchFromSendResult({ kind: "error", message: "boom" })).toEqual({ status: "error", outcome: null, error: "boom" });
+  });
+});
+
+describe("sendStep authHeader merge", () => {
+  beforeEach(() => {
+    vi.mocked(ipc.grpcInvokeOneshot).mockResolvedValue({
+      status_code: 0, status_message: "OK", response_json: "{}", trailing_metadata: {}, elapsed_ms: 1,
+    });
+  });
+
+  it("merges the auth header verbatim alongside resolved metadata rows", async () => {
+    await sendStep(
+      { address: "h:443", tls: true, service: "S", method: "M", requestJson: "{}",
+        metadata: [{ key: "x", value: "1", enabled: true }] },
+      { key: "authorization", value: "Bearer {{notresolved}}" }, // verbatim: no var resolution
+    );
+    expect(ipc.grpcInvokeOneshot).toHaveBeenCalledWith(
+      { address: "h:443", tls: true, skip_verify: false },
+      { service: "S", method: "M", request_json: "{}",
+        metadata: { x: "1", authorization: "Bearer {{notresolved}}" } },
+    );
+  });
+
+  it("injects nothing when no authHeader is given", async () => {
+    await sendStep({ address: "h:443", tls: true, service: "S", method: "M", requestJson: "{}", metadata: [] });
+    expect(ipc.grpcInvokeOneshot).toHaveBeenCalledWith(
+      { address: "h:443", tls: true, skip_verify: false },
+      { service: "S", method: "M", request_json: "{}", metadata: {} },
+    );
+  });
+});
+
+describe("resolveStepAuthHeader", () => {
+  const getNone = () => ({ auth: { kind: "none" as const } });
+
+  it("returns kind 'none' when serviceId is null", async () => {
+    const r = await resolveStepAuthHeader(null, () => undefined, ipc.authResolve);
+    expect(r.kind).toBe("none");
+    expect(ipc.authResolve).not.toHaveBeenCalled();
+  });
+
+  it("returns kind 'none' when the service auth is none", async () => {
+    const r = await resolveStepAuthHeader("svc-1", getNone, ipc.authResolve);
+    expect(r.kind).toBe("none");
+    expect(ipc.authResolve).not.toHaveBeenCalled();
+  });
+
+  it("returns a header when EnvVar auth resolves", async () => {
+    vi.mocked(ipc.authResolve).mockResolvedValue({ header_name: "authorization", header_value: "Bearer t" });
+    const svc = { auth: { kind: "env_var" as const, env_var: "TOK", header_name: "authorization", prefix: "Bearer " } };
+    const r = await resolveStepAuthHeader("svc-1", () => svc, ipc.authResolve);
+    expect(r).toEqual({ kind: "header", header: { key: "authorization", value: "Bearer t" } });
+  });
+
+  it("returns kind 'error' when authResolve throws (OAuth2 NotImplemented)", async () => {
+    vi.mocked(ipc.authResolve).mockRejectedValue({ type: "NotImplemented", message: "oauth2 token fetch" });
+    const svc = { auth: { kind: "oauth_2_client_credentials" as const, token_url: "u", client_id: "c", client_secret_env_var: "S", scopes: [] } };
+    const r = await resolveStepAuthHeader("svc-1", () => svc, ipc.authResolve);
+    expect(r.kind).toBe("error");
+    if (r.kind === "error") expect(r.message).toContain("oauth2");
   });
 });

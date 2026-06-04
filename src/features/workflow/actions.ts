@@ -1,5 +1,5 @@
 import * as ipc from "@/ipc/client";
-import type { InvokeOutcomeIpc } from "@/ipc/bindings";
+import type { InvokeOutcomeIpc, SavedAuthConfigIpc, AuthCredentialsIpc } from "@/ipc/bindings";
 import { newStep, type MetadataRow, type Step } from "./model";
 import { resolveStepTemplates } from "./resolve";
 
@@ -40,19 +40,47 @@ export type SendResult =
   | { kind: "error"; message: string }
   | { kind: "unresolved"; unresolved: string[]; cycle: string[] | null };
 
-export async function sendStep(step: {
-  address: string;
-  tls: boolean;
-  service: string;
-  method: string;
-  requestJson: string;
-  metadata: MetadataRow[];
-}): Promise<SendResult> {
+export type AuthHeader = { key: string; value: string };
+
+export type AuthHeaderResult =
+  | { kind: "none" }
+  | { kind: "header"; header: AuthHeader }
+  | { kind: "error"; message: string };
+
+export async function resolveStepAuthHeader(
+  serviceId: string | null,
+  getService: (id: string) => { auth: SavedAuthConfigIpc } | undefined,
+  authResolve: (c: SavedAuthConfigIpc) => Promise<AuthCredentialsIpc | null>,
+): Promise<AuthHeaderResult> {
+  if (!serviceId) return { kind: "none" };
+  const svc = getService(serviceId);
+  if (!svc || svc.auth.kind === "none") return { kind: "none" };
+  try {
+    const creds = await authResolve(svc.auth);
+    if (!creds) return { kind: "none" };
+    return { kind: "header", header: { key: creds.header_name, value: creds.header_value } };
+  } catch (e) {
+    return { kind: "error", message: errorToMessage(e) };
+  }
+}
+
+export async function sendStep(
+  step: {
+    address: string;
+    tls: boolean;
+    service: string;
+    method: string;
+    requestJson: string;
+    metadata: MetadataRow[];
+  },
+  authHeader?: AuthHeader | null,
+): Promise<SendResult> {
   try {
     const r = await resolveStepTemplates(step, ipc.varsResolve);
     if (!r.ok) return { kind: "unresolved", unresolved: r.unresolved, cycle: r.cycle };
     const metadata: Record<string, string> = {};
     for (const m of r.request.metadata) metadata[m.key] = m.value;
+    if (authHeader) metadata[authHeader.key] = authHeader.value; // verbatim, not {{var}}-resolved
     const outcome = await ipc.grpcInvokeOneshot(
       { address: r.request.address, tls: step.tls, skip_verify: false },
       { service: step.service, method: step.method, request_json: r.request.requestJson, metadata },
