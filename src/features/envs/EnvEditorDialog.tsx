@@ -17,8 +17,6 @@ import type { EnvironmentIpc } from "@/ipc/bindings";
 
 import { VariablesTable } from "./VariablesTable";
 
-const NAME_RE = /^[a-zA-Z_][a-zA-Z0-9_-]*$/;
-
 export interface EnvEditorDialogProps {
   open: boolean;
   /** `null` ⇒ create mode (empty name + empty vars). String ⇒ edit mode. */
@@ -75,14 +73,14 @@ export function EnvEditorDialog({
   }, [open, originalName]);
 
   const trimmedName = name.trim();
-  const nameInvalid = trimmedName.length > 0 && !NAME_RE.test(trimmedName);
   const nameEmpty = trimmedName.length === 0;
+  // The name may be any non-empty string (any characters). The only guards are
+  // non-empty and uniqueness (the name is the store key — a duplicate would clobber).
   const nameIsDuplicate =
-    !nameInvalid &&
     !nameEmpty &&
     trimmedName !== originalName &&
     envs.some((e) => e.name === trimmedName);
-  const canSave = !nameInvalid && !nameEmpty && !nameIsDuplicate;
+  const canSave = !nameEmpty && !nameIsDuplicate;
 
   async function handleSave() {
     if (!canSave) return;
@@ -140,19 +138,11 @@ export function EnvEditorDialog({
               id="env-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className={cn(
-                "font-mono text-sm",
-                (nameInvalid || nameIsDuplicate) && "border-destructive",
-              )}
-              aria-invalid={nameInvalid || nameIsDuplicate}
+              className={cn("font-mono text-sm", nameIsDuplicate && "border-destructive")}
+              aria-invalid={nameIsDuplicate}
               autoFocus
               placeholder="e.g. prod"
             />
-            {nameInvalid && (
-              <p className="text-xs text-destructive mt-1">
-                name must match ^[a-zA-Z_][a-zA-Z0-9_-]*$
-              </p>
-            )}
             {nameIsDuplicate && (
               <p className="text-xs text-destructive mt-1">name already exists</p>
             )}
