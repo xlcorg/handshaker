@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { copyTextForNode, valuePreview, PREVIEW_LIMIT } from "./copyValue";
+import { copyTextForNode, valuePreview, valueLiteral, PREVIEW_LIMIT } from "./copyValue";
 import { parseJsonTree } from "./jsonTree";
 
 const nodeFor = (json: string, key: string) => {
@@ -41,5 +41,24 @@ describe("valuePreview", () => {
     expect(valuePreview(nodeFor(`{"e":{}}`, "e"))).toBe("{}");
     expect(valuePreview(nodeFor(`{"arr":[1,2,3]}`, "arr"))).toBe("[3]");
     expect(valuePreview(nodeFor(`{"empty":[]}`, "empty"))).toBe("[]");
+  });
+});
+
+describe("valueLiteral", () => {
+  it("quotes strings and truncates with … past the limit", () => {
+    expect(valueLiteral(nodeFor(`{"s":"hi"}`, "s"))).toBe(`"hi"`);
+    const long = "x".repeat(PREVIEW_LIMIT + 50);
+    const v = valueLiteral(nodeFor(`{"s":${JSON.stringify(long)}}`, "s"));
+    expect(v.startsWith(`"`)).toBe(true);
+    expect(v.endsWith(`…"`)).toBe(true);
+  });
+  it("renders number/bool/null as JSON literals", () => {
+    expect(valueLiteral(nodeFor(`{"n":42}`, "n"))).toBe("42");
+    expect(valueLiteral(nodeFor(`{"b":true}`, "b"))).toBe("true");
+    expect(valueLiteral(nodeFor(`{"z":null}`, "z"))).toBe("null");
+  });
+  it("renders empty containers as {} and []", () => {
+    expect(valueLiteral(nodeFor(`{"o":{}}`, "o"))).toBe("{}");
+    expect(valueLiteral(nodeFor(`{"a":[]}`, "a"))).toBe("[]");
   });
 });
