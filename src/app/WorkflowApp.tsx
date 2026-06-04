@@ -1,11 +1,27 @@
 import { useEffect, useState } from "react";
 import { Kbd } from "@/components/ui/kbd";
 import { FocusView } from "@/features/workflow/FocusView";
+import { LedgerView } from "@/features/workflow/LedgerView";
+import { ListView } from "@/features/workflow/ListView";
+import { ViewSwitcher } from "@/features/workflow/ViewSwitcher";
+import { WorkflowSelector } from "@/features/workflow/WorkflowSelector";
 import { useActiveWorkflow } from "@/features/workflow/store";
+import type { ViewMode } from "@/features/workflow/model";
 import { Sidebar } from "@/features/catalog/Sidebar";
 import { CommandPalette } from "@/features/catalog/CommandPalette";
 import { ServicePanel } from "@/features/catalog/ServicePanel";
 import type { CatalogService } from "@/features/catalog/model";
+
+function renderView(view: ViewMode) {
+  switch (view) {
+    case "ledger":
+      return <LedgerView />;
+    case "list":
+      return <ListView />;
+    default:
+      return <FocusView />;
+  }
+}
 
 export function WorkflowApp() {
   const wf = useActiveWorkflow();
@@ -23,9 +39,8 @@ export function WorkflowApp() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // Creating a call (from the sidebar, the service panel, or ⌘K) adds a step and
-  // switches the workflow to Focus. Close any open service panel so the new call
-  // is actually visible instead of staying hidden behind the panel.
+  // Creating a call (sidebar / service panel / ⌘K) adds a step and switches the
+  // workflow to Focus. Close any open service panel so the new call is visible.
   useEffect(() => {
     if (wf.activeStepId) setPanelServiceId(null);
   }, [wf.activeStepId]);
@@ -36,8 +51,12 @@ export function WorkflowApp() {
     <div className="flex h-screen flex-col bg-background text-foreground">
       <div className="flex h-9 items-center gap-3 border-b border-border px-3 text-sm">
         <span className="font-semibold">⚡ Handshaker</span>
-        <span className="text-muted-foreground">{wf.name}</span>
+        <WorkflowSelector />
+        <span className="rounded bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+          env: default
+        </span>
         <div className="flex-1" />
+        <ViewSwitcher />
         <button
           type="button"
           onClick={() => setPaletteOpen(true)}
@@ -53,7 +72,7 @@ export function WorkflowApp() {
           {panelServiceId ? (
             <ServicePanel serviceId={panelServiceId} onClose={() => setPanelServiceId(null)} />
           ) : (
-            <FocusView />
+            renderView(wf.view)
           )}
         </div>
       </div>

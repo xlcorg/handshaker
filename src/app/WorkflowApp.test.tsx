@@ -61,3 +61,23 @@ describe("WorkflowApp shell", () => {
     expect(screen.queryByText("PANEL:svc1")).not.toBeInTheDocument();
   });
 });
+
+describe("WorkflowApp titlebar + view dispatch", () => {
+  it("renders the workflow selector, env pill and view switcher", () => {
+    render(<WorkflowApp />);
+    expect(screen.getByRole("button", { name: /workflow-1/ })).toBeInTheDocument();
+    expect(screen.getByText(/env:/i)).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Лента" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Список" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Фокус" })).toBeInTheDocument();
+  });
+
+  it("defaults to Focus (the mocked FocusView) and switches to the real List view", async () => {
+    const user = userEvent.setup();
+    render(<WorkflowApp />);
+    expect(screen.getByText("FOCUS")).toBeInTheDocument(); // mocked FocusView
+    await user.click(screen.getByRole("radio", { name: "Список" }));
+    expect(screen.queryByText("FOCUS")).not.toBeInTheDocument();
+    expect(screen.getByText(/Нет шагов/)).toBeInTheDocument(); // real ListView empty state
+  });
+});
