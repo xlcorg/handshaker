@@ -11,6 +11,7 @@ pub mod connection;
 pub mod contract;
 pub mod contract_cache;
 pub mod descriptor;
+pub mod file_contract_cache;
 pub mod invoke;
 pub mod reflection;
 pub mod transport;
@@ -19,6 +20,7 @@ pub use catalog::{build_catalog, MethodEntry, ServiceCatalog, ServiceEntry};
 pub use connection::{GrpcConnection, GrpcTarget};
 pub use contract::activate;
 pub use contract_cache::{CachedContract, ContractCache, ContractKey, InMemoryContractCache};
+pub use file_contract_cache::FileContractCache;
 pub use descriptor::build_pool;
 pub use invoke::{
     build_request_skeleton, build_request_skeleton_from_pool, invoke_unary, UnaryOutcome,
