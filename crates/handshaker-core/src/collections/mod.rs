@@ -119,8 +119,6 @@ impl Item {
 #[cfg(test)]
 mod model_tests {
     use super::*;
-    use crate::auth::SavedAuthConfig;
-    use crate::collections::ids::{CollectionId, ItemId};
     use uuid::Uuid;
 
     #[test]
@@ -141,6 +139,7 @@ mod model_tests {
             last_used_at: None,
             use_count: 0,
         };
+        // duplicate keys preserved in order
         assert_eq!(r.metadata.len(), 2);
         assert!(!r.metadata[1].enabled);
     }

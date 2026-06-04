@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 
-use handshaker_core::auth::AuthByEnv;
+use handshaker_core::auth::SavedAuthConfig;
 use handshaker_core::collections::ids::{CollectionId, ItemId};
 use handshaker_core::collections::store::CollectionStore;
 use handshaker_core::collections::{tree, Collection, Folder, Item, SavedRequest};
@@ -19,9 +19,11 @@ fn request(id: u128, name: &str) -> Item {
         service: "pkg.Svc".into(),
         method: "Do".into(),
         body_template: "{}".into(),
-        metadata: HashMap::new(),
-        auth_by_env: AuthByEnv::default(),
+        metadata: vec![],
+        auth: SavedAuthConfig::None,
         tls_override: None,
+        last_used_at: None,
+        use_count: 0,
     })
 }
 
@@ -38,12 +40,14 @@ fn collection_tree_survives_restart() {
             id: ItemId(Uuid::from_u128(1)),
             name: "Users".into(),
             items: vec![],
-            auth_by_env: AuthByEnv::default(),
         })],
         variables: HashMap::new(),
-        auth_by_env: AuthByEnv::default(),
+        auth: SavedAuthConfig::None,
         default_tls: false,
         skip_tls_verify: false,
+        pinned: false,
+        description: None,
+        created_at: 0,
     };
 
     // Add a request under the folder, then persist.
