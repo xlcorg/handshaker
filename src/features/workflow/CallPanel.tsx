@@ -1,31 +1,48 @@
-import { BodyEditor } from "@/features/invoke/BodyEditor";
 import { ResponsePanel } from "@/features/response/ResponsePanel";
 import type { RespState } from "@/features/response/RespMeta";
+import type { SavedAuthConfigIpc } from "@/ipc/bindings";
+import { authResolve } from "@/ipc/client";
+import { catalogStore } from "@/features/catalog/store";
 import { AddressBar } from "./AddressBar";
+import { RequestTabs } from "./RequestTabs";
 import { workflowStore } from "./store";
 import { updateStep } from "./reducers";
-import { sendStep, stepPatchFromSendResult } from "./actions";
-import type { Step } from "./model";
+import { resolveStepAuthHeader, sendStep, stepPatchFromSendResult } from "./actions";
+import type { MetadataRow, Step } from "./model";
 
 /** The editable, sendable surface for one step — reused by Focus/List/Ledger. */
 export function CallPanel({ step }: { step: Step }) {
   const onBody = (value: string) =>
     workflowStore.update((w) => updateStep(w, step.id, { requestJson: value }));
+  const onMetadata = (rows: MetadataRow[]) =>
+    workflowStore.update((w) => updateStep(w, step.id, { metadata: rows }));
 
   const onSend = async () => {
-    workflowStore.update((w) =>
-      updateStep(w, step.id, { status: "sending", error: null }),
+    workflowStore.update((w) => updateStep(w, step.id, { status: "sending", error: null }));
+    const auth = await resolveStepAuthHeader(
+      step.serviceId,
+      (id) => catalogStore.getService(id),
+      authResolve,
     );
-    const res = await sendStep(step);
+    if (auth.kind === "error") {
+      workflowStore.update((w) =>
+        updateStep(w, step.id, { status: "error", outcome: null, error: auth.message }),
+      );
+      return;
+    }
+    const res = await sendStep(step, auth.kind === "header" ? auth.header : null);
     workflowStore.update((w) => updateStep(w, step.id, stepPatchFromSendResult(res)));
   };
+
+  const svcForAuth = step.serviceId ? catalogStore.getService(step.serviceId) : undefined;
+  const serviceAuth: SavedAuthConfigIpc = svcForAuth?.auth ?? { kind: "none" };
 
   return (
     <div className="flex h-full flex-col">
       <AddressBar step={step} onSend={onSend} />
       <div className="flex min-h-0 flex-1">
         <div className="min-w-0 flex-1 border-r border-border">
-          <BodyEditor value={step.requestJson} onChange={onBody} />
+          <RequestTabs step={step} serviceAuth={serviceAuth} onBody={onBody} onMetadata={onMetadata} />
         </div>
         <div className="flex min-w-0 flex-1 flex-col">
           <ResponseSlot step={step} />
