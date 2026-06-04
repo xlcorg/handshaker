@@ -54,8 +54,8 @@
 - `src/components/ui/toaster.test.tsx`
 - `src/features/response/json/JsonRowView.tsx` — one presentational row (caret, key, value, kind colors, dbl-click copy, match highlight).
 - `src/features/response/json/JsonRowView.test.tsx`
-- `src/features/response/json/JsonTree.tsx` — virtualized container over `flattenVisible`.
-- `src/features/response/json/JsonTree.test.tsx`
+- `src/features/response/json/JsonTreeView.tsx` — virtualized container over `flattenVisible` (exports `JsonTree`/`JsonTreeProps`; filename is `JsonTreeView` to avoid a case-insensitive-FS collision with `jsonTree.ts` on Windows).
+- `src/features/response/json/JsonTreeView.test.tsx`
 - `src/features/response/json/JsonSearchBar.tsx` — Ctrl+F bar (input, n/N, next/prev, close).
 - `src/features/response/json/JsonSearchBar.test.tsx`
 - `src/features/response/ResponseBody.tsx` — orchestrator (parse + collapse + search + degrade + copy). Replaces `BodyView` in the success path.
@@ -1447,7 +1447,7 @@ export function ErrorView({ outcome }: { outcome: InvokeOutcomeIpc }) {
 ```tsx
 import { useEffect, useMemo, useState } from "react";
 import { Copy } from "lucide-react";
-import { JsonTree } from "./json/JsonTree";
+import { JsonTree } from "./json/JsonTreeView";
 import { JsonSearchBar } from "./json/JsonSearchBar";
 import { parseJsonTree, type JsonNode } from "./json/jsonTree";
 import { copyTextForNode } from "./json/copyValue";
