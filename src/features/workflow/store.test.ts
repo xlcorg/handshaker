@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { workflowStore } from "./store";
 import { newStep } from "./model";
+import { addStep, updateStep } from "./reducers";
 
 const envActiveSet = vi.fn().mockResolvedValue(undefined);
 vi.mock("@/ipc/client", () => ({ envActiveSet: (n: string | null) => envActiveSet(n) }));
@@ -56,5 +57,36 @@ describe("workflow env sync", () => {
     );
     expect(envActiveSet).toHaveBeenLastCalledWith("prod");
     expect(wf2.envName).toBeNull();
+  });
+});
+
+describe("parallel send independence", () => {
+  beforeEach(() => { workflowStore.reset(); });
+
+  it("two steps can be in-flight simultaneously with independent status + requestId", () => {
+    // Add two steps via the addStep reducer (store has no direct addStep method)
+    const stepA = newStep({ address: "h", tls: false, service: "S", method: "A" });
+    const stepB = newStep({ address: "h", tls: false, service: "S", method: "B" });
+    workflowStore.update((wf) => addStep(wf, stepA));
+    workflowStore.update((wf) => addStep(wf, stepB));
+
+    // Mark both as sending with distinct requestIds
+    workflowStore.update((wf) => updateStep(wf, stepA.id, { status: "sending", requestId: "req-a" }));
+    workflowStore.update((wf) => updateStep(wf, stepB.id, { status: "sending", requestId: "req-b" }));
+
+    const steps = workflowStore.activeWorkflow().steps;
+    const sa = steps.find((s) => s.id === stepA.id)!;
+    const sb = steps.find((s) => s.id === stepB.id)!;
+    expect(sa.status).toBe("sending");
+    expect(sb.status).toBe("sending");
+    expect(sa.requestId).toBe("req-a");
+    expect(sb.requestId).toBe("req-b");
+
+    // Completing A leaves B untouched.
+    workflowStore.update((wf) => updateStep(wf, stepA.id, { status: "ok", requestId: null }));
+    const stepsAfter = workflowStore.activeWorkflow().steps;
+    expect(stepsAfter.find((s) => s.id === stepA.id)!.status).toBe("ok");
+    expect(stepsAfter.find((s) => s.id === stepB.id)!.status).toBe("sending");
+    expect(stepsAfter.find((s) => s.id === stepB.id)!.requestId).toBe("req-b");
   });
 });
