@@ -10,6 +10,21 @@
 
 **Spec ref:** `docs/superpowers/specs/2026-06-04-postman-style-json-response-render-design.md`.
 
+> **✅ EXECUTION STATUS — PLAN #4b COMPLETE (2026-06-04, subagent-driven):** All 5 tasks
+> implemented, committed, reviewed on `redesign/workflow-ui-spec-plans` (commits `d921d46`…`fdf9f3e`).
+> Final whole-implementation review returned **READY TO MERGE** — comma-correctness traced through a
+> nested stress case and confirmed valid in every sibling/last-child/root position (single
+> comma-source-per-node invariant).
+> - T1 `flattenLines` `d921d46` · T2 `valueLiteral` `7d554df` · T3 `JsonLineView` `6412d51`
+> - T4 `JsonTreeView` real-JSON rewrite `d621342` · T5 retire outline + gate `fdf9f3e`
+> - **Gate: 151/151 tests green** (38 files); `pnpm lint` (tsc -b) exit 0; `pnpm build` success.
+> - The response now renders as real foldable JSON (braces, quoted keys, commas, closing lines,
+>   line numbers, highlight); double-click-copy §6 + Ctrl+F + degrade/download + ErrorView preserved.
+> - Retired: `JsonRowView`, `flattenVisible`, `valuePreview`.
+> **Deferred (non-blocking minors from final review):** (1) `title` recomputes `JSON.stringify` per
+> container row — could be hover-lazy; (2) leaf comma is a separate span while close/folded inline it
+> (cosmetic). **Human smoke (Step 9) still pending:** rebuild (`pnpm tauri:dev`) and eyeball.
+
 ---
 
 ## File Structure
