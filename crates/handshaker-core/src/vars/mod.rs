@@ -19,10 +19,12 @@ use crate::error::CoreError;
 /// Cap on substitution passes; beyond this we assume a cycle (see §4).
 pub const MAX_PASSES: usize = 4;
 
-/// Matches `{{name}}` where `name` starts with a letter or underscore and contains
-/// letters / digits / underscore / hyphen. Per master spec §5.2 line 223.
+/// Matches `{{name}}` where `name` is any non-empty run of characters other than the
+/// `{` / `}` delimiters. The key is taken literally (no trimming) and may contain
+/// digits, dots, hyphens, or non-ASCII — it simply has to equal an env/collection key.
+/// (Relaxes the former `[a-zA-Z_][a-zA-Z0-9_-]*` rule from master spec §5.2.)
 static VAR_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"\{\{([a-zA-Z_][a-zA-Z0-9_-]*)\}\}")
+    Regex::new(r"\{\{([^{}]+)\}\}")
         .expect("VAR_RE is a known-good regex")
 });
 
@@ -223,13 +225,45 @@ mod tests {
     }
 
     #[test]
-    fn invalid_name_left_alone() {
-        // Names starting with a digit don't match the regex — should pass through literally.
+    fn digit_leading_name_now_treated_as_var() {
+        // The key may be ANY non-brace characters now (no leading-letter rule), so a
+        // digit-leading name is a real variable — here unresolved, left as-is.
         let env = map(&[]);
         let coll = map(&[]);
         let r = resolve_template_with_diagnostics("{{1bad}}", &vs(&env, &coll));
         assert_eq!(r.resolved, "{{1bad}}");
+        assert_eq!(r.unresolved_vars, vec!["1bad".to_string()]);
+    }
+
+    #[test]
+    fn any_key_chars_allowed() {
+        // Keys may contain digits-leading, dots, and non-ASCII — anything but braces.
+        let env = map(&[("1bad", "ok"), ("user.id", "42"), ("ключ", "значение")]);
+        let coll = map(&[]);
+        let r = resolve_template_with_diagnostics(
+            "{{1bad}} {{user.id}} {{ключ}}",
+            &vs(&env, &coll),
+        );
+        assert_eq!(r.resolved, "ok 42 значение");
         assert!(r.unresolved_vars.is_empty());
+    }
+
+    #[test]
+    fn arbitrary_key_unresolved_when_absent() {
+        let env = map(&[]);
+        let coll = map(&[]);
+        let r = resolve_template_with_diagnostics("{{user.id}}", &vs(&env, &coll));
+        assert_eq!(r.resolved, "{{user.id}}");
+        assert_eq!(r.unresolved_vars, vec!["user.id".to_string()]);
+    }
+
+    #[test]
+    fn adjacent_vars_do_not_bleed() {
+        // [^{}]+ is greedy but cannot cross a brace, so adjacent placeholders stay distinct.
+        let env = map(&[("a", "1"), ("b", "2")]);
+        let coll = map(&[]);
+        let r = resolve_template_with_diagnostics("{{a}}{{b}}", &vs(&env, &coll));
+        assert_eq!(r.resolved, "12");
     }
 
     #[test]

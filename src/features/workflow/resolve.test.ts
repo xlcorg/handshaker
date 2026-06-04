@@ -6,7 +6,7 @@ import { resolveStepTemplates } from "./resolve";
 function fakeResolver(table: Record<string, string>) {
   return async (tpl: string): Promise<ResolutionReportIpc> => {
     const unresolved: string[] = [];
-    const resolved = tpl.replace(/\{\{([a-zA-Z_][\w-]*)\}\}/g, (_, name) => {
+    const resolved = tpl.replace(/\{\{([^{}]+)\}\}/g, (_, name) => {
       if (name in table) return table[name];
       unresolved.push(name);
       return `{{${name}}}`;

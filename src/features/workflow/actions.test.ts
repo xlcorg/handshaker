@@ -141,7 +141,7 @@ describe("sendStep", () => {
 
   it("sendStep blocks on unresolved variables and does not invoke", async () => {
     vi.mocked(ipc.varsResolve).mockImplementation(async (tpl: string) => {
-      const m = [...tpl.matchAll(/\{\{([a-zA-Z_][\w-]*)\}\}/g)].map((x) => x[1]);
+      const m = [...tpl.matchAll(/\{\{([^{}]+)\}\}/g)].map((x) => x[1]);
       return { resolved: tpl, unresolved_vars: m, cycle_chain: null };
     });
     const res = await sendStep({
