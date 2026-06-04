@@ -1360,43 +1360,32 @@ Drop the two controls and a static env pill into the titlebar, and render the ma
 
 **Files:**
 - Modify: `src/app/WorkflowApp.tsx`
-- Test: `src/app/WorkflowApp.test.tsx`
+- Modify: `src/app/WorkflowApp.test.tsx` (an existing file from Plan #2 — **extend, do not clobber**)
 
-- [ ] **Step 1: Write the failing test `src/app/WorkflowApp.test.tsx`**
+> **Existing test (do not delete):** `src/app/WorkflowApp.test.tsx` already exists from Plan #2. It `vi.mock`s `Sidebar`, `ServicePanel`, `CommandPalette`, and `FocusView` and has a `describe("WorkflowApp shell", …)` block asserting the panel↔Focus logic. **Keep that block and its mocks intact.** Add a **new** `describe` block for the titlebar/view-dispatch, reusing the same mocks (so `FocusView` stays the `<div>FOCUS</div>` stub and no Monaco mounts). `LedgerView`/`ListView` are *not* mocked, so switching to them renders the real (empty-state) view — safe, since their empty branch never reaches `CallPanel`.
 
-`WorkflowApp` renders the catalog `Sidebar`/`CommandPalette` and, with the default empty workflow (view `focus`, no steps), the Focus empty-state — so no Monaco is mounted and the test is stable.
+- [ ] **Step 1: Add the failing titlebar tests to `src/app/WorkflowApp.test.tsx`**
+
+Append this `describe` block to the existing file (the `WorkflowApp`, `workflowStore`, `render`, `screen`, `userEvent` imports are already present at the top — do not duplicate them):
 
 ```tsx
-import { describe, it, expect, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { workflowStore } from "@/features/workflow/store";
-import { catalogStore } from "@/features/catalog/store";
-import { WorkflowApp } from "./WorkflowApp";
-
-beforeEach(() => {
-  workflowStore.reset();
-  catalogStore.reset();
-});
-
-describe("WorkflowApp", () => {
-  it("renders the titlebar with the workflow selector and view switcher", () => {
+describe("WorkflowApp titlebar + view dispatch", () => {
+  it("renders the workflow selector, env pill and view switcher", () => {
     render(<WorkflowApp />);
     expect(screen.getByRole("button", { name: /workflow-1/ })).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: "Фокус" })).toBeInTheDocument();
     expect(screen.getByText(/env:/i)).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Лента" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Список" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Фокус" })).toBeInTheDocument();
   });
 
-  it("defaults to the Focus empty state", () => {
-    render(<WorkflowApp />);
-    expect(screen.getByText(/Нет активного вызова/)).toBeInTheDocument();
-  });
-
-  it("switching to Список shows that view's empty state", async () => {
+  it("defaults to Focus (the mocked FocusView) and switches to the real List view", async () => {
     const user = userEvent.setup();
     render(<WorkflowApp />);
+    expect(screen.getByText("FOCUS")).toBeInTheDocument(); // mocked FocusView
     await user.click(screen.getByRole("radio", { name: "Список" }));
-    expect(screen.getByText(/Нет шагов/)).toBeInTheDocument();
+    expect(screen.queryByText("FOCUS")).not.toBeInTheDocument();
+    expect(screen.getByText(/Нет шагов/)).toBeInTheDocument(); // real ListView empty state
   });
 });
 ```
@@ -1404,7 +1393,7 @@ describe("WorkflowApp", () => {
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pnpm test src/app/WorkflowApp.test.tsx`
-Expected: FAIL — titlebar still has no selector/switcher/env pill (old markup).
+Expected: FAIL — titlebar still has no selector/switcher/env pill (old markup); the 2 existing "WorkflowApp shell" tests still PASS.
 
 - [ ] **Step 3: Rewrite `src/app/WorkflowApp.tsx`**
 
@@ -1497,7 +1486,7 @@ export function WorkflowApp() {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `pnpm test src/app/WorkflowApp.test.tsx`
-Expected: PASS (3 tests).
+Expected: PASS (4 tests — 2 existing "shell" + 2 new "titlebar").
 
 - [ ] **Step 5: Typecheck**
 
