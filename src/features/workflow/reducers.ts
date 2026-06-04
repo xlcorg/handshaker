@@ -40,3 +40,7 @@ export function setActiveStep(wf: Workflow, id: string | null): Workflow {
 export function setView(wf: Workflow, view: ViewMode): Workflow {
   return { ...wf, view };
 }
+
+export function setWorkflowEnv(wf: Workflow, name: string | null): Workflow {
+  return { ...wf, envName: name };
+}

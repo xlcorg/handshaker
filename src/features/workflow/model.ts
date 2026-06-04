@@ -29,6 +29,7 @@ export interface Workflow {
   steps: Step[];
   activeStepId: string | null;
   view: ViewMode;
+  envName: string | null; // active environment for this workflow; null = "No environment"
 }
 
 export function newStep(init: {
@@ -53,5 +54,5 @@ export function newStep(init: {
 }
 
 export function newWorkflow(name: string): Workflow {
-  return { id: newId(), name, steps: [], activeStepId: null, view: "focus" };
+  return { id: newId(), name, steps: [], activeStepId: null, view: "focus", envName: null };
 }

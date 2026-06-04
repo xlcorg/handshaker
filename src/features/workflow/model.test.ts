@@ -25,4 +25,8 @@ describe("newWorkflow", () => {
     expect(wf.view).toBe("focus");
     expect(wf.id).toMatch(/.+/);
   });
+
+  it("newWorkflow defaults envName to null (No environment)", () => {
+    expect(newWorkflow("wf-1").envName).toBeNull();
+  });
 });

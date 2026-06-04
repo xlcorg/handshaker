@@ -7,6 +7,7 @@ import {
   setActiveStep,
   setView,
   reorderStep,
+  setWorkflowEnv,
 } from "./reducers";
 
 function wfWith(...n: number[]): Workflow {
@@ -79,5 +80,16 @@ describe("setActiveStep / setView", () => {
   it("clears active when given null (collapse all)", () => {
     const wf = wfWith(1, 2);
     expect(setActiveStep(wf, null).activeStepId).toBeNull();
+  });
+});
+
+describe("setWorkflowEnv", () => {
+  it("sets the workflow env name", () => {
+    const wf = newWorkflow("wf");
+    expect(setWorkflowEnv(wf, "staging").envName).toBe("staging");
+  });
+  it("clears env when given null", () => {
+    const wf = { ...newWorkflow("wf"), envName: "prod" };
+    expect(setWorkflowEnv(wf, null).envName).toBeNull();
   });
 });
