@@ -1,7 +1,7 @@
 import { cn } from "@/lib/cn";
 import type { JsonKind, JsonNode } from "./jsonTree";
 import type { JsonLine } from "./jsonLines";
-import { copyTextForNode, valueLiteral } from "./copyValue";
+import { valueLiteral } from "./copyValue";
 
 const LITERAL_CLASS: Record<JsonKind, string> = {
   string: "tok-str",
@@ -58,7 +58,6 @@ export function JsonLineView({
       role="treeitem"
       aria-expanded={canFold ? line.kind === "open" : undefined}
       onDoubleClick={() => onCopy(node)}
-      title={copyTextForNode(node)}
       className={cn(
         "flex h-[22px] items-center whitespace-pre pr-2 font-mono text-[12.5px] leading-[22px]",
         "cursor-default select-none hover:bg-accent/50",

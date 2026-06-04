@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { copyTextForNode, valueLiteral, PREVIEW_LIMIT } from "./copyValue";
+import { copyTextForNode, valueLiteral, toastSnippet, TOAST_SNIPPET_LIMIT, PREVIEW_LIMIT } from "./copyValue";
 import { parseJsonTree } from "./jsonTree";
 
 const nodeFor = (json: string, key: string) => {
@@ -43,5 +43,20 @@ describe("valueLiteral", () => {
   it("renders empty containers as {} and []", () => {
     expect(valueLiteral(nodeFor(`{"o":{}}`, "o"))).toBe("{}");
     expect(valueLiteral(nodeFor(`{"a":[]}`, "a"))).toBe("[]");
+  });
+});
+
+describe("toastSnippet", () => {
+  it("returns short text unchanged", () => {
+    expect(toastSnippet("hello")).toBe("hello");
+  });
+  it("collapses whitespace and newlines to single spaces", () => {
+    expect(toastSnippet("a\n  b\tc")).toBe("a b c");
+  });
+  it("truncates long text with … at the limit", () => {
+    const long = "x".repeat(TOAST_SNIPPET_LIMIT + 20);
+    const s = toastSnippet(long);
+    expect(s.endsWith("…")).toBe(true);
+    expect(s.length).toBe(TOAST_SNIPPET_LIMIT + 1); // limit chars + the … glyph
   });
 });

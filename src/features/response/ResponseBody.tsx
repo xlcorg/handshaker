@@ -3,7 +3,7 @@ import { Copy } from "lucide-react";
 import { JsonTree } from "./json/JsonTreeView";
 import { JsonSearchBar } from "./json/JsonSearchBar";
 import { parseJsonTree, type JsonNode } from "./json/jsonTree";
-import { copyTextForNode } from "./json/copyValue";
+import { copyTextForNode, toastSnippet } from "./json/copyValue";
 import { findMatches, ancestorsToExpand } from "./json/jsonSearch";
 import { shouldDegrade } from "./json/degrade";
 import { copyToClipboard } from "@/lib/clipboard";
@@ -74,7 +74,10 @@ export function ResponseBody({ json }: ResponseBodyProps) {
       return next;
     });
 
-  const onCopy = (node: JsonNode) => { void copyToClipboard(copyTextForNode(node)); };
+  const onCopy = (node: JsonNode) => {
+    const text = copyTextForNode(node);
+    void copyToClipboard(text, `Скопировано: ${toastSnippet(text)}`);
+  };
 
   if (degraded) {
     return (

@@ -70,4 +70,11 @@ describe("JsonLineView", () => {
       isMatch={false} isActiveMatch={false} onToggle={noop} onCopy={noop} />);
     expect(screen.getByText("{}")).toBeInTheDocument();
   });
+
+  it("does not render a tooltip (title) on the row", () => {
+    const r = rows(`{"s":"some long value"}`).find((x) => x.node.key === "s")!;
+    render(<JsonLineView line={r.line} node={r.node} lineNumber={r.n}
+      isMatch={false} isActiveMatch={false} onToggle={noop} onCopy={noop} />);
+    expect(screen.getByRole("treeitem")).not.toHaveAttribute("title");
+  });
 });

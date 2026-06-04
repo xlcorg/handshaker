@@ -29,7 +29,7 @@ describe("ResponseBody", () => {
     render(<ResponseBody json={`{"name":"Alice"}`} />);
     await user.dblClick(screen.getByText(`"Alice"`));
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith("Alice");
-    await waitFor(() => expect(toastStore.getState()[0]?.message).toMatch(/Скопировано/));
+    await waitFor(() => expect(toastStore.getState()[0]?.message).toMatch(/Скопировано: Alice/));
   });
 
   it("⧉ copy all copies the whole response", async () => {
