@@ -1,0 +1,24 @@
+import { describe, it, expect } from "vitest";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+
+import { VariablesTable } from "./VariablesTable";
+
+describe("VariablesTable", () => {
+  it("does not flag keys with dots / digits / spaces as invalid", async () => {
+    const user = userEvent.setup();
+    render(<VariablesTable value={{}} onChange={() => {}} />);
+    await user.type(screen.getByPlaceholderText("Add variable"), "user.id");
+    const input = screen.getByDisplayValue("user.id");
+    expect(input.className).not.toContain("text-destructive");
+    expect(input).not.toHaveAttribute("title");
+  });
+
+  it("still warns about duplicate keys", async () => {
+    const user = userEvent.setup();
+    render(<VariablesTable value={{ token: "a" }} onChange={() => {}} />);
+    // Type the same key in the trailing empty row → duplicate.
+    await user.type(screen.getByPlaceholderText("Add variable"), "token");
+    expect(screen.getByText(/duplicate key/i)).toBeInTheDocument();
+  });
+});

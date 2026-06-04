@@ -10,10 +10,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { cn } from "@/lib/cn";
-
-const NAME_RE = /^[a-zA-Z_][a-zA-Z0-9_-]*$/;
-
 export interface VariablesTableProps {
   /** Current variables as { key -> value }. */
   value: Record<string, string>;
@@ -109,7 +105,6 @@ export function VariablesTable({ value, onChange }: VariablesTableProps) {
         <TableBody>
           {rows.map((r, i) => {
             const isTrailingEmpty = i === rows.length - 1 && r.key === "";
-            const invalid = r.key.length > 0 && !NAME_RE.test(r.key);
             return (
               <Fragment key={r.id}>
                 <TableRow className="group hover:bg-transparent border-t">
@@ -118,10 +113,7 @@ export function VariablesTable({ value, onChange }: VariablesTableProps) {
                       value={r.key}
                       onChange={(e) => updateRow(i, { key: e.target.value })}
                       placeholder={isTrailingEmpty ? "Add variable" : "key"}
-                      className={cn(CELL_INPUT_CLASS, invalid && "text-destructive")}
-                      title={
-                        isTrailingEmpty ? undefined : "key must match ^[a-zA-Z_][a-zA-Z0-9_-]*$"
-                      }
+                      className={CELL_INPUT_CLASS}
                     />
                   </TableCell>
                   <TableCell className="p-0 align-middle border-l">
