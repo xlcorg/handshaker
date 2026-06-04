@@ -9,7 +9,7 @@ use handshaker_core::env::file_store::FileEnvironmentStore;
 use handshaker_core::env::in_memory::InMemoryEnvironmentStore;
 use handshaker_core::env::EnvironmentStore;
 use handshaker_core::error::CoreError;
-use handshaker_core::grpc::{ContractCache, InMemoryContractCache};
+use handshaker_core::grpc::{ContractCache, FileContractCache, InMemoryContractCache};
 use tokio::sync::{Notify, RwLock};
 
 /// Per-request cancel registry: `request_id` → `Notify` fired by `grpc_cancel`.
@@ -23,7 +23,8 @@ pub struct AppState {
     pub active_env: RwLock<Option<String>>,
     /// Collection store (plan #6). Cold boot: empty.
     pub collection_store: Arc<dyn CollectionStore>,
-    /// Descriptor cache (plan #6). Session-only, not persisted.
+    /// Descriptor/contract cache. File-backed in `load` (persists across restarts, B7);
+    /// in-memory under `default()`.
     pub contract_cache: Arc<dyn ContractCache>,
     /// In-flight gRPC requests: `request_id` → cancellation `Notify`.
     pub in_flight: InFlight,
@@ -50,7 +51,7 @@ impl AppState {
             env_store: Arc::new(env_store),
             active_env: RwLock::new(None),
             collection_store: Arc::new(collection_store),
-            contract_cache: Arc::new(InMemoryContractCache::new()),
+            contract_cache: Arc::new(FileContractCache::load(data_dir.join("contracts"))?),
             in_flight: Mutex::new(HashMap::new()),
         })
     }
@@ -64,5 +65,18 @@ mod tests {
     fn default_has_empty_in_flight_registry() {
         let s = AppState::default();
         assert!(s.in_flight.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn load_uses_file_backed_contract_cache_under_contracts_dir() {
+        use handshaker_core::grpc::ContractKey;
+        let dir = tempfile::tempdir().unwrap();
+        let state = AppState::load(dir.path()).unwrap();
+
+        // the cache directory is created on load
+        assert!(dir.path().join("contracts").is_dir());
+        // cold cache: nothing cached yet
+        let k = ContractKey { address: "h:1".into(), tls: false };
+        assert!(state.contract_cache.get(&k).is_none());
     }
 }
