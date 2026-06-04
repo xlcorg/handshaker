@@ -20,9 +20,13 @@
   reviewed (final review: ready-to-merge, no critical/important issues), review-fix applied.
   Gate green: **pnpm test 204/204**, `pnpm lint` exit 0, `pnpm build` success,
   `cargo test -p handshaker` 25/25. Commits: `eca633b`…`d45fc38` (B1, B2, B3, B4, B5, B6,
-  B7, B8, B9, review-fix). Active: **Phase C** — still an outline; **expand to full TDD at
-  its /clear-checkpoint before executing** (project cadence: detail-on-reach), and FIRST
-  verify (context7/WebSearch) the Tauri promise-drop cancel premise per project convention.
+  B7, B8, B9, review-fix).
+- **Status:** 🚧 **Phase C IN PROGRESS** (2026-06-04, subagent-driven). Outline expanded to
+  full TDD (tasks C1–C9 below). Both design-impacting premises verified + cited (see
+  **Phase C — verification log**): (1) a dropped JS promise does NOT abort the awaited Rust
+  command → server-side `Notify` cancel registry required; (2) `notify_one()` (not
+  `notify_waiters()`) for cancel-before-await safety. Error-variant decision CONFIRMED:
+  reuse `Transport(msg)` + frontend classifier. Execute from the first unchecked C-task.
 - **Mode:** subagent-driven (default).
 - **Build/test commands** (from repo root, PowerShell):
   - Frontend unit tests: `pnpm test` (vitest run) · single file: `pnpm test <path>`
@@ -2013,37 +2017,65 @@ git commit -m "feat(workflow): wire RequestTabs + service auth into CallPanel se
 
 # PHASE C — Cancel / timeout + network diagnostics + parallel send
 
-> **Detailed breakdown — expand to full TDD at this checkpoint before executing.**
-> Covers outline tasks 5, 6 & 7. **Before detailing: verify (context7/WebSearch) that a
-> dropped JS promise does not abort the awaited Rust Tauri command** — this is the premise
-> for the server-side cancel registry. Cite the source in the detailed plan (project
-> convention: verify design-impacting claims).
+> **✅ DETAILED to full TDD (2026-06-04).** Verification done (below); tasks C1–C9 below
+> are executable. Covers outline tasks 5, 6 & 7.
+
+## Phase C — verification log (design-impacting premises)
+
+Per project convention (verify design-impacting claims with context7/WebSearch before
+relying on them):
+
+1. **A dropped JS `invoke` promise does NOT abort the awaited Rust command future.**
+   Tauri runs the command to completion regardless of the frontend promise's fate; there
+   is no AbortController bridge. Cancellation must be implemented server-side with tokio
+   primitives (`tokio::select!` racing a cancel signal). → **Confirms Key Decision #3**
+   (server-side `Notify` registry is required; a frontend-only "drop the promise" cancel
+   would silently leak the in-flight RPC).
+   Sources: [tauri#8351 — AbortController feature request](https://github.com/tauri-apps/tauri/issues/8351)
+   (open; maintainers' recommended workaround is tokio-side `select!`/oneshot),
+   [tauri::async_runtime docs](https://docs.rs/tauri/latest/tauri/async_runtime/index.html).
+
+2. **`tokio::sync::Notify`: `notify_one()` stores a permit when there is no waiter;
+   `notify_waiters()` does not.** A cancel that arrives *before* the `select!` first poll
+   (registry entry inserted, but `notified()` not yet polled) must still cancel the next
+   poll. `notify_one()` stores a permit consumed by the next `notified()`;
+   `notify_waiters()` only wakes *already-registered* waiters and would lose that race.
+   → **`grpc_cancel` uses `notify_one()`** (the outline said `notify_waiters()` — corrected).
+   Source: [tokio `notify.rs` — `inner_notify_waiters` only increments a counter when no
+   waiters present, stores no permit](https://github.com/tokio-rs/tokio/blob/master/tokio/src/sync/notify.rs).
 
 ## File structure (Phase C)
 
 **Backend (Rust):**
-- Modify: `src-tauri/src/state.rs` — add
-  `pub in_flight: Mutex<HashMap<String, Arc<tokio::sync::Notify>>>` (std `Mutex` is fine —
-  held only for insert/remove, never across `.await`).
-- Modify: `src-tauri/src/commands/grpc.rs`:
-  - `grpc_invoke_oneshot(state, target, request, request_id: String, timeout_ms: u32)`:
-    register a `Notify` under `request_id`; run `activate + invoke_unary` inside
-    `tokio::select!` racing `notify.notified()`; wrap the invoke arm in
-    `tokio::time::timeout(Duration::from_millis(timeout_ms as u64), …)`; always remove the
-    registry entry on exit (guard struct / `scopeguard`-style drop). Cancelled → return a
-    dedicated `IpcError` (or `CoreError::Transport("request cancelled")`); timeout →
-    `CoreError::Transport("request timed out after {ms}ms")`.
+- Modify: `src-tauri/src/state.rs` — add a `pub type InFlight = Mutex<HashMap<String,
+  Arc<Notify>>>` alias and a `pub in_flight: InFlight` field (std `Mutex` — held only for
+  insert/remove/lookup, never across `.await`). (Task C1)
+- Modify: `src-tauri/src/commands/grpc.rs` (Task C2):
+  - Add a **testable seam** `race_cancel_timeout<T, F>(in_flight, request_id, timeout_ms,
+    work) -> Result<T, IpcError>` that registers a `Notify`, runs `tokio::select!{ biased;
+    notify.notified() => Cancelled, timeout(work) => … }`, and removes the registry entry
+    on scope exit via a `DeregisterGuard` (Drop — fires on success / timeout / cancel /
+    panic). Generic over `T` so its tests need no `InvokeOutcomeIpc` value and no network.
+  - `grpc_invoke_oneshot(state, target, request, request_id: String, timeout_ms: u32)`
+    builds `work = async { activate + invoke_unary }` and delegates to
+    `race_cancel_timeout` (`T = InvokeOutcomeIpc`).
   - New command `grpc_cancel(state, request_id: String) -> Result<(), IpcError>`: look up
-    and `notify_waiters()`.
-- Modify: `src-tauri/src/lib.rs` — register `grpc_cancel`.
+    the `Notify` and call **`notify_one()`** (NOT `notify_waiters()` — see verification
+    log #2; `notify_one` stores a permit so a cancel racing the first `select!` poll still
+    wins).
+  - Cancelled → `IpcError::Transport { message: "request cancelled" }`; timeout →
+    `IpcError::Transport { message: "request timed out after {ms}ms" }`. (Decision below.)
+- Modify: `src-tauri/src/lib.rs` — register `grpc_cancel`. (Task C3)
 - Regenerate bindings; update `src/ipc/client.ts` (`grpcInvokeOneshot` gains
-  `request_id` + `timeout_ms`; add `grpcCancel`).
+  `request_id` + `timeout_ms`; add `grpcCancel`; update the one legacy caller). (Task C3)
 
-> **Decision to confirm at this checkpoint:** dedicated `CoreError::Cancelled` /
-> `CoreError::Timeout` variants (cleaner diagnostics, ripples through `error.rs` +
-> `IpcError` + bindings + existing error rendering) **vs** reusing `Transport(msg)` and
-> classifying by message on the frontend (less invasive; the diagnostics classifier in C5
-> already parses messages). Default: reuse `Transport(msg)` to bound scope.
+> **Decision — CONFIRMED: reuse `Transport(msg)`, classify on the frontend.** Dedicated
+> `CoreError::Cancelled` / `CoreError::Timeout` variants would ripple through `error.rs`
+> (the exhaustiveness test), `IpcError`, bindings, and every existing error renderer for no
+> functional gain — the C5 `classifyTransportError` classifier already parses transport
+> messages, and `sendStep` reuses it to detect the cancel sentinel. Scope stays bounded to
+> Phase C. The two sentinel strings (`"request cancelled"`, `"request timed out after …"`)
+> are the contract between C2 (emit) and C5/C6 (classify).
 
 **Frontend:**
 - Modify: `src/lib/use-prefs.ts` — add `requestTimeoutMs: number` (default `30000`) to
@@ -2068,28 +2100,1073 @@ git commit -m "feat(workflow): wire RequestTabs + service auth into CallPanel se
   when the error is a client/transport error, run it through `classifyTransportError` and
   render the friendly kind + hint (spec §10: refused / TLS / DNS / timeout).
 
-## Tasks (TDD intentions)
+## Tasks (full TDD)
 
-- **C1 — Timeout pref.** Test: default `30000`; `NetworkPane` input round-trips
-  seconds↔ms; invalid input clamped to a sane min (e.g. ≥ 1000 ms).
-- **C2 — Backend timeout.** Rust test: an invoke against a dead/slow target with
-  `timeout_ms = small` returns the timeout `Transport` error within the budget. (Use the
-  existing dead-listener pattern from `tonic_impl.rs` tests.)
-- **C3 — Backend cancel registry.** Rust test: register a request, `grpc_cancel` fires the
-  `Notify`, the `select!` arm resolves to cancelled; registry entry is removed on exit
-  (no leak). Unit-test the registry insert/remove + notify in isolation.
-- **C4 — Frontend cancel wiring.** Tests: `sendStep` passes a `request_id` + `timeout_ms`;
-  `cancelStep` calls `grpcCancel(requestId)`; a cancelled send resets the step to `draft`.
-  `AddressBar` shows Cancel while sending and calls `cancelStep`.
-- **C5 — Network diagnostics classifier.** Pure tests over `classifyTransportError` for
-  each kind (refused/TLS/DNS/timeout/cancelled/other) + the rendered hint. Wire into
-  `ErrorView`/client-error block; test that a "connection refused" message renders the
-  refused hint.
-- **C6 — Parallel Send.** Verify each step's Send is independent (per-step `sending` is
-  already isolated in the store from Plan #1). Test: kicking two `onSend`s on different
-  steps tracks two independent in-flight states and two distinct `request_id`s; no global
-  lock. Confirm the store keys nothing globally on "sending". (Likely already true — this
-  task is mostly a regression test + removing any accidental global guard.)
+> Order encodes dependencies: backend cancel/timeout (C1–C3) → timeout pref (C4) → pure
+> classifier (C5) → frontend cancel wiring that reuses both (C6) → Cancel UI (C7) →
+> diagnostics rendering (C8) → parallel-send regression (C9). Run each named test and watch
+> it FAIL before implementing. Frontend: `pnpm test <path>`; Rust: `cargo test -p handshaker`.
+> Outline-task mapping: C1–C3 = task 5 (cancel/timeout backend), C4+C7+C8 = task 6
+> (timeout pref + Cancel UI + §10 diagnostics), C5/C6 shared, C9 = task 7 (parallel send).
+
+---
+
+### Task C1: In-flight cancel registry on `AppState`
+
+**Files:**
+- Modify: `src-tauri/src/state.rs`
+
+- [ ] **Step 1 — Failing test.** Add a `tests` module at the end of `state.rs`:
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_has_empty_in_flight_registry() {
+        let s = AppState::default();
+        assert!(s.in_flight.lock().unwrap().is_empty());
+    }
+}
+```
+
+- [ ] **Step 2 — Run, expect fail.** `cargo test -p handshaker state::` → FAIL (no
+  `in_flight` field; does not compile).
+
+- [ ] **Step 3 — Implement.** Add imports near the top of `state.rs`:
+
+```rust
+use std::collections::HashMap;
+use std::sync::Mutex;
+use tokio::sync::Notify;
+```
+
+Add the alias above `pub struct AppState` and the field inside it:
+
+```rust
+/// Per-request cancel registry: `request_id` → `Notify` fired by `grpc_cancel`.
+/// std `Mutex` — locked only for insert/remove/lookup, never across `.await`.
+pub type InFlight = Mutex<HashMap<String, Arc<Notify>>>;
+```
+
+```rust
+pub struct AppState {
+    // …existing fields…
+    pub in_flight: InFlight,
+}
+```
+
+Initialize it in **both** constructors:
+- in `impl Default` → add `in_flight: Mutex::new(HashMap::new()),`
+- in `AppState::load` → add `in_flight: Mutex::new(HashMap::new()),`
+
+- [ ] **Step 4 — Run, expect pass.** `cargo test -p handshaker state::` → PASS.
+
+- [ ] **Step 5 — Commit.**
+
+```bash
+git add src-tauri/src/state.rs
+git commit -m "feat(state): in-flight cancel registry (request_id -> Notify)"
+```
+
+---
+
+### Task C2: `race_cancel_timeout` seam + `grpc_invoke_oneshot` timeout + `grpc_cancel`
+
+**Files:**
+- Modify: `src-tauri/src/commands/grpc.rs`
+
+- [ ] **Step 1 — Failing tests.** Append to the existing `#[cfg(test)] mod tests` in
+  `grpc.rs`:
+
+```rust
+    use crate::ipc::IpcError;
+    use crate::state::InFlight;
+    use std::collections::HashMap;
+    use std::time::Duration;
+
+    fn empty_in_flight() -> InFlight {
+        std::sync::Mutex::new(HashMap::new())
+    }
+
+    #[tokio::test]
+    async fn race_passes_through_success_and_cleans_up() {
+        let m = empty_in_flight();
+        let r = race_cancel_timeout(&m, "id1".to_string(), 1000, async {
+            Ok::<i32, IpcError>(7)
+        })
+        .await;
+        assert_eq!(r.unwrap(), 7);
+        assert!(m.lock().unwrap().is_empty(), "registry entry removed on success");
+    }
+
+    #[tokio::test]
+    async fn race_times_out_when_work_exceeds_budget() {
+        let m = empty_in_flight();
+        let work = async {
+            tokio::time::sleep(Duration::from_secs(10)).await;
+            Ok::<i32, IpcError>(1)
+        };
+        match race_cancel_timeout(&m, "id2".to_string(), 50, work).await {
+            Err(IpcError::Transport { message }) => assert!(message.contains("timed out"), "{message}"),
+            other => panic!("expected timeout Transport, got {other:?}"),
+        }
+        assert!(m.lock().unwrap().is_empty(), "registry entry removed on timeout");
+    }
+
+    #[tokio::test]
+    async fn race_cancels_when_notified_and_cleans_up() {
+        let m = empty_in_flight();
+        let id = "cancel-me".to_string();
+        let work = std::future::pending::<Result<i32, IpcError>>();
+
+        // Concurrent canceller on the same task (no spawn → no 'static bound): wait until
+        // the race registers its Notify, then fire notify_one().
+        let canceller = async {
+            loop {
+                if let Some(n) = m.lock().unwrap().get(&id).cloned() {
+                    n.notify_one();
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        };
+
+        let (raced, _) = tokio::join!(
+            race_cancel_timeout(&m, id.clone(), 60_000, work),
+            canceller,
+        );
+        match raced {
+            Err(IpcError::Transport { message }) => assert!(message.contains("cancelled"), "{message}"),
+            other => panic!("expected cancelled Transport, got {other:?}"),
+        }
+        assert!(m.lock().unwrap().is_empty(), "registry entry removed on cancel");
+    }
+```
+
+- [ ] **Step 2 — Run, expect fail.** `cargo test -p handshaker commands::grpc` → FAIL
+  (`race_cancel_timeout` undefined; does not compile).
+
+- [ ] **Step 3 — Implement.** Add imports to the top of `grpc.rs`:
+
+```rust
+use std::collections::HashMap;
+use std::time::Duration;
+
+use tokio::sync::Notify;
+
+use crate::state::InFlight;
+```
+
+(`HashMap` may already be unused elsewhere — if `cargo` warns it's unused, it is needed by
+the `work` map type below via `request.metadata: HashMap<String,String>`; keep it. If a
+duplicate-import error appears, drop the redundant line.)
+
+Add the seam + helpers (above `grpc_invoke_oneshot`):
+
+```rust
+/// Sentinel transport messages classified on the frontend (Transport(msg) reuse — see the
+/// Phase C decision). Kept as the C2↔C5/C6 contract.
+const CANCELLED_MSG: &str = "request cancelled";
+fn timed_out_msg(ms: u32) -> String {
+    format!("request timed out after {ms}ms")
+}
+
+/// Removes the in-flight registry entry on scope exit (success / timeout / cancel / panic).
+struct DeregisterGuard<'a> {
+    map: &'a InFlight,
+    id: String,
+}
+impl Drop for DeregisterGuard<'_> {
+    fn drop(&mut self) {
+        if let Ok(mut g) = self.map.lock() {
+            g.remove(&self.id);
+        }
+    }
+}
+
+/// Race a unit of `work` against (a) a per-request cancel `Notify` and (b) a timeout.
+/// Testable seam: the command builds `work` from the real activate+invoke; tests pass a
+/// synthetic future. Generic over `T` so tests need no `InvokeOutcomeIpc` and no network.
+pub(crate) async fn race_cancel_timeout<T, F>(
+    in_flight: &InFlight,
+    request_id: String,
+    timeout_ms: u32,
+    work: F,
+) -> Result<T, IpcError>
+where
+    F: std::future::Future<Output = Result<T, IpcError>>,
+{
+    let notify = Arc::new(Notify::new());
+    in_flight
+        .lock()
+        .expect("in_flight registry poisoned")
+        .insert(request_id.clone(), notify.clone());
+    let _guard = DeregisterGuard { map: in_flight, id: request_id };
+
+    tokio::select! {
+        biased;
+        _ = notify.notified() => Err(IpcError::Transport { message: CANCELLED_MSG.to_string() }),
+        r = tokio::time::timeout(Duration::from_millis(timeout_ms as u64), work) => match r {
+            Ok(inner) => inner,
+            Err(_) => Err(IpcError::Transport { message: timed_out_msg(timeout_ms) }),
+        },
+    }
+}
+```
+
+Rewrite `grpc_invoke_oneshot` to take the new params and delegate:
+
+```rust
+#[tauri::command]
+#[specta::specta]
+pub async fn grpc_invoke_oneshot(
+    state: State<'_, AppState>,
+    target: GrpcTargetIpc,
+    request: InvokeRequest,
+    request_id: String,
+    timeout_ms: u32,
+) -> Result<InvokeOutcomeIpc, IpcError> {
+    let target = target.into_core()?;
+    let cache = state.contract_cache.clone();
+    let work = async move {
+        let transport = Arc::new(TonicTransport::new());
+        let conn = activate(target, transport, cache.as_ref()).await?;
+        let outcome = invoke_unary(
+            &conn,
+            &request.service,
+            &request.method,
+            &request.request_json,
+            request.metadata,
+        )
+        .await?;
+        Ok::<InvokeOutcomeIpc, IpcError>(outcome.into())
+    };
+    race_cancel_timeout(&state.in_flight, request_id, timeout_ms, work).await
+}
+```
+
+Add the cancel command (below `grpc_invoke_oneshot`):
+
+```rust
+/// Fire the cancel `Notify` for an in-flight `request_id`. No-op if unknown (already
+/// finished or never started). Uses `notify_one()` so a cancel racing the `select!` first
+/// poll still stores a permit (see verification log #2).
+#[tauri::command]
+#[specta::specta]
+pub async fn grpc_cancel(
+    state: State<'_, AppState>,
+    request_id: String,
+) -> Result<(), IpcError> {
+    if let Some(n) = state
+        .in_flight
+        .lock()
+        .expect("in_flight registry poisoned")
+        .get(&request_id)
+    {
+        n.notify_one();
+    }
+    Ok(())
+}
+```
+
+- [ ] **Step 4 — Run, expect pass.** `cargo test -p handshaker commands::grpc` → PASS
+  (3 new + 2 existing `target_key` tests).
+
+- [ ] **Step 5 — Commit.**
+
+```bash
+git add src-tauri/src/commands/grpc.rs
+git commit -m "feat(grpc): cancel+timeout via race_cancel_timeout seam; grpc_cancel command"
+```
+
+---
+
+### Task C3: Register `grpc_cancel`, regenerate bindings, update client wrappers
+
+**Files:**
+- Modify: `src-tauri/src/lib.rs`
+- Regenerate: `src/ipc/bindings.ts`
+- Modify: `src/ipc/client.ts`
+- Modify: `src/features/invoke/RequestPanel.tsx` (legacy caller — keep `pnpm lint` green)
+
+- [ ] **Step 1 — Register the command.** In `src-tauri/src/lib.rs`, extend the import
+  `use commands::grpc::{ … }` to include `grpc_cancel`, and add `grpc_cancel,` to the
+  `collect_commands![…]` list (right after `grpc_invoke_oneshot,`).
+
+- [ ] **Step 2 — Regenerate bindings.** From repo root:
+
+```bash
+cargo run -p handshaker --bin export-bindings
+```
+
+Expected: `src/ipc/bindings.ts` now has
+`async grpcInvokeOneshot(target, request, requestId: string, timeoutMs: number)` and
+`async grpcCancel(requestId: string): Promise<Result<null, IpcError>>`.
+
+- [ ] **Step 3 — Update the typed wrappers.** In `src/ipc/client.ts`, change
+  `grpcInvokeOneshot` to forward the two new args and add `grpcCancel`:
+
+```ts
+export async function grpcInvokeOneshot(
+  target: GrpcTargetIpc,
+  req: InvokeRequest,
+  requestId: string,
+  timeoutMs: number,
+): Promise<InvokeOutcomeIpc> {
+  const r = await commands.grpcInvokeOneshot(target, req, requestId, timeoutMs);
+  if (r.status === "error") throw r.error;
+  return r.data;
+}
+
+export async function grpcCancel(requestId: string): Promise<void> {
+  const r = await commands.grpcCancel(requestId);
+  if (r.status === "error") throw r.error;
+}
+```
+
+Add `grpcCancel,` to the `export const ipc = { … }` object.
+
+- [ ] **Step 4 — Update the legacy caller.** In `src/features/invoke/RequestPanel.tsx`, the
+  call at `await ipc.grpcInvokeOneshot({…}, {…})` now needs two more args. The legacy
+  invoke UI has no cancel/timeout surface, so pass an inert request id and the default
+  deadline:
+
+```ts
+      const outcome = await ipc.grpcInvokeOneshot(
+        { address: resolvedAddr, tls: target.tls, skip_verify: false },
+        {
+          // …existing request fields…
+        },
+        "", // legacy invoke UI: no cancel wiring
+        30_000, // default request deadline (ms)
+      );
+```
+
+- [ ] **Step 5 — Typecheck.** `pnpm lint` → exit 0. (Confirms no other 2-arg callers slipped
+  through. If lint flags another call site, grep `grpcInvokeOneshot(` and add the two args.)
+
+- [ ] **Step 6 — Commit.**
+
+```bash
+git add src-tauri/src/lib.rs src/ipc/bindings.ts src/ipc/client.ts src/features/invoke/RequestPanel.tsx
+git commit -m "feat(ipc): register grpc_cancel; grpcInvokeOneshot gains request_id + timeout_ms"
+```
+
+---
+
+### Task C4: `requestTimeoutMs` pref + editable NetworkPane "Request deadline"
+
+**Files:**
+- Modify: `src/lib/use-prefs.ts`
+- Modify: `src/features/settings/NetworkPane.tsx`
+- Test: `src/lib/use-prefs.test.ts` (create if absent)
+- Test: `src/features/settings/NetworkPane.test.tsx` (create)
+
+- [ ] **Step 1 — Failing test (pref + clamp).** Create/append `src/lib/use-prefs.test.ts`:
+
+```ts
+import { describe, it, expect } from "vitest";
+import { PREFS_DEFAULTS, clampTimeoutMs } from "./use-prefs";
+
+describe("requestTimeoutMs pref", () => {
+  it("defaults to 30000 ms", () => {
+    expect(PREFS_DEFAULTS.requestTimeoutMs).toBe(30000);
+  });
+  it("clampTimeoutMs floors sub-second values to 1000 ms", () => {
+    expect(clampTimeoutMs(0)).toBe(1000);
+    expect(clampTimeoutMs(500)).toBe(1000);
+    expect(clampTimeoutMs(NaN)).toBe(1000);
+  });
+  it("clampTimeoutMs passes valid values through (rounded to int)", () => {
+    expect(clampTimeoutMs(45000)).toBe(45000);
+    expect(clampTimeoutMs(45000.7)).toBe(45001);
+  });
+});
+```
+
+- [ ] **Step 2 — Run, expect fail.** `pnpm test src/lib/use-prefs.test.ts` → FAIL
+  (`requestTimeoutMs`/`clampTimeoutMs` absent).
+
+- [ ] **Step 3 — Implement (use-prefs.ts).** Add the field to the interface + defaults and a
+  clamp helper:
+
+```ts
+export interface Prefs {
+  // …existing fields…
+  /** Per-request deadline in ms, applied backend-side via tokio timeout. */
+  requestTimeoutMs: number;
+}
+```
+
+```ts
+export const PREFS_DEFAULTS: Prefs = {
+  // …existing fields…
+  requestTimeoutMs: 30000,
+};
+```
+
+```ts
+export const TIMEOUT_MIN_MS = 1000;
+
+/** Floor to TIMEOUT_MIN_MS and round to an integer ms (rejects NaN/sub-second input). */
+export function clampTimeoutMs(ms: number): number {
+  if (!Number.isFinite(ms)) return TIMEOUT_MIN_MS;
+  return Math.max(TIMEOUT_MIN_MS, Math.round(ms));
+}
+```
+
+- [ ] **Step 4 — Failing test (NetworkPane).** Create `NetworkPane.test.tsx`. The prefs
+  module is a localStorage-backed singleton; reset it to the default before each test via
+  its public setter (rendered once through a throwaway probe), so tests are order-independent:
+
+```tsx
+import { describe, it, expect, beforeEach } from "vitest";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { NetworkPane } from "./NetworkPane";
+import { readPrefs, usePrefs } from "@/lib/use-prefs";
+
+/** Reset the prefs singleton to a known deadline via the public setter. */
+function setDeadlineMs(ms: number) {
+  function Probe() {
+    usePrefs()[1]("requestTimeoutMs", ms);
+    return null;
+  }
+  render(<Probe />);
+}
+
+describe("NetworkPane request deadline", () => {
+  beforeEach(() => setDeadlineMs(30000));
+
+  it("shows the deadline in seconds and writes ms back on change", async () => {
+    const user = userEvent.setup();
+    render(<NetworkPane />);
+    const input = screen.getByLabelText(/request deadline/i) as HTMLInputElement;
+    expect(input.value).toBe("30");
+    await user.clear(input);
+    await user.type(input, "45");
+    await user.tab(); // commit on blur
+    expect(readPrefs().requestTimeoutMs).toBe(45000);
+  });
+
+  it("clamps sub-second input to the 1000 ms floor", async () => {
+    const user = userEvent.setup();
+    render(<NetworkPane />);
+    const input = screen.getByLabelText(/request deadline/i) as HTMLInputElement;
+    await user.clear(input);
+    await user.type(input, "0");
+    await user.tab();
+    expect(readPrefs().requestTimeoutMs).toBe(1000);
+  });
+});
+```
+
+- [ ] **Step 5 — Run, expect fail.** `pnpm test src/features/settings/NetworkPane.test.tsx`
+  → FAIL (deadline input is a read-only placeholder).
+
+- [ ] **Step 6 — Implement (NetworkPane.tsx).** Make the "Request deadline" row an editable,
+  validated seconds input bound to the pref. Replace the static row:
+
+```tsx
+import { useState } from "react";
+import { usePrefs, clampTimeoutMs } from "@/lib/use-prefs";
+```
+
+```tsx
+function RequestDeadlineRow() {
+  const [prefs, setPref] = usePrefs();
+  const [draft, setDraft] = useState(String(Math.round(prefs.requestTimeoutMs / 1000)));
+  const commit = () => {
+    const ms = clampTimeoutMs(Number(draft) * 1000);
+    setPref("requestTimeoutMs", ms);
+    setDraft(String(Math.round(ms / 1000)));
+  };
+  return (
+    <SettingsRow
+      title="Request deadline"
+      hint="Per-request deadline; the call is cancelled if it exceeds this."
+      control={
+        <div className="flex items-center gap-1">
+          <Input
+            aria-label="Request deadline"
+            type="number"
+            min={1}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            className="w-20 h-8 font-mono text-xs"
+          />
+          <span className="text-xs text-muted-foreground">s</span>
+        </div>
+      }
+    />
+  );
+}
+```
+
+Render `<RequestDeadlineRow />` in place of the old `Request deadline` `SettingsRow`, and
+drop "Request deadline" from the trailing "read-only placeholders" note (the other rows
+stay placeholders).
+
+- [ ] **Step 7 — Run, expect pass.** `pnpm test src/lib/use-prefs.test.ts src/features/settings/NetworkPane.test.tsx`
+  then `pnpm lint`.
+
+- [ ] **Step 8 — Commit.**
+
+```bash
+git add src/lib/use-prefs.ts src/lib/use-prefs.test.ts src/features/settings/NetworkPane.tsx src/features/settings/NetworkPane.test.tsx
+git commit -m "feat(settings): editable request-deadline pref (requestTimeoutMs)"
+```
+
+---
+
+### Task C5: `classifyTransportError` network-diagnostics classifier (pure)
+
+**Files:**
+- Create: `src/features/workflow/netDiagnostics.ts`
+- Test: `src/features/workflow/netDiagnostics.test.ts`
+
+- [ ] **Step 1 — Failing test.** Create `netDiagnostics.test.ts`:
+
+```ts
+import { describe, it, expect } from "vitest";
+import { classifyTransportError } from "./netDiagnostics";
+
+describe("classifyTransportError", () => {
+  it.each([
+    ["request cancelled", "cancelled"],
+    ["request timed out after 30000ms", "timeout"],
+    ["deadline exceeded", "timeout"],
+    ["connection refused", "refused"],
+    ["ECONNREFUSED 127.0.0.1:443", "refused"],
+    ["the certificate is not trusted", "tls"],
+    ["TLS handshake failed", "tls"],
+    ["dns error: failed to lookup address", "dns"],
+    ["no such host", "dns"],
+    ["something weird happened", "other"],
+  ])("classifies %j as %s", (message, kind) => {
+    expect(classifyTransportError(message).kind).toBe(kind);
+  });
+
+  it("returns a non-empty hint for recognised kinds and empty for other", () => {
+    expect(classifyTransportError("connection refused").hint).toMatch(/listening|reachable|refused/i);
+    expect(classifyTransportError("totally opaque").hint).toBe("");
+  });
+
+  it("is case-insensitive", () => {
+    expect(classifyTransportError("Connection Refused").kind).toBe("refused");
+  });
+});
+```
+
+- [ ] **Step 2 — Run, expect fail.** `pnpm test src/features/workflow/netDiagnostics.test.ts`
+  → FAIL (module not found).
+
+- [ ] **Step 3 — Implement.** Create `netDiagnostics.ts`. **Order matters** — cancel and
+  timeout are checked before refused/tls/dns so a "timed out"/"cancelled" message wins:
+
+```ts
+export type TransportKind = "refused" | "tls" | "dns" | "timeout" | "cancelled" | "other";
+
+export interface TransportDiagnosis {
+  kind: TransportKind;
+  hint: string;
+}
+
+const RULES: { kind: Exclude<TransportKind, "other">; patterns: RegExp; hint: string }[] = [
+  { kind: "cancelled", patterns: /cancel/i, hint: "Request was cancelled." },
+  { kind: "timeout", patterns: /timed out|timeout|deadline/i, hint: "The server did not respond before the request deadline. Raise it in Settings → Network or check the server." },
+  { kind: "refused", patterns: /connection refused|econnrefused|refused/i, hint: "Nothing is listening at that address/port. Check the host, port, and that the server is running." },
+  { kind: "tls", patterns: /certificate|tls|ssl|handshake/i, hint: "TLS negotiation failed. Verify the scheme, the server certificate, or disable verification for self-signed certs." },
+  { kind: "dns", patterns: /\bdns\b|name resolution|failed to lookup|no such host/i, hint: "The hostname could not be resolved. Check the address for typos or your network/DNS." },
+];
+
+/** Map a raw client/transport error message to a friendly kind + actionable hint. */
+export function classifyTransportError(message: string): TransportDiagnosis {
+  for (const r of RULES) {
+    if (r.patterns.test(message)) return { kind: r.kind, hint: r.hint };
+  }
+  return { kind: "other", hint: "" };
+}
+```
+
+- [ ] **Step 4 — Run, expect pass.**
+
+- [ ] **Step 5 — Commit.**
+
+```bash
+git add src/features/workflow/netDiagnostics.ts src/features/workflow/netDiagnostics.test.ts
+git commit -m "feat(workflow): classifyTransportError network-diagnostics classifier"
+```
+
+---
+
+### Task C6: `request_id` + timeout in `sendStep`; `cancelStep`; cancelled → draft
+
+**Files:**
+- Modify: `src/features/workflow/model.ts`
+- Modify: `src/features/workflow/actions.ts`
+- Modify: `src/features/workflow/actions.test.ts`
+- Modify: `src/features/workflow/model.test.ts`
+
+- [ ] **Step 1 — Failing test (model).** Append to `model.test.ts`:
+
+```ts
+it("newStep defaults requestId to null", () => {
+  const s = newStep({ address: "h", tls: false, service: "S", method: "M" });
+  expect(s.requestId).toBeNull();
+});
+```
+
+- [ ] **Step 2 — Failing tests (actions).** In `actions.test.ts`, extend the mocked client to
+  add `grpcCancel` (and keep the others):
+
+```ts
+vi.mock("@/ipc/client", () => ({
+  grpcBuildRequestSkeleton: vi.fn(),
+  grpcInvokeOneshot: vi.fn(),
+  varsResolve: vi.fn(),
+  authResolve: vi.fn(),
+  grpcCancel: vi.fn(),
+}));
+```
+
+Add `cancelStep` to the import line and append these tests:
+
+```ts
+import { cancelStep } from "./actions";
+
+describe("sendStep cancel/timeout wiring", () => {
+  beforeEach(() => {
+    vi.mocked(ipc.grpcInvokeOneshot).mockResolvedValue({
+      status_code: 0, status_message: "OK", response_json: "{}", trailing_metadata: {}, elapsed_ms: 1,
+    });
+  });
+
+  it("passes a request_id and a timeout_ms to grpcInvokeOneshot", async () => {
+    await sendStep(
+      { address: "h:443", tls: true, service: "S", method: "M", requestJson: "{}", metadata: [] },
+      null,
+      { requestId: "req-1", timeoutMs: 12345 },
+    );
+    expect(ipc.grpcInvokeOneshot).toHaveBeenCalledWith(
+      { address: "h:443", tls: true, skip_verify: false },
+      { service: "S", method: "M", request_json: "{}", metadata: {} },
+      "req-1",
+      12345,
+    );
+  });
+
+  it("returns kind 'cancelled' when the backend reports a cancellation", async () => {
+    vi.mocked(ipc.grpcInvokeOneshot).mockRejectedValue({ type: "Transport", message: "request cancelled" });
+    const res = await sendStep(
+      { address: "h", tls: false, service: "S", method: "M", requestJson: "{}", metadata: [] },
+      null,
+      { requestId: "req-2", timeoutMs: 1000 },
+    );
+    expect(res.kind).toBe("cancelled");
+    expect(ipc.grpcCancel).not.toHaveBeenCalled();
+  });
+
+  it("generates distinct request ids across calls when none is provided", async () => {
+    await sendStep({ address: "h", tls: false, service: "S", method: "M", requestJson: "{}", metadata: [] });
+    await sendStep({ address: "h", tls: false, service: "S", method: "M", requestJson: "{}", metadata: [] });
+    const ids = vi.mocked(ipc.grpcInvokeOneshot).mock.calls.map((c) => c[2]);
+    expect(ids[0]).not.toBe(ids[1]);
+    expect(typeof ids[0]).toBe("string");
+  });
+});
+
+describe("cancelStep", () => {
+  it("calls grpcCancel with the request id", async () => {
+    await cancelStep("req-9");
+    expect(ipc.grpcCancel).toHaveBeenCalledWith("req-9");
+  });
+  it("swallows grpcCancel errors (best-effort)", async () => {
+    vi.mocked(ipc.grpcCancel).mockRejectedValueOnce(new Error("gone"));
+    await expect(cancelStep("req-x")).resolves.toBeUndefined();
+  });
+});
+
+describe("stepPatchFromSendResult cancelled", () => {
+  it("cancelled → draft, cleared", () => {
+    expect(stepPatchFromSendResult({ kind: "cancelled" })).toEqual({
+      status: "draft", outcome: null, error: null,
+    });
+  });
+});
+```
+
+**Also update the EXISTING `toHaveBeenCalledWith` assertions** (they now receive 4 args).
+Append `expect.any(String), expect.any(Number)` to each `grpcInvokeOneshot` assertion in
+the existing `describe("sendStep", …)` and `describe("sendStep authHeader merge", …)`
+blocks — there are five:
+- "returns ok outcome on success"
+- "omits disabled and empty-key metadata rows"
+- "sendStep invokes with resolved address + metadata when all vars resolve" (the
+  `objectContaining` one)
+- "merges the auth header verbatim alongside resolved metadata rows"
+- "injects nothing when no authHeader is given"
+
+Example shape after the edit:
+
+```ts
+    expect(ipc.grpcInvokeOneshot).toHaveBeenCalledWith(
+      { address: "h:443", tls: true, skip_verify: false },
+      { service: "S", method: "M", request_json: "{}", metadata: { x: "1" } },
+      expect.any(String),
+      expect.any(Number),
+    );
+```
+
+- [ ] **Step 3 — Run, expect fail.**
+  `pnpm test src/features/workflow/actions.test.ts src/features/workflow/model.test.ts`
+  → FAIL (`requestId`/`cancelStep`/`cancelled` absent; 2-arg vs 4-arg mismatch).
+
+- [ ] **Step 4 — Implement (model.ts).** Add the transient field to `Step` and `newStep`:
+
+```ts
+export interface Step {
+  // …existing fields…
+  requestId: string | null; // transient: in-flight invoke id while status === "sending"
+}
+```
+
+In `newStep`'s returned object add `requestId: null,` (e.g. after `error: null`).
+
+- [ ] **Step 5 — Implement (actions.ts).** Add imports + the `cancelled` variant + opts +
+  `cancelStep`, and reuse the classifier to detect cancellation:
+
+```ts
+import { newId } from "@/lib/ids";
+import { readPrefs } from "@/lib/use-prefs";
+import { classifyTransportError } from "./netDiagnostics";
+```
+
+```ts
+export type SendResult =
+  | { kind: "ok"; outcome: InvokeOutcomeIpc }
+  | { kind: "error"; message: string }
+  | { kind: "unresolved"; unresolved: string[]; cycle: string[] | null }
+  | { kind: "cancelled" };
+```
+
+Update `sendStep` to accept `opts` and forward `requestId` + `timeoutMs`:
+
+```ts
+export async function sendStep(
+  step: { address: string; tls: boolean; service: string; method: string; requestJson: string; metadata: MetadataRow[] },
+  authHeader?: AuthHeader | null,
+  opts?: { requestId?: string; timeoutMs?: number },
+): Promise<SendResult> {
+  const requestId = opts?.requestId ?? newId();
+  const timeoutMs = opts?.timeoutMs ?? readPrefs().requestTimeoutMs;
+  try {
+    const r = await resolveStepTemplates(step, ipc.varsResolve);
+    if (!r.ok) return { kind: "unresolved", unresolved: r.unresolved, cycle: r.cycle };
+    const metadata: Record<string, string> = {};
+    for (const m of r.request.metadata) metadata[m.key] = m.value;
+    if (authHeader) metadata[authHeader.key] = authHeader.value;
+    const outcome = await ipc.grpcInvokeOneshot(
+      { address: r.request.address, tls: step.tls, skip_verify: false },
+      { service: step.service, method: step.method, request_json: r.request.requestJson, metadata },
+      requestId,
+      timeoutMs,
+    );
+    return { kind: "ok", outcome };
+  } catch (e) {
+    const message = errorToMessage(e);
+    if (classifyTransportError(message).kind === "cancelled") return { kind: "cancelled" };
+    return { kind: "error", message };
+  }
+}
+
+/** Best-effort cancel of an in-flight invoke. Errors are swallowed (the call may have
+ *  already completed and dropped its registry entry). */
+export async function cancelStep(requestId: string): Promise<void> {
+  try {
+    await ipc.grpcCancel(requestId);
+  } catch {
+    /* best-effort */
+  }
+}
+```
+
+Add the `cancelled` branch to `stepPatchFromSendResult` (before the trailing `error`
+return):
+
+```ts
+  if (res.kind === "cancelled") {
+    return { status: "draft", outcome: null, error: null };
+  }
+```
+
+- [ ] **Step 6 — Run, expect pass.** `pnpm test src/features/workflow` then `pnpm lint`.
+
+- [ ] **Step 7 — Commit.**
+
+```bash
+git add src/features/workflow/model.ts src/features/workflow/model.test.ts src/features/workflow/actions.ts src/features/workflow/actions.test.ts
+git commit -m "feat(workflow): request_id + timeout in sendStep; cancelStep; cancelled -> draft"
+```
+
+---
+
+### Task C7: Cancel button in `AddressBar` + wire through `CallPanel`
+
+**Files:**
+- Modify: `src/features/workflow/AddressBar.tsx`
+- Modify: `src/features/workflow/CallPanel.tsx`
+- Test: `src/features/workflow/AddressBar.test.tsx` (create)
+
+- [ ] **Step 1 — Failing test.** Create `AddressBar.test.tsx`:
+
+```tsx
+import { describe, it, expect, vi } from "vitest";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { AddressBar } from "./AddressBar";
+import { newStep } from "./model";
+
+const base = newStep({ address: "h:443", tls: true, service: "S", method: "M" });
+
+describe("AddressBar cancel", () => {
+  it("shows Send (not Cancel) when idle", () => {
+    render(<AddressBar step={base} onSend={() => {}} onCancel={() => {}} />);
+    expect(screen.getByRole("button", { name: /send/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /cancel/i })).not.toBeInTheDocument();
+  });
+
+  it("shows Cancel while sending and calls onCancel when clicked", async () => {
+    const onCancel = vi.fn();
+    const user = userEvent.setup();
+    render(<AddressBar step={{ ...base, status: "sending" }} onSend={() => {}} onCancel={onCancel} />);
+    await user.click(screen.getByRole("button", { name: /cancel/i }));
+    expect(onCancel).toHaveBeenCalledOnce();
+  });
+});
+```
+
+- [ ] **Step 2 — Run, expect fail.** `pnpm test src/features/workflow/AddressBar.test.tsx`
+  → FAIL (`onCancel` prop / Cancel button absent).
+
+- [ ] **Step 3 — Implement (AddressBar.tsx).** Add the `onCancel` prop and a Cancel button
+  shown while sending:
+
+```tsx
+export function AddressBar({
+  step,
+  onSend,
+  onCancel,
+}: {
+  step: Step;
+  onSend: () => void;
+  onCancel: () => void;
+}) {
+  const sending = step.status === "sending";
+  return (
+    <div className="flex h-14 items-center gap-3 border-b border-border px-4">
+      {/* …existing icon/method/address/status spans… */}
+      <div className="flex-1" />
+      {/* …existing ok/error status spans… */}
+      {sending ? (
+        <Button size="sm" variant="outline" onClick={onCancel}>
+          ✕ Cancel
+        </Button>
+      ) : null}
+      <Button size="sm" onClick={onSend} disabled={sending}>
+        {sending ? "Sending…" : "▶ Send"}
+      </Button>
+    </div>
+  );
+}
+```
+
+- [ ] **Step 4 — Implement (CallPanel.tsx).** Generate a `requestId`, stamp it on the step
+  while sending, pass it to `sendStep`, clear it on completion, and wire `onCancel`:
+
+```tsx
+import { newId } from "@/lib/ids";
+import { cancelStep, resolveStepAuthHeader, sendStep, stepPatchFromSendResult } from "./actions";
+```
+
+```tsx
+  const onSend = async () => {
+    const requestId = newId();
+    workflowStore.update((w) => updateStep(w, step.id, { status: "sending", error: null, requestId }));
+    const auth = await resolveStepAuthHeader(step.serviceId, (id) => catalogStore.getService(id), authResolve);
+    if (auth.kind === "error") {
+      workflowStore.update((w) => updateStep(w, step.id, { status: "error", outcome: null, error: auth.message, requestId: null }));
+      return;
+    }
+    const res = await sendStep(step, auth.kind === "header" ? auth.header : null, { requestId });
+    workflowStore.update((w) => updateStep(w, step.id, { ...stepPatchFromSendResult(res), requestId: null }));
+  };
+
+  const onCancel = () => {
+    if (step.requestId) void cancelStep(step.requestId);
+  };
+```
+
+Pass `onCancel` to `<AddressBar step={step} onSend={onSend} onCancel={onCancel} />`.
+
+- [ ] **Step 5 — Run, expect pass.** `pnpm test src/features/workflow/AddressBar.test.tsx`
+  then `pnpm lint`. (CallPanel itself is not render-tested — it mounts Monaco via
+  `RequestTabs`; the logic lives in the C6 helpers which are unit-tested.)
+
+- [ ] **Step 6 — Commit.**
+
+```bash
+git add src/features/workflow/AddressBar.tsx src/features/workflow/AddressBar.test.tsx src/features/workflow/CallPanel.tsx
+git commit -m "feat(workflow): Cancel button while sending; wire cancelStep through CallPanel"
+```
+
+---
+
+### Task C8: Render network diagnostics on client errors (`ClientErrorBanner`)
+
+**Files:**
+- Create: `src/features/workflow/ClientErrorBanner.tsx`
+- Modify: `src/features/workflow/CallPanel.tsx`
+- Test: `src/features/workflow/ClientErrorBanner.test.tsx`
+
+- [ ] **Step 1 — Failing test.** Create `ClientErrorBanner.test.tsx`:
+
+```tsx
+import { describe, it, expect } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { ClientErrorBanner } from "./ClientErrorBanner";
+
+describe("ClientErrorBanner", () => {
+  it("shows the raw message", () => {
+    render(<ClientErrorBanner message="connection refused" />);
+    expect(screen.getByText(/connection refused/i)).toBeInTheDocument();
+  });
+
+  it("renders a diagnostic hint for a recognised transport error", () => {
+    render(<ClientErrorBanner message="connection refused" />);
+    expect(screen.getByText(/listening|reachable|server is running/i)).toBeInTheDocument();
+  });
+
+  it("shows no hint for an unrecognised (other) message", () => {
+    render(<ClientErrorBanner message="Unresolved variables: {{host}}" />);
+    expect(screen.queryByTestId("diag-hint")).not.toBeInTheDocument();
+  });
+});
+```
+
+- [ ] **Step 2 — Run, expect fail.** `pnpm test src/features/workflow/ClientErrorBanner.test.tsx`
+  → FAIL (module not found).
+
+- [ ] **Step 3 — Implement.** Create `ClientErrorBanner.tsx`:
+
+```tsx
+import { classifyTransportError } from "./netDiagnostics";
+
+/** Banner for client/transport errors (non-gRPC). Adds a friendly hint when the message
+ *  matches a known transport failure (refused / TLS / DNS / timeout / cancelled). */
+export function ClientErrorBanner({ message }: { message: string }) {
+  const diag = classifyTransportError(message);
+  return (
+    <div className="m-3 flex-none rounded-md border border-destructive bg-destructive/10 px-3 py-2 text-xs text-destructive">
+      <div className="break-all">{message}</div>
+      {diag.kind !== "other" ? (
+        <div data-testid="diag-hint" className="mt-1 text-[11px] text-muted-foreground">
+          {diag.hint}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+```
+
+- [ ] **Step 4 — Implement (CallPanel.tsx).** Replace the inline client-error `div` in
+  `ResponseSlot` with the new component:
+
+```tsx
+import { ClientErrorBanner } from "./ClientErrorBanner";
+```
+
+```tsx
+      {step.error && !step.outcome ? <ClientErrorBanner message={step.error} /> : null}
+```
+
+- [ ] **Step 5 — Run, expect pass.** `pnpm test src/features/workflow/ClientErrorBanner.test.tsx`
+  then `pnpm lint`.
+
+- [ ] **Step 6 — Commit.**
+
+```bash
+git add src/features/workflow/ClientErrorBanner.tsx src/features/workflow/ClientErrorBanner.test.tsx src/features/workflow/CallPanel.tsx
+git commit -m "feat(workflow): render network diagnostics hint on client errors"
+```
+
+---
+
+### Task C9: Parallel-send independence (regression test)
+
+**Files:**
+- Test: `src/features/workflow/store.test.ts` (append)
+
+Per Plan #1 the store keys nothing globally on "sending" — each step owns its `status`.
+This task locks that in with a regression test and confirms no accidental global guard
+exists.
+
+- [ ] **Step 1 — Add the regression test.** Append to `store.test.ts`:
+
+```ts
+describe("parallel send independence", () => {
+  beforeEach(() => { workflowStore.reset(); });
+
+  it("two steps can be in-flight simultaneously with independent status + requestId", () => {
+    const a = workflowStore.addStep(newStep({ address: "h", tls: false, service: "S", method: "A" }));
+    const b = workflowStore.addStep(newStep({ address: "h", tls: false, service: "S", method: "B" }));
+
+    workflowStore.update((w) => updateStep(w, a.id, { status: "sending", requestId: "req-a" }));
+    workflowStore.update((w) => updateStep(w, b.id, { status: "sending", requestId: "req-b" }));
+
+    const steps = workflowStore.activeWorkflow().steps;
+    const sa = steps.find((s) => s.id === a.id)!;
+    const sb = steps.find((s) => s.id === b.id)!;
+    expect(sa.status).toBe("sending");
+    expect(sb.status).toBe("sending");
+    expect(sa.requestId).toBe("req-a");
+    expect(sb.requestId).toBe("req-b");
+
+    // Completing A leaves B untouched.
+    workflowStore.update((w) => updateStep(w, a.id, { status: "ok", requestId: null }));
+    expect(workflowStore.activeWorkflow().steps.find((s) => s.id === b.id)!.status).toBe("sending");
+  });
+});
+```
+
+> Adapt `addStep`/`newStep`/`updateStep` imports and the `addStep` API to whatever
+> `store.test.ts` already uses to create steps (read the top of the file first; Plan #1
+> established the helper names). If `addStep` returns void, fetch the created step from
+> `activeWorkflow().steps` instead of binding `a`/`b` directly.
+
+- [ ] **Step 2 — Run, expect pass** (no production change expected). `pnpm test src/features/workflow/store.test.ts`.
+  If it FAILS because some global "sending" guard exists, remove that guard (the store
+  must track `status` per step only) and re-run.
+
+- [ ] **Step 3 — Commit.**
+
+```bash
+git add src/features/workflow/store.test.ts
+git commit -m "test(workflow): lock in parallel-send independence (per-step status)"
+```
+
+---
+
+### Phase C — final review
+
+- [ ] Full gate: `pnpm test` · `pnpm lint` · `pnpm build` · `cargo test -p handshaker` ·
+      `cargo test -p handshaker-core` — all green.
+- [ ] Final code review on the Phase C diff (subagent-driven two-stage review). Apply
+      critical/important fixes; log deferrals.
+- [ ] Update the EXECUTION STATUS banner: Phase C complete + commit range.
 
 ## 🧹 /clear-checkpoint at completion — **redesign feature-complete.**
 
