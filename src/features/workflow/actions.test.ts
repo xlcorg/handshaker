@@ -3,12 +3,20 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("@/ipc/client", () => ({
   grpcBuildRequestSkeleton: vi.fn(),
   grpcInvokeOneshot: vi.fn(),
+  varsResolve: vi.fn(),
 }));
 
 import * as ipc from "@/ipc/client";
-import { createStepFromMethod, sendStep } from "./actions";
+import { createStepFromMethod, sendStep, stepPatchFromSendResult } from "./actions";
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.mocked(ipc.varsResolve).mockImplementation(async (tpl: string) => ({
+    resolved: tpl,
+    unresolved_vars: [],
+    cycle_chain: null,
+  }));
+});
 
 describe("createStepFromMethod", () => {
   it("builds a step with skeleton body from the contract", async () => {
@@ -118,5 +126,59 @@ describe("sendStep", () => {
       { address: "h:443", tls: true, skip_verify: false },
       { service: "S", method: "M", request_json: "{}", metadata: { keep: "1" } },
     );
+  });
+
+  it("sendStep blocks on unresolved variables and does not invoke", async () => {
+    vi.mocked(ipc.varsResolve).mockImplementation(async (tpl: string) => {
+      const m = [...tpl.matchAll(/\{\{([a-zA-Z_][\w-]*)\}\}/g)].map((x) => x[1]);
+      return { resolved: tpl, unresolved_vars: m, cycle_chain: null };
+    });
+    const res = await sendStep({
+      address: "{{host}}", tls: false, service: "S", method: "M",
+      requestJson: "{}", metadata: [],
+    });
+    expect(res.kind).toBe("unresolved");
+    if (res.kind === "unresolved") expect(res.unresolved).toEqual(["host"]);
+    expect(ipc.grpcInvokeOneshot).not.toHaveBeenCalled();
+  });
+
+  it("sendStep invokes with resolved address + metadata when all vars resolve", async () => {
+    vi.mocked(ipc.varsResolve).mockImplementation(async (tpl: string) => ({
+      resolved: tpl.replace("{{host}}", "api.internal"),
+      unresolved_vars: [], cycle_chain: null,
+    }));
+    vi.mocked(ipc.grpcInvokeOneshot).mockResolvedValue({
+      status_code: 0, status_message: "OK", response_json: "{}",
+      trailing_metadata: {}, elapsed_ms: 5,
+    });
+    await sendStep({ address: "{{host}}", tls: true, service: "S", method: "M", requestJson: "{}", metadata: [] });
+    expect(ipc.grpcInvokeOneshot).toHaveBeenCalledWith(
+      { address: "api.internal", tls: true, skip_verify: false },
+      expect.objectContaining({ service: "S", method: "M" }),
+    );
+  });
+});
+
+describe("stepPatchFromSendResult", () => {
+  it("ok with status 0 → ok", () => {
+    const outcome = { status_code: 0, status_message: "OK", response_json: "{}", trailing_metadata: {}, elapsed_ms: 1 };
+    expect(stepPatchFromSendResult({ kind: "ok", outcome })).toEqual({ status: "ok", outcome, error: null });
+  });
+  it("ok with non-zero status → error (grpc status), keeps outcome", () => {
+    const outcome = { status_code: 5, status_message: "NOT_FOUND", response_json: null, trailing_metadata: {}, elapsed_ms: 1 };
+    expect(stepPatchFromSendResult({ kind: "ok", outcome })).toEqual({ status: "error", outcome, error: null });
+  });
+  it("unresolved → error with variable list", () => {
+    const p = stepPatchFromSendResult({ kind: "unresolved", unresolved: ["host", "id"], cycle: null });
+    expect(p.status).toBe("error");
+    expect(p.outcome).toBeNull();
+    expect(p.error).toBe("Unresolved variables: {{host}}, {{id}}");
+  });
+  it("unresolved with cycle → cycle message", () => {
+    const p = stepPatchFromSendResult({ kind: "unresolved", unresolved: [], cycle: ["a", "b", "a"] });
+    expect(p.error).toBe("Variable cycle: a → b → a");
+  });
+  it("error → error with message", () => {
+    expect(stepPatchFromSendResult({ kind: "error", message: "boom" })).toEqual({ status: "error", outcome: null, error: "boom" });
   });
 });

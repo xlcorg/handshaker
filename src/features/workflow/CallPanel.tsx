@@ -4,7 +4,7 @@ import type { RespState } from "@/features/response/RespMeta";
 import { AddressBar } from "./AddressBar";
 import { workflowStore } from "./store";
 import { updateStep } from "./reducers";
-import { sendStep } from "./actions";
+import { sendStep, stepPatchFromSendResult } from "./actions";
 import type { Step } from "./model";
 
 /** The editable, sendable surface for one step — reused by Focus/List/Ledger. */
@@ -17,19 +17,7 @@ export function CallPanel({ step }: { step: Step }) {
       updateStep(w, step.id, { status: "sending", error: null }),
     );
     const res = await sendStep(step);
-    workflowStore.update((w) =>
-      updateStep(
-        w,
-        step.id,
-        res.kind === "ok"
-          ? {
-              status: res.outcome.status_code === 0 ? "ok" : "error",
-              outcome: res.outcome,
-              error: null,
-            }
-          : { status: "error", outcome: null, error: res.message },
-      ),
-    );
+    workflowStore.update((w) => updateStep(w, step.id, stepPatchFromSendResult(res)));
   };
 
   return (
