@@ -33,7 +33,7 @@ export function reorderStep(wf: Workflow, from: number, to: number): Workflow {
   return { ...wf, steps };
 }
 
-export function setActiveStep(wf: Workflow, id: string): Workflow {
+export function setActiveStep(wf: Workflow, id: string | null): Workflow {
   return { ...wf, activeStepId: id };
 }
 

@@ -76,4 +76,8 @@ describe("setActiveStep / setView", () => {
     expect(setActiveStep(wf, wf.steps[0].id).activeStepId).toBe(wf.steps[0].id);
     expect(setView(wf, "ledger").view).toBe("ledger");
   });
+  it("clears active when given null (collapse all)", () => {
+    const wf = wfWith(1, 2);
+    expect(setActiveStep(wf, null).activeStepId).toBeNull();
+  });
 });
