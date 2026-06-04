@@ -13,10 +13,16 @@
 - **Status:** ✅ **Phase A COMPLETE** (2026-06-04, subagent-driven). Env-on-workflow +
   `{{var}}` resolution implemented, reviewed, review-fixes applied. 175/175 tests green,
   `pnpm lint` clean, `pnpm build` success. Commits: `d73d292`…`4dfd261` (A1+A2, A3, A4, A5,
-  A6+A7, review-fix). Active: **Phase B** — now **expanded to full TDD (tasks B1–B9)** and
-  ready to execute; Key Decision #2 (auth via new `auth_resolve` IPC, not collection-bound
-  `auth_set_for_env`) **confirmed** at the checkpoint. Phase C remains an outline —
-  expand to full TDD at its /clear-checkpoint (project cadence: detail-on-reach).
+  A6+A7, review-fix). Key Decision #2 (auth via new `auth_resolve` IPC, not collection-bound
+  `auth_set_for_env`) **confirmed** at the Phase B checkpoint.
+- **Status:** ✅ **Phase B COMPLETE** (2026-06-04, subagent-driven, B1–B9 full TDD).
+  Service-level auth + default metadata + Request/Metadata/Auth sub-tabs implemented,
+  reviewed (final review: ready-to-merge, no critical/important issues), review-fix applied.
+  Gate green: **pnpm test 204/204**, `pnpm lint` exit 0, `pnpm build` success,
+  `cargo test -p handshaker` 25/25. Commits: `eca633b`…`d45fc38` (B1, B2, B3, B4, B5, B6,
+  B7, B8, B9, review-fix). Active: **Phase C** — still an outline; **expand to full TDD at
+  its /clear-checkpoint before executing** (project cadence: detail-on-reach), and FIRST
+  verify (context7/WebSearch) the Tauri promise-drop cancel premise per project convention.
 - **Mode:** subagent-driven (default).
 - **Build/test commands** (from repo root, PowerShell):
   - Frontend unit tests: `pnpm test` (vitest run) · single file: `pnpm test <path>`
@@ -1991,11 +1997,15 @@ git commit -m "feat(workflow): wire RequestTabs + service auth into CallPanel se
 
 ### Phase B — final review
 
-- [ ] Run full suite + typecheck + build + Rust tests (see B9 gate); paste results into the
-  status banner.
-- [ ] Code review on the Phase B diff (use `superpowers:requesting-code-review`). Address
-  findings; log deferrals in this banner.
-- [ ] Update the EXECUTION STATUS banner: Phase B complete + commit range; set Active = Phase C.
+- [x] Run full suite + typecheck + build + Rust tests (B9 gate): pnpm test 204/204, lint
+  exit 0, build success, `cargo test -p handshaker` 25/25.
+- [x] Final code review on the Phase B diff (`4ea8f22..bbd286b`) → **ready to merge**, no
+  critical/important issues. Two minor notes: (1) orphaned-serviceId branch of
+  `resolveStepAuthHeader` was untested → **fixed** in `d45fc38`; (2) `CallPanel`'s read-only
+  Auth-tab display is computed synchronously from `catalogStore` (no `useCatalog()` subscribe)
+  so it can be momentarily stale — **accepted** (no correctness risk: the header actually sent
+  is read fresh in `onSend`; a one-line `useCatalog()` would make the display live if desired).
+- [x] EXECUTION STATUS banner updated: Phase B complete + commit range; Active = Phase C.
 
 ## 🧹 /clear-checkpoint — end Phase B. Start a fresh session for Phase C.
 
