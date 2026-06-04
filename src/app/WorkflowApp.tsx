@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Kbd } from "@/components/ui/kbd";
+import { Toaster } from "@/components/ui/toaster";
 import { FocusView } from "@/features/workflow/FocusView";
 import { LedgerView } from "@/features/workflow/LedgerView";
 import { ListView } from "@/features/workflow/ListView";
@@ -78,6 +79,7 @@ export function WorkflowApp() {
       </div>
 
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      <Toaster />
     </div>
   );
 }
