@@ -21,12 +21,19 @@
   Gate green: **pnpm test 204/204**, `pnpm lint` exit 0, `pnpm build` success,
   `cargo test -p handshaker` 25/25. Commits: `eca633b`…`d45fc38` (B1, B2, B3, B4, B5, B6,
   B7, B8, B9, review-fix).
-- **Status:** 🚧 **Phase C IN PROGRESS** (2026-06-04, subagent-driven). Outline expanded to
-  full TDD (tasks C1–C9 below). Both design-impacting premises verified + cited (see
-  **Phase C — verification log**): (1) a dropped JS promise does NOT abort the awaited Rust
-  command → server-side `Notify` cancel registry required; (2) `notify_one()` (not
-  `notify_waiters()`) for cancel-before-await safety. Error-variant decision CONFIRMED:
-  reuse `Transport(msg)` + frontend classifier. Execute from the first unchecked C-task.
+- **Status:** ✅ **Phase C COMPLETE** (2026-06-04, subagent-driven, C1–C9 full TDD +
+  two-stage review per task + final integration review = "ready to merge"). Cancel
+  (`grpc_cancel` + `Notify` registry + Cancel button) · configurable timeout (`requestTimeoutMs`
+  pref + backend `tokio::time::timeout`) · network diagnostics (`classifyTransportError` +
+  `ClientErrorBanner`) · parallel-send independence (regression-tested) — all per spec §6/§10.
+  Both design premises verified + cited (see **Phase C — verification log**): (1) dropped JS
+  promise does NOT abort the Rust command → server-side `Notify` registry; (2) `notify_one()`
+  for cancel-before-await safety. Error-variant decision CONFIRMED: reuse `Transport(msg)` +
+  frontend classifier; cancel reset keys on the EXACT sentinel (`isCancelSentinel`).
+  Gate green: **pnpm test 236/236**, `pnpm lint` exit 0, `pnpm build` success,
+  `cargo test -p handshaker` 29/29, `cargo test -p handshaker-core` green. Commits:
+  `ce98521`…`1e2e561` (C1–C9) + `2d07956` (final-review nit: unique default requestId).
+  **🎉 Redesign feature-complete.**
 - **Mode:** subagent-driven (default).
 - **Build/test commands** (from repo root, PowerShell):
   - Frontend unit tests: `pnpm test` (vitest run) · single file: `pnpm test <path>`
@@ -3162,11 +3169,17 @@ git commit -m "test(workflow): lock in parallel-send independence (per-step stat
 
 ### Phase C — final review
 
-- [ ] Full gate: `pnpm test` · `pnpm lint` · `pnpm build` · `cargo test -p handshaker` ·
-      `cargo test -p handshaker-core` — all green.
-- [ ] Final code review on the Phase C diff (subagent-driven two-stage review). Apply
-      critical/important fixes; log deferrals.
-- [ ] Update the EXECUTION STATUS banner: Phase C complete + commit range.
+- [x] Full gate: `pnpm test` (236/236) · `pnpm lint` (0) · `pnpm build` (ok) ·
+      `cargo test -p handshaker` (29/29) · `cargo test -p handshaker-core` (green).
+- [x] Per-task two-stage review (spec + quality) on C1–C9 + final integration review →
+      "ready to merge". Review-fixes applied inline: C2 (notify_one verified, permit-path
+      test deemed untestable w/o contorting the seam — documented), C4 (useEffect draft
+      re-sync), C6 (cancel reset hardened to exact `isCancelSentinel`, not fuzzy
+      `/cancel/i`, + boundary test), final nit `2d07956` (unique default requestId).
+      Deferred minors (non-blocking): backend `timeout_ms==0` seam guard (UI clamps ≥1000);
+      AddressBar/ClientErrorBanner a11y `aria-label`/`role="alert"` (matches existing glyph
+      pattern); NetworkPane remaining read-only placeholders (no backend).
+- [x] EXECUTION STATUS banner updated: Phase C complete + commit range.
 
 ## 🧹 /clear-checkpoint at completion — **redesign feature-complete.**
 
