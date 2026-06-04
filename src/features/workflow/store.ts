@@ -49,6 +49,7 @@ export const workflowStore = {
     const wf = newWorkflow(name);
     state = { workflows: [...state.workflows, wf], activeWorkflowId: wf.id };
     emit();
+    void envActiveSet(wf.envName);
     return wf;
   },
   setWorkflowEnv(name: string | null) {

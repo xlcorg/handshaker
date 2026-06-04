@@ -5,6 +5,7 @@ vi.mock("@/ipc/client", () => ({
   grpcRefreshContract: vi.fn(),
   grpcBuildRequestSkeleton: vi.fn(),
   grpcInvokeOneshot: vi.fn(),
+  envActiveSet: vi.fn(),
 }));
 
 import * as ipc from "@/ipc/client";

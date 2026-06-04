@@ -128,6 +128,17 @@ describe("sendStep", () => {
     );
   });
 
+  it("sendStep returns an error result (does not throw) when varsResolve rejects", async () => {
+    vi.mocked(ipc.varsResolve).mockRejectedValueOnce(new Error("backend boom"));
+    const res = await sendStep({
+      address: "{{host}}", tls: false, service: "S", method: "M",
+      requestJson: "{}", metadata: [],
+    });
+    expect(res.kind).toBe("error");
+    if (res.kind === "error") expect(res.message).toContain("backend boom");
+    expect(ipc.grpcInvokeOneshot).not.toHaveBeenCalled();
+  });
+
   it("sendStep blocks on unresolved variables and does not invoke", async () => {
     vi.mocked(ipc.varsResolve).mockImplementation(async (tpl: string) => {
       const m = [...tpl.matchAll(/\{\{([a-zA-Z_][\w-]*)\}\}/g)].map((x) => x[1]);

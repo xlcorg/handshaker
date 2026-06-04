@@ -39,11 +39,11 @@ export async function sendStep(step: {
   requestJson: string;
   metadata: MetadataRow[];
 }): Promise<SendResult> {
-  const r = await resolveStepTemplates(step, ipc.varsResolve);
-  if (!r.ok) return { kind: "unresolved", unresolved: r.unresolved, cycle: r.cycle };
-  const metadata: Record<string, string> = {};
-  for (const m of r.request.metadata) metadata[m.key] = m.value;
   try {
+    const r = await resolveStepTemplates(step, ipc.varsResolve);
+    if (!r.ok) return { kind: "unresolved", unresolved: r.unresolved, cycle: r.cycle };
+    const metadata: Record<string, string> = {};
+    for (const m of r.request.metadata) metadata[m.key] = m.value;
     const outcome = await ipc.grpcInvokeOneshot(
       { address: r.request.address, tls: step.tls, skip_verify: false },
       { service: step.service, method: step.method, request_json: r.request.requestJson, metadata },

@@ -40,6 +40,13 @@ describe("workflow env sync", () => {
     expect(envActiveSet).toHaveBeenCalledWith("prod");
   });
 
+  it("createWorkflow syncs backend to the new workflow's env (null)", () => {
+    workflowStore.setWorkflowEnv("prod"); // current wf → prod, backend = prod
+    envActiveSet.mockClear();
+    workflowStore.createWorkflow("wf-2"); // new active wf has envName null
+    expect(envActiveSet).toHaveBeenLastCalledWith(null);
+  });
+
   it("switching workflows re-syncs backend to that workflow's env", () => {
     workflowStore.setWorkflowEnv("prod");            // current wf → prod
     const wf2 = workflowStore.createWorkflow("wf-2"); // new wf (envName null) becomes active
