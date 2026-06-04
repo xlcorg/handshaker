@@ -1,7 +1,7 @@
-import type { HTMLAttributes } from "react";
 import { X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { summarizeStep, type StepTone } from "./stepView";
+import type { RowDragProps } from "./dnd";
 import type { Step } from "./model";
 
 const TONE_DOT: Record<StepTone, string> = {
@@ -23,7 +23,7 @@ export function StepRow({
   active: boolean;
   onSelect: () => void;
   onDelete: () => void;
-  dragProps?: HTMLAttributes<HTMLDivElement> & { draggable?: boolean };
+  dragProps?: RowDragProps;
 }) {
   const s = summarizeStep(step, index);
   return (
