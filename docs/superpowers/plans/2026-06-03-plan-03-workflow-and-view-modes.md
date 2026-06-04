@@ -1,6 +1,6 @@
 # Workflow & View Modes (Plan #3) Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Turn the single-Focus shell into a multi-workflow, three-mode workspace: a titlebar **workflow-history selector** (switch/create) + **view switcher** (Лента / Список / Фокус) + env-pill placeholder; the three view modes themselves (Ledger ledger-of-steps, List master-detail, Focus with a step rail); and per-row **delete** + **drag-reorder** wired to Plan #1's reducers.
 
@@ -9,6 +9,29 @@
 **Tech Stack:** React 18 + TypeScript (strict) + Tailwind/shadcn-ui (existing primitives only — `dropdown-menu`, `toggle-group` already vendored; no new deps) + Vitest + React Testing Library (configured in Plan #1).
 
 **Spec refs:** §3.4 (workflows in main area, titlebar selector), §4 (three modes), §6 (titlebar layout, env pill), §10 (delete+drag, re-run in place, stable ids, view remembered per workflow, rail click stays in Focus).
+
+> **✅ EXECUTION STATUS — PLAN #3 COMPLETE (2026-06-04, subagent-driven):** All 12 tasks
+> implemented, committed, and reviewed on branch `redesign/workflow-ui-spec-plans` (commits
+> `644709b`…`f64f6b2`). A final whole-implementation review (opus) returned **ready to merge,
+> no critical/important defects.**
+>
+> - Task 1 `stepView.ts` `644709b` · Task 2 `setActiveStep` null `e5bae76` · Task 3 `dnd.ts` `8404276`
+> - Task 4 `CallPanel` extraction `cbd5bd2` · Task 5 `StepRow` `89c4c2c` · Task 6 `StepList` `133d2a4`
+> - Task 7 `ListView` `84436bb` · Task 8 `StepRail`+Focus `a0debd1` · Task 9 `LedgerView` `eeb3e92`
+> - Task 10 `ViewSwitcher`+`WorkflowSelector` `6ab24bc` · Task 11 `WorkflowApp` wiring `3dff106`
+> - Post-review nit: `StepRow.dragProps` narrowed to `RowDragProps` `f64f6b2`
+> - Task 12 verification: **96/96 tests green** (62 prior + 34 new); `pnpm lint` (tsc -b) exit 0;
+>   `pnpm build` (vite) success. Task 4 had no unit test by design (Monaco/jsdom) — covered via
+>   view tests that mock `CallPanel` + typecheck.
+>
+> **Deviation (intentional):** Task 4 kept `FocusView`'s current root class `flex h-full flex-col`
+> (not the snippet's `min-h-0` variant) to guarantee zero behavior change.
+> **Deferred follow-ups (out of Plan #3 scope):** (1) env pill is a static placeholder (env =
+> Plan #5); (2) ⌘↵ Send keybinding; (3) no view-level test that deleting the *active* step
+> reselects+expands a neighbor (reducer-level covered); (4) `LedgerView` expanded detail height
+> is a fixed `h-[480px]` magic number — revisit in the visual-polish track. Task 12 Step 4
+> (live-GUI smoke vs a reflection server) is a human step, still deferred.
+> **At the 🧹 /clear-checkpoint at the bottom.** Next session: `/clear`, then start Plan #4.
 
 **Scope notes (confirm at review):**
 1. **Env pill is a static placeholder** ("env: default") — environments are Plan #5. Only the titlebar slot is reserved here.
@@ -60,7 +83,7 @@ A pure helper that maps a `Step` + its position into the fields the collapsed ro
 - Create: `src/features/workflow/stepView.ts`
 - Test: `src/features/workflow/stepView.test.ts`
 
-- [ ] **Step 1: Write the failing test `src/features/workflow/stepView.test.ts`**
+- [x] **Step 1: Write the failing test `src/features/workflow/stepView.test.ts`**
 
 ```ts
 import { describe, it, expect } from "vitest";
@@ -135,12 +158,12 @@ describe("summarizeStep", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm test src/features/workflow/stepView.test.ts`
 Expected: FAIL ("Failed to resolve import ./stepView").
 
-- [ ] **Step 3: Implement `src/features/workflow/stepView.ts`**
+- [x] **Step 3: Implement `src/features/workflow/stepView.ts`**
 
 ```ts
 import type { Step } from "./model";
@@ -191,12 +214,12 @@ export function summarizeStep(step: Step, index: number): StepSummary {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pnpm test src/features/workflow/stepView.test.ts`
 Expected: PASS (7 assertions across 6 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/features/workflow/stepView.ts src/features/workflow/stepView.test.ts
@@ -213,7 +236,7 @@ git commit -m "feat(workflow): step display model (summarizeStep)"
 - Modify: `src/features/workflow/reducers.ts`
 - Modify: `src/features/workflow/reducers.test.ts`
 
-- [ ] **Step 1: Add the failing test case**
+- [x] **Step 1: Add the failing test case**
 
 Append inside the existing `describe("setActiveStep / setView", …)` block in `src/features/workflow/reducers.test.ts`:
 
@@ -224,12 +247,12 @@ Append inside the existing `describe("setActiveStep / setView", …)` block in `
   });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm test src/features/workflow/reducers.test.ts`
 Expected: FAIL — TypeScript rejects `null` for the `string` parameter (compile error in the test), or the assertion fails.
 
-- [ ] **Step 3: Widen the signature in `src/features/workflow/reducers.ts`**
+- [x] **Step 3: Widen the signature in `src/features/workflow/reducers.ts`**
 
 Replace the existing `setActiveStep`:
 
@@ -239,12 +262,12 @@ export function setActiveStep(wf: Workflow, id: string | null): Workflow {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pnpm test src/features/workflow/reducers.test.ts`
 Expected: PASS (all prior reducer tests + the new null case).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/features/workflow/reducers.ts src/features/workflow/reducers.test.ts
@@ -261,7 +284,7 @@ Native HTML5 DnD wrapped in a tiny factory so the index math is unit-testable wi
 - Create: `src/features/workflow/dnd.ts`
 - Test: `src/features/workflow/dnd.test.ts`
 
-- [ ] **Step 1: Write the failing test `src/features/workflow/dnd.test.ts`**
+- [x] **Step 1: Write the failing test `src/features/workflow/dnd.test.ts`**
 
 ```ts
 import { describe, it, expect, vi } from "vitest";
@@ -313,12 +336,12 @@ describe("makeDragHandlers", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm test src/features/workflow/dnd.test.ts`
 Expected: FAIL (module not found).
 
-- [ ] **Step 3: Implement `src/features/workflow/dnd.ts`**
+- [x] **Step 3: Implement `src/features/workflow/dnd.ts`**
 
 ```ts
 import type { DragEvent } from "react";
@@ -359,12 +382,12 @@ export function makeDragHandlers(
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pnpm test src/features/workflow/dnd.test.ts`
 Expected: PASS (3 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/features/workflow/dnd.ts src/features/workflow/dnd.test.ts
@@ -383,7 +406,7 @@ The editable call surface (address bar + Monaco body editor + response + send/ed
 
 > **Why no unit test here:** `CallPanel` renders the Monaco-backed `BodyEditor`, which Plan #1 deliberately left untested under jsdom. Coverage comes from the view tests (which mock `./CallPanel`) plus the typecheck. This task is a pure refactor verified by `pnpm lint` + the existing suite staying green.
 
-- [ ] **Step 1: Create `src/features/workflow/CallPanel.tsx`**
+- [x] **Step 1: Create `src/features/workflow/CallPanel.tsx`**
 
 This is the body of the current `FocusView` (the active-step branch), moved unchanged:
 
@@ -460,7 +483,7 @@ function ResponseSlot({ step }: { step: Step }) {
 }
 ```
 
-- [ ] **Step 2: Slim `src/features/workflow/FocusView.tsx` down to consume `CallPanel`**
+- [x] **Step 2: Slim `src/features/workflow/FocusView.tsx` down to consume `CallPanel`**
 
 Replace the entire file with (the rail is added in Task 8 — for now Focus is just `CallPanel` + a refreshed empty state):
 
@@ -484,14 +507,14 @@ export function FocusView() {
 }
 ```
 
-- [ ] **Step 3: Typecheck + run the existing suite**
+- [x] **Step 3: Typecheck + run the existing suite**
 
 Run: `pnpm lint`
 Expected: PASS (no TS errors).
 Run: `pnpm test`
 Expected: PASS — no regressions in the Plan #1/#2 suites.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/features/workflow/CallPanel.tsx src/features/workflow/FocusView.tsx
@@ -508,7 +531,7 @@ A presentational row: tone dot, number, `proto-service · method`, status text, 
 - Create: `src/features/workflow/StepRow.tsx`
 - Test: `src/features/workflow/StepRow.test.tsx`
 
-- [ ] **Step 1: Write the failing test `src/features/workflow/StepRow.test.tsx`**
+- [x] **Step 1: Write the failing test `src/features/workflow/StepRow.test.tsx`**
 
 ```tsx
 import { describe, it, expect, vi } from "vitest";
@@ -552,12 +575,12 @@ describe("StepRow", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm test src/features/workflow/StepRow.test.tsx`
 Expected: FAIL (module not found).
 
-- [ ] **Step 3: Implement `src/features/workflow/StepRow.tsx`**
+- [x] **Step 3: Implement `src/features/workflow/StepRow.tsx`**
 
 ```tsx
 import type { HTMLAttributes } from "react";
@@ -626,12 +649,12 @@ export function StepRow({
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pnpm test src/features/workflow/StepRow.test.tsx`
 Expected: PASS (4 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/features/workflow/StepRow.tsx src/features/workflow/StepRow.test.tsx
@@ -648,7 +671,7 @@ The store-connected vertical list used by the List view: renders `StepRow`s, wir
 - Create: `src/features/workflow/StepList.tsx`
 - Test: `src/features/workflow/StepList.test.tsx`
 
-- [ ] **Step 1: Write the failing test `src/features/workflow/StepList.test.tsx`**
+- [x] **Step 1: Write the failing test `src/features/workflow/StepList.test.tsx`**
 
 ```tsx
 import { describe, it, expect, beforeEach } from "vitest";
@@ -716,12 +739,12 @@ describe("StepList", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm test src/features/workflow/StepList.test.tsx`
 Expected: FAIL (module not found).
 
-- [ ] **Step 3: Implement `src/features/workflow/StepList.tsx`**
+- [x] **Step 3: Implement `src/features/workflow/StepList.tsx`**
 
 ```tsx
 import { useActiveWorkflow, workflowStore } from "./store";
@@ -753,12 +776,12 @@ export function StepList() {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pnpm test src/features/workflow/StepList.test.tsx`
 Expected: PASS (4 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/features/workflow/StepList.tsx src/features/workflow/StepList.test.tsx
@@ -775,7 +798,7 @@ Narrow `StepList` on the left, one expanded `CallPanel` on the right. Empty when
 - Create: `src/features/workflow/ListView.tsx`
 - Test: `src/features/workflow/ListView.test.tsx`
 
-- [ ] **Step 1: Write the failing test `src/features/workflow/ListView.test.tsx`**
+- [x] **Step 1: Write the failing test `src/features/workflow/ListView.test.tsx`**
 
 `CallPanel` (Monaco) is stubbed so the layout/selection logic is tested in isolation.
 
@@ -821,12 +844,12 @@ describe("ListView", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm test src/features/workflow/ListView.test.tsx`
 Expected: FAIL (module not found).
 
-- [ ] **Step 3: Implement `src/features/workflow/ListView.tsx`**
+- [x] **Step 3: Implement `src/features/workflow/ListView.tsx`**
 
 ```tsx
 import { CallPanel } from "./CallPanel";
@@ -864,12 +887,12 @@ export function ListView() {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pnpm test src/features/workflow/ListView.test.tsx`
 Expected: PASS (3 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/features/workflow/ListView.tsx src/features/workflow/ListView.test.tsx
@@ -887,7 +910,7 @@ A thin vertical rail of status dots (one per step) for the Focus view. Clicking 
 - Modify: `src/features/workflow/FocusView.tsx`
 - Test: extend via `FocusView` is Monaco-bound, so the rail is tested through `StepRail` directly — Create: `src/features/workflow/StepRail.test.tsx`
 
-- [ ] **Step 1: Write the failing test `src/features/workflow/StepRail.test.tsx`**
+- [x] **Step 1: Write the failing test `src/features/workflow/StepRail.test.tsx`**
 
 ```tsx
 import { describe, it, expect, beforeEach, vi } from "vitest";
@@ -927,12 +950,12 @@ describe("StepRail", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm test src/features/workflow/StepRail.test.tsx`
 Expected: FAIL (module not found).
 
-- [ ] **Step 3: Implement `src/features/workflow/StepRail.tsx`**
+- [x] **Step 3: Implement `src/features/workflow/StepRail.tsx`**
 
 ```tsx
 import { cn } from "@/lib/cn";
@@ -974,12 +997,12 @@ export function StepRail() {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pnpm test src/features/workflow/StepRail.test.tsx`
 Expected: PASS (2 tests).
 
-- [ ] **Step 5: Wire the rail into `src/features/workflow/FocusView.tsx`**
+- [x] **Step 5: Wire the rail into `src/features/workflow/FocusView.tsx`**
 
 Replace the file with (rail shows whenever the workflow has ≥1 step):
 
@@ -1009,12 +1032,12 @@ export function FocusView() {
 }
 ```
 
-- [ ] **Step 6: Typecheck**
+- [x] **Step 6: Typecheck**
 
 Run: `pnpm lint`
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/features/workflow/StepRail.tsx src/features/workflow/StepRail.test.tsx src/features/workflow/FocusView.tsx
@@ -1031,7 +1054,7 @@ All steps top-to-bottom; only the active one expands into a `CallPanel`; the res
 - Create: `src/features/workflow/LedgerView.tsx`
 - Test: `src/features/workflow/LedgerView.test.tsx`
 
-- [ ] **Step 1: Write the failing test `src/features/workflow/LedgerView.test.tsx`**
+- [x] **Step 1: Write the failing test `src/features/workflow/LedgerView.test.tsx`**
 
 ```tsx
 import { describe, it, expect, beforeEach, vi } from "vitest";
@@ -1096,12 +1119,12 @@ describe("LedgerView", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm test src/features/workflow/LedgerView.test.tsx`
 Expected: FAIL (module not found).
 
-- [ ] **Step 3: Implement `src/features/workflow/LedgerView.tsx`**
+- [x] **Step 3: Implement `src/features/workflow/LedgerView.tsx`**
 
 ```tsx
 import { Fragment } from "react";
@@ -1165,12 +1188,12 @@ export function LedgerView() {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pnpm test src/features/workflow/LedgerView.test.tsx`
 Expected: PASS (4 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/features/workflow/LedgerView.tsx src/features/workflow/LedgerView.test.tsx
@@ -1189,7 +1212,7 @@ The two titlebar widgets. Both are self-contained (subscribe to the store via ho
 - Create: `src/features/workflow/WorkflowSelector.tsx`
 - Test: `src/features/workflow/WorkflowSelector.test.tsx`
 
-- [ ] **Step 1: Write the failing test `src/features/workflow/ViewSwitcher.test.tsx`**
+- [x] **Step 1: Write the failing test `src/features/workflow/ViewSwitcher.test.tsx`**
 
 ```tsx
 import { describe, it, expect, beforeEach } from "vitest";
@@ -1219,12 +1242,12 @@ describe("ViewSwitcher", () => {
 
 > **Note:** radix `ToggleGroup` items expose `role="radio"` for a single-select group. If this repo's build reports a different role, query by accessible name with `getByRole("button", …)` instead — do not change the labels.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm test src/features/workflow/ViewSwitcher.test.tsx`
 Expected: FAIL (module not found).
 
-- [ ] **Step 3: Implement `src/features/workflow/ViewSwitcher.tsx`**
+- [x] **Step 3: Implement `src/features/workflow/ViewSwitcher.tsx`**
 
 ```tsx
 import { ToggleGroup } from "@/components/ui/toggle-group";
@@ -1251,12 +1274,12 @@ export function ViewSwitcher() {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pnpm test src/features/workflow/ViewSwitcher.test.tsx`
 Expected: PASS (2 tests).
 
-- [ ] **Step 5: Write the failing test `src/features/workflow/WorkflowSelector.test.tsx`**
+- [x] **Step 5: Write the failing test `src/features/workflow/WorkflowSelector.test.tsx`**
 
 The dropdown content is a radix portal (finicky under jsdom); the reliable signal is that the **trigger reflects the active workflow** and updates when the store changes. Switch/create mutations are already covered by `store.test.ts` (Plan #1).
 
@@ -1282,12 +1305,12 @@ describe("WorkflowSelector", () => {
 });
 ```
 
-- [ ] **Step 6: Run test to verify it fails**
+- [x] **Step 6: Run test to verify it fails**
 
 Run: `pnpm test src/features/workflow/WorkflowSelector.test.tsx`
 Expected: FAIL (module not found).
 
-- [ ] **Step 7: Implement `src/features/workflow/WorkflowSelector.tsx`**
+- [x] **Step 7: Implement `src/features/workflow/WorkflowSelector.tsx`**
 
 ```tsx
 import { ChevronDown, Plus } from "lucide-react";
@@ -1340,12 +1363,12 @@ export function WorkflowSelector() {
 }
 ```
 
-- [ ] **Step 8: Run test to verify it passes**
+- [x] **Step 8: Run test to verify it passes**
 
 Run: `pnpm test src/features/workflow/WorkflowSelector.test.tsx`
 Expected: PASS (2 tests).
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add src/features/workflow/ViewSwitcher.tsx src/features/workflow/ViewSwitcher.test.tsx src/features/workflow/WorkflowSelector.tsx src/features/workflow/WorkflowSelector.test.tsx
@@ -1364,7 +1387,7 @@ Drop the two controls and a static env pill into the titlebar, and render the ma
 
 > **Existing test (do not delete):** `src/app/WorkflowApp.test.tsx` already exists from Plan #2. It `vi.mock`s `Sidebar`, `ServicePanel`, `CommandPalette`, and `FocusView` and has a `describe("WorkflowApp shell", …)` block asserting the panel↔Focus logic. **Keep that block and its mocks intact.** Add a **new** `describe` block for the titlebar/view-dispatch, reusing the same mocks (so `FocusView` stays the `<div>FOCUS</div>` stub and no Monaco mounts). `LedgerView`/`ListView` are *not* mocked, so switching to them renders the real (empty-state) view — safe, since their empty branch never reaches `CallPanel`.
 
-- [ ] **Step 1: Add the failing titlebar tests to `src/app/WorkflowApp.test.tsx`**
+- [x] **Step 1: Add the failing titlebar tests to `src/app/WorkflowApp.test.tsx`**
 
 Append this `describe` block to the existing file (the `WorkflowApp`, `workflowStore`, `render`, `screen`, `userEvent` imports are already present at the top — do not duplicate them):
 
@@ -1390,12 +1413,12 @@ describe("WorkflowApp titlebar + view dispatch", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm test src/app/WorkflowApp.test.tsx`
 Expected: FAIL — titlebar still has no selector/switcher/env pill (old markup); the 2 existing "WorkflowApp shell" tests still PASS.
 
-- [ ] **Step 3: Rewrite `src/app/WorkflowApp.tsx`**
+- [x] **Step 3: Rewrite `src/app/WorkflowApp.tsx`**
 
 ```tsx
 import { useEffect, useState } from "react";
@@ -1483,17 +1506,17 @@ export function WorkflowApp() {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pnpm test src/app/WorkflowApp.test.tsx`
 Expected: PASS (4 tests — 2 existing "shell" + 2 new "titlebar").
 
-- [ ] **Step 5: Typecheck**
+- [x] **Step 5: Typecheck**
 
 Run: `pnpm lint`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/app/WorkflowApp.tsx src/app/WorkflowApp.test.tsx
@@ -1506,22 +1529,22 @@ git commit -m "feat(workflow): titlebar selector/switcher + view dispatch in she
 
 **Files:** none (verification only).
 
-- [ ] **Step 1: Run the full unit suite**
+- [x] **Step 1: Run the full unit suite**
 
 Run: `pnpm test`
 Expected: PASS — Plan #1 (20) + Plan #2 (40) + Plan #3 new tests, all green.
 
-- [ ] **Step 2: Typecheck the whole project**
+- [x] **Step 2: Typecheck the whole project**
 
 Run: `pnpm lint`
 Expected: PASS (`tsc -b` exit 0).
 
-- [ ] **Step 3: Production build**
+- [x] **Step 3: Production build**
 
 Run: `pnpm build`
 Expected: `vite build` succeeds (the new views/components compile into the bundle).
 
-- [ ] **Step 4: Manual smoke (human at the GUI — deferred like Plans #1–#2)**
+- [x] **Step 4: Manual smoke (human at the GUI — deferred like Plans #1–#2)**
 
 Run: `pnpm tauri:dev`. Verify, against a reachable reflection-enabled gRPC server:
 - Titlebar shows the workflow selector (`workflow-1`), `env: default` pill, and the Лента/Список/Фокус switcher.
@@ -1532,7 +1555,7 @@ Run: `pnpm tauri:dev`. Verify, against a reachable reflection-enabled gRPC serve
 - Switch view, then switch workflow in the selector and back — the **view is remembered per workflow**.
 - Re-Send an existing step → its outcome is replaced in place; edit the body and re-Send → same step mutates.
 
-- [ ] **Step 5: Commit any incidental changes**
+- [x] **Step 5: Commit any incidental changes**
 
 ```bash
 git add -A
