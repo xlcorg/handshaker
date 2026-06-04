@@ -14,35 +14,48 @@ vi.mock("@tanstack/react-virtual", () => ({
 import { JsonTree } from "./JsonTreeView";
 import { parseJsonTree } from "./jsonTree";
 
-describe("JsonTree", () => {
-  it("renders a row per visible node and hides collapsed descendants", () => {
+const base = {
+  matchIds: new Set<string>(),
+  activeMatchId: null,
+  scrollToId: null,
+  onToggle: () => {},
+  onCopy: () => {},
+};
+
+describe("JsonTree (JSON lines)", () => {
+  it("renders real JSON lines including closing braces", () => {
     const tree = parseJsonTree(`{"a":{"b":1},"c":2}`);
-    const aId = tree.order.find((id) => tree.nodes[id].key === "a")!;
-    const { rerender } = render(
-      <JsonTree tree={tree} collapsed={new Set()} matchIds={new Set()} activeMatchId={null}
-        scrollToId={null} onToggle={() => {}} onCopy={() => {}} />,
-    );
-    expect(screen.getByText("b")).toBeInTheDocument();
-    rerender(
-      <JsonTree tree={tree} collapsed={new Set([aId])} matchIds={new Set()} activeMatchId={null}
-        scrollToId={null} onToggle={() => {}} onCopy={() => {}} />,
-    );
-    expect(screen.queryByText("b")).not.toBeInTheDocument();
-    expect(screen.getByText("c")).toBeInTheDocument();
+    render(<JsonTree tree={tree} collapsed={new Set()} {...base} />);
+    expect(screen.getByText(`"a"`)).toBeInTheDocument();
+    expect(screen.getByText(`"b"`)).toBeInTheDocument();
+    expect(screen.getByText(`"c"`)).toBeInTheDocument();
+    expect(screen.getByText("},")).toBeInTheDocument(); // close of "a" (trailing comma)
+    expect(screen.getByText("}")).toBeInTheDocument();  // close of root
   });
 
-  it("wires copy + toggle through to rows", async () => {
+  it("collapsing a container hides its children and its closing brace", () => {
+    const tree = parseJsonTree(`{"a":{"b":1},"c":2}`);
+    const aId = tree.order.find((id) => tree.nodes[id].key === "a")!;
+    const { rerender } = render(<JsonTree tree={tree} collapsed={new Set()} {...base} />);
+    expect(screen.getByText(`"b"`)).toBeInTheDocument();
+    rerender(<JsonTree tree={tree} collapsed={new Set([aId])} {...base} />);
+    expect(screen.queryByText(`"b"`)).not.toBeInTheDocument();
+    expect(screen.getByText(/\{ … \}/)).toBeInTheDocument();
+  });
+
+  it("shows line numbers", () => {
+    const tree = parseJsonTree(`{"a":1}`); // 3 lines: {  "a": 1  }
+    render(<JsonTree tree={tree} collapsed={new Set()} {...base} />);
+    expect(screen.getByText("2")).toBeInTheDocument();
+    expect(screen.getByText("3")).toBeInTheDocument();
+  });
+
+  it("wires toggle through to a container line", async () => {
     const user = userEvent.setup();
-    const onCopy = vi.fn();
     const onToggle = vi.fn();
-    const tree = parseJsonTree(`{"n":5}`);
-    render(
-      <JsonTree tree={tree} collapsed={new Set()} matchIds={new Set()} activeMatchId={null}
-        scrollToId={null} onToggle={onToggle} onCopy={onCopy} />,
-    );
-    await user.dblClick(screen.getByText("5"));
-    expect(onCopy).toHaveBeenCalled();
-    await user.click(screen.getByRole("button", { name: "toggle-node" })); // root container caret
+    const tree = parseJsonTree(`{"obj":{"a":1}}`);
+    render(<JsonTree tree={tree} collapsed={new Set()} {...base} onToggle={onToggle} />);
+    await user.click(screen.getAllByRole("button", { name: "toggle-node" })[0]);
     expect(onToggle).toHaveBeenCalled();
   });
 });
