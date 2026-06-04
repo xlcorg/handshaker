@@ -29,6 +29,34 @@
 > **Confirmed defaults:** custom viewer replaces Monaco **for the response body only**
 > (request `BodyEditor` stays Monaco). Degrade threshold = **2 MB** of UTF-8 JSON.
 
+> **✅ EXECUTION STATUS — PLAN #4 COMPLETE (2026-06-04, subagent-driven):** All 12 tasks
+> implemented, committed, and reviewed on branch `redesign/workflow-ui-spec-plans` (commits
+> `4a7a5eb`…`df8f725`). A final whole-implementation review (opus) returned **MERGE WITH MINOR
+> FOLLOW-UPS**; the two Important findings + one hard-crash guard were fixed before completion.
+>
+> - T1 dep `4a7a5eb` · T2 `jsonTree` `5fe724d` · T3 `copyValue` `882f8df` · T4 `jsonSearch` `a3514d9`
+> - T5 `degrade`+`download` `0db4c76` · T6 `toast`+`clipboard` `ea5e330` · T7 `Toaster` `d4f5401`
+> - T8 `JsonRowView` `6a29f89` · T9 `JsonTreeView` `0778745` (+doc `50db3d6`) · T10 `JsonSearchBar` `3688979`
+> - T11 `ResponseBody`+`ErrorView` `472b324` (+degrade-parse fix `54bdab7`) · T12 wire+gate `49df840`
+> - Post-final-review fixes `df8f725`: (1) reset viewer state on `json` change (was leaking
+>   collapse/search across step switches); (2) match auto-scroll dep `[scrollToId, rows.length]`
+>   (matches under collapsed ancestors now scroll into view); (3) wrap `build` in try/catch so
+>   pathologically deep JSON degrades to a parse-error tree instead of a stack-overflow crash.
+> - **Gate: 140/140 tests green** (96 prior + 44 new); `pnpm lint` (tsc -b) exit 0;
+>   `pnpm build` (vite) success. `JsonTreeView.tsx` filename (export `JsonTree`) avoids a
+>   Windows case-insensitive-FS collision with `jsonTree.ts`.
+>
+> **Deviations (intentional):** (a) `google.rpc` structured error details DEFERRED to a backend
+> follow-up — `ErrorView` shows an honest pending note (see scope decision #1 above); (b) Task 12
+> tightened a flawed planned assertion (`getByText("NOT_FOUND")` was ambiguous vs the kept
+> `RespMeta` pill → assert the full `status_message` only `ErrorView` renders).
+> **Deferred follow-ups (out of Plan #4 scope):** (1) backend decode of `grpc-status-details-bin`
+> → structured `google.rpc` details; (2) response-headers (initial-metadata) tab still empty
+> (pre-existing); (3) degrade threshold (2 MB) tuning; (4) `JsonRowView` `title` recomputes
+> `JSON.stringify` per render — memoize/hover-only; (5) search counts key+value as two stops on
+> one row; (6) live-GUI smoke vs a reflection server (human step, deferred like Plan #3 T12).
+> **At the 🧹 /clear-checkpoint at the bottom.** Next session: `/clear`, then start Plan #5.
+
 ---
 
 ## File Structure
