@@ -55,9 +55,22 @@ async grpcBuildRequestSkeleton(target: GrpcTargetIpc, service: string, method: s
  * `Err` is only for client-side failures (transport / encode / decode).
  * The descriptor pool is reused from the `ContractCache` when present; only the channel is opened fresh per call.
  */
-async grpcInvokeOneshot(target: GrpcTargetIpc, request: InvokeRequest) : Promise<Result<InvokeOutcomeIpc, IpcError>> {
+async grpcInvokeOneshot(target: GrpcTargetIpc, request: InvokeRequest, requestId: string, timeoutMs: number) : Promise<Result<InvokeOutcomeIpc, IpcError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("grpc_invoke_oneshot", { target, request }) };
+    return { status: "ok", data: await TAURI_INVOKE("grpc_invoke_oneshot", { target, request, requestId, timeoutMs }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Fire the cancel `Notify` for an in-flight `request_id`. No-op if unknown (already
+ * finished or never started). Uses `notify_one()` so a cancel racing the `select!` first
+ * poll still stores a permit.
+ */
+async grpcCancel(requestId: string) : Promise<Result<null, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("grpc_cancel", { requestId }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };

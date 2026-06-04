@@ -49,10 +49,20 @@ export async function grpcBuildRequestSkeleton(
 export async function grpcInvokeOneshot(
   target: GrpcTargetIpc,
   req: InvokeRequest,
+  // The workflow Send path passes an explicit request id (for cancel) and the
+  // user's deadline pref. Defaults serve callers with no cancel/timeout surface
+  // (the legacy invoke UI): "" never matches a cancel; 30_000ms is the pref default.
+  requestId = "",
+  timeoutMs = 30_000,
 ): Promise<InvokeOutcomeIpc> {
-  const r = await commands.grpcInvokeOneshot(target, req);
+  const r = await commands.grpcInvokeOneshot(target, req, requestId, timeoutMs);
   if (r.status === "error") throw r.error;
   return r.data;
+}
+
+export async function grpcCancel(requestId: string): Promise<void> {
+  const r = await commands.grpcCancel(requestId);
+  if (r.status === "error") throw r.error;
 }
 
 export async function envList(): Promise<EnvironmentIpc[]> {
@@ -165,6 +175,7 @@ export const ipc = {
   grpcDescribe,
   grpcRefreshContract,
   grpcInvokeOneshot,
+  grpcCancel,
   grpcBuildRequestSkeleton,
   envList,
   envActiveGet,
