@@ -1,5 +1,19 @@
 # Backend Schema for Collections Refactor (Plan #1) — Implementation Plan
 
+> **✅ STATUS: COMPLETE** — all 5 tasks done, subagent-driven (impl + spec + quality
+> review per task, + final holistic review). Branch `redesign/workflow-ui-spec-plans`,
+> commits `cadaccd..625241b`. Backend gate green: `handshaker-core` 103 + `handshaker` 31.
+> **Deviation (sanctioned by the header timestamp note):** `i64` timestamps export as
+> `bigint` (specta `BigIntForbidden`), so `created_at`/`last_used_at`/`used_at` are `f64`
+> across core + IPC + commands; `Eq` dropped from float-bearing structs (`Collection`/
+> `Folder`/`Item`/`SavedRequest`/`ItemSnapshot`), `PartialEq` kept — no blast radius
+> (no `Eq`/`Hash` consumers; ids keep `Eq+Hash`).
+> **Frontend is intentionally broken at this commit** (backend-first) — `tsc` fails only in
+> the deferred legacy surface, worklist for plans #3/#7/#9: `src/ipc/client.ts`,
+> `src/features/collections/{draft.ts,fixtures.ts,useCollections.ts,overview/CollectionOverview.tsx}`.
+> **Follow-up:** core `AuthByEnv` (not the Ipc) is now orphaned — delete in plan-08/09 cleanup.
+> 🧹 **/clear-чекпойнт** here (01→02). Next: plan-02 (persist contract cache, B7).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development
 > (recommended) or superpowers:executing-plans to implement this plan task-by-task.
 > Steps use checkbox (`- [ ]`) syntax for tracking.
