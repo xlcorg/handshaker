@@ -115,27 +115,46 @@ impl AppState {
         self.collection_store.upsert(c)
     }
 
-    pub fn auth_set_for_env_impl(&self, collection_id: &str, item_id: Option<String>, env_name: String, config: Option<SavedAuthConfigIpc>) -> Result<(), CoreError> {
+    pub fn collection_set_node_auth_impl(
+        &self,
+        collection_id: &str,
+        item_id: Option<String>,
+        config: SavedAuthConfigIpc,
+    ) -> Result<(), CoreError> {
         let cid = parse_collection_id(collection_id)?;
         let mut c = self.require_collection(cid)?;
-        let abe = match item_id {
-            None => &mut c.auth_by_env,
+        let core = config.into_core();
+        match item_id {
+            None => c.auth = core,
             Some(s) => {
                 let iid = parse_item_id(&s)?;
                 match tree::find_item_mut(&mut c.items, iid) {
-                    Some(Item::Folder(f)) => &mut f.auth_by_env,
-                    Some(Item::Request(r)) => &mut r.auth_by_env,
+                    Some(Item::Request(r)) => r.auth = core,
+                    Some(Item::Folder(_)) => {
+                        return Err(CoreError::InvalidTarget("folders carry no auth".into()))
+                    }
                     None => return Err(CoreError::InvalidTarget(format!("item {iid:?} not found"))),
                 }
             }
-        };
-        match config {
-            Some(cfg) => {
-                abe.configs.insert(env_name, cfg.into_core());
+        }
+        self.collection_store.upsert(c)
+    }
+
+    pub fn collection_bump_usage_impl(
+        &self,
+        collection_id: &str,
+        item_id: &str,
+        used_at: i64,
+    ) -> Result<(), CoreError> {
+        let cid = parse_collection_id(collection_id)?;
+        let iid = parse_item_id(item_id)?;
+        let mut c = self.require_collection(cid)?;
+        match tree::find_item_mut(&mut c.items, iid) {
+            Some(Item::Request(r)) => {
+                r.last_used_at = Some(used_at);
+                r.use_count = r.use_count.saturating_add(1);
             }
-            None => {
-                abe.configs.remove(&env_name); // reset to inherited
-            }
+            _ => return Err(CoreError::InvalidTarget(format!("request {iid:?} not found"))),
         }
         self.collection_store.upsert(c)
     }
@@ -211,14 +230,20 @@ pub async fn collection_restore_item(state: State<'_, AppState>, collection_id: 
 
 #[tauri::command]
 #[specta::specta]
-pub async fn auth_set_for_env(state: State<'_, AppState>, collection_id: String, item_id: Option<String>, env_name: String, config: Option<SavedAuthConfigIpc>) -> Result<(), IpcError> {
-    state.auth_set_for_env_impl(&collection_id, item_id, env_name, config).map_err(IpcError::from)
+pub async fn collection_set_node_auth(state: State<'_, AppState>, collection_id: String, item_id: Option<String>, config: SavedAuthConfigIpc) -> Result<(), IpcError> {
+    state.collection_set_node_auth_impl(&collection_id, item_id, config).map_err(IpcError::from)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn collection_bump_usage(state: State<'_, AppState>, collection_id: String, item_id: String, used_at: i64) -> Result<(), IpcError> {
+    state.collection_bump_usage_impl(&collection_id, &item_id, used_at).map_err(IpcError::from)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ipc::collection::{AuthByEnvIpc, FolderIpc, SavedRequestIpc};
+    use crate::ipc::collection::{FolderIpc, SavedRequestIpc};
     use uuid::Uuid;
 
     fn empty_collection_ipc(id: u128, name: &str) -> CollectionIpc {
@@ -227,9 +252,12 @@ mod tests {
             name: name.into(),
             items: vec![],
             variables: HashMap::new(),
-            auth_by_env: AuthByEnvIpc::default(),
+            auth: SavedAuthConfigIpc::None,
             default_tls: false,
             skip_tls_verify: false,
+            pinned: false,
+            description: None,
+            created_at: 0,
         }
     }
 
@@ -241,9 +269,11 @@ mod tests {
             service: "svc".into(),
             method: "M".into(),
             body_template: "{}".into(),
-            metadata: HashMap::new(),
-            auth_by_env: AuthByEnvIpc::default(),
+            metadata: vec![],
+            auth: SavedAuthConfigIpc::None,
             tls_override: None,
+            last_used_at: None,
+            use_count: 0,
         })
     }
 
@@ -252,7 +282,6 @@ mod tests {
             id: Uuid::from_u128(id).to_string(),
             name: name.into(),
             items: vec![],
-            auth_by_env: AuthByEnvIpc::default(),
         })
     }
 
@@ -323,21 +352,34 @@ mod tests {
     }
 
     #[test]
-    fn auth_set_for_env_root_node_and_clear() {
+    fn set_node_auth_on_collection_and_request() {
         let state = AppState::default();
         state.collection_upsert_impl(empty_collection_ipc(1, "c")).unwrap();
+        state.collection_add_item_impl(&cid(1), None, request_ipc(20, "r")).unwrap();
         let cfg = SavedAuthConfigIpc::EnvVar {
             env_var: "TOK".into(),
             header_name: "authorization".into(),
             prefix: "Bearer ".into(),
         };
-        // set collection-root auth (item_id = None)
-        state.auth_set_for_env_impl(&cid(1), None, "prod".into(), Some(cfg)).unwrap();
+        state.collection_set_node_auth_impl(&cid(1), None, cfg.clone()).unwrap();
+        state.collection_set_node_auth_impl(&cid(1), Some(cid(20)), cfg).unwrap();
         let got = state.collection_get_impl(&cid(1)).unwrap();
-        assert!(got.auth_by_env.configs.contains_key("prod"));
-        // clear it (config = None)
-        state.auth_set_for_env_impl(&cid(1), None, "prod".into(), None).unwrap();
+        assert!(matches!(got.auth, SavedAuthConfigIpc::EnvVar { .. }));
+    }
+
+    #[test]
+    fn bump_usage_sets_last_used_and_increments_count() {
+        let state = AppState::default();
+        state.collection_upsert_impl(empty_collection_ipc(1, "c")).unwrap();
+        state.collection_add_item_impl(&cid(1), None, request_ipc(20, "r")).unwrap();
+        state.collection_bump_usage_impl(&cid(1), &cid(20), 555).unwrap();
+        state.collection_bump_usage_impl(&cid(1), &cid(20), 777).unwrap();
         let got = state.collection_get_impl(&cid(1)).unwrap();
-        assert!(!got.auth_by_env.configs.contains_key("prod"));
+        let req = match &got.items[0] {
+            ItemIpc::Request(r) => r,
+            _ => panic!(),
+        };
+        assert_eq!(req.last_used_at, Some(777));
+        assert_eq!(req.use_count, 2);
     }
 }
