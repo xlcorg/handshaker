@@ -23,6 +23,13 @@ export function WorkflowApp() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // Creating a call (from the sidebar, the service panel, or ⌘K) adds a step and
+  // switches the workflow to Focus. Close any open service panel so the new call
+  // is actually visible instead of staying hidden behind the panel.
+  useEffect(() => {
+    if (wf.activeStepId) setPanelServiceId(null);
+  }, [wf.activeStepId]);
+
   const openService = (svc: CatalogService) => setPanelServiceId(svc.id);
 
   return (
