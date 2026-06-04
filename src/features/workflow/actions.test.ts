@@ -252,6 +252,12 @@ describe("resolveStepAuthHeader", () => {
     expect(ipc.authResolve).not.toHaveBeenCalled();
   });
 
+  it("returns kind 'none' when the origin service no longer exists (orphaned serviceId)", async () => {
+    const r = await resolveStepAuthHeader("stale", () => undefined, ipc.authResolve);
+    expect(r.kind).toBe("none");
+    expect(ipc.authResolve).not.toHaveBeenCalled();
+  });
+
   it("returns a header when EnvVar auth resolves", async () => {
     vi.mocked(ipc.authResolve).mockResolvedValue({ header_name: "authorization", header_value: "Bearer t" });
     const svc = { auth: { kind: "env_var" as const, env_var: "TOK", header_name: "authorization", prefix: "Bearer " } };
