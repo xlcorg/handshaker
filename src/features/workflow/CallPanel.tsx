@@ -3,6 +3,7 @@ import type { RespState } from "@/features/response/RespMeta";
 import type { SavedAuthConfigIpc } from "@/ipc/bindings";
 import { authResolve } from "@/ipc/client";
 import { catalogStore } from "@/features/catalog/store";
+import { ClientErrorBanner } from "./ClientErrorBanner";
 import { AddressBar } from "./AddressBar";
 import { RequestTabs } from "./RequestTabs";
 import { workflowStore } from "./store";
@@ -72,11 +73,7 @@ function ResponseSlot({ step }: { step: Step }) {
 
   return (
     <>
-      {step.error && !step.outcome ? (
-        <div className="m-3 flex-none rounded-md border border-destructive bg-destructive/10 px-3 py-2 text-xs text-destructive">
-          {step.error}
-        </div>
-      ) : null}
+      {step.error && !step.outcome ? <ClientErrorBanner message={step.error} /> : null}
       <ResponsePanel state={respState} outcome={step.outcome} />
     </>
   );
