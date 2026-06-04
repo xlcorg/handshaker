@@ -1,10 +1,24 @@
 # Persist the Contract (Reflection) Cache — Plan #2 (B7) — Implementation Plan
 
-> **STATUS: READY — detailed to TDD, not yet executed.** Branch
-> `redesign/workflow-ui-spec-plans`. Follows plan-01 (`cadaccd..625241b`, 🧹 01→02 checkpoint).
-> Backend-only; **no IPC/DTO/command/bindings change** (the cache is internal —
-> `activate()` already calls `ContractCache::{get,put}`). Next after this: plan-03 (pure
-> frontend functions). 🧹 **/clear-чекпойнт** at the end (02→03).
+> **✅ STATUS: COMPLETE** — all 3 tasks done, subagent-driven (impl + spec-review +
+> quality-review per task, + final holistic review). Branch `redesign/workflow-ui-spec-plans`,
+> commits `41d29bf..0a33cae` (3). Backend gate green: `handshaker-core` **107** (+4) ·
+> `handshaker` **32** (+1). **No IPC/DTO/command/bindings change** — `git diff --stat`
+> confirms only `grpc/file_contract_cache.rs` (new), `grpc/mod.rs`, `src-tauri/state.rs`,
+> `src-tauri/Cargo.toml` (dev-dep `tempfile`). Frontend untouched (still on plan-01's
+> known-broken legacy list).
+> **Review-driven deltas (commit `79789d5`):** `key_filename` privatized (was `pub` —
+> leaked persistence-format detail); `invalidate` made `NotFound`-safe (dropped TOCTOU
+> `exists()` pre-check); corrupt-load test tightened. **Impl note:** `FileContractCache`
+> does not derive `Debug` (its `CachedContract` can't — `prost_reflect::DescriptorPool` is
+> not `Debug`); consistent with sibling `InMemoryContractCache`.
+> 🧹 **/clear-чекпойнт** here (02→03). Next: plan-03 (pure frontend functions: `mapping.ts`,
+> `grouping.ts`, `sort.ts`) — outline, detail to TDD before executing.
+>
+> ---
+> **(historical) Original pre-execution banner:** Branch `redesign/workflow-ui-spec-plans`.
+> Follows plan-01 (`cadaccd..625241b`, 🧹 01→02 checkpoint). Backend-only; the cache is
+> internal — `activate()` already calls `ContractCache::{get,put}`.
 >
 > **Deviations from plan-00 index (sanctioned here):**
 > 1. **Placement:** the index file-map listed `collections/contract_cache.rs`. The cache is
@@ -62,7 +76,7 @@ invalidates).
 - Create: `crates/handshaker-core/src/grpc/file_contract_cache.rs`
 - Modify: `crates/handshaker-core/src/grpc/mod.rs` (register module + re-export)
 
-- [ ] **Step 1: Write the failing tests** (new file — write the `#[cfg(test)]` block first,
+- [x] **Step 1: Write the failing tests** (new file — write the `#[cfg(test)]` block first,
   with a minimal module skeleton so it compiles to a *test failure*, not a parse error)
 
 Create `file_contract_cache.rs` with the struct/impl **stubs that compile** (so the
@@ -201,13 +215,13 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: Run — verify it fails** (red)
+- [x] **Step 2: Run — verify it fails** (red)
 
 Run: `cargo test -p handshaker-core file_contract_cache 2>&1 | tail -30`
 Expected: tests build but fail (stub `unimplemented!()`), or compile errors naming the
 not-yet-written items. Either is a valid red.
 
-- [ ] **Step 3: Implement `FileContractCache`** (top of the same file, above the test mod)
+- [x] **Step 3: Implement `FileContractCache`** (top of the same file, above the test mod)
 
 ```rust
 //! Disk-backed `ContractCache`: one `<dir>/<hex-key>.json` per cached contract, written
@@ -347,7 +361,7 @@ impl ContractCache for FileContractCache {
 }
 ```
 
-- [ ] **Step 4: Register the module + re-export** in `grpc/mod.rs`
+- [x] **Step 4: Register the module + re-export** in `grpc/mod.rs`
 
 Add `pub mod file_contract_cache;` (after `pub mod descriptor;`) and extend the
 contract_cache re-export line:
@@ -356,13 +370,13 @@ contract_cache re-export line:
 pub use file_contract_cache::FileContractCache;
 ```
 
-- [ ] **Step 5: Run — verify pass** (green)
+- [x] **Step 5: Run — verify pass** (green)
 
 Run: `cargo test -p handshaker-core file_contract_cache 2>&1 | tail -20`
 Expected: all 4 tests pass.
 Run (no regressions in grpc): `cargo test -p handshaker-core grpc 2>&1 | tail -10`
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add crates/handshaker-core/src/grpc/file_contract_cache.rs crates/handshaker-core/src/grpc/mod.rs
@@ -377,7 +391,7 @@ git commit -m "feat(core): file-backed ContractCache (persist reflection contrac
 - Modify: `src-tauri/src/state.rs` (use `FileContractCache` in `load`; update field doc)
 - Modify: `src-tauri/Cargo.toml` (add `[dev-dependencies] tempfile`)
 
-- [ ] **Step 1: Add the failing wiring test** (append to `state.rs#tests`)
+- [x] **Step 1: Add the failing wiring test** (append to `state.rs#tests`)
 
 ```rust
     #[test]
@@ -402,7 +416,7 @@ git commit -m "feat(core): file-backed ContractCache (persist reflection contrac
 (This asserts the `contracts/` dir is created by `load` — only the file-backed impl does
 that. The deeper persist/reload behavior is already covered by Task 1's core tests.)
 
-- [ ] **Step 2: Add `tempfile` dev-dep + run — verify red**
+- [x] **Step 2: Add `tempfile` dev-dep + run — verify red**
 
 In `src-tauri/Cargo.toml`, add:
 
@@ -415,7 +429,7 @@ Run: `cargo test -p handshaker state 2>&1 | tail -20`
 Expected: compile error — `FileContractCache` not used yet ⇒ `contracts/` dir absent ⇒
 `is_dir()` assert fails (or, before wiring, the dir isn't created). Red.
 
-- [ ] **Step 3: Swap the cache in `load` + update the field doc**
+- [x] **Step 3: Swap the cache in `load` + update the field doc**
 
 In `state.rs`:
 - import: `use handshaker_core::grpc::{ContractCache, FileContractCache, InMemoryContractCache};`
@@ -431,12 +445,12 @@ In `state.rs`:
 
 `AppState::default()` keeps `InMemoryContractCache::new()` (tests stay off-disk).
 
-- [ ] **Step 4: Run — verify pass** (green)
+- [x] **Step 4: Run — verify pass** (green)
 
 Run: `cargo test -p handshaker state 2>&1 | tail -20`
 Expected: both state tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src-tauri/src/state.rs src-tauri/Cargo.toml
@@ -449,7 +463,7 @@ git commit -m "feat(state): persist contract cache via FileContractCache in load
 
 **Files:** none (verification + banner update only).
 
-- [ ] **Step 1: Full backend gate**
+- [x] **Step 1: Full backend gate**
 
 Run: `cargo test -p handshaker-core 2>&1 | tail -5`
 Run: `cargo test -p handshaker 2>&1 | tail -5`
@@ -457,13 +471,13 @@ Expected: both green. (No IPC/specta surface changed ⇒ **no `export-bindings` 
 `bindings.ts` diff. Frontend `tsc` state is unchanged from plan-01's known-broken legacy
 list — do **not** touch it here.)
 
-- [ ] **Step 2: Sanity — confirm no IPC drift**
+- [x] **Step 2: Sanity — confirm no IPC drift**
 
 Run: `git --no-pager diff --stat` — expect only `grpc/file_contract_cache.rs`, `grpc/mod.rs`,
 `state.rs`, `src-tauri/Cargo.toml`, and this plan/the index. **No** `src/ipc/bindings.ts`,
 **no** `commands/`/`ipc/` changes.
 
-- [ ] **Step 3: Update banners**
+- [x] **Step 3: Update banners**
 
 - This plan's header: STATUS → **✅ COMPLETE**, with commit range + the gate counts.
 - `plan-00-index.md` plan-02 row: `outline` → `✅ done` (+ commit range).
