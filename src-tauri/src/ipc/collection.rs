@@ -7,11 +7,11 @@
 use std::collections::HashMap;
 
 use handshaker_core::auth::{
-    AuthByEnv, EnvVarAuthConfig, OAuth2ClientCredentialsConfig, SavedAuthConfig,
+    EnvVarAuthConfig, OAuth2ClientCredentialsConfig, SavedAuthConfig,
 };
 use handshaker_core::collections::ids::{CollectionId, ItemId};
 use handshaker_core::collections::tree::ItemSnapshot;
-use handshaker_core::collections::{Collection, Folder, Item, SavedRequest};
+use handshaker_core::collections::{Collection, Folder, Item, MetadataRow, SavedRequest};
 use handshaker_core::error::CoreError;
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -82,22 +82,21 @@ impl SavedAuthConfigIpc {
     }
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, Type)]
-pub struct AuthByEnvIpc {
-    pub configs: HashMap<String, SavedAuthConfigIpc>,
+// --- metadata DTOs ----------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct MetadataRowIpc {
+    pub key: String,
+    pub value: String,
+    pub enabled: bool,
 }
 
-impl AuthByEnvIpc {
-    pub fn from_core(a: AuthByEnv) -> Self {
-        Self {
-            configs: a.configs.into_iter().map(|(k, v)| (k, SavedAuthConfigIpc::from_core(v))).collect(),
-        }
+impl MetadataRowIpc {
+    pub fn from_core(r: MetadataRow) -> Self {
+        Self { key: r.key, value: r.value, enabled: r.enabled }
     }
-
-    pub fn into_core(self) -> AuthByEnv {
-        AuthByEnv {
-            configs: self.configs.into_iter().map(|(k, v)| (k, v.into_core())).collect(),
-        }
+    pub fn into_core(self) -> MetadataRow {
+        MetadataRow { key: self.key, value: self.value, enabled: self.enabled }
     }
 }
 
@@ -108,7 +107,6 @@ pub struct FolderIpc {
     pub id: String,
     pub name: String,
     pub items: Vec<ItemIpc>,
-    pub auth_by_env: AuthByEnvIpc,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -119,9 +117,11 @@ pub struct SavedRequestIpc {
     pub service: String,
     pub method: String,
     pub body_template: String,
-    pub metadata: HashMap<String, String>,
-    pub auth_by_env: AuthByEnvIpc,
+    pub metadata: Vec<MetadataRowIpc>,
+    pub auth: SavedAuthConfigIpc,
     pub tls_override: Option<bool>,
+    pub last_used_at: Option<i64>,
+    pub use_count: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -138,7 +138,6 @@ impl ItemIpc {
                 id: f.id.0.to_string(),
                 name: f.name,
                 items: f.items.into_iter().map(ItemIpc::from_core).collect(),
-                auth_by_env: AuthByEnvIpc::from_core(f.auth_by_env),
             }),
             Item::Request(r) => Self::Request(SavedRequestIpc {
                 id: r.id.0.to_string(),
@@ -147,9 +146,11 @@ impl ItemIpc {
                 service: r.service,
                 method: r.method,
                 body_template: r.body_template,
-                metadata: r.metadata,
-                auth_by_env: AuthByEnvIpc::from_core(r.auth_by_env),
+                metadata: r.metadata.into_iter().map(MetadataRowIpc::from_core).collect(),
+                auth: SavedAuthConfigIpc::from_core(r.auth),
                 tls_override: r.tls_override,
+                last_used_at: r.last_used_at,
+                use_count: r.use_count,
             }),
         }
     }
@@ -162,7 +163,6 @@ impl ItemIpc {
                     id: parse_item_id(&f.id)?,
                     name: f.name,
                     items,
-                    auth_by_env: f.auth_by_env.into_core(),
                 }))
             }
             Self::Request(r) => Ok(Item::Request(SavedRequest {
@@ -172,9 +172,11 @@ impl ItemIpc {
                 service: r.service,
                 method: r.method,
                 body_template: r.body_template,
-                metadata: r.metadata,
-                auth_by_env: r.auth_by_env.into_core(),
+                metadata: r.metadata.into_iter().map(MetadataRowIpc::into_core).collect(),
+                auth: r.auth.into_core(),
                 tls_override: r.tls_override,
+                last_used_at: r.last_used_at,
+                use_count: r.use_count,
             })),
         }
     }
@@ -188,9 +190,12 @@ pub struct CollectionIpc {
     pub name: String,
     pub items: Vec<ItemIpc>,
     pub variables: HashMap<String, String>,
-    pub auth_by_env: AuthByEnvIpc,
+    pub auth: SavedAuthConfigIpc,
     pub default_tls: bool,
     pub skip_tls_verify: bool,
+    pub pinned: bool,
+    pub description: Option<String>,
+    pub created_at: i64,
 }
 
 impl CollectionIpc {
@@ -200,9 +205,12 @@ impl CollectionIpc {
             name: c.name,
             items: c.items.into_iter().map(ItemIpc::from_core).collect(),
             variables: c.variables,
-            auth_by_env: AuthByEnvIpc::from_core(c.auth_by_env),
+            auth: SavedAuthConfigIpc::from_core(c.auth),
             default_tls: c.default_tls,
             skip_tls_verify: c.skip_tls_verify,
+            pinned: c.pinned,
+            description: c.description,
+            created_at: c.created_at,
         }
     }
 
@@ -213,9 +221,12 @@ impl CollectionIpc {
             name: self.name,
             items,
             variables: self.variables,
-            auth_by_env: self.auth_by_env.into_core(),
+            auth: self.auth.into_core(),
             default_tls: self.default_tls,
             skip_tls_verify: self.skip_tls_verify,
+            pinned: self.pinned,
+            description: self.description,
+            created_at: self.created_at,
         })
     }
 }
@@ -248,7 +259,8 @@ impl ItemSnapshotIpc {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use handshaker_core::auth::AuthByEnv as CoreAuthByEnv;
+    use handshaker_core::auth::SavedAuthConfig;
+    use handshaker_core::collections::{Collection, Folder, Item, MetadataRow, SavedRequest};
 
     fn sample_collection() -> Collection {
         Collection {
@@ -264,16 +276,23 @@ mod tests {
                     service: "svc".into(),
                     method: "M".into(),
                     body_template: "{}".into(),
-                    metadata: HashMap::new(),
-                    auth_by_env: CoreAuthByEnv::default(),
+                    metadata: vec![
+                        MetadataRow { key: "a".into(), value: "1".into(), enabled: true },
+                        MetadataRow { key: "a".into(), value: "2".into(), enabled: false },
+                    ],
+                    auth: SavedAuthConfig::None,
                     tls_override: Some(true),
+                    last_used_at: Some(123),
+                    use_count: 4,
                 })],
-                auth_by_env: CoreAuthByEnv::default(),
             })],
             variables: HashMap::new(),
-            auth_by_env: CoreAuthByEnv::default(),
+            auth: SavedAuthConfig::None,
             default_tls: false,
             skip_tls_verify: false,
+            pinned: true,
+            description: Some("d".into()),
+            created_at: 1_700_000_000_000,
         }
     }
 
@@ -283,6 +302,13 @@ mod tests {
         let ipc = CollectionIpc::from_core(original.clone());
         let back = ipc.into_core().unwrap();
         assert_eq!(original, back);
+
+        // metadata order (incl. duplicate keys + enabled flags) preserved through round-trip
+        let Item::Folder(folder) = &back.items[0] else { panic!("expected folder") };
+        let Item::Request(req) = &folder.items[0] else { panic!("expected request") };
+        assert_eq!(req.metadata[0].key, "a");
+        assert!(req.metadata[0].enabled);
+        assert!(!req.metadata[1].enabled);
     }
 
     #[test]
@@ -292,9 +318,12 @@ mod tests {
             name: "c".into(),
             items: vec![],
             variables: HashMap::new(),
-            auth_by_env: AuthByEnvIpc::default(),
+            auth: SavedAuthConfigIpc::None,
             default_tls: false,
             skip_tls_verify: false,
+            pinned: false,
+            description: None,
+            created_at: 0,
         };
         assert!(matches!(ipc.into_core().unwrap_err(), CoreError::InvalidTarget(_)));
     }
