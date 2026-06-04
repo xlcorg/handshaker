@@ -154,7 +154,10 @@ impl AppState {
                 r.last_used_at = Some(used_at);
                 r.use_count = r.use_count.saturating_add(1);
             }
-            _ => return Err(CoreError::InvalidTarget(format!("request {iid:?} not found"))),
+            Some(Item::Folder(_)) => {
+                return Err(CoreError::InvalidTarget("usage applies to requests, not folders".into()))
+            }
+            None => return Err(CoreError::InvalidTarget(format!("request {iid:?} not found"))),
         }
         self.collection_store.upsert(c)
     }
@@ -365,6 +368,25 @@ mod tests {
         state.collection_set_node_auth_impl(&cid(1), Some(cid(20)), cfg).unwrap();
         let got = state.collection_get_impl(&cid(1)).unwrap();
         assert!(matches!(got.auth, SavedAuthConfigIpc::EnvVar { .. }));
+        let req = match &got.items[0] {
+            ItemIpc::Request(r) => r,
+            _ => panic!(),
+        };
+        assert!(matches!(req.auth, SavedAuthConfigIpc::EnvVar { .. }));
+    }
+
+    #[test]
+    fn set_node_auth_on_folder_is_rejected() {
+        let state = AppState::default();
+        state.collection_upsert_impl(empty_collection_ipc(1, "c")).unwrap();
+        state.collection_add_item_impl(&cid(1), None, folder_ipc(10, "f")).unwrap();
+        let cfg = SavedAuthConfigIpc::EnvVar {
+            env_var: "TOK".into(),
+            header_name: "authorization".into(),
+            prefix: "Bearer ".into(),
+        };
+        let err = state.collection_set_node_auth_impl(&cid(1), Some(cid(10)), cfg).unwrap_err();
+        assert!(matches!(err, CoreError::InvalidTarget(_)));
     }
 
     #[test]
