@@ -3,12 +3,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("@/ipc/client", () => ({
   grpcBuildRequestSkeleton: vi.fn(),
   grpcInvokeOneshot: vi.fn(),
+  grpcCancel: vi.fn(),
   varsResolve: vi.fn(),
   authResolve: vi.fn(),
 }));
 
 import * as ipc from "@/ipc/client";
-import { createStepFromMethod, sendStep, stepPatchFromSendResult, resolveStepAuthHeader } from "./actions";
+import { createStepFromMethod, sendStep, stepPatchFromSendResult, resolveStepAuthHeader, cancelStep } from "./actions";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -85,6 +86,8 @@ describe("sendStep", () => {
     expect(ipc.grpcInvokeOneshot).toHaveBeenCalledWith(
       { address: "h:443", tls: true, skip_verify: false },
       { service: "S", method: "M", request_json: "{}", metadata: { x: "1" } },
+      expect.any(String),
+      expect.any(Number),
     );
   });
 
@@ -139,6 +142,8 @@ describe("sendStep", () => {
     expect(ipc.grpcInvokeOneshot).toHaveBeenCalledWith(
       { address: "h:443", tls: true, skip_verify: false },
       { service: "S", method: "M", request_json: "{}", metadata: { keep: "1" } },
+      expect.any(String),
+      expect.any(Number),
     );
   });
 
@@ -180,6 +185,8 @@ describe("sendStep", () => {
     expect(ipc.grpcInvokeOneshot).toHaveBeenCalledWith(
       { address: "api.internal", tls: true, skip_verify: false },
       expect.objectContaining({ service: "S", method: "M" }),
+      expect.any(String),
+      expect.any(Number),
     );
   });
 });
@@ -225,6 +232,8 @@ describe("sendStep authHeader merge", () => {
       { address: "h:443", tls: true, skip_verify: false },
       { service: "S", method: "M", request_json: "{}",
         metadata: { x: "1", authorization: "Bearer {{notresolved}}" } },
+      expect.any(String),
+      expect.any(Number),
     );
   });
 
@@ -233,6 +242,8 @@ describe("sendStep authHeader merge", () => {
     expect(ipc.grpcInvokeOneshot).toHaveBeenCalledWith(
       { address: "h:443", tls: true, skip_verify: false },
       { service: "S", method: "M", request_json: "{}", metadata: {} },
+      expect.any(String),
+      expect.any(Number),
     );
   });
 });
@@ -271,5 +282,81 @@ describe("resolveStepAuthHeader", () => {
     const r = await resolveStepAuthHeader("svc-1", () => svc, ipc.authResolve);
     expect(r.kind).toBe("error");
     if (r.kind === "error") expect(r.message).toContain("oauth2");
+  });
+});
+
+describe("sendStep cancel/timeout wiring", () => {
+  beforeEach(() => {
+    vi.mocked(ipc.grpcInvokeOneshot).mockResolvedValue({
+      status_code: 0, status_message: "OK", response_json: "{}", trailing_metadata: {}, elapsed_ms: 1,
+    });
+  });
+
+  it("passes a request_id and a timeout_ms to grpcInvokeOneshot", async () => {
+    await sendStep(
+      { address: "h:443", tls: true, service: "S", method: "M", requestJson: "{}", metadata: [] },
+      null,
+      { requestId: "req-1", timeoutMs: 12345 },
+    );
+    expect(ipc.grpcInvokeOneshot).toHaveBeenCalledWith(
+      { address: "h:443", tls: true, skip_verify: false },
+      { service: "S", method: "M", request_json: "{}", metadata: {} },
+      "req-1",
+      12345,
+    );
+  });
+
+  it("returns kind 'cancelled' when the backend reports a cancellation", async () => {
+    vi.mocked(ipc.grpcInvokeOneshot).mockRejectedValue({ type: "Transport", message: "request cancelled" });
+    const res = await sendStep(
+      { address: "h", tls: false, service: "S", method: "M", requestJson: "{}", metadata: [] },
+      null,
+      { requestId: "req-2", timeoutMs: 1000 },
+    );
+    expect(res.kind).toBe("cancelled");
+    expect(ipc.grpcCancel).not.toHaveBeenCalled();
+  });
+
+  it("does NOT treat a near-miss transport error containing 'cancel' as a cancellation", async () => {
+    // Only the exact backend sentinel resets to draft; an unrelated I/O error that merely
+    // contains "cancel" must surface as an error, not silently vanish.
+    vi.mocked(ipc.grpcInvokeOneshot).mockRejectedValue({
+      type: "Transport",
+      message: "I/O operation has been canceled by the host",
+    });
+    const res = await sendStep(
+      { address: "h", tls: false, service: "S", method: "M", requestJson: "{}", metadata: [] },
+      null,
+      { requestId: "req-3", timeoutMs: 1000 },
+    );
+    expect(res.kind).toBe("error");
+    if (res.kind === "error") expect(res.message).toContain("canceled");
+  });
+
+  it("generates distinct request ids across calls when none is provided", async () => {
+    await sendStep({ address: "h", tls: false, service: "S", method: "M", requestJson: "{}", metadata: [] });
+    await sendStep({ address: "h", tls: false, service: "S", method: "M", requestJson: "{}", metadata: [] });
+    const ids = vi.mocked(ipc.grpcInvokeOneshot).mock.calls.map((c) => c[2]);
+    expect(ids[0]).not.toBe(ids[1]);
+    expect(typeof ids[0]).toBe("string");
+  });
+});
+
+describe("cancelStep", () => {
+  it("calls grpcCancel with the request id", async () => {
+    await cancelStep("req-9");
+    expect(ipc.grpcCancel).toHaveBeenCalledWith("req-9");
+  });
+  it("swallows grpcCancel errors (best-effort)", async () => {
+    vi.mocked(ipc.grpcCancel).mockRejectedValueOnce(new Error("gone"));
+    await expect(cancelStep("req-x")).resolves.toBeUndefined();
+  });
+});
+
+describe("stepPatchFromSendResult cancelled", () => {
+  it("cancelled → draft, cleared", () => {
+    expect(stepPatchFromSendResult({ kind: "cancelled" })).toEqual({
+      status: "draft", outcome: null, error: null,
+    });
   });
 });

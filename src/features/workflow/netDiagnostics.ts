@@ -1,5 +1,18 @@
 export type TransportKind = "refused" | "tls" | "dns" | "timeout" | "cancelled" | "other";
 
+/**
+ * Exact backend cancel sentinel (`IpcError::Transport { message }` fired by the cancel
+ * `Notify`; see `grpc.rs` CANCELLED_MSG). Use this for the cancel CONTROL-FLOW decision
+ * (reset to idle) — an exact match, not the fuzzy `/cancel/i` rule below, so an unrelated
+ * transport error that merely contains "cancel" is never mistaken for a user cancel.
+ */
+export const CANCELLED_SENTINEL = "request cancelled";
+
+/** True only for the exact backend cancel sentinel — the safe cancel discriminator. */
+export function isCancelSentinel(message: string): boolean {
+  return message === CANCELLED_SENTINEL;
+}
+
 export interface TransportDiagnosis {
   kind: TransportKind;
   hint: string;

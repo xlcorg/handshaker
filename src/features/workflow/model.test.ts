@@ -45,3 +45,8 @@ describe("newWorkflow", () => {
     expect(newWorkflow("wf-1").envName).toBeNull();
   });
 });
+
+it("newStep defaults requestId to null", () => {
+  const s = newStep({ address: "h", tls: false, service: "S", method: "M" });
+  expect(s.requestId).toBeNull();
+});

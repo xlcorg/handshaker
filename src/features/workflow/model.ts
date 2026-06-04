@@ -22,6 +22,7 @@ export interface Step {
   status: StepStatus;
   outcome: InvokeOutcomeIpc | null;
   error: string | null; // client-side (non-gRPC) error message
+  requestId: string | null; // transient: in-flight invoke id while status === "sending"
 }
 
 export interface Workflow {
@@ -54,6 +55,7 @@ export function newStep(init: {
     status: "draft",
     outcome: null,
     error: null,
+    requestId: null,
   };
 }
 

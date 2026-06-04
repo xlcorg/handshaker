@@ -2,6 +2,9 @@ import * as ipc from "@/ipc/client";
 import type { InvokeOutcomeIpc, SavedAuthConfigIpc, AuthCredentialsIpc } from "@/ipc/bindings";
 import { newStep, type MetadataRow, type Step } from "./model";
 import { resolveStepTemplates } from "./resolve";
+import { newId } from "@/lib/ids";
+import { readPrefs } from "@/lib/use-prefs";
+import { isCancelSentinel } from "./netDiagnostics";
 
 export interface CallTargetInit {
   address: string;
@@ -38,7 +41,8 @@ export async function createStepFromMethod(
 export type SendResult =
   | { kind: "ok"; outcome: InvokeOutcomeIpc }
   | { kind: "error"; message: string }
-  | { kind: "unresolved"; unresolved: string[]; cycle: string[] | null };
+  | { kind: "unresolved"; unresolved: string[]; cycle: string[] | null }
+  | { kind: "cancelled" };
 
 export type AuthHeader = { key: string; value: string };
 
@@ -74,7 +78,10 @@ export async function sendStep(
     metadata: MetadataRow[];
   },
   authHeader?: AuthHeader | null,
+  opts?: { requestId?: string; timeoutMs?: number },
 ): Promise<SendResult> {
+  const requestId = opts?.requestId ?? newId();
+  const timeoutMs = opts?.timeoutMs ?? readPrefs().requestTimeoutMs;
   try {
     const r = await resolveStepTemplates(step, ipc.varsResolve);
     if (!r.ok) return { kind: "unresolved", unresolved: r.unresolved, cycle: r.cycle };
@@ -84,10 +91,24 @@ export async function sendStep(
     const outcome = await ipc.grpcInvokeOneshot(
       { address: r.request.address, tls: step.tls, skip_verify: false },
       { service: step.service, method: step.method, request_json: r.request.requestJson, metadata },
+      requestId,
+      timeoutMs,
     );
     return { kind: "ok", outcome };
   } catch (e) {
-    return { kind: "error", message: errorToMessage(e) };
+    const message = errorToMessage(e);
+    if (isCancelSentinel(message)) return { kind: "cancelled" }; // exact sentinel, not fuzzy
+    return { kind: "error", message };
+  }
+}
+
+/** Best-effort cancel of an in-flight invoke. Errors are swallowed (the call may have
+ *  already completed and dropped its registry entry). */
+export async function cancelStep(requestId: string): Promise<void> {
+  try {
+    await ipc.grpcCancel(requestId);
+  } catch {
+    /* best-effort */
   }
 }
 
@@ -103,6 +124,9 @@ export function stepPatchFromSendResult(res: SendResult): Partial<Step> {
         ? `Variable cycle: ${res.cycle.join(" → ")}`
         : `Unresolved variables: ${res.unresolved.map((v) => `{{${v}}}`).join(", ")}`,
     };
+  }
+  if (res.kind === "cancelled") {
+    return { status: "draft", outcome: null, error: null };
   }
   return { status: "error", outcome: null, error: res.message };
 }
