@@ -72,9 +72,7 @@ impl GrpcTransport for TonicTransport {
             Ok(response) => {
                 let trailing = metadata_to_map(response.metadata());
                 let msg: DynamicMessage = response.into_inner();
-                // prost-reflect impl Serialize for DynamicMessage = canonical proto3 JSON.
-                let json = serde_json::to_string_pretty(&msg)
-                    .map_err(|e| CoreError::DecodeResponse(e.to_string()))?;
+                let json = message_to_pretty_json(&msg)?;
                 Ok(UnaryOutcome {
                     status_code: 0,
                     status_message: "OK".into(),
@@ -108,6 +106,24 @@ fn inject_ascii_metadata(
         md.insert(key, value);
     }
     Ok(())
+}
+
+/// Serialize a decoded response message to pretty JSON, **emitting fields that are at
+/// their proto3 default value**.
+///
+/// prost-reflect's default `Serialize` impl uses `SerializeOptions::skip_default_fields =
+/// true` (proto3 canonical JSON), which OMITS any field whose value is the default
+/// (`""` / `0` / `false` / empty). For a gRPC debugging tool that hides newly-added or
+/// zero-valued response fields entirely — Postman / grpcurl show them. We override with
+/// `skip_default_fields(false)` so the response view always shows the full message shape.
+/// See <https://docs.rs/prost-reflect/latest/prost_reflect/struct.SerializeOptions.html>.
+fn message_to_pretty_json(msg: &DynamicMessage) -> Result<String, CoreError> {
+    let mut buf = Vec::new();
+    let mut serializer = serde_json::Serializer::pretty(&mut buf);
+    let options = prost_reflect::SerializeOptions::new().skip_default_fields(false);
+    msg.serialize_with_options(&mut serializer, &options)
+        .map_err(|e| CoreError::DecodeResponse(e.to_string()))?;
+    String::from_utf8(buf).map_err(|e| CoreError::DecodeResponse(e.to_string()))
 }
 
 /// Pull ASCII keys out of a `MetadataMap`. Binary keys (`-bin` suffix) are skipped silently.
@@ -224,5 +240,67 @@ mod tests {
         let target = GrpcTarget::new(addr.to_string(), false, false).unwrap();
         let err = t.channel(&target).await.unwrap_err();
         assert!(matches!(err, CoreError::Transport(_)), "got {err:?}");
+    }
+
+    /// A response message whose fields are all at their proto3 default value must still
+    /// serialize WITH those fields present — otherwise newly-added / zero-valued response
+    /// fields are invisible in the viewer (Postman/grpcurl show them). Regression guard
+    /// for the `skip_default_fields` default in prost-reflect's canonical JSON.
+    #[test]
+    fn response_json_emits_default_valued_fields() {
+        use prost::Message as _;
+        use prost_reflect::{DescriptorPool, DynamicMessage};
+        use prost_types::{
+            field_descriptor_proto::Type as Ty, DescriptorProto, FieldDescriptorProto,
+            FileDescriptorProto, FileDescriptorSet,
+        };
+
+        // message Pong { string id = 1; bool done = 2; int32 count = 3; }
+        let pong = DescriptorProto {
+            name: Some("Pong".into()),
+            field: vec![
+                FieldDescriptorProto {
+                    name: Some("id".into()),
+                    number: Some(1),
+                    r#type: Some(Ty::String as i32),
+                    ..Default::default()
+                },
+                FieldDescriptorProto {
+                    name: Some("done".into()),
+                    number: Some(2),
+                    r#type: Some(Ty::Bool as i32),
+                    ..Default::default()
+                },
+                FieldDescriptorProto {
+                    name: Some("count".into()),
+                    number: Some(3),
+                    r#type: Some(Ty::Int32 as i32),
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+        let file = FileDescriptorProto {
+            name: Some("t.proto".into()),
+            package: Some("test".into()),
+            syntax: Some("proto3".into()),
+            message_type: vec![pong],
+            ..Default::default()
+        };
+        let set = FileDescriptorSet { file: vec![file] };
+        let mut buf = Vec::new();
+        set.encode(&mut buf).unwrap();
+        let mut pool = DescriptorPool::new();
+        pool.add_file_descriptor_set(FileDescriptorSet::decode(&buf[..]).unwrap())
+            .unwrap();
+        let desc = pool.get_message_by_name("test.Pong").unwrap();
+
+        // Every field left unset → all at proto3 default (""/false/0).
+        let msg = DynamicMessage::new(desc);
+        let json = message_to_pretty_json(&msg).expect("serialize");
+
+        assert!(json.contains("\"id\""), "default string field must appear: {json}");
+        assert!(json.contains("\"done\""), "default bool field must appear: {json}");
+        assert!(json.contains("\"count\""), "default int field must appear: {json}");
     }
 }
