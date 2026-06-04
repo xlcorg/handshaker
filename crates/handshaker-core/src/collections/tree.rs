@@ -180,9 +180,8 @@ fn reassign_ids(item: &mut Item) -> ItemId {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::auth::AuthByEnv;
+    use crate::auth::SavedAuthConfig;
     use crate::collections::{Folder, SavedRequest};
-    use std::collections::HashMap;
     use uuid::Uuid;
 
     fn iid(n: u128) -> ItemId {
@@ -197,9 +196,11 @@ mod tests {
             service: "svc".into(),
             method: "M".into(),
             body_template: "{}".into(),
-            metadata: HashMap::new(),
-            auth_by_env: AuthByEnv::default(),
+            metadata: vec![],
+            auth: SavedAuthConfig::None,
             tls_override: None,
+            last_used_at: None,
+            use_count: 0,
         })
     }
 
@@ -208,7 +209,6 @@ mod tests {
             id,
             name: name.to_string(),
             items,
-            auth_by_env: AuthByEnv::default(),
         })
     }
 

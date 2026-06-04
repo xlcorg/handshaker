@@ -48,7 +48,7 @@ impl CollectionStore for InMemoryCollectionStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::auth::AuthByEnv;
+    use crate::auth::SavedAuthConfig;
     use uuid::Uuid;
 
     fn coll(id: u128, name: &str) -> Collection {
@@ -57,9 +57,12 @@ mod tests {
             name: name.into(),
             items: vec![],
             variables: HashMap::new(),
-            auth_by_env: AuthByEnv::default(),
+            auth: SavedAuthConfig::None,
             default_tls: false,
             skip_tls_verify: false,
+            pinned: false,
+            description: None,
+            created_at: 0,
         }
     }
 
