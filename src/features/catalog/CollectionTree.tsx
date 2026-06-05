@@ -48,6 +48,11 @@ export function CollectionTree(props: CollectionTreeProps) {
 
   const visible = useMemo(() => flattenVisible(collections, effectiveOpen), [collections, effectiveOpen]);
 
+  // Drop keyboard focus if the focused node is no longer visible (collapsed/filtered out).
+  useEffect(() => {
+    if (focusedId && !visible.some((n) => n.id === focusedId)) setFocusedId(null);
+  }, [visible, focusedId]);
+
   const setOpenId = (id: string, want: boolean) =>
     setOpen((prev) => {
       const next = new Set(prev);
@@ -103,28 +108,24 @@ export function CollectionTree(props: CollectionTreeProps) {
     }
   };
 
-  const cb: TreeCallbacks = useMemo(
-    () => ({
-      open: effectiveOpen,
-      activeItemId: props.activeItemId,
-      focusedId,
-      editingId,
-      onToggle: toggle,
-      onEditingChange: props.onEditingChange,
-      onOpenRequest: props.onOpenRequest,
-      onOpenCollection: props.onOpenCollection,
-      onRenameItem: props.onRenameItem,
-      onRenameCollection: props.onRenameCollection,
-      onDuplicateItem: props.onDuplicateItem,
-      onRequestDeleteItem: (collectionId, itemId) => setDelTarget({ kind: "item", collectionId, itemId }),
-      onRequestDeleteCollection: (collectionId) => setDelTarget({ kind: "collection", collectionId }),
-      onAddRequest: props.onAddRequest,
-      onAddFolder: props.onAddFolder,
-      onSetPinned: props.onSetPinned,
-    }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [effectiveOpen, focusedId, editingId, props],
-  );
+  const cb: TreeCallbacks = {
+    open: effectiveOpen,
+    activeItemId: props.activeItemId,
+    focusedId,
+    editingId,
+    onToggle: toggle,
+    onEditingChange: props.onEditingChange,
+    onOpenRequest: props.onOpenRequest,
+    onOpenCollection: props.onOpenCollection,
+    onRenameItem: props.onRenameItem,
+    onRenameCollection: props.onRenameCollection,
+    onDuplicateItem: props.onDuplicateItem,
+    onRequestDeleteItem: (collectionId, itemId) => setDelTarget({ kind: "item", collectionId, itemId }),
+    onRequestDeleteCollection: (collectionId) => setDelTarget({ kind: "collection", collectionId }),
+    onAddRequest: props.onAddRequest,
+    onAddFolder: props.onAddFolder,
+    onSetPinned: props.onSetPinned,
+  };
 
   const confirmDelete = () => {
     if (!delTarget) return;

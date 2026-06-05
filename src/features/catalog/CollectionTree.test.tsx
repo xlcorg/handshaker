@@ -66,6 +66,40 @@ describe("CollectionTree arrow navigation", () => {
     fireEvent.keyDown(tree, { key: "F2" });
     expect(props.onEditingChange).toHaveBeenCalledWith("c1");
   });
+
+  it("hiding the focused child drops its focus; ArrowDown then re-focuses the first node", () => {
+    const onEditingChange = vi.fn();
+    const base: CollectionTreeProps = {
+      collections: [col("c1", [req("r1")])],
+      filterActive: true, // expands all, so r1 is a visible (focusable) row
+      activeItemId: null,
+      editingId: null,
+      onEditingChange,
+      onOpenRequest: vi.fn(),
+      onOpenCollection: vi.fn(),
+      onRenameItem: vi.fn(),
+      onRenameCollection: vi.fn(),
+      onDuplicateItem: vi.fn(),
+      onDeleteItem: vi.fn(),
+      onDeleteCollection: vi.fn(),
+      onAddRequest: vi.fn(),
+      onAddFolder: vi.fn(),
+      onSetPinned: vi.fn(),
+    };
+    const { rerender } = render(<CollectionTree {...base} />);
+    const tree = screen.getByLabelText("collections-tree");
+    fireEvent.keyDown(tree, { key: "ArrowDown" }); // focus c1
+    fireEvent.keyDown(tree, { key: "ArrowDown" }); // focus r1
+
+    // SidebarShell now passes a filtered list where r1 is gone: the focused node
+    // is no longer visible, so the effect must clear focus on the SAME instance.
+    rerender(<CollectionTree {...base} collections={[col("c1", [])]} />);
+
+    // Focus cleared -> ArrowDown lands on the first node (c1), not a stale index.
+    fireEvent.keyDown(tree, { key: "ArrowDown" });
+    fireEvent.keyDown(tree, { key: "F2" });
+    expect(onEditingChange).toHaveBeenLastCalledWith("c1");
+  });
 });
 
 describe("CollectionTree filter", () => {
