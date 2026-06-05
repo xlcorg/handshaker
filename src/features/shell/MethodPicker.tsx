@@ -13,7 +13,7 @@ import { deriveKind, shortService, type MethodKind, type SelectedMethod } from "
 
 export interface MethodPickerProps {
   selected: SelectedMethod;
-  catalog: ServiceCatalogIpc;
+  catalog: ServiceCatalogIpc | null;
   onSelect: (next: SelectedMethod) => void;
   maxLabel?: number;
   className?: string;
@@ -35,7 +35,7 @@ export function MethodPicker({ selected, catalog, onSelect, maxLabel = 160, clas
 
   const groups = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    return catalog.services
+    return (catalog?.services ?? [])
       .map((svc) => ({
         full: svc.full_name,
         short: shortService(svc.full_name),
@@ -53,7 +53,8 @@ export function MethodPicker({ selected, catalog, onSelect, maxLabel = 160, clas
       .filter((svc) => svc.methods.length > 0);
   }, [catalog, q]);
 
-  const triggerLabel = (
+  const hasMethod = selected.method.trim().length > 0;
+  const triggerLabel = hasMethod ? (
     <>
       <Box className="size-3 text-muted-foreground flex-none" />
       <span className="text-muted-foreground truncate" style={{ maxWidth: maxLabel }}>
@@ -65,6 +66,12 @@ export function MethodPicker({ selected, catalog, onSelect, maxLabel = 160, clas
       </span>
       {selected.kind !== "unary" && <KindBadge kind={selected.kind} />}
       <ChevronDown className="size-2.5 text-muted-foreground/70 ml-0.5 flex-none" />
+    </>
+  ) : (
+    <>
+      <Box className="size-3 text-muted-foreground flex-none" />
+      <span className="text-muted-foreground truncate">Select a method</span>
+      <ChevronDown className="size-2.5 text-muted-foreground/70 ml-auto flex-none" />
     </>
   );
 
