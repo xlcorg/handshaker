@@ -3,6 +3,7 @@ import { cn } from "@/lib/cn";
 import type { SavedRequestIpc } from "@/ipc/bindings";
 import { RowMenu, type RowMenuItem } from "./RowMenu";
 import { RenameInput } from "./RenameInput";
+import { zoneFromPointer } from "./dnd";
 import type { TreeCallbacks } from "./treeTypes";
 
 export const ROW_INDENT = 20;
@@ -32,6 +33,7 @@ export function RequestRow({ collectionId, req, depth, cb }: RequestRowProps) {
   const editing = cb.editingId === req.id;
   const active = cb.activeItemId === req.id;
   const focused = cb.focusedId === req.id;
+  const hint = cb.dropHint?.id === req.id ? cb.dropHint.zone : null;
 
   const items: RowMenuItem[] = [
     { icon: <Pencil />, label: "Rename", onClick: () => cb.onEditingChange(req.id) },
@@ -44,10 +46,30 @@ export function RequestRow({ collectionId, req, depth, cb }: RequestRowProps) {
     <RowMenu items={items}>
       <div
         data-node-id={req.id}
+        data-drop={hint ?? undefined}
+        draggable={!editing}
+        onDragStart={(e) => {
+          if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
+          cb.onDragStartItem({ collectionId, itemId: req.id, kind: "request" });
+        }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          const r = e.currentTarget.getBoundingClientRect();
+          cb.onDragOverRow({ collectionId, id: req.id, kind: "request" }, zoneFromPointer(r, e.clientY, "request"));
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          const r = e.currentTarget.getBoundingClientRect();
+          cb.onDropRow({ collectionId, id: req.id, kind: "request" }, zoneFromPointer(r, e.clientY, "request"));
+        }}
+        onDragEnd={cb.onDragEndItem}
         className={cn(
-          "group flex items-center gap-2 py-1 pr-8 text-xs hover:bg-accent/50",
+          "group relative flex items-center gap-2 py-1 pr-8 text-xs hover:bg-accent/50",
           active && "bg-accent",
           focused && "ring-1 ring-inset ring-ring",
+          cb.dragId === req.id && "opacity-50",
+          hint === "before" && "shadow-[inset_0_2px_0_0_hsl(var(--primary))]",
+          hint === "after" && "shadow-[inset_0_-2px_0_0_hsl(var(--primary))]",
         )}
         style={{ paddingLeft: ROW_INDENT + depth * DEPTH_STEP }}
       >

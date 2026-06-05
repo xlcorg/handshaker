@@ -18,7 +18,9 @@ function makeCb(over: Partial<TreeCallbacks> = {}): TreeCallbacks {
     onToggle: vi.fn(), onEditingChange: vi.fn(), onOpenRequest: vi.fn(),
     onOpenCollection: vi.fn(), onRenameItem: vi.fn(), onRenameCollection: vi.fn(),
     onDuplicateItem: vi.fn(), onRequestDeleteItem: vi.fn(), onRequestDeleteCollection: vi.fn(),
-    onAddRequest: vi.fn(), onAddFolder: vi.fn(), onSetPinned: vi.fn(), ...over,
+    onAddRequest: vi.fn(), onAddFolder: vi.fn(), onSetPinned: vi.fn(),
+    dragId: null, dropHint: null, onDragStartItem: vi.fn(), onDragOverRow: vi.fn(),
+    onDropRow: vi.fn(), onDragEndItem: vi.fn(), ...over,
   };
 }
 

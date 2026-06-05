@@ -3,6 +3,7 @@ import type { CollectionIpc, SavedRequestIpc } from "@/ipc/bindings";
 import { CollectionNode } from "./CollectionNode";
 import { ConfirmDeleteDialog } from "./ConfirmDeleteDialog";
 import { allContainerIds, flattenVisible, pathToItem } from "./treeNav";
+import { planDrop, type DragData, type DropTarget, type DropZone } from "./dnd";
 import type { TreeCallbacks } from "./treeTypes";
 
 export interface CollectionTreeProps {
@@ -21,6 +22,14 @@ export interface CollectionTreeProps {
   onAddRequest: (collectionId: string, parentId: string | null) => void;
   onAddFolder: (collectionId: string, parentId: string | null) => void;
   onSetPinned: (collectionId: string, pinned: boolean) => void;
+  onMoveItem: (collectionId: string, itemId: string, parentId: string | null, position: number) => void;
+  onMoveItemAcross: (
+    sourceCollectionId: string,
+    itemId: string,
+    targetCollectionId: string,
+    parentId: string | null,
+    position: number,
+  ) => void;
 }
 
 type DeleteTarget =
@@ -32,6 +41,8 @@ export function CollectionTree(props: CollectionTreeProps) {
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [delTarget, setDelTarget] = useState<DeleteTarget | null>(null);
+  const [drag, setDrag] = useState<DragData | null>(null);
+  const [dropHint, setDropHint] = useState<{ id: string; zone: DropZone } | null>(null);
 
   // While filtering, treat everything as expanded.
   const effectiveOpen = useMemo(
@@ -108,6 +119,35 @@ export function CollectionTree(props: CollectionTreeProps) {
     }
   };
 
+  const onDragStartItem = (d: DragData) => setDrag(d);
+  const onDragEndItem = () => {
+    setDrag(null);
+    setDropHint(null);
+  };
+  const onDragOverRow = (target: DropTarget, zone: DropZone) => {
+    if (!drag) return;
+    setDropHint({ id: target.id, zone });
+  };
+  const onDropRow = (target: DropTarget, zone: DropZone) => {
+    const d = drag;
+    setDrag(null);
+    setDropHint(null);
+    if (!d) return;
+    const plan = planDrop(collections, d, target, zone);
+    if (!plan) return;
+    if (plan.sourceCollectionId === plan.targetCollectionId) {
+      props.onMoveItem(plan.sourceCollectionId, plan.itemId, plan.parentId, plan.position);
+    } else {
+      props.onMoveItemAcross(
+        plan.sourceCollectionId,
+        plan.itemId,
+        plan.targetCollectionId,
+        plan.parentId,
+        plan.position,
+      );
+    }
+  };
+
   const cb: TreeCallbacks = {
     open: effectiveOpen,
     activeItemId: props.activeItemId,
@@ -125,6 +165,12 @@ export function CollectionTree(props: CollectionTreeProps) {
     onAddRequest: props.onAddRequest,
     onAddFolder: props.onAddFolder,
     onSetPinned: props.onSetPinned,
+    dragId: drag?.itemId ?? null,
+    dropHint,
+    onDragStartItem,
+    onDragOverRow,
+    onDropRow,
+    onDragEndItem,
   };
 
   const confirmDelete = () => {

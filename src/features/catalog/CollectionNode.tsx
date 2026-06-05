@@ -17,6 +17,7 @@ export function CollectionNode({ col, cb }: CollectionNodeProps) {
   const open = cb.open.has(col.id);
   const editing = cb.editingId === col.id;
   const focused = cb.focusedId === col.id;
+  const hint = cb.dropHint?.id === col.id ? cb.dropHint.zone : null;
 
   const items: RowMenuItem[] = [
     { icon: <FilePlus />, label: "Add request", onClick: () => cb.onAddRequest(col.id, null) },
@@ -31,9 +32,19 @@ export function CollectionNode({ col, cb }: CollectionNodeProps) {
       <RowMenu items={items}>
         <div
           data-node-id={col.id}
+          data-drop={hint ?? undefined}
+          onDragOver={(e) => {
+            e.preventDefault();
+            cb.onDragOverRow({ collectionId: col.id, id: col.id, kind: "collection" }, "inside");
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            cb.onDropRow({ collectionId: col.id, id: col.id, kind: "collection" }, "inside");
+          }}
           className={cn(
             "group flex items-center gap-1 py-1 pr-8 pl-1.5 text-xs font-medium hover:bg-accent/50",
             focused && "ring-1 ring-inset ring-ring",
+            hint === "inside" && "ring-1 ring-inset ring-primary bg-primary/5",
           )}
         >
           <button

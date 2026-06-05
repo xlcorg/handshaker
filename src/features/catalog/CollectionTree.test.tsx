@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, fireEvent, createEvent } from "@testing-library/react";
 import type { CollectionIpc, ItemIpc } from "@/ipc/bindings";
 import { CollectionTree, type CollectionTreeProps } from "./CollectionTree";
 
@@ -34,6 +34,8 @@ function setup(over: Partial<CollectionTreeProps> = {}) {
     onAddRequest: vi.fn(),
     onAddFolder: vi.fn(),
     onSetPinned: vi.fn(),
+    onMoveItem: vi.fn(),
+    onMoveItemAcross: vi.fn(),
     ...over,
   };
   render(<CollectionTree {...props} />);
@@ -85,6 +87,8 @@ describe("CollectionTree arrow navigation", () => {
       onAddRequest: vi.fn(),
       onAddFolder: vi.fn(),
       onSetPinned: vi.fn(),
+      onMoveItem: vi.fn(),
+      onMoveItemAcross: vi.fn(),
     };
     const { rerender } = render(<CollectionTree {...base} />);
     const tree = screen.getByLabelText("collections-tree");
@@ -120,5 +124,69 @@ describe("CollectionTree confirm-delete", () => {
     fireEvent.click(screen.getByText("Delete"));
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     expect(props.onDeleteItem).toHaveBeenCalledWith("c1", "r1");
+  });
+});
+
+function folder(id: string, items: ItemIpc[] = []): Extract<ItemIpc, { type: "folder" }> {
+  return { type: "folder", id, name: id, items };
+}
+
+function renderTree(collections: CollectionIpc[]) {
+  const onMoveItem = vi.fn();
+  const onMoveItemAcross = vi.fn();
+  setup({ collections, filterActive: true, onMoveItem, onMoveItemAcross });
+  return { onMoveItem, onMoveItemAcross };
+}
+
+const rowOf = (id: string) => document.querySelector(`[data-node-id="${id}"]`) as HTMLElement;
+
+// jsdom's DragEvent ignores `clientY` from the init dict, so define it explicitly
+// on the event before dispatch (otherwise zoneFromPointer sees NaN).
+function dragOverAt(el: HTMLElement, clientY: number) {
+  const ev = createEvent.dragOver(el);
+  Object.defineProperty(ev, "clientY", { value: clientY });
+  fireEvent(el, ev);
+}
+function dropAt(el: HTMLElement, clientY: number) {
+  const ev = createEvent.drop(el);
+  Object.defineProperty(ev, "clientY", { value: clientY });
+  fireEvent(el, ev);
+}
+
+describe("CollectionTree drag-and-drop", () => {
+  let rectSpy: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    rectSpy = vi
+      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockReturnValue({ top: 0, height: 100, bottom: 100, left: 0, right: 0, width: 0, x: 0, y: 0, toJSON: () => ({}) } as DOMRect);
+  });
+  afterEach(() => rectSpy.mockRestore());
+
+  it("reorders a request after a sibling (same collection)", () => {
+    const { onMoveItem } = renderTree([col("c1", [folder("f1"), req("r3"), req("r4")])]);
+    fireEvent.dragStart(rowOf("r3"));
+    dropAt(rowOf("r4"), 90);
+    expect(onMoveItem).toHaveBeenCalledWith("c1", "r3", null, 2);
+  });
+
+  it("drops a request into a folder", () => {
+    const { onMoveItem } = renderTree([col("c1", [folder("f1"), req("r3")])]);
+    fireEvent.dragStart(rowOf("r3"));
+    dropAt(rowOf("f1"), 50);
+    expect(onMoveItem).toHaveBeenCalledWith("c1", "r3", "f1", 0);
+  });
+
+  it("moves a request across collections via the collection header", () => {
+    const { onMoveItemAcross } = renderTree([col("c1", [req("r3")]), col("c2", [])]);
+    fireEvent.dragStart(rowOf("r3"));
+    dropAt(rowOf("c2"), 5);
+    expect(onMoveItemAcross).toHaveBeenCalledWith("c1", "r3", "c2", null, 0);
+  });
+
+  it("sets data-drop on the hovered row during dragover", () => {
+    renderTree([col("c1", [req("r3"), req("r4")])]);
+    fireEvent.dragStart(rowOf("r3"));
+    dragOverAt(rowOf("r4"), 10);
+    expect(rowOf("r4").getAttribute("data-drop")).toBe("before");
   });
 });
