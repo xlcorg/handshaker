@@ -15,7 +15,7 @@ export async function createStepFromMethod(
   target: CallTargetInit,
   service: string,
   method: string,
-  opts: { serviceId?: string | null; defaultMetadata?: MetadataRow[] } = {},
+  opts: { auth?: SavedAuthConfigIpc; defaultMetadata?: MetadataRow[] } = {},
 ): Promise<Step> {
   let requestJson = "{}";
   try {
@@ -33,7 +33,7 @@ export async function createStepFromMethod(
     service,
     method,
     requestJson,
-    serviceId: opts.serviceId ?? null,
+    auth: opts.auth ?? { kind: "none" },
     metadata: (opts.defaultMetadata ?? []).map((r) => ({ ...r })), // deep copy → editable
   });
 }
@@ -51,16 +51,13 @@ export type AuthHeaderResult =
   | { kind: "header"; header: AuthHeader }
   | { kind: "error"; message: string };
 
-export async function resolveStepAuthHeader(
-  serviceId: string | null,
-  getService: (id: string) => { auth: SavedAuthConfigIpc } | undefined,
+export async function resolveAuthHeader(
+  auth: SavedAuthConfigIpc,
   authResolve: (c: SavedAuthConfigIpc) => Promise<AuthCredentialsIpc | null>,
 ): Promise<AuthHeaderResult> {
-  if (!serviceId) return { kind: "none" };
-  const svc = getService(serviceId);
-  if (!svc || svc.auth.kind === "none") return { kind: "none" };
+  if (auth.kind === "none") return { kind: "none" };
   try {
-    const creds = await authResolve(svc.auth);
+    const creds = await authResolve(auth);
     if (!creds) return { kind: "none" };
     return { kind: "header", header: { key: creds.header_name, value: creds.header_value } };
   } catch (e) {
@@ -129,6 +126,17 @@ export function stepPatchFromSendResult(res: SendResult): Partial<Step> {
     return { status: "draft", outcome: null, error: null };
   }
   return { status: "error", outcome: null, error: res.message };
+}
+
+/** Whether a Send result represents a call that reached the server and should be
+ *  recorded as an executed history step (gRPC responded — success or non-zero status). */
+export function shouldRecordExecuted(res: SendResult): boolean {
+  return res.kind === "ok";
+}
+
+/** A frozen executed-history snapshot of `draft` with the Send patch applied and a fresh id. */
+export function buildExecutedStep(draft: Step, patch: Partial<Step>): Step {
+  return { ...draft, ...patch, id: newId(), requestId: null };
 }
 
 function errorToMessage(e: unknown): string {

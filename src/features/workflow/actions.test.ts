@@ -9,7 +9,8 @@ vi.mock("@/ipc/client", () => ({
 }));
 
 import * as ipc from "@/ipc/client";
-import { createStepFromMethod, sendStep, stepPatchFromSendResult, resolveStepAuthHeader, cancelStep } from "./actions";
+import { createStepFromMethod, sendStep, stepPatchFromSendResult, resolveAuthHeader, shouldRecordExecuted, buildExecutedStep, cancelStep } from "./actions";
+import { newStep } from "./model";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -50,14 +51,15 @@ describe("createStepFromMethod", () => {
     expect(step.requestJson).toBe("{}");
   });
 
-  it("seeds metadata (deep copy) from service defaultMetadata and records serviceId", async () => {
+  it("seeds metadata (deep copy) from service defaultMetadata and records inline auth", async () => {
     vi.mocked(ipc.grpcBuildRequestSkeleton).mockResolvedValue("{}");
     const defaults = [{ key: "x-tenant", value: "{{tenant}}", enabled: true }];
+    const auth = { kind: "env_var" as const, env_var: "TOK", header_name: "authorization", prefix: "Bearer " };
     const step = await createStepFromMethod(
       { address: "h:443", tls: true }, "S", "M",
-      { serviceId: "svc-1", defaultMetadata: defaults },
+      { auth, defaultMetadata: defaults },
     );
-    expect(step.serviceId).toBe("svc-1");
+    expect(step.auth).toEqual(auth);
     expect(step.metadata).toEqual(defaults);
     expect(step.metadata).not.toBe(defaults);       // deep copy: array identity differs
     expect(step.metadata[0]).not.toBe(defaults[0]); // and row identity differs
@@ -248,40 +250,60 @@ describe("sendStep authHeader merge", () => {
   });
 });
 
-describe("resolveStepAuthHeader", () => {
-  const getNone = () => ({ auth: { kind: "none" as const } });
-
-  it("returns kind 'none' when serviceId is null", async () => {
-    const r = await resolveStepAuthHeader(null, () => undefined, ipc.authResolve);
-    expect(r.kind).toBe("none");
-    expect(ipc.authResolve).not.toHaveBeenCalled();
-  });
-
-  it("returns kind 'none' when the service auth is none", async () => {
-    const r = await resolveStepAuthHeader("svc-1", getNone, ipc.authResolve);
-    expect(r.kind).toBe("none");
-    expect(ipc.authResolve).not.toHaveBeenCalled();
-  });
-
-  it("returns kind 'none' when the origin service no longer exists (orphaned serviceId)", async () => {
-    const r = await resolveStepAuthHeader("stale", () => undefined, ipc.authResolve);
+describe("resolveAuthHeader", () => {
+  it("returns kind 'none' when auth.kind is none (no resolve call)", async () => {
+    const r = await resolveAuthHeader({ kind: "none" }, ipc.authResolve);
     expect(r.kind).toBe("none");
     expect(ipc.authResolve).not.toHaveBeenCalled();
   });
 
   it("returns a header when EnvVar auth resolves", async () => {
     vi.mocked(ipc.authResolve).mockResolvedValue({ header_name: "authorization", header_value: "Bearer t" });
-    const svc = { auth: { kind: "env_var" as const, env_var: "TOK", header_name: "authorization", prefix: "Bearer " } };
-    const r = await resolveStepAuthHeader("svc-1", () => svc, ipc.authResolve);
+    const auth = { kind: "env_var" as const, env_var: "TOK", header_name: "authorization", prefix: "Bearer " };
+    const r = await resolveAuthHeader(auth, ipc.authResolve);
     expect(r).toEqual({ kind: "header", header: { key: "authorization", value: "Bearer t" } });
+  });
+
+  it("returns kind 'none' when authResolve yields null credentials", async () => {
+    vi.mocked(ipc.authResolve).mockResolvedValue(null);
+    const auth = { kind: "env_var" as const, env_var: "TOK", header_name: "authorization", prefix: "Bearer " };
+    const r = await resolveAuthHeader(auth, ipc.authResolve);
+    expect(r.kind).toBe("none");
   });
 
   it("returns kind 'error' when authResolve throws (OAuth2 NotImplemented)", async () => {
     vi.mocked(ipc.authResolve).mockRejectedValue({ type: "NotImplemented", message: "oauth2 token fetch" });
-    const svc = { auth: { kind: "oauth_2_client_credentials" as const, token_url: "u", client_id: "c", client_secret_env_var: "S", scopes: [] } };
-    const r = await resolveStepAuthHeader("svc-1", () => svc, ipc.authResolve);
+    const auth = { kind: "oauth_2_client_credentials" as const, token_url: "u", client_id: "c", client_secret_env_var: "S", scopes: [] };
+    const r = await resolveAuthHeader(auth, ipc.authResolve);
     expect(r.kind).toBe("error");
     if (r.kind === "error") expect(r.message).toContain("oauth2");
+  });
+});
+
+describe("shouldRecordExecuted", () => {
+  it("records only calls that reached the server (kind 'ok')", () => {
+    const outcome = { status_code: 0, status_message: "OK", response_json: "{}", trailing_metadata: {}, elapsed_ms: 1 };
+    expect(shouldRecordExecuted({ kind: "ok", outcome })).toBe(true);
+    // non-zero gRPC status still reached the server → recorded
+    const errOutcome = { status_code: 5, status_message: "NOT_FOUND", response_json: null, trailing_metadata: {}, elapsed_ms: 1 };
+    expect(shouldRecordExecuted({ kind: "ok", outcome: errOutcome })).toBe(true);
+    expect(shouldRecordExecuted({ kind: "error", message: "refused" })).toBe(false);
+    expect(shouldRecordExecuted({ kind: "unresolved", unresolved: ["x"], cycle: null })).toBe(false);
+    expect(shouldRecordExecuted({ kind: "cancelled" })).toBe(false);
+  });
+});
+
+describe("buildExecutedStep", () => {
+  it("freezes a fresh-id snapshot of the draft with the send patch applied", () => {
+    const draft = newStep({ address: "h:443", tls: true, service: "S", method: "M" });
+    const outcome = { status_code: 0, status_message: "OK", response_json: "{}", trailing_metadata: {}, elapsed_ms: 7 };
+    const snap = buildExecutedStep(draft, { status: "ok", outcome, error: null, requestId: null });
+    expect(snap.id).not.toBe(draft.id);     // distinct history entry
+    expect(snap.requestId).toBeNull();
+    expect(snap.status).toBe("ok");
+    expect(snap.outcome).toEqual(outcome);
+    expect(snap.service).toBe("S");
+    expect(snap.method).toBe("M");
   });
 });
 
