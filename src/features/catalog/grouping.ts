@@ -1,24 +1,30 @@
 import type { CollectionIpc, ItemIpc } from "@/ipc/bindings";
 
-/**
- * Strip a trailing `:<digits>` port from an address; templates are preserved.
- * Scoped to gRPC target strings (`host:port`, bare `host`, or `{{var}}:port`) —
- * there is no URL path component, so stripping a trailing `:\d+` is unambiguous.
- */
-function hostOf(address: string): string {
-  const m = address.match(/^(.*):\d+$/);
-  return (m ? m[1] : address).trim();
-}
-
 /** Last dot-segment of a full service name. */
-function serviceShortName(service: string): string {
+export function serviceShortName(service: string): string {
   const parts = service.split(".");
   return (parts[parts.length - 1] ?? "").trim();
 }
 
-/** Suggested `Host > Service` folder path for the Save dialog. */
-export function suggestSavePath(address: string, service: string): string[] {
-  return [hostOf(address), serviceShortName(service)].filter((s) => s.length > 0);
+export interface SaveTarget {
+  /** Folder name derived from the service (short name minus a trailing "Service"). */
+  folderName: string;
+  /** Request name = the method's short name. */
+  requestName: string;
+}
+
+/**
+ * Recommend where a gRPC call should be saved, mirroring the server's structure:
+ * `notes.v1.NotesApiService` + `Create` → folder `NotesApi`, request `Create`.
+ * A trailing "Service" is stripped, but a bare "Service" is left intact (never empty).
+ */
+export function suggestSaveTarget(service: string, method: string): SaveTarget {
+  const short = serviceShortName(service);
+  const stripped = short.replace(/Service$/, "");
+  return {
+    folderName: stripped.length > 0 ? stripped : short,
+    requestName: method.trim(),
+  };
 }
 
 export interface SaveLocation {

@@ -1,26 +1,32 @@
 import { describe, it, expect } from "vitest";
-import { suggestSavePath, findSavedLocations } from "./grouping";
+import { suggestSaveTarget, findSavedLocations } from "./grouping";
 import type { CollectionIpc, ItemIpc, SavedRequestIpc } from "@/ipc/bindings";
 
-describe("suggestSavePath", () => {
-  it("returns [host, ServiceShortName]", () => {
-    expect(suggestSavePath("localhost:5002", "payments.v1.PaymentService")).toEqual([
-      "localhost",
-      "PaymentService",
-    ]);
+describe("suggestSaveTarget", () => {
+  it("drops a trailing 'Service' suffix from the short service name", () => {
+    expect(suggestSaveTarget("notes.v1.NotesApiService", "Create")).toEqual({
+      folderName: "NotesApi",
+      requestName: "Create",
+    });
   });
 
-  it("keeps a templated host and strips the port", () => {
-    expect(suggestSavePath("{{host}}:443", "Echo")).toEqual(["{{host}}", "Echo"]);
+  it("keeps the short name when there is no 'Service' suffix", () => {
+    expect(suggestSaveTarget("payments.v1.Payments", "Charge")).toEqual({
+      folderName: "Payments",
+      requestName: "Charge",
+    });
   });
 
-  it("handles an address with no port", () => {
-    expect(suggestSavePath("api.example.com", "pkg.Svc")).toEqual(["api.example.com", "Svc"]);
+  it("uses only the last dot-segment of the service", () => {
+    expect(suggestSaveTarget("pkg.sub.EchoService", "Ping").folderName).toBe("Echo");
   });
 
-  it("drops empty segments", () => {
-    expect(suggestSavePath("", "")).toEqual([]);
-    expect(suggestSavePath("localhost:1", "")).toEqual(["localhost"]);
+  it("never collapses a bare 'Service' to an empty folder name", () => {
+    expect(suggestSaveTarget("Service", "Do").folderName).toBe("Service");
+  });
+
+  it("passes the method through as the request name", () => {
+    expect(suggestSaveTarget("a.b.FooService", "DeleteThing").requestName).toBe("DeleteThing");
   });
 });
 
