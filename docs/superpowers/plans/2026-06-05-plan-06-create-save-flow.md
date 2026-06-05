@@ -5,7 +5,16 @@
 > Steps use checkbox (`- [ ]`) syntax for tracking. **Detail is TDD-complete** — execute
 > task-by-task.
 
-**Status:** 📝 **detailed — ready to execute** (outline → full TDD; nothing implemented yet).
+**Status:** ✅ **done** (`50583ed..4ae7d8e`, 11 commits). Full front-end suite green:
+**374** tests / 73 files (was 336 at plan-05; +38 new across `workflow/{store,actions,
+useDraftReflection,DraftAddressBar,CallPanel.editable}` + `catalog/{treeEdit,useCatalogTree,
+save,SaveRequestDialog,discardGuard,DiscardDraftDialog,actions}`). `pnpm lint` (`tsc -b`)
+reports only the **15 pre-existing** legacy errors (`src/features/collections/**` ×14 +
+`src/ipc/client.ts` ×1) — **zero new** under `features/{catalog,workflow}` (gate = `pnpm test`
++ targeted typecheck; `pnpm build` stays `tsc`-blocked by the legacy 15 until plan-09). Final
+whole-impl review: **ship it** (only Minor follow-ups, listed below). NB: building blocks +
+the `CallPanel`/`FocusView` edits only — **live shell glue (Ctrl+S, autosave effect,
+discard-interception, Save orchestrator) is plan-09**.
 **Branch:** `redesign/workflow-ui-spec-plans`
 **Phase:** 5 of spec §16 (`docs/superpowers/specs/2026-06-05-service-collection-sidebar-refactor-design.md`),
 spec §6 (Создание и сохранение) + §10 (Reflection) + §15-table rows.
@@ -1619,3 +1628,12 @@ git commit -m "docs(plan-06): mark complete; update index row"
 - MethodPicker `selected.kind` is `"unary"` for drafts (Step carries no stream kind); derive
   the real kind from the loaded catalog (shared with plan-05's stream-badge follow-up).
 - Auth editing in Focus (spec §6 «правка …auth») is not built here — deferred.
+- `useDraftReflection`: no stale-async/unmount guard — a slow in-flight reflect can clobber a
+  newer catalog (last-write-wins). Add an `AbortController`/`cancelled` flag when wiring live.
+- `useDraftReflection`: when the address is cleared after a catalog loaded, the debounce effect
+  early-returns and never re-runs the clearing branch, so the old catalog/MethodPicker lingers.
+  The `run` callback already handles empty-address clearing; the effect should invoke it (or
+  clear synchronously) on the loaded→empty transition. Low impact (only visible once wired).
+
+> Doc note: Task 10's `suggestSavePath`/`findSavedLocations` were already delivered in plan-03
+> (`grouping.ts`); this plan only consumed them — nothing was duplicated.
