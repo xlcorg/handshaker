@@ -88,4 +88,16 @@ describe("findSavedLocations", () => {
       { collectionId: "c2", collectionName: "Root", folderPath: [], requestId: "r2", requestName: "GetX" },
     ]);
   });
+
+  it("aggregates matches across multiple collections", () => {
+    const collections = [
+      col({ id: "c1", name: "A", items: [req({ id: "r1" })] }),
+      col({ id: "c2", name: "B", items: [folder("F", [req({ id: "r2" })])] }),
+    ];
+    const out = findSavedLocations(collections, match);
+    expect(out.map((l) => [l.collectionId, l.requestId, l.folderPath])).toEqual([
+      ["c1", "r1", []],
+      ["c2", "r2", ["F"]],
+    ]);
+  });
 });

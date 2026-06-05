@@ -1,6 +1,10 @@
 import type { CollectionIpc, ItemIpc } from "@/ipc/bindings";
 
-/** Strip a trailing `:<digits>` port from an address; templates are preserved. */
+/**
+ * Strip a trailing `:<digits>` port from an address; templates are preserved.
+ * Scoped to gRPC target strings (`host:port`, bare `host`, or `{{var}}:port`) —
+ * there is no URL path component, so stripping a trailing `:\d+` is unambiguous.
+ */
 function hostOf(address: string): string {
   const m = address.match(/^(.*):\d+$/);
   return (m ? m[1] : address).trim();
