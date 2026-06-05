@@ -10,6 +10,8 @@ export interface Prefs {
   theme: ThemeMode;
   density: Density;
   sidebar: boolean;
+  /** Sidebar width in px (resizable, persisted). Clamped to [200, 600] by the shell. */
+  sidebarWidth: number;
   split: SplitDir;
   fontUi: FontUi;
   fontMono: FontMono;
@@ -24,6 +26,7 @@ export const PREFS_DEFAULTS: Prefs = {
   theme: "dark",
   density: "regular",
   sidebar: true,
+  sidebarWidth: 256,
   split: "horizontal",
   fontUi: "inter",
   fontMono: "jetbrains",
