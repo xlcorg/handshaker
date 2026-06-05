@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { workflowStore, useDraft } from "./store";
+import { workflowStore } from "./store";
 import { newStep } from "./model";
 import { addStep, updateStep } from "./reducers";
 
