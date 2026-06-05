@@ -60,6 +60,7 @@ export function CallPanel({ step, onPatch, onExecuted, editable }: CallPanelProp
       reflecting={reflection.loading}
       reflectError={reflection.error}
       onAddress={(address) => onPatch({ address })}
+      onTls={(tls) => onPatch({ tls })}
       onRefresh={reflection.refresh}
       onSelectMethod={(m) =>
         void applyMethodSelection(onPatch, { address: step.address, tls: step.tls }, m)
