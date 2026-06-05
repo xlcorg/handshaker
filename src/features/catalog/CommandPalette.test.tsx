@@ -1,87 +1,87 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-
-vi.mock("./actions", () => ({
-  describeService: vi.fn(),
-  openCallFromMethod: vi.fn(),
-}));
-
+import type { CollectionIpc, ItemIpc, SavedRequestIpc } from "@/ipc/bindings";
 import { CommandPalette } from "./CommandPalette";
-import { catalogStore } from "./store";
-import { describeService, openCallFromMethod } from "./actions";
-import type { ServiceCatalogIpc, MethodEntryIpc } from "@/ipc/bindings";
 
-function method(name: string): MethodEntryIpc {
+function req(id: string, name: string, over: Partial<SavedRequestIpc> = {}): ItemIpc {
   return {
-    name,
-    path: `/ord.v1.S/${name}`,
-    input_message: `${name}Req`,
-    output_message: `${name}Res`,
-    client_streaming: false,
-    server_streaming: false,
+    type: "request", id, name, address_template: "h:443", service: "p.v1.S", method: "GetX",
+    body_template: "{}", metadata: [], auth: { kind: "none" }, tls_override: null,
+    last_used_at: null, use_count: 0, ...over,
+  };
+}
+function col(id: string, name: string, items: ItemIpc[]): CollectionIpc {
+  return {
+    id, name, items, variables: {}, auth: { kind: "none" }, default_tls: false,
+    skip_tls_verify: false, pinned: false, description: null, created_at: 0,
   };
 }
 
-const contract: ServiceCatalogIpc = {
-  services: [{ full_name: "ord.v1.OrderService", methods: [method("GetOrder")] }],
-};
+const collections = [
+  col("c1", "Orders", [req("r1", "Alpha")]),
+  col("c2", "Inventory", [req("r2", "Beta")]),
+];
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  catalogStore.reset();
-  vi.mocked(describeService).mockResolvedValue(contract);
-});
+beforeEach(() => vi.clearAllMocks());
 
 describe("CommandPalette", () => {
   it("renders nothing when closed", () => {
-    const { container } = render(<CommandPalette open={false} onClose={() => {}} />);
+    const { container } = render(
+      <CommandPalette open={false} onClose={() => {}} collections={collections} onOpen={() => {}} />,
+    );
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("stage 1: fuzzy-filters services by query", async () => {
-    const user = userEvent.setup();
-    catalogStore.addService({ address: "pay:443", label: "payment-api" });
-    catalogStore.addService({ address: "inv:443", label: "inventory" });
-    render(<CommandPalette open onClose={() => {}} />);
-    await user.type(screen.getByLabelText("command-input"), "pay");
-    expect(screen.getByText("payment-api")).toBeInTheDocument();
-    expect(screen.queryByText("inventory")).not.toBeInTheDocument();
+  it("lists saved requests from every collection with their location", () => {
+    render(<CommandPalette open onClose={() => {}} collections={collections} onOpen={() => {}} />);
+    expect(screen.getByText("Alpha")).toBeInTheDocument();
+    expect(screen.getByText("Beta")).toBeInTheDocument();
+    expect(screen.getByText("Orders")).toBeInTheDocument(); // collection name as location
   });
 
-  it("Enter picks a service, loads its contract, then Enter creates a call", async () => {
+  it("filters by query", async () => {
     const user = userEvent.setup();
-    const svc = catalogStore.addService({ address: "ord:443", label: "Orders" });
-    // preload contract so stage 2 lists the method without async timing
-    catalogStore.setContract(svc.id, contract, 1);
-
-    render(<CommandPalette open onClose={() => {}} />);
-    const input = screen.getByLabelText("command-input");
-    input.focus();
-    await user.keyboard("{Enter}"); // pick first (only) service
-    expect(await screen.findByText("GetOrder")).toBeInTheDocument();
-    input.focus();
-    await user.keyboard("{Enter}"); // pick first method
-
-    expect(openCallFromMethod).toHaveBeenCalledWith(
-      expect.objectContaining({ id: svc.id }),
-      "ord.v1.OrderService",
-      "GetOrder",
-      { newWorkflow: false },
-    );
+    render(<CommandPalette open onClose={() => {}} collections={collections} onOpen={() => {}} />);
+    await user.type(screen.getByLabelText("command-input"), "beta");
+    expect(screen.getByText("Beta")).toBeInTheDocument();
+    expect(screen.queryByText("Alpha")).not.toBeInTheDocument();
   });
 
-  it("Escape from stage 2 returns to service stage", async () => {
+  it("Enter opens the active request and closes", async () => {
     const user = userEvent.setup();
-    const svc = catalogStore.addService({ address: "ord:443", label: "Orders" });
-    catalogStore.setContract(svc.id, contract, 1);
-    render(<CommandPalette open onClose={() => {}} />);
+    const onOpen = vi.fn();
+    const onClose = vi.fn();
+    render(<CommandPalette open onClose={onClose} collections={collections} onOpen={onOpen} />);
     const input = screen.getByLabelText("command-input");
     input.focus();
-    await user.keyboard("{Enter}"); // → stage method
-    expect(await screen.findByText("GetOrder")).toBeInTheDocument();
+    await user.keyboard("{Enter}"); // empty query → first by name = "Alpha" (c1)
+    expect(onOpen).toHaveBeenCalledWith("c1", expect.objectContaining({ id: "r1", name: "Alpha" }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("clicking a row opens that request", async () => {
+    const user = userEvent.setup();
+    const onOpen = vi.fn();
+    render(<CommandPalette open onClose={() => {}} collections={collections} onOpen={onOpen} />);
+    await user.click(screen.getByText("Beta"));
+    expect(onOpen).toHaveBeenCalledWith("c2", expect.objectContaining({ id: "r2" }));
+  });
+
+  it("Escape closes", async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    render(<CommandPalette open onClose={onClose} collections={collections} onOpen={() => {}} />);
+    const input = screen.getByLabelText("command-input");
     input.focus();
-    await user.keyboard("{Escape}"); // → back to service
-    expect(screen.getByPlaceholderText("Поиск сервиса…")).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows an empty state when nothing matches", async () => {
+    const user = userEvent.setup();
+    render(<CommandPalette open onClose={() => {}} collections={collections} onOpen={() => {}} />);
+    await user.type(screen.getByLabelText("command-input"), "zzzznomatch");
+    expect(screen.getByText(/No saved requests/i)).toBeInTheDocument();
   });
 });

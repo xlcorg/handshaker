@@ -1,27 +1,26 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { cn } from "@/lib/cn";
 import { Kbd } from "@/components/ui/kbd";
-import { catalogStore, useCatalog } from "./store";
-import { rankServices } from "./fuzzy";
-import { buildServiceTree, type MethodNode } from "./tree";
-import { describeService, openCallFromMethod } from "./actions";
-import type { CatalogService } from "./model";
+import type { CollectionIpc, SavedRequestIpc } from "@/ipc/bindings";
+import { flattenRequests, rankRequests, type RequestHit } from "./palette";
 
-type Stage = "service" | "method";
+export interface CommandPaletteProps {
+  open: boolean;
+  onClose: () => void;
+  /** Every collection (already loaded); the palette flattens their saved requests. */
+  collections: CollectionIpc[];
+  /** Open a saved request in Focus. The caller binds origin + handles dirty-confirm. */
+  onOpen: (collectionId: string, req: SavedRequestIpc) => void;
+}
 
-export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
-  useCatalog(); // subscribe
-  const [stage, setStage] = useState<Stage>("service");
-  const [svc, setSvc] = useState<CatalogService | null>(null);
+/** ⌘K palette over saved requests across every collection (spec §9). Single-stage search. */
+export function CommandPalette({ open, onClose, collections, onOpen }: CommandPaletteProps) {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
-  const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (open) {
-      setStage("service");
-      setSvc(null);
       setQuery("");
       setActive(0);
       const t = setTimeout(() => inputRef.current?.focus(), 10);
@@ -29,65 +28,29 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     }
   }, [open]);
 
-  const services = catalogStore.services();
-  const ranked = useMemo(() => rankServices(query, services), [query, services]);
+  const all = useMemo(() => flattenRequests(collections), [collections]);
+  const hits = useMemo(() => rankRequests(query, all), [query, all]);
 
-  const methods: MethodNode[] = useMemo(() => {
-    if (stage !== "method" || !svc) return [];
-    const all = buildServiceTree(svc).flatMap((ps) => ps.methods);
-    const needle = query.trim().toLowerCase();
-    return needle ? all.filter((m) => m.method.toLowerCase().includes(needle)) : all;
-  }, [stage, svc, query]);
-
-  const count = stage === "service" ? ranked.length : methods.length;
   useEffect(() => {
-    setActive((a) => Math.min(a, Math.max(0, count - 1)));
-  }, [count]);
+    setActive((a) => Math.min(a, Math.max(0, hits.length - 1)));
+  }, [hits.length]);
 
   if (!open) return null;
 
-  const pickService = async (s: CatalogService) => {
-    setSvc(s);
-    setStage("method");
-    setQuery("");
-    setActive(0);
-    if (s.contract === null) {
-      setLoading(true);
-      try {
-        await describeService(s);
-      } catch {
-        // Reflection failed — leave the method stage (empty list); the palette
-        // has no error surface yet (tracked as a follow-up). Swallow so the
-        // user-initiated action doesn't become an unhandled rejection.
-      } finally {
-        setLoading(false);
-      }
-    }
-    inputRef.current?.focus();
-  };
-
-  const pickMethod = (m: MethodNode, newWorkflow: boolean) => {
-    if (!svc) return;
-    void openCallFromMethod(svc, m.service, m.method, { newWorkflow });
+  const choose = (hit: RequestHit) => {
+    onOpen(hit.collectionId, hit.request);
     onClose();
   };
 
   const onKeyDown = (e: KeyboardEvent) => {
     if (e.key === "Escape") {
       e.preventDefault();
-      if (stage === "method") {
-        setStage("service");
-        setSvc(null);
-        setQuery("");
-        setActive(0);
-      } else {
-        onClose();
-      }
+      onClose();
       return;
     }
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setActive((a) => Math.min(count - 1, a + 1));
+      setActive((a) => Math.min(hits.length - 1, a + 1));
       return;
     }
     if (e.key === "ArrowUp") {
@@ -97,13 +60,8 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     }
     if (e.key === "Enter") {
       e.preventDefault();
-      if (stage === "service") {
-        const r = ranked[active];
-        if (r) void pickService(r.service);
-      } else {
-        const m = methods[active];
-        if (m) pickMethod(m, e.altKey);
-      }
+      const h = hits[active];
+      if (h) choose(h);
     }
   };
 
@@ -117,17 +75,12 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2 border-b border-border px-3">
-          {stage === "method" && svc ? (
-            <span className="whitespace-nowrap font-mono text-xs text-muted-foreground">
-              {svc.label} ›
-            </span>
-          ) : null}
           <input
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={onKeyDown}
-            placeholder={stage === "service" ? "Поиск сервиса…" : "Поиск метода…"}
+            placeholder="Search saved requests…"
             aria-label="command-input"
             className="h-11 flex-1 bg-transparent text-sm focus:outline-none"
           />
@@ -135,70 +88,38 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         </div>
 
         <div className="max-h-[360px] overflow-auto py-1">
-          {loading ? (
-            <div className="px-4 py-6 text-center text-xs text-muted-foreground">
-              Загрузка контракта…
-            </div>
-          ) : null}
-
-          {!loading && stage === "service"
-            ? ranked.length === 0
-              ? <Empty q={query} />
-              : ranked.map((r, i) => (
-                  <button
-                    key={r.service.id}
-                    type="button"
-                    onMouseEnter={() => setActive(i)}
-                    onClick={() => void pickService(r.service)}
-                    className={cn(
-                      "flex w-full items-center gap-2 px-4 py-2 text-left text-sm",
-                      i === active && "bg-accent",
-                    )}
-                  >
-                    <span className="flex-1 truncate">{r.service.label}</span>
-                    <span className="font-mono text-[10px] text-muted-foreground">
-                      {r.service.address}
-                    </span>
-                    <span className="text-[10px] text-muted-foreground">
-                      {r.service.curated.length} ●
-                    </span>
-                  </button>
-                ))
-            : null}
-
-          {!loading && stage === "method"
-            ? methods.length === 0
-              ? <Empty q={query} />
-              : methods.map((m, i) => (
-                  <button
-                    key={`${m.service}/${m.method}`}
-                    type="button"
-                    onMouseEnter={() => setActive(i)}
-                    onClick={(e) => pickMethod(m, e.altKey)}
-                    className={cn(
-                      "flex w-full items-center gap-2 px-4 py-1.5 text-left font-mono text-xs",
-                      i === active && "bg-accent",
-                    )}
-                  >
-                    <span className={m.inCollection ? "text-[var(--ok)]" : "text-muted-foreground"}>
-                      {m.inCollection ? "●" : "○"}
-                    </span>
-                    <span className="flex-1 truncate">{m.method}</span>
-                    {m.entry ? (
-                      <span className="text-[10px] text-muted-foreground">
-                        {m.entry.input_message} → {m.entry.output_message}
-                      </span>
-                    ) : null}
-                  </button>
-                ))
-            : null}
+          {hits.length === 0 ? (
+            <Empty q={query} />
+          ) : (
+            hits.map((h, i) => {
+              const r = h.request;
+              const where = [h.collectionName, ...h.folderPath].join(" › ");
+              return (
+                <button
+                  key={`${h.collectionId}/${r.id}`}
+                  type="button"
+                  onMouseEnter={() => setActive(i)}
+                  onClick={() => choose(h)}
+                  className={cn(
+                    "flex w-full items-center gap-2 px-4 py-2 text-left text-sm",
+                    i === active && "bg-accent",
+                  )}
+                >
+                  <span className="flex-1 truncate">{r.name}</span>
+                  <span className="truncate font-mono text-[10px] text-muted-foreground">
+                    {r.service ? `${r.service}.${r.method}` : r.method}
+                  </span>
+                  <span className="truncate text-[10px] text-muted-foreground/70">{where}</span>
+                </button>
+              );
+            })
+          )}
         </div>
 
         <div className="flex items-center gap-3 border-t border-border px-4 py-1.5 text-[10px] text-muted-foreground">
-          <span><Kbd>↵</Kbd> вызов</span>
-          <span><Kbd>⌥↵</Kbd> новый workflow</span>
-          <span><Kbd>esc</Kbd> назад</span>
-          <span><Kbd>↑↓</Kbd> навигация</span>
+          <span><Kbd>↵</Kbd> open</span>
+          <span><Kbd>esc</Kbd> close</span>
+          <span><Kbd>↑↓</Kbd> navigate</span>
         </div>
       </div>
     </div>
@@ -208,7 +129,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
 function Empty({ q }: { q: string }) {
   return (
     <div className="px-4 py-8 text-center text-xs text-muted-foreground">
-      Ничего не найдено{q ? ` по «${q}»` : ""}.
+      No saved requests{q ? ` matching "${q}"` : ""}.
     </div>
   );
 }
