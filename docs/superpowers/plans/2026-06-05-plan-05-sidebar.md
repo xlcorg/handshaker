@@ -5,7 +5,19 @@
 > Steps use checkbox (`- [ ]`) syntax for tracking. **Detail is already TDD-complete** —
 > execute task-by-task.
 
-**Status:** ⏳ **in progress** (outline detailed to TDD).
+**Status:** ✅ **done** (`65d8c96..f813bf9`). 336/336 front-end tests green (was 274 at
+plan-04; +62 new across `catalog/{treeNav,treeEdit,useCatalogTree,RowMenu,RenameInput,
+PinButton,SortControl,RequestRow,FolderNode,CollectionNode,ConfirmDeleteDialog,
+CollectionTree,SidebarShell}` + `catalog/actions` + `lib/use-prefs`). `pnpm lint` (`tsc -b`)
+reports only the **15 pre-existing** legacy errors (`src/features/collections/**` ×14,
+`src/ipc/client.ts` ×1) — **zero** new and none under `features/catalog`/`lib/use-prefs`;
+gate was `pnpm test` + targeted typecheck (`pnpm build` stays `tsc`-blocked by the legacy 15,
+as in plan-04). NB: (a) Task 5 caught a real flaw in the plan's `openSavedRequest` test —
+`newStep` mints a fresh UUID per call, so the assertion compares all fields except `id`;
+(b) final code review fixed two nits in `CollectionTree` (`f813bf9`): reset orphaned keyboard
+focus when the focused node is hidden, and drop the non-memoizing `cb` `useMemo` + its
+eslint-disable. New sidebar is **not yet wired into `WorkflowApp`** — that, and deletion of
+the legacy derived-catalog `Sidebar`, is plan-09.
 **Branch:** `redesign/workflow-ui-spec-plans`
 **Phase:** 4 of spec §16 (`docs/superpowers/specs/2026-06-05-service-collection-sidebar-refactor-design.md`).
 **Predecessors:** plan-01 (`cadaccd..625241b`), plan-02 (`41d29bf..0a33cae`),
