@@ -24,3 +24,31 @@ export function aggregateUsage(collection: CollectionIpc): CollectionUsage {
   walk(collection.items, acc);
   return { lastUsedAt: acc.last, useCount: acc.count };
 }
+
+export type SortKey = "alpha" | "created" | "recent" | "frequency";
+
+function byKey(a: CollectionIpc, b: CollectionIpc, key: SortKey): number {
+  switch (key) {
+    case "alpha":
+      return a.name.localeCompare(b.name);
+    case "created":
+      return b.created_at - a.created_at; // newest first
+    case "recent": {
+      const al = aggregateUsage(a).lastUsedAt ?? -Infinity;
+      const bl = aggregateUsage(b).lastUsedAt ?? -Infinity;
+      return bl - al || a.name.localeCompare(b.name);
+    }
+    case "frequency": {
+      const ac = aggregateUsage(a).useCount;
+      const bc = aggregateUsage(b).useCount;
+      return bc - ac || a.name.localeCompare(b.name);
+    }
+  }
+}
+
+/** Sort collections by the global key, pinned floated to the top. Pure (new array). */
+export function sortCollections(collections: CollectionIpc[], key: SortKey): CollectionIpc[] {
+  return [...collections].sort(
+    (a, b) => Number(b.pinned) - Number(a.pinned) || byKey(a, b, key),
+  );
+}
