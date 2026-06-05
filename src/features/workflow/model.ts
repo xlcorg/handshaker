@@ -1,5 +1,5 @@
 import { newId } from "@/lib/ids";
-import type { InvokeOutcomeIpc } from "@/ipc/bindings";
+import type { InvokeOutcomeIpc, SavedAuthConfigIpc } from "@/ipc/bindings";
 
 export type ViewMode = "ledger" | "list" | "focus";
 export type StepStatus = "draft" | "sending" | "ok" | "error";
@@ -16,7 +16,7 @@ export interface Step {
   tls: boolean;
   service: string; // proto service full name, e.g. "payments.v1.PaymentService"
   method: string; // method name, e.g. "GetPayment"
-  serviceId: string | null; // origin catalog service, for live auth lookup at Send
+  auth: SavedAuthConfigIpc; // inline auth for this call (resolved at Send)
   requestJson: string; // editable request body (skeleton-prefilled)
   metadata: MetadataRow[];
   status: StepStatus;
@@ -41,7 +41,7 @@ export function newStep(init: {
   method: string;
   requestJson?: string;
   metadata?: MetadataRow[];
-  serviceId?: string | null;
+  auth?: SavedAuthConfigIpc;
 }): Step {
   return {
     id: newId(),
@@ -49,7 +49,7 @@ export function newStep(init: {
     tls: init.tls,
     service: init.service,
     method: init.method,
-    serviceId: init.serviceId ?? null,
+    auth: init.auth ?? { kind: "none" },
     requestJson: init.requestJson ?? "{}",
     metadata: init.metadata ?? [],
     status: "draft",

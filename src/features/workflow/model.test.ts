@@ -16,17 +16,18 @@ describe("newStep", () => {
   });
 });
 
-describe("newStep — serviceId and metadata", () => {
-  it("newStep defaults serviceId to null and metadata to []", () => {
+describe("newStep — auth and metadata", () => {
+  it("newStep defaults auth to { kind: 'none' } and metadata to []", () => {
     const s = newStep({ address: "h", tls: false, service: "S", method: "M" });
-    expect(s.serviceId).toBeNull();
+    expect(s.auth).toEqual({ kind: "none" });
     expect(s.metadata).toEqual([]);
   });
 
-  it("newStep carries provided serviceId and metadata", () => {
+  it("newStep carries provided auth and metadata", () => {
     const rows = [{ key: "x", value: "1", enabled: true }];
-    const s = newStep({ address: "h", tls: false, service: "S", method: "M", serviceId: "svc-1", metadata: rows });
-    expect(s.serviceId).toBe("svc-1");
+    const auth = { kind: "env_var" as const, env_var: "TOK", header_name: "authorization", prefix: "Bearer " };
+    const s = newStep({ address: "h", tls: false, service: "S", method: "M", auth, metadata: rows });
+    expect(s.auth).toEqual(auth);
     expect(s.metadata).toEqual(rows);
   });
 });
