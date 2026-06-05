@@ -10,6 +10,7 @@ vi.mock("@/ipc/client", () => ({
 
 import * as ipc from "@/ipc/client";
 import { createStepFromMethod, sendStep, stepPatchFromSendResult, resolveAuthHeader, shouldRecordExecuted, buildExecutedStep, cancelStep } from "./actions";
+import { buildRequestSkeletonSafe, applyMethodSelection } from "./actions";
 import { newStep } from "./model";
 
 beforeEach(() => {
@@ -380,5 +381,31 @@ describe("stepPatchFromSendResult cancelled", () => {
     expect(stepPatchFromSendResult({ kind: "cancelled" })).toEqual({
       status: "draft", outcome: null, error: null,
     });
+  });
+});
+
+describe("buildRequestSkeletonSafe", () => {
+  it("returns the backend skeleton on success", async () => {
+    vi.mocked(ipc.grpcBuildRequestSkeleton).mockResolvedValue('{"id":""}');
+    const out = await buildRequestSkeletonSafe({ address: "h:443", tls: true }, "p.S", "M");
+    expect(out).toBe('{"id":""}');
+    expect(ipc.grpcBuildRequestSkeleton).toHaveBeenCalledWith(
+      { address: "h:443", tls: true, skip_verify: false }, "p.S", "M",
+    );
+  });
+
+  it("falls back to '{}' when reflection/skeleton fails", async () => {
+    vi.mocked(ipc.grpcBuildRequestSkeleton).mockRejectedValue(new Error("nope"));
+    expect(await buildRequestSkeletonSafe({ address: "h", tls: false }, "p.S", "M")).toBe("{}");
+  });
+});
+
+describe("applyMethodSelection", () => {
+  it("patches service/method first, then the fetched skeleton", async () => {
+    vi.mocked(ipc.grpcBuildRequestSkeleton).mockResolvedValue('{"a":""}');
+    const patch = vi.fn();
+    await applyMethodSelection(patch, { address: "h:443", tls: true }, { service: "p.S", method: "M" });
+    expect(patch).toHaveBeenNthCalledWith(1, { service: "p.S", method: "M" });
+    expect(patch).toHaveBeenNthCalledWith(2, { requestJson: '{"a":""}' });
   });
 });

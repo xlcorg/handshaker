@@ -11,22 +11,41 @@ export interface CallTargetInit {
   tls: boolean;
 }
 
+/** Fetch a request-body skeleton for a method; never throws — falls back to "{}". */
+export async function buildRequestSkeletonSafe(
+  target: CallTargetInit,
+  service: string,
+  method: string,
+): Promise<string> {
+  try {
+    return await ipc.grpcBuildRequestSkeleton(
+      { address: target.address, tls: target.tls, skip_verify: false },
+      service,
+      method,
+    );
+  } catch {
+    return "{}";
+  }
+}
+
+/** MethodPicker handler for an editable draft: patch service/method, then the new skeleton. */
+export async function applyMethodSelection(
+  patch: (p: Partial<Step>) => void,
+  target: CallTargetInit,
+  m: { service: string; method: string },
+): Promise<void> {
+  patch({ service: m.service, method: m.method });
+  const requestJson = await buildRequestSkeletonSafe(target, m.service, m.method);
+  patch({ requestJson });
+}
+
 export async function createStepFromMethod(
   target: CallTargetInit,
   service: string,
   method: string,
   opts: { auth?: SavedAuthConfigIpc; defaultMetadata?: MetadataRow[] } = {},
 ): Promise<Step> {
-  let requestJson = "{}";
-  try {
-    requestJson = await ipc.grpcBuildRequestSkeleton(
-      { address: target.address, tls: target.tls, skip_verify: false },
-      service,
-      method,
-    );
-  } catch {
-    requestJson = "{}";
-  }
+  const requestJson = await buildRequestSkeletonSafe(target, service, method);
   return newStep({
     address: target.address,
     tls: target.tls,
