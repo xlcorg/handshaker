@@ -73,7 +73,7 @@ export function parseWithSpans(text: string): { tree: JsonTree; spans: ValueSpan
     const start = c.i;
     const rest = c.s.slice(c.i);
     const m = /^(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null)/.exec(rest);
-    if (!m) fail();
+    if (!m) return fail();
     c.i += m[1].length;
     try { return JSON.parse(c.s.slice(start, c.i)); } catch { return fail(); }
   };
