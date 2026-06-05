@@ -105,7 +105,7 @@ export function SidebarShell({ onOpenCollection }: SidebarShellProps) {
         activeItemId={null}
         editingId={editingId}
         onEditingChange={setEditingId}
-        onOpenRequest={(_collectionId, req) => openSavedRequest(req)}
+        onOpenRequest={(collectionId, req) => openSavedRequest(collectionId, req)}
         onOpenCollection={onOpenCollection ?? (() => {})}
         onRenameItem={cat.renameItem}
         onRenameCollection={cat.renameCollection}

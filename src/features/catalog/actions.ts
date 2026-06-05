@@ -49,10 +49,10 @@ export async function openCallFromMethod(
   workflowStore.setDraft(step);
 }
 
-/** Open a saved request in Focus as the global pending-draft. */
-export function openSavedRequest(saved: SavedRequestIpc): void {
+/** Open a saved request in Focus as the global pending-draft, bound to its origin. */
+export function openSavedRequest(collectionId: string, saved: SavedRequestIpc): void {
   workflowStore.update((w) => setView(w, "focus"));
-  workflowStore.setDraft(savedRequestToDraft(saved));
+  workflowStore.setDraft(savedRequestToDraft(saved), { collectionId, requestId: saved.id });
 }
 
 /** Start a fresh, empty pending-draft in Focus (header `+` / menu "Add request"). */
