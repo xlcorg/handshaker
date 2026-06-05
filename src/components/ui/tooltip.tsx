@@ -26,9 +26,7 @@ export const TooltipContent = React.forwardRef<
 ));
 TooltipContent.displayName = "TooltipContent";
 
-/** Compact wrapper for one-shot tooltips: <Tooltip content="…"><button>…</button></Tooltip>.
- * Includes its own TooltipProvider so it works without a provider in the component tree
- * (e.g. in tests). When rendered inside a global TooltipProvider the nested one is a no-op. */
+/** Compact wrapper for one-shot tooltips: <Tooltip content="…"><button>…</button></Tooltip>. */
 export function Tooltip({
   content,
   children,
@@ -41,11 +39,9 @@ export function Tooltip({
   delayDuration?: number;
 }) {
   return (
-    <TooltipProvider delayDuration={delayDuration}>
-      <TooltipRoot>
-        <TooltipTrigger asChild>{children}</TooltipTrigger>
-        <TooltipContent side={side}>{content}</TooltipContent>
-      </TooltipRoot>
-    </TooltipProvider>
+    <TooltipRoot delayDuration={delayDuration}>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent side={side}>{content}</TooltipContent>
+    </TooltipRoot>
   );
 }

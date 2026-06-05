@@ -1,9 +1,17 @@
 import { describe, it, expect, vi } from "vitest";
+import type { ReactElement } from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { COTabs } from "./COTabs";
 import { TlsBlock } from "./TlsBlock";
 import { VariablesBlock } from "./VariablesBlock";
 import { EnvVarField } from "./EnvVarField";
+
+// Some ports use the `Tooltip` wrapper, which needs a TooltipProvider ancestor (supplied
+// globally in `main.tsx`). Wrap renders here so the shared component stays untouched.
+function r(ui: ReactElement) {
+  return render(<TooltipProvider>{ui}</TooltipProvider>);
+}
 
 describe("overview sub-components (ports)", () => {
   it("COTabs switches the active tab", () => {
@@ -31,7 +39,7 @@ describe("overview sub-components (ports)", () => {
 
   it("VariablesBlock edits a row value", () => {
     const onChange = vi.fn();
-    render(<VariablesBlock rows={[{ id: "v0", k: "base", v: "x" }]} onChange={onChange} />);
+    r(<VariablesBlock rows={[{ id: "v0", k: "base", v: "x" }]} onChange={onChange} />);
     fireEvent.change(screen.getByDisplayValue("x"), { target: { value: "y" } });
     expect(onChange).toHaveBeenCalledWith([{ id: "v0", k: "base", v: "y" }]);
   });
