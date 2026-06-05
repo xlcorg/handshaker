@@ -106,3 +106,57 @@ describe("SaveRequestDialog — recommendation chip", () => {
     expect(p.onCreateFolder).not.toHaveBeenCalled();
   });
 });
+
+describe("SaveRequestDialog — contextual New", () => {
+  it("labels the button 'New folder in' the selected collection", () => {
+    render(<SaveRequestDialog {...props()} />);
+    expect(screen.getByRole("button", { name: /New folder in .*My APIs/ })).toBeTruthy();
+  });
+
+  it("creates a new folder under the selected collection and saves into it", async () => {
+    const p = props();
+    render(<SaveRequestDialog {...p} />);
+    fireEvent.click(screen.getByRole("button", { name: /New folder in/ }));
+    fireEvent.change(screen.getByLabelText("New node name"), { target: { value: "Billing" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(p.onCreateFolder).toHaveBeenCalledWith("c1", null, "Billing"));
+    await waitFor(() =>
+      expect(p.onSave).toHaveBeenCalledWith({ collectionId: "c1", parentId: "f-new", name: "Create" }),
+    );
+  });
+
+  it("labels the button 'New collection' when nothing is selected", () => {
+    render(<SaveRequestDialog {...props({ collections: [] })} />);
+    expect(screen.getByRole("button", { name: /New collection/ })).toBeTruthy();
+  });
+
+  it("creates a new collection (pending) and saves into it", async () => {
+    const p = props({ collections: [] });
+    render(<SaveRequestDialog {...p} />);
+    fireEvent.click(screen.getByRole("button", { name: /New collection/ }));
+    fireEvent.change(screen.getByLabelText("New node name"), { target: { value: "Fresh" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(p.onCreateCollection).toHaveBeenCalledWith("Fresh"));
+    await waitFor(() =>
+      expect(p.onSave).toHaveBeenCalledWith({ collectionId: "c-new", parentId: null, name: "Create" }),
+    );
+  });
+
+  it("does NOT persist a pending folder the user navigated away from (no orphan)", async () => {
+    const p = props();
+    render(<SaveRequestDialog {...p} />);
+    // create a pending folder under My APIs (selects it)
+    fireEvent.click(screen.getByRole("button", { name: /New folder in/ }));
+    fireEvent.change(screen.getByLabelText("New node name"), { target: { value: "Stray" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    // navigate away: select a different collection's root
+    fireEvent.click(screen.getByText("Sandbox"));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(p.onSave).toHaveBeenCalledWith({ collectionId: "c2", parentId: null, name: "Create" }),
+    );
+    expect(p.onCreateFolder).not.toHaveBeenCalled();
+  });
+});

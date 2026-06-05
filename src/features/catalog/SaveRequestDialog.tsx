@@ -14,7 +14,7 @@ import type { SaveLocation } from "./grouping";
 import { suggestSaveTarget } from "./grouping";
 import { CollectionPicker, type PickTarget } from "./CollectionPicker";
 import { newId } from "@/lib/ids";
-import { augmentTree, type PendingFolder } from "./savePicker";
+import { augmentTree, type PendingFolder, type PendingCollection } from "./savePicker";
 
 export interface SaveRequestDialogProps {
   open: boolean;
@@ -37,12 +37,15 @@ export interface SaveRequestDialogProps {
 }
 
 export function SaveRequestDialog(props: SaveRequestDialogProps) {
-  const { open, onOpenChange, collections, defaultName, onSave, onCreateFolder, draftService, draftMethod, originBound, existingLocations } = props;
+  const { open, onOpenChange, collections, defaultName, onSave, onCreateFolder, onCreateCollection, draftService, draftMethod, originBound, existingLocations } = props;
   const [name, setName] = useState(defaultName);
   const [query, setQuery] = useState("");
   const [target, setTarget] = useState<PickTarget | null>(null);
   const [busy, setBusy] = useState(false);
   const [pendingFolders, setPendingFolders] = useState<PendingFolder[]>([]);
+  const [pendingCollections, setPendingCollections] = useState<PendingCollection[]>([]);
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState("");
 
   const prevOpenRef = useRef(false);
   useEffect(() => {
@@ -50,14 +53,21 @@ export function SaveRequestDialog(props: SaveRequestDialogProps) {
       setName(defaultName);
       setQuery("");
       setPendingFolders([]);
+      setPendingCollections([]);
+      setAdding(false);
+      setNewName("");
       setTarget(collections.length > 0 ? { collectionId: collections[0].id, parentId: null } : null);
     }
     prevOpenRef.current = open;
   }, [open, defaultName, collections]);
 
   const reco = draftService && draftMethod ? suggestSaveTarget(draftService, draftMethod) : null;
-  const augmented = augmentTree(collections, [], pendingFolders);
+  const augmented = augmentTree(collections, pendingCollections, pendingFolders);
   const selectedCollection = target ? augmented.find((c) => c.id === target.collectionId) ?? null : null;
+
+  const newLabel = !target
+    ? "＋ New collection"
+    : `＋ New folder in "${selectedCollection?.name ?? ""}"`;
 
   function applyReco() {
     if (!reco || !target) return;
@@ -79,6 +89,25 @@ export function SaveRequestDialog(props: SaveRequestDialogProps) {
     setTarget({ collectionId: target.collectionId, parentId: tempId });
   }
 
+  function commitNew() {
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+    if (!target) {
+      const tempId = newId();
+      setPendingCollections((prev) => [...prev, { tempId, name: trimmed }]);
+      setTarget({ collectionId: tempId, parentId: null });
+    } else {
+      const tempId = newId();
+      setPendingFolders((prev) => [
+        ...prev,
+        { tempId, collectionId: target.collectionId, parentId: target.parentId, name: trimmed },
+      ]);
+      setTarget({ collectionId: target.collectionId, parentId: tempId });
+    }
+    setAdding(false);
+    setNewName("");
+  }
+
   async function submit() {
     if (!name.trim()) return;
     if (originBound) {
@@ -94,14 +123,45 @@ export function SaveRequestDialog(props: SaveRequestDialogProps) {
     if (!target) return;
     setBusy(true);
     try {
-      // Resolve the (possibly pending) target into a real {collectionId, parentId}.
       const idMap = new Map<string, string>();
+
+      // Walk the target's pending-folder ancestor chain to find which pending folders
+      // are actually needed; stop at the first real (non-pending) id.
+      const neededFolderIds = new Set<string>();
+      let cursor: string | null = target.parentId;
+      while (cursor) {
+        const pf = pendingFolders.find((f) => f.tempId === cursor);
+        if (!pf) break;
+        neededFolderIds.add(pf.tempId);
+        cursor = pf.parentId;
+      }
+
+      // The target's collection is needed if it (or a needed folder) references a pending collection.
+      const neededCollectionIds = new Set<string>();
+      if (pendingCollections.some((c) => c.tempId === target.collectionId)) {
+        neededCollectionIds.add(target.collectionId);
+      }
       for (const pf of pendingFolders) {
+        if (neededFolderIds.has(pf.tempId) && pendingCollections.some((c) => c.tempId === pf.collectionId)) {
+          neededCollectionIds.add(pf.collectionId);
+        }
+      }
+
+      // Materialize needed pending collections first.
+      for (const pc of pendingCollections) {
+        if (!neededCollectionIds.has(pc.tempId)) continue;
+        const realId = await onCreateCollection(pc.name);
+        idMap.set(pc.tempId, realId);
+      }
+      // Then needed pending folders, in array order (parents precede children).
+      for (const pf of pendingFolders) {
+        if (!neededFolderIds.has(pf.tempId)) continue;
         const realCollectionId = idMap.get(pf.collectionId) ?? pf.collectionId;
         const realParentId = pf.parentId ? idMap.get(pf.parentId) ?? pf.parentId : null;
         const newRealId = await onCreateFolder(realCollectionId, realParentId, pf.name);
         idMap.set(pf.tempId, newRealId);
       }
+
       const finalCollectionId = idMap.get(target.collectionId) ?? target.collectionId;
       const finalParentId = target.parentId ? idMap.get(target.parentId) ?? target.parentId : null;
       await onSave({ collectionId: finalCollectionId, parentId: finalParentId, name: name.trim() });
@@ -165,6 +225,35 @@ export function SaveRequestDialog(props: SaveRequestDialogProps) {
             />
 
             <CollectionPicker collections={augmented} query={query} value={target} onChange={setTarget} />
+
+            <div className="flex items-center gap-2">
+              {adding ? (
+                <>
+                  <Input
+                    aria-label="New node name"
+                    autoFocus
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") commitNew();
+                      if (e.key === "Escape") setAdding(false);
+                    }}
+                    placeholder="Name"
+                    className="h-7 text-xs"
+                  />
+                  <Button size="sm" onClick={commitNew}>Add</Button>
+                  <Button size="sm" variant="ghost" onClick={() => setAdding(false)}>Cancel</Button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="text-[11px] text-muted-foreground hover:text-foreground"
+                  onClick={() => setAdding(true)}
+                >
+                  {newLabel}
+                </button>
+              )}
+            </div>
           </>
         )}
 
