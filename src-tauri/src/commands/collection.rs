@@ -84,6 +84,42 @@ impl AppState {
         self.collection_store.upsert(c)
     }
 
+    /// Move an item subtree from one collection into another. When source == target this is an
+    /// ordinary intra-tree move (which also rejects folder-into-own-descendant cycles).
+    pub fn collection_move_item_across_impl(
+        &self,
+        source_collection_id: &str,
+        item_id: &str,
+        target_collection_id: &str,
+        new_parent_id: Option<String>,
+        position: u32,
+    ) -> Result<(), CoreError> {
+        let scid = parse_collection_id(source_collection_id)?;
+        let tcid = parse_collection_id(target_collection_id)?;
+        let iid = parse_item_id(item_id)?;
+        let new_parent = parse_opt_item_id(new_parent_id)?;
+
+        if scid == tcid {
+            let mut c = self.require_collection(scid)?;
+            tree::move_item(&mut c.items, iid, new_parent, position as usize)?;
+            return self.collection_store.upsert(c);
+        }
+
+        let mut src = self.require_collection(scid)?;
+        let mut tgt = self.require_collection(tcid)?;
+
+        // Detach from source (operates on loaded copies; nothing is persisted yet).
+        let snap = tree::delete_item(&mut src.items, iid)
+            .ok_or_else(|| CoreError::InvalidTarget(format!("item {iid:?} not found in source")))?;
+        // Insert into target; `restore_item` validates the new parent is a folder and clamps the
+        // position. On error we return before either upsert, so stored state is untouched.
+        tree::restore_item(&mut tgt.items, snap.item, new_parent, position as usize)?;
+
+        // No global transaction across stores; persist source (removal) then target (insert).
+        self.collection_store.upsert(src)?;
+        self.collection_store.upsert(tgt)
+    }
+
     pub fn collection_duplicate_item_impl(&self, collection_id: &str, item_id: &str) -> Result<String, CoreError> {
         let cid = parse_collection_id(collection_id)?;
         let iid = parse_item_id(item_id)?;
@@ -215,6 +251,21 @@ pub async fn collection_move_item(state: State<'_, AppState>, collection_id: Str
 
 #[tauri::command]
 #[specta::specta]
+pub async fn collection_move_item_across(
+    state: State<'_, AppState>,
+    source_collection_id: String,
+    item_id: String,
+    target_collection_id: String,
+    new_parent_id: Option<String>,
+    position: u32,
+) -> Result<(), IpcError> {
+    state
+        .collection_move_item_across_impl(&source_collection_id, &item_id, &target_collection_id, new_parent_id, position)
+        .map_err(IpcError::from)
+}
+
+#[tauri::command]
+#[specta::specta]
 pub async fn collection_duplicate_item(state: State<'_, AppState>, collection_id: String, item_id: String) -> Result<String, IpcError> {
     state.collection_duplicate_item_impl(&collection_id, &item_id).map_err(IpcError::from)
 }
@@ -329,6 +380,64 @@ mod tests {
         state.collection_add_item_impl(&cid(1), Some(cid(10)), folder_ipc(11, "inner")).unwrap();
         let err = state.collection_move_item_impl(&cid(1), &cid(10), Some(cid(11)), 0).unwrap_err();
         assert!(matches!(err, CoreError::InvalidTarget(_)));
+    }
+
+    #[test]
+    fn move_across_collections_relocates_item() {
+        let state = AppState::default();
+        state.collection_upsert_impl(empty_collection_ipc(1, "src")).unwrap();
+        state.collection_upsert_impl(empty_collection_ipc(2, "dst")).unwrap();
+        state.collection_add_item_impl(&cid(1), None, request_ipc(20, "r")).unwrap();
+        state
+            .collection_move_item_across_impl(&cid(1), &cid(20), &cid(2), None, 0)
+            .unwrap();
+        assert_eq!(state.collection_get_impl(&cid(1)).unwrap().items.len(), 0);
+        let dst = state.collection_get_impl(&cid(2)).unwrap();
+        assert_eq!(dst.items.len(), 1);
+        assert!(matches!(&dst.items[0], ItemIpc::Request(r) if r.id == cid(20)));
+    }
+
+    #[test]
+    fn move_across_into_target_folder() {
+        let state = AppState::default();
+        state.collection_upsert_impl(empty_collection_ipc(1, "src")).unwrap();
+        state.collection_upsert_impl(empty_collection_ipc(2, "dst")).unwrap();
+        state.collection_add_item_impl(&cid(1), None, request_ipc(20, "r")).unwrap();
+        state.collection_add_item_impl(&cid(2), None, folder_ipc(30, "f")).unwrap();
+        state
+            .collection_move_item_across_impl(&cid(1), &cid(20), &cid(2), Some(cid(30)), 0)
+            .unwrap();
+        let dst = state.collection_get_impl(&cid(2)).unwrap();
+        let folder = match &dst.items[0] {
+            ItemIpc::Folder(f) => f,
+            _ => panic!("expected folder"),
+        };
+        assert_eq!(folder.items.len(), 1);
+    }
+
+    #[test]
+    fn move_across_same_collection_delegates_to_move() {
+        // source == target → behaves like an intra-tree move (and rejects cycles).
+        let state = AppState::default();
+        state.collection_upsert_impl(empty_collection_ipc(1, "c")).unwrap();
+        state.collection_add_item_impl(&cid(1), None, folder_ipc(10, "outer")).unwrap();
+        state.collection_add_item_impl(&cid(1), Some(cid(10)), folder_ipc(11, "inner")).unwrap();
+        let err = state
+            .collection_move_item_across_impl(&cid(1), &cid(10), &cid(1), Some(cid(11)), 0)
+            .unwrap_err();
+        assert!(matches!(err, CoreError::InvalidTarget(_)));
+    }
+
+    #[test]
+    fn move_across_missing_item_errors_and_persists_nothing() {
+        let state = AppState::default();
+        state.collection_upsert_impl(empty_collection_ipc(1, "src")).unwrap();
+        state.collection_upsert_impl(empty_collection_ipc(2, "dst")).unwrap();
+        let err = state
+            .collection_move_item_across_impl(&cid(1), &cid(999), &cid(2), None, 0)
+            .unwrap_err();
+        assert!(matches!(err, CoreError::InvalidTarget(_)));
+        assert_eq!(state.collection_get_impl(&cid(2)).unwrap().items.len(), 0);
     }
 
     #[test]

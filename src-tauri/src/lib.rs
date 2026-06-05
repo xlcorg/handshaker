@@ -8,7 +8,7 @@ use commands::auth::auth_resolve;
 use commands::collection::{
     collection_add_item, collection_bump_usage, collection_delete, collection_delete_item,
     collection_duplicate_item, collection_get, collection_list, collection_move_item,
-    collection_rename_item, collection_restore_item, collection_set_node_auth,
+    collection_move_item_across, collection_rename_item, collection_restore_item, collection_set_node_auth,
     collection_set_variables, collection_upsert,
 };
 use commands::env::{env_active_get, env_active_set, env_delete, env_list, env_upsert};
@@ -50,6 +50,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             collection_add_item,
             collection_rename_item,
             collection_move_item,
+            collection_move_item_across,
             collection_duplicate_item,
             collection_delete_item,
             collection_restore_item,
