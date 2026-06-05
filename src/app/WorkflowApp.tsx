@@ -77,7 +77,14 @@ export function WorkflowApp() {
         </div>
       </div>
 
-      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      {/* TODO(plan-09): wire `collections` from useCatalogTree + onOpen=openSavedRequest
+          with dirty-confirm. Placeholders keep the rewritten palette type-correct. */}
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        collections={[]}
+        onOpen={() => {}}
+      />
       <Toaster />
     </div>
   );
