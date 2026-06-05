@@ -42,6 +42,11 @@ describe("stepToSavedRequest", () => {
     expect(saved.metadata).not.toBe(s.metadata);
     expect(saved.metadata).toEqual([{ key: "a", value: "b", enabled: false }]);
   });
+
+  it("writes a concrete tls_override for a plaintext step (never null on Save)", () => {
+    const saved = stepToSavedRequest(step({ tls: false }), { id: "r", name: "n" });
+    expect(saved.tls_override).toBe(false);
+  });
 });
 
 function saved(over: Partial<SavedRequestIpc> = {}): SavedRequestIpc {
@@ -83,6 +88,13 @@ describe("savedRequestToDraft", () => {
 
   it("treats a null tls_override as plaintext (false)", () => {
     expect(savedRequestToDraft(saved({ tls_override: null })).tls).toBe(false);
+  });
+
+  it("copies metadata into a fresh array, not aliasing the saved request", () => {
+    const src = saved({ metadata: [{ key: "a", value: "b", enabled: true }] });
+    const draft = savedRequestToDraft(src);
+    expect(draft.metadata).not.toBe(src.metadata);
+    expect(draft.metadata).toEqual([{ key: "a", value: "b", enabled: true }]);
   });
 
   it("round-trips the call fields step -> saved -> draft (auth/id aside)", () => {
