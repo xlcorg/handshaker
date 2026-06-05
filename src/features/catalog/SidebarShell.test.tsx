@@ -19,7 +19,7 @@ function makeTreeHook() {
     duplicateItem: vi.fn(),
   };
 }
-vi.mock("./useCatalogTree", () => ({ useCatalogTree: () => tree.current }));
+vi.mock("./CatalogProvider", () => ({ useCatalog: () => tree.current }));
 vi.mock("./actions", () => ({ openSavedRequest: vi.fn(), newRequestDraft: vi.fn() }));
 
 import { SidebarShell } from "./SidebarShell";

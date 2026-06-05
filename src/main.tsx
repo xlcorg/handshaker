@@ -9,6 +9,7 @@ import "@fontsource/jetbrains-mono/500.css";
 import "@fontsource/jetbrains-mono/600.css";
 import "@/styles/globals.css";
 import { WorkflowApp } from "@/app/WorkflowApp";
+import { CatalogProvider } from "@/features/catalog/CatalogProvider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { readPrefs } from "@/lib/use-prefs";
 // Side-effect import: kicks off Monaco chunk download in parallel with React
@@ -22,7 +23,9 @@ document.documentElement.classList.toggle("dark", initial.theme === "dark");
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <TooltipProvider delayDuration={150} skipDelayDuration={400}>
-      <WorkflowApp />
+      <CatalogProvider>
+        <WorkflowApp />
+      </CatalogProvider>
     </TooltipProvider>
   </StrictMode>
 );

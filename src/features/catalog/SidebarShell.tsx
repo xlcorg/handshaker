@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { readPrefs, usePrefs } from "@/lib/use-prefs";
 import { newId } from "@/lib/ids";
 import type { ItemIpc, SavedRequestIpc } from "@/ipc/bindings";
-import { useCatalogTree } from "./useCatalogTree";
+import { useCatalog } from "./CatalogProvider";
 import { newRequestDraft, openSavedRequest } from "./actions";
 import { filterCollections, sortCollections, type SortKey } from "./sort";
 import { SortControl } from "./SortControl";
@@ -27,7 +27,7 @@ export function SidebarShell({ onOpenCollection, onOpenRequest, onAddRequest }: 
   const openRequest = onOpenRequest ?? openSavedRequest;
   const addRequest = onAddRequest ?? newRequestDraft;
   const [prefs, setPref] = usePrefs();
-  const cat = useCatalogTree();
+  const cat = useCatalog();
   const [filter, setFilter] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("alpha");
   const [editingId, setEditingId] = useState<string | null>(null);

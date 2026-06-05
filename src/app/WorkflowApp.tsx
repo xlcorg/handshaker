@@ -13,7 +13,7 @@ import type { SavedRequestIpc } from "@/ipc/bindings";
 import { SidebarShell } from "@/features/catalog/SidebarShell";
 import { CommandPalette } from "@/features/catalog/CommandPalette";
 import { CollectionOverview } from "@/features/catalog/overview/CollectionOverview";
-import { useCatalogTree } from "@/features/catalog/useCatalogTree";
+import { useCatalog } from "@/features/catalog/CatalogProvider";
 import { openSavedRequest, newRequestDraft } from "@/features/catalog/actions";
 import { SaveRequestDialog } from "@/features/catalog/SaveRequestDialog";
 import { DiscardDraftDialog } from "@/features/catalog/DiscardDraftDialog";
@@ -36,8 +36,8 @@ function renderView(view: ViewMode, onRequestSave: () => void) {
 export function WorkflowApp() {
   const wf = useActiveWorkflow();
   const draft = useDraft();
-  // One catalog snapshot for ⌘K + overview + Save dialog; the sidebar keeps its own instance.
-  const cat = useCatalogTree();
+  // The ONE shared catalog instance — feeds ⌘K + overview + Save dialog AND the sidebar.
+  const cat = useCatalog();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [panelCollectionId, setPanelCollectionId] = useState<string | null>(null);
   const [saveOpen, setSaveOpen] = useState(false);
@@ -76,7 +76,10 @@ export function WorkflowApp() {
         }
       } else if (mod && (e.key === "n" || e.key === "N")) {
         e.preventDefault();
-        guardedRun(() => newRequestDraft());
+        guardedRun(() => {
+          setPanelCollectionId(null);
+          newRequestDraft();
+        });
       }
     };
     window.addEventListener("keydown", onKey);
@@ -110,8 +113,18 @@ export function WorkflowApp() {
     pending?.();
   }
 
+  // Opening a request / starting a new draft must reveal Focus — close any open overview first.
   const openRequest = (collectionId: string, req: SavedRequestIpc) =>
-    guardedRun(() => openSavedRequest(collectionId, req));
+    guardedRun(() => {
+      setPanelCollectionId(null);
+      openSavedRequest(collectionId, req);
+    });
+
+  const addRequest = () =>
+    guardedRun(() => {
+      setPanelCollectionId(null);
+      newRequestDraft();
+    });
 
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
@@ -134,7 +147,7 @@ export function WorkflowApp() {
         <SidebarShell
           onOpenCollection={(id) => setPanelCollectionId(id)}
           onOpenRequest={openRequest}
-          onAddRequest={() => guardedRun(() => newRequestDraft())}
+          onAddRequest={addRequest}
         />
         <div className="min-h-0 flex-1">
           {panelCollection ? (

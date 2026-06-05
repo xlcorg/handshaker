@@ -20,8 +20,19 @@ vi.mock("@/features/catalog/SidebarShell", () => ({
   ),
 }));
 vi.mock("@/features/catalog/overview/CollectionOverview", () => ({
-  CollectionOverview: ({ collection }: { collection: { id: string } }) => (
-    <div>OVERVIEW:{collection.id}</div>
+  CollectionOverview: ({
+    collection,
+    onSelectRequest,
+  }: {
+    collection: { id: string };
+    onSelectRequest?: (collectionId: string, req: { id: string }) => void;
+  }) => (
+    <div>
+      OVERVIEW:{collection.id}
+      <button type="button" onClick={() => onSelectRequest?.(collection.id, { id: "rZ" } as never)}>
+        overview-open-req
+      </button>
+    </div>
   ),
 }));
 vi.mock("@/features/catalog/CommandPalette", () => ({
@@ -74,8 +85,8 @@ vi.mock("@/features/catalog/DiscardDraftDialog", () => ({
       </div>
     ) : null,
 }));
-vi.mock("@/features/catalog/useCatalogTree", () => ({
-  useCatalogTree: () => ({
+vi.mock("@/features/catalog/CatalogProvider", () => ({
+  useCatalog: () => ({
     tree: [{ id: "c1", name: "C1", items: [], variables: {}, auth: { kind: "none" } }],
     loading: false,
     error: null,
@@ -155,6 +166,39 @@ describe("WorkflowApp shell", () => {
     createCall();
     expect(screen.getByText("FOCUS")).toBeInTheDocument();
     expect(screen.queryByText("OVERVIEW:c1")).not.toBeInTheDocument();
+  });
+
+  it("closes the overview and shows Focus when a request is selected from within it", async () => {
+    const user = userEvent.setup();
+    render(<WorkflowApp />);
+    await user.click(screen.getByText("open-col"));
+    expect(screen.getByText("OVERVIEW:c1")).toBeInTheDocument();
+    await user.click(screen.getByText("overview-open-req"));
+    expect(openSavedRequest).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("OVERVIEW:c1")).not.toBeInTheDocument();
+    expect(screen.getByText("FOCUS")).toBeInTheDocument();
+  });
+
+  it("closes the overview and shows Focus when a request is opened from the sidebar", async () => {
+    const user = userEvent.setup();
+    render(<WorkflowApp />);
+    await user.click(screen.getByText("open-col"));
+    expect(screen.getByText("OVERVIEW:c1")).toBeInTheDocument();
+    await user.click(screen.getByText("open-req"));
+    expect(openSavedRequest).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("OVERVIEW:c1")).not.toBeInTheDocument();
+    expect(screen.getByText("FOCUS")).toBeInTheDocument();
+  });
+
+  it("closes the overview and shows Focus when a new request is added", async () => {
+    const user = userEvent.setup();
+    render(<WorkflowApp />);
+    await user.click(screen.getByText("open-col"));
+    expect(screen.getByText("OVERVIEW:c1")).toBeInTheDocument();
+    await user.click(screen.getByText("add-req"));
+    expect(newRequestDraft).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("OVERVIEW:c1")).not.toBeInTheDocument();
+    expect(screen.getByText("FOCUS")).toBeInTheDocument();
   });
 });
 
