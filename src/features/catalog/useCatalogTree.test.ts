@@ -11,6 +11,8 @@ vi.mock("@/ipc/client", () => ({
     collectionRenameItem: vi.fn(),
     collectionDeleteItem: vi.fn(),
     collectionDuplicateItem: vi.fn(),
+    collectionMoveItem: vi.fn(),
+    collectionMoveItemAcross: vi.fn(),
   },
 }));
 
@@ -129,5 +131,63 @@ describe("optimistic mutations + rollback", () => {
     const item = result.current.tree[0].items[0] as Extract<{ type: "request"; method: string }, { type: "request" }>;
     expect(item.method).toBe("m"); // reverted to the seeded value
     expect(result.current.error).toBe("disk full");
+  });
+});
+
+describe("useCatalogTree move", () => {
+  function reqItem(id: string) {
+    return {
+      type: "request", id, name: id, address_template: "h", service: "s", method: "m",
+      body_template: "{}", metadata: [], auth: { kind: "none" }, tls_override: null,
+      last_used_at: null, use_count: 0,
+    } as const;
+  }
+  async function loadedTwo() {
+    const c1 = {
+      ...col("c1"),
+      items: [{ type: "folder", id: "f1", name: "f1", items: [] }, reqItem("r3")],
+    } as CollectionIpc;
+    const c2 = col("c2");
+    vi.mocked(ipc.collectionList).mockResolvedValue([
+      { id: "c1", name: "c1" },
+      { id: "c2", name: "c2" },
+    ]);
+    vi.mocked(ipc.collectionGet).mockImplementation(async (id: string) => (id === "c1" ? c1 : c2));
+    const hook = renderHook(() => useCatalogTree());
+    await waitFor(() => expect(hook.result.current.loading).toBe(false));
+    return hook;
+  }
+
+  it("moveItem reshapes locally and calls collectionMoveItem", async () => {
+    const { result } = await loadedTwo();
+    vi.mocked(ipc.collectionMoveItem).mockResolvedValue(undefined);
+    await act(async () => {
+      await result.current.moveItem("c1", "r3", "f1", 0);
+    });
+    expect(ipc.collectionMoveItem).toHaveBeenCalledWith("c1", "r3", "f1", 0);
+    const c1 = result.current.tree.find((c) => c.id === "c1")!;
+    const f1 = c1.items.find((i) => i.id === "f1") as Extract<typeof c1.items[number], { type: "folder" }>;
+    expect(f1.items.map((i) => i.id)).toEqual(["r3"]); // optimistic reshape
+  });
+
+  it("moveItemAcross calls collectionMoveItemAcross and relocates locally", async () => {
+    const { result } = await loadedTwo();
+    vi.mocked(ipc.collectionMoveItemAcross).mockResolvedValue(undefined);
+    await act(async () => {
+      await result.current.moveItemAcross("c1", "r3", "c2", null, 0);
+    });
+    expect(ipc.collectionMoveItemAcross).toHaveBeenCalledWith("c1", "r3", "c2", null, 0);
+    expect(result.current.tree.find((c) => c.id === "c2")!.items.map((i) => i.id)).toEqual(["r3"]);
+  });
+
+  it("rolls back moveItem when the IPC rejects", async () => {
+    const { result } = await loadedTwo();
+    const before = JSON.stringify(result.current.tree);
+    vi.mocked(ipc.collectionMoveItem).mockRejectedValueOnce({ message: "boom" });
+    await act(async () => {
+      await expect(result.current.moveItem("c1", "r3", "f1", 0)).rejects.toBeTruthy();
+    });
+    expect(JSON.stringify(result.current.tree)).toBe(before);
+    expect(result.current.error).toBe("boom");
   });
 });

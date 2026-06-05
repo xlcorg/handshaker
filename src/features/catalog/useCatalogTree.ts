@@ -4,6 +4,8 @@ import type { CollectionIpc, ItemIpc, SavedRequestIpc } from "@/ipc/bindings";
 import { newId } from "@/lib/ids";
 import {
   insertItemInTree,
+  moveItemAcrossTree,
+  moveItemWithinTree,
   removeCollectionFromTree,
   removeItemFromTree,
   renameCollectionInTree,
@@ -26,6 +28,14 @@ export interface UseCatalogTree {
   updateItemContent: (collectionId: string, itemId: string, content: SavedRequestIpc) => Promise<void>;
   deleteItem: (collectionId: string, itemId: string) => Promise<void>;
   duplicateItem: (collectionId: string, itemId: string) => Promise<void>;
+  moveItem: (collectionId: string, itemId: string, parentId: string | null, position: number) => Promise<void>;
+  moveItemAcross: (
+    sourceCollectionId: string,
+    itemId: string,
+    targetCollectionId: string,
+    parentId: string | null,
+    position: number,
+  ) => Promise<void>;
 }
 
 function emptyCollection(name: string): CollectionIpc {
@@ -186,6 +196,30 @@ export function useCatalogTree(): UseCatalogTree {
     [apply],
   );
 
+  const moveItem = useCallback(
+    (collectionId: string, itemId: string, parentId: string | null, position: number) =>
+      optimistic(
+        (prev) => moveItemWithinTree(prev, collectionId, itemId, parentId, position),
+        () => ipc.collectionMoveItem(collectionId, itemId, parentId, position),
+      ),
+    [optimistic],
+  );
+
+  const moveItemAcross = useCallback(
+    (
+      sourceCollectionId: string,
+      itemId: string,
+      targetCollectionId: string,
+      parentId: string | null,
+      position: number,
+    ) =>
+      optimistic(
+        (prev) => moveItemAcrossTree(prev, sourceCollectionId, itemId, targetCollectionId, parentId, position),
+        () => ipc.collectionMoveItemAcross(sourceCollectionId, itemId, targetCollectionId, parentId, position),
+      ),
+    [optimistic],
+  );
+
   return {
     tree,
     loading,
@@ -200,5 +234,7 @@ export function useCatalogTree(): UseCatalogTree {
     updateItemContent,
     deleteItem,
     duplicateItem,
+    moveItem,
+    moveItemAcross,
   };
 }
