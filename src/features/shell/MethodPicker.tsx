@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Box, ChevronDown, Search } from "lucide-react";
+import { ReflectionFooter } from "@/features/workflow/ReflectionFooter";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,9 +18,11 @@ export interface MethodPickerProps {
   onSelect: (next: SelectedMethod) => void;
   maxLabel?: number;
   className?: string;
+  /** Draft-only: status + reload row at the bottom of the dropdown. Omit to hide. */
+  reflection?: { loading: boolean; error: string | null; onRefresh: () => void };
 }
 
-export function MethodPicker({ selected, catalog, onSelect, maxLabel = 160, className }: MethodPickerProps) {
+export function MethodPicker({ selected, catalog, onSelect, maxLabel = 160, className, reflection }: MethodPickerProps) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -146,6 +149,13 @@ export function MethodPicker({ selected, catalog, onSelect, maxLabel = 160, clas
             ))
           )}
         </div>
+        {reflection && (
+          <ReflectionFooter
+            loading={reflection.loading}
+            error={reflection.error}
+            onRefresh={reflection.onRefresh}
+          />
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
