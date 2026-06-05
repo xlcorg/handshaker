@@ -54,7 +54,9 @@ export function DraftAddressBar({
         selected={{ service: step.service, method: step.method, kind: "unary" }}
         catalog={catalog}
         onSelect={onSelectMethod}
-        reflection={{ loading: reflecting, error: reflectError, onRefresh }}
+        reflection={
+          step.address.trim() ? { loading: reflecting, error: reflectError, onRefresh } : undefined
+        }
         className="flex-1"
       />
       {sending ? (
