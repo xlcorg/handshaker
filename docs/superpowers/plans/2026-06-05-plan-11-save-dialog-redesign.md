@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Status:** ready for execution · **Branch:** `redesign/workflow-ui-spec-plans`
+**Status:** ✅ done (`baa8eeb..5056cc3`) — all 9 tasks implemented, two-stage reviewed; `tsc` clean, full Vitest suite (442) + `pnpm build` green. Manual desktop smoke (Task 9 §2) pending user. · **Branch:** `redesign/workflow-ui-spec-plans`
 **Spec:** `docs/superpowers/specs/2026-06-05-save-request-dialog-redesign-design.md`
 
 **Goal:** Replace the two-`<select>` Save dialog with a Postman-style navigable collection/folder picker (80vh, scrollable tree, search) plus a server-structure recommendation chip (`NotesApiService/Create` → folder `NotesApi`, name `Create`).
