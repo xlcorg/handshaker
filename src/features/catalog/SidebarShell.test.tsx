@@ -34,6 +34,7 @@ function col(id: string, name = id): CollectionIpc {
 
 beforeEach(() => {
   localStorage.clear();
+  vi.clearAllMocks();
   tree.current = makeTreeHook();
 });
 
@@ -49,6 +50,14 @@ describe("SidebarShell", () => {
     render(<SidebarShell />);
     fireEvent.click(screen.getByLabelText("new-request"));
     expect(newRequestDraft).toHaveBeenCalledTimes(1);
+  });
+
+  it("the + button calls onAddRequest when provided (guarded open)", () => {
+    const onAddRequest = vi.fn();
+    render(<SidebarShell onAddRequest={onAddRequest} />);
+    fireEvent.click(screen.getByLabelText("new-request"));
+    expect(onAddRequest).toHaveBeenCalledTimes(1);
+    expect(newRequestDraft).not.toHaveBeenCalled();
   });
 
   it("New collection creates a default-named collection and enters rename", async () => {

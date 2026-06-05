@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { readPrefs, usePrefs } from "@/lib/use-prefs";
 import { newId } from "@/lib/ids";
-import type { ItemIpc } from "@/ipc/bindings";
+import type { ItemIpc, SavedRequestIpc } from "@/ipc/bindings";
 import { useCatalogTree } from "./useCatalogTree";
 import { newRequestDraft, openSavedRequest } from "./actions";
 import { filterCollections, sortCollections, type SortKey } from "./sort";
@@ -17,9 +17,15 @@ const MAX_WIDTH = 600;
 export interface SidebarShellProps {
   /** Open a collection's overview (CollectionOverview lands in plan-07). */
   onOpenCollection?: (collectionId: string) => void;
+  /** Open a saved request (default: direct `openSavedRequest`). Lets a parent guard the open. */
+  onOpenRequest?: (collectionId: string, req: SavedRequestIpc) => void;
+  /** Start a new request draft (default: direct `newRequestDraft`). Lets a parent guard it. */
+  onAddRequest?: () => void;
 }
 
-export function SidebarShell({ onOpenCollection }: SidebarShellProps) {
+export function SidebarShell({ onOpenCollection, onOpenRequest, onAddRequest }: SidebarShellProps) {
+  const openRequest = onOpenRequest ?? openSavedRequest;
+  const addRequest = onAddRequest ?? newRequestDraft;
   const [prefs, setPref] = usePrefs();
   const cat = useCatalogTree();
   const [filter, setFilter] = useState("");
@@ -84,7 +90,7 @@ export function SidebarShell({ onOpenCollection }: SidebarShellProps) {
           className="h-8 text-xs"
           aria-label="collection-filter"
         />
-        <Button size="icon" variant="ghost" aria-label="new-request" onClick={() => newRequestDraft()}>
+        <Button size="icon" variant="ghost" aria-label="new-request" onClick={() => addRequest()}>
           <Plus className="size-4" />
         </Button>
         <Button size="icon" variant="ghost" aria-label="new-collection" onClick={() => void onNewCollection()}>
@@ -105,14 +111,14 @@ export function SidebarShell({ onOpenCollection }: SidebarShellProps) {
         activeItemId={null}
         editingId={editingId}
         onEditingChange={setEditingId}
-        onOpenRequest={(collectionId, req) => openSavedRequest(collectionId, req)}
+        onOpenRequest={(collectionId, req) => openRequest(collectionId, req)}
         onOpenCollection={onOpenCollection ?? (() => {})}
         onRenameItem={cat.renameItem}
         onRenameCollection={cat.renameCollection}
         onDuplicateItem={cat.duplicateItem}
         onDeleteItem={cat.deleteItem}
         onDeleteCollection={cat.deleteCollection}
-        onAddRequest={() => newRequestDraft()}
+        onAddRequest={() => addRequest()}
         onAddFolder={onAddFolder}
         onSetPinned={cat.setPinned}
         onMoveItem={cat.moveItem}
