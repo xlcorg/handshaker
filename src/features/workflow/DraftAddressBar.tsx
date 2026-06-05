@@ -47,7 +47,7 @@ export function DraftAddressBar({
           value={step.address}
           onChange={(e) => onAddress(e.target.value)}
           placeholder="host:port"
-          className="h-7 w-44 border-0 bg-transparent px-1 font-mono text-xs focus-visible:ring-0"
+          className="h-7 w-[22rem] border-0 bg-transparent px-1 font-mono text-xs focus-visible:ring-0"
         />
       </div>
       <MethodPicker
