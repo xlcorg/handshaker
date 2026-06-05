@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { CollectionIpc } from "@/ipc/bindings";
 import { filterCollections } from "./sort";
-import { allContainerIds, flattenVisible } from "./treeNav";
+import { allContainerIds, flattenVisible, pathToItem } from "./treeNav";
 
 export interface PickTarget {
   collectionId: string;
@@ -17,6 +17,12 @@ export interface CollectionPickerProps {
 
 export function CollectionPicker({ collections, query, value, onChange }: CollectionPickerProps) {
   const [open, setOpen] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!value) return;
+    const path = pathToItem(collections, value.parentId ?? value.collectionId);
+    if (path) setOpen((prev) => new Set([...prev, ...path]));
+  }, [value, collections]);
 
   const filtered = useMemo(() => filterCollections(collections, query), [collections, query]);
   const filtering = query.trim().length > 0;

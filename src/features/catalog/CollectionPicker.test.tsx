@@ -42,7 +42,7 @@ describe("CollectionPicker", () => {
 
   it("expanding a collection reveals its folders, and selecting one emits parentId=folderId", () => {
     const { onChange } = setup();
-    fireEvent.click(screen.getByLabelText("expand My APIs"));
+    // Auto-reveal: My APIs is auto-expanded because c1 is selected; folders are visible immediately.
     fireEvent.click(screen.getByText("Staging"));
     expect(onChange).toHaveBeenCalledWith({ collectionId: "c1", parentId: "f1" });
   });
@@ -63,7 +63,7 @@ describe("CollectionPicker", () => {
     render(
       <CollectionPicker collections={tree} query="" value={{ collectionId: "c1", parentId: "f1" }} onChange={onChange} />,
     );
-    fireEvent.click(screen.getByLabelText("expand My APIs"));
+    // Auto-reveal: My APIs is auto-expanded because f1 is selected, so Staging is already visible.
     expect(screen.getByText("Staging").closest("[data-selected='true']")).toBeTruthy();
   });
 });

@@ -9,12 +9,26 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { CollectionIpc } from "@/ipc/bindings";
+import type { CollectionIpc, ItemIpc } from "@/ipc/bindings";
 import type { SaveLocation } from "./grouping";
 import { suggestSaveTarget } from "./grouping";
 import { CollectionPicker, type PickTarget } from "./CollectionPicker";
 import { newId } from "@/lib/ids";
 import { augmentTree, type PendingFolder, type PendingCollection } from "./savePicker";
+
+const DEFAULT_NEW_COLLECTION_NAME = "New Collection";
+
+/** Find a folder by id anywhere in a flat items list (recursive). */
+function findFolderById(items: ItemIpc[], id: string): ItemIpc | null {
+  for (const item of items) {
+    if (item.id === id) return item;
+    if (item.type === "folder") {
+      const found = findFolderById(item.items, id);
+      if (found) return found;
+    }
+  }
+  return null;
+}
 
 export interface SaveRequestDialogProps {
   open: boolean;
@@ -65,18 +79,6 @@ export function SaveRequestDialog(props: SaveRequestDialogProps) {
   const augmented = augmentTree(collections, pendingCollections, pendingFolders);
   const selectedCollection = target ? augmented.find((c) => c.id === target.collectionId) ?? null : null;
 
-  /** Find a folder by id anywhere in a flat items list (recursive). */
-  function findFolderById(items: import("@/ipc/bindings").ItemIpc[], id: string): import("@/ipc/bindings").ItemIpc | null {
-    for (const item of items) {
-      if (item.id === id) return item;
-      if (item.type === "folder") {
-        const found = findFolderById(item.items, id);
-        if (found) return found;
-      }
-    }
-    return null;
-  }
-
   const selectedNodeName: string = (() => {
     if (!target) return "";
     if (target.parentId && selectedCollection) {
@@ -91,7 +93,19 @@ export function SaveRequestDialog(props: SaveRequestDialogProps) {
     : `＋ New folder in "${selectedNodeName}"`;
 
   function applyReco() {
-    if (!reco || !target) return;
+    if (!reco) return;
+    if (!target) {
+      // No collection exists yet — create a pending collection and pending folder.
+      const colTempId = newId();
+      setPendingCollections((prev) => [...prev, { tempId: colTempId, name: DEFAULT_NEW_COLLECTION_NAME }]);
+      const folderTempId = newId();
+      setPendingFolders((prev) => [
+        ...prev,
+        { tempId: folderTempId, collectionId: colTempId, parentId: null, name: reco.folderName },
+      ]);
+      setTarget({ collectionId: colTempId, parentId: folderTempId });
+      return;
+    }
     const collection = augmented.find((c) => c.id === target.collectionId);
     if (!collection) return;
     // Reuse an existing root folder of the same name.
@@ -213,6 +227,18 @@ export function SaveRequestDialog(props: SaveRequestDialogProps) {
 
         {!originBound && (
           <>
+            {reco && reco.folderName && (
+              <div className="rounded-md border border-blue-500/60 bg-blue-500/10 px-2.5 py-2 text-xs">
+                <div className="mb-0.5 text-blue-400">✨ Рекомендуем сохранить как</div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-mono text-foreground">
+                    {(selectedCollection?.name ?? DEFAULT_NEW_COLLECTION_NAME) + " / " + reco.folderName + " / " + name.trim()}
+                  </span>
+                  <Button size="sm" variant="secondary" onClick={applyReco}>Добавить</Button>
+                </div>
+              </div>
+            )}
+
             {existingLocations && existingLocations.length > 0 && (
               <div className="text-[11px] text-muted-foreground">
                 Already saved in:
@@ -223,18 +249,6 @@ export function SaveRequestDialog(props: SaveRequestDialogProps) {
                     </li>
                   ))}
                 </ul>
-              </div>
-            )}
-
-            {reco && reco.folderName && (
-              <div className="rounded-md border border-blue-500/60 bg-blue-500/10 px-2.5 py-2 text-xs">
-                <div className="mb-0.5 text-blue-400">✨ Рекомендуем сохранить как</div>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-mono text-foreground">
-                    {(selectedCollection?.name ?? "") + " / " + reco.folderName + " / " + name.trim()}
-                  </span>
-                  <Button size="sm" variant="secondary" onClick={applyReco}>Добавить</Button>
-                </div>
               </div>
             )}
 
@@ -280,7 +294,7 @@ export function SaveRequestDialog(props: SaveRequestDialogProps) {
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={submit} disabled={busy}>Save</Button>
+          <Button onClick={submit} disabled={busy || (!originBound && !target)}>Save</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

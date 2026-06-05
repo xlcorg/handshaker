@@ -49,7 +49,7 @@ describe("SaveRequestDialog — shell", () => {
   it("saves into a folder the user selects", async () => {
     const p = props();
     render(<SaveRequestDialog {...p} />);
-    fireEvent.click(screen.getByLabelText("expand My APIs"));
+    // Auto-reveal: My APIs is auto-expanded because c1 is the default selected collection.
     fireEvent.click(screen.getByText("Staging"));
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() =>
@@ -91,6 +91,23 @@ describe("SaveRequestDialog — recommendation chip", () => {
     await waitFor(() => expect(p.onCreateFolder).toHaveBeenCalledWith("c1", null, "NotesApi"));
     await waitFor(() =>
       expect(p.onSave).toHaveBeenCalledWith({ collectionId: "c1", parentId: "f-new", name: "Create" }),
+    );
+  });
+
+  it("chip text shows 'New Collection' when collections is empty", () => {
+    render(<SaveRequestDialog {...props({ collections: [] })} />);
+    expect(screen.getByText(/New Collection\s*\/\s*NotesApi\s*\/\s*Create/)).toBeTruthy();
+  });
+
+  it("'Добавить' with no collections creates a new collection + folder and saves into it", async () => {
+    const p = props({ collections: [] });
+    render(<SaveRequestDialog {...p} />);
+    fireEvent.click(screen.getByRole("button", { name: /Добавить/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(p.onCreateCollection).toHaveBeenCalledWith("New Collection"));
+    await waitFor(() => expect(p.onCreateFolder).toHaveBeenCalledWith("c-new", null, "NotesApi"));
+    await waitFor(() =>
+      expect(p.onSave).toHaveBeenCalledWith({ collectionId: "c-new", parentId: "f-new", name: "Create" }),
     );
   });
 
