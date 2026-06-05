@@ -65,9 +65,30 @@ export function SaveRequestDialog(props: SaveRequestDialogProps) {
   const augmented = augmentTree(collections, pendingCollections, pendingFolders);
   const selectedCollection = target ? augmented.find((c) => c.id === target.collectionId) ?? null : null;
 
+  /** Find a folder by id anywhere in a flat items list (recursive). */
+  function findFolderById(items: import("@/ipc/bindings").ItemIpc[], id: string): import("@/ipc/bindings").ItemIpc | null {
+    for (const item of items) {
+      if (item.id === id) return item;
+      if (item.type === "folder") {
+        const found = findFolderById(item.items, id);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
+  const selectedNodeName: string = (() => {
+    if (!target) return "";
+    if (target.parentId && selectedCollection) {
+      const folder = findFolderById(selectedCollection.items, target.parentId);
+      if (folder) return folder.name;
+    }
+    return selectedCollection?.name ?? "";
+  })();
+
   const newLabel = !target
     ? "＋ New collection"
-    : `＋ New folder in "${selectedCollection?.name ?? ""}"`;
+    : `＋ New folder in "${selectedNodeName}"`;
 
   function applyReco() {
     if (!reco || !target) return;
@@ -236,13 +257,13 @@ export function SaveRequestDialog(props: SaveRequestDialogProps) {
                     onChange={(e) => setNewName(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") commitNew();
-                      if (e.key === "Escape") setAdding(false);
+                      if (e.key === "Escape") { setAdding(false); setNewName(""); }
                     }}
                     placeholder="Name"
                     className="h-7 text-xs"
                   />
                   <Button size="sm" onClick={commitNew}>Add</Button>
-                  <Button size="sm" variant="ghost" onClick={() => setAdding(false)}>Cancel</Button>
+                  <Button size="sm" variant="ghost" onClick={() => { setAdding(false); setNewName(""); }}>Cancel</Button>
                 </>
               ) : (
                 <button

@@ -160,3 +160,65 @@ describe("SaveRequestDialog — contextual New", () => {
     expect(p.onCreateFolder).not.toHaveBeenCalled();
   });
 });
+
+describe("SaveRequestDialog — pending materialization order", () => {
+  it("creates a pending collection, then a folder inside it, then saves with real ids", async () => {
+    const onCreateCollection = vi.fn().mockResolvedValue("real-col");
+    const onCreateFolder = vi.fn().mockResolvedValue("real-folder");
+    const p = props({ collections: [], onCreateCollection, onCreateFolder });
+    render(<SaveRequestDialog {...p} />);
+
+    // New collection
+    fireEvent.click(screen.getByRole("button", { name: /New collection/ }));
+    fireEvent.change(screen.getByLabelText("New node name"), { target: { value: "Acme" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+
+    // New folder inside it (selection is now the pending collection root)
+    fireEvent.click(screen.getByRole("button", { name: /New folder in .*Acme/ }));
+    fireEvent.change(screen.getByLabelText("New node name"), { target: { value: "NotesApi" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(onCreateCollection).toHaveBeenCalledWith("Acme"));
+    await waitFor(() => expect(onCreateFolder).toHaveBeenCalledWith("real-col", null, "NotesApi"));
+    await waitFor(() =>
+      expect(p.onSave).toHaveBeenCalledWith({
+        collectionId: "real-col",
+        parentId: "real-folder",
+        name: "Create",
+      }),
+    );
+  });
+
+  it("materializes two nested pending folders under a real collection in parent-before-child order", async () => {
+    const calls: Array<[string, string | null, string]> = [];
+    const onCreateFolder = vi.fn(async (collectionId: string, parentId: string | null, name: string) => {
+      calls.push([collectionId, parentId, name]);
+      return name === "Outer" ? "real-outer" : "real-inner";
+    });
+    const p = props({ onCreateFolder });
+    render(<SaveRequestDialog {...p} />);
+
+    // First collection "My APIs" is selected by default → create "Outer" under it
+    fireEvent.click(screen.getByRole("button", { name: /New folder in .*My APIs/ }));
+    fireEvent.change(screen.getByLabelText("New node name"), { target: { value: "Outer" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+
+    // Now "Outer" is selected → create "Inner" under it
+    fireEvent.click(screen.getByRole("button", { name: /New folder in .*Outer/ }));
+    fireEvent.change(screen.getByLabelText("New node name"), { target: { value: "Inner" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(p.onSave).toHaveBeenCalledWith({ collectionId: "c1", parentId: "real-inner", name: "Create" }),
+    );
+    // Outer created before Inner; Inner's parent is Outer's real id
+    expect(calls).toEqual([
+      ["c1", null, "Outer"],
+      ["c1", "real-outer", "Inner"],
+    ]);
+  });
+});
