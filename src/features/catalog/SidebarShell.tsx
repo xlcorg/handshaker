@@ -115,6 +115,8 @@ export function SidebarShell({ onOpenCollection }: SidebarShellProps) {
         onAddRequest={() => newRequestDraft()}
         onAddFolder={onAddFolder}
         onSetPinned={cat.setPinned}
+        onMoveItem={cat.moveItem}
+        onMoveItemAcross={cat.moveItemAcross}
       />
 
       {cat.error ? (
