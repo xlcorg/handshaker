@@ -19,6 +19,7 @@ describe("stepToSavedRequest", () => {
       method: "GetX",
       requestJson: '{"id":"1"}',
       metadata: [{ key: "x-tenant", value: "acme", enabled: true }],
+      auth: { kind: "env_var", env_var: "TOK", header_name: "authorization", prefix: "Bearer " },
     });
     const saved = stepToSavedRequest(s, { id: "req-1", name: "GetX" });
     expect(saved).toEqual({
@@ -29,7 +30,7 @@ describe("stepToSavedRequest", () => {
       method: "GetX",
       body_template: '{"id":"1"}',
       metadata: [{ key: "x-tenant", value: "acme", enabled: true }],
-      auth: { kind: "none" },
+      auth: { kind: "env_var", env_var: "TOK", header_name: "authorization", prefix: "Bearer " },
       tls_override: true,
       last_used_at: null,
       use_count: 0,
@@ -74,10 +75,11 @@ describe("savedRequestToDraft", () => {
         tls_override: true,
         body_template: '{"id":"1"}',
         metadata: [{ key: "x", value: "y", enabled: true }],
+        auth: { kind: "env_var", env_var: "TOK", header_name: "authorization", prefix: "Bearer " },
       }),
     );
     expect(draft.status).toBe("draft");
-    expect(draft.serviceId).toBeNull();
+    expect(draft.auth).toEqual({ kind: "env_var", env_var: "TOK", header_name: "authorization", prefix: "Bearer " });
     expect(draft.address).toBe("{{host}}:443");
     expect(draft.tls).toBe(true);
     expect(draft.service).toBe("pkg.v1.Svc");
@@ -113,5 +115,12 @@ describe("savedRequestToDraft", () => {
     expect(draft.method).toBe(original.method);
     expect(draft.requestJson).toBe(original.requestJson);
     expect(draft.metadata).toEqual(original.metadata);
+  });
+
+  it("round-trips inline auth step -> saved -> draft", () => {
+    const auth = { kind: "env_var" as const, env_var: "TOK", header_name: "authorization", prefix: "Bearer " };
+    const original = step({ service: "pkg.v1.Svc", method: "Ping", auth });
+    const draft = savedRequestToDraft(stepToSavedRequest(original, { id: "x", name: "Ping" }));
+    expect(draft.auth).toEqual(auth);
   });
 });
