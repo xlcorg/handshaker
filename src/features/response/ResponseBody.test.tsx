@@ -32,14 +32,6 @@ describe("ResponseBody", () => {
     await waitFor(() => expect(toastStore.getState()[0]?.message).toMatch(/Скопировано: Alice/));
   });
 
-  it("⧉ copy all copies the whole response", async () => {
-    const user = userEvent.setup();
-    vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue(undefined);
-    render(<ResponseBody json={`{"a":1}`} />);
-    await user.click(screen.getByRole("button", { name: "copy-all" }));
-    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(`{"a":1}`);
-  });
-
   it("Ctrl+F opens the search bar and matches highlight + count", async () => {
     const user = userEvent.setup();
     render(<ResponseBody json={`{"city":"Berlin","other":"Berlin"}`} />);

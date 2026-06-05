@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { Copy } from "lucide-react";
 import { JsonTree } from "./json/JsonTreeView";
 import { JsonSearchBar } from "./json/JsonSearchBar";
 import { parseJsonTree, type JsonNode } from "./json/jsonTree";
@@ -102,16 +101,6 @@ export function ResponseBody({ json }: ResponseBodyProps) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex flex-none items-center justify-end border-b border-border/60 px-2 py-1">
-        <button
-          type="button"
-          aria-label="copy-all"
-          onClick={() => void copyToClipboard(json, "Ответ скопирован")}
-          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground"
-        >
-          <Copy className="size-3" /> копировать всё
-        </button>
-      </div>
       {searchOpen && (
         <JsonSearchBar
           query={query}
