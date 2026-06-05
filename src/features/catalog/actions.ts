@@ -1,7 +1,7 @@
 import * as ipc from "@/ipc/client";
 import type { GrpcTargetIpc, ServiceCatalogIpc } from "@/ipc/bindings";
 import { workflowStore } from "@/features/workflow/store";
-import { addStep, setView } from "@/features/workflow/reducers";
+import { setView } from "@/features/workflow/reducers";
 import { createStepFromMethod } from "@/features/workflow/actions";
 import { catalogStore } from "./store";
 import type { CatalogService } from "./model";
@@ -25,8 +25,9 @@ export async function refreshContract(svc: CatalogService): Promise<ServiceCatal
 }
 
 /**
- * Create a call from a catalog method and open it in Focus.
- * `newWorkflow` (⌥↵) starts a fresh workflow first.
+ * Create a call from a catalog method and open it as the global pending-draft in Focus.
+ * `newWorkflow` (⌥↵) starts a fresh workflow first. The opened method carries the
+ * service's `auth` inline (request-first model — the draft is not history).
  * NOTE: skipVerify is not yet propagated into the invoke path.
  */
 export async function openCallFromMethod(
@@ -40,7 +41,8 @@ export async function openCallFromMethod(
     { address: svc.address, tls: svc.tls },
     service,
     method,
-    { serviceId: svc.id, defaultMetadata: svc.defaultMetadata },
+    { auth: svc.auth, defaultMetadata: svc.defaultMetadata },
   );
-  workflowStore.update((w) => setView(addStep(w, step), "focus"));
+  workflowStore.update((w) => setView(w, "focus"));
+  workflowStore.setDraft(step);
 }

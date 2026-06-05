@@ -8,9 +8,15 @@ vi.mock("@/ipc/client", () => ({
   envActiveSet: vi.fn(),
 }));
 
+vi.mock("@/features/workflow/actions", () => ({
+  createStepFromMethod: vi.fn(),
+}));
+
 import * as ipc from "@/ipc/client";
 import { catalogStore } from "./store";
 import { workflowStore } from "@/features/workflow/store";
+import { createStepFromMethod } from "@/features/workflow/actions";
+import { newStep } from "@/features/workflow/model";
 import { describeService, refreshContract, openCallFromMethod } from "./actions";
 import type { ServiceCatalogIpc } from "@/ipc/bindings";
 
@@ -47,29 +53,33 @@ describe("refreshContract", () => {
 });
 
 describe("openCallFromMethod", () => {
-  it("creates a step in the active workflow and switches to focus", async () => {
-    vi.mocked(ipc.grpcBuildRequestSkeleton).mockResolvedValue('{"id":""}');
+  it("opens the method as the global draft, carrying the service auth inline", async () => {
+    const step = newStep({ address: "ord:443", tls: true, service: "ord.v1.OrderService", method: "GetOrder" });
+    vi.mocked(createStepFromMethod).mockResolvedValue(step);
+    const setDraft = vi.spyOn(workflowStore, "setDraft");
     const svc = catalogStore.addService({ address: "ord:443", tls: true });
     await openCallFromMethod(svc, "ord.v1.OrderService", "GetOrder");
-    const wf = workflowStore.activeWorkflow();
-    expect(wf.steps).toHaveLength(1);
-    expect(wf.steps[0]).toMatchObject({
-      address: "ord:443",
-      tls: true,
-      service: "ord.v1.OrderService",
-      method: "GetOrder",
-    });
-    expect(wf.activeStepId).toBe(wf.steps[0].id);
-    expect(wf.view).toBe("focus");
+    expect(createStepFromMethod).toHaveBeenCalledWith(
+      { address: svc.address, tls: svc.tls },
+      "ord.v1.OrderService",
+      "GetOrder",
+      { auth: svc.auth, defaultMetadata: svc.defaultMetadata },
+    );
+    expect(setDraft).toHaveBeenCalledWith(step);
+    expect(workflowStore.getState().draft).toBe(step);
+    expect(workflowStore.activeWorkflow().view).toBe("focus");
+    // draft path does not append to history
+    expect(workflowStore.activeWorkflow().steps).toHaveLength(0);
   });
 
   it("opens in a fresh workflow when newWorkflow is set", async () => {
-    vi.mocked(ipc.grpcBuildRequestSkeleton).mockResolvedValue("{}");
+    const step = newStep({ address: "h:443", tls: false, service: "p.S", method: "M" });
+    vi.mocked(createStepFromMethod).mockResolvedValue(step);
     const before = workflowStore.getState().workflows.length;
     const svc = catalogStore.addService({ address: "h:443" });
     await openCallFromMethod(svc, "p.S", "M", { newWorkflow: true });
     const st = workflowStore.getState();
     expect(st.workflows).toHaveLength(before + 1);
-    expect(workflowStore.activeWorkflow().steps).toHaveLength(1);
+    expect(st.draft).toBe(step);
   });
 });
