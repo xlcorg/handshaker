@@ -46,7 +46,8 @@ describe("formToConfig", () => {
     expect(formToConfig({ ...AUTH_FORM_DEFAULTS, kind: "apikey", envVar: "KEY", headerName: "x-key", prefix: "" })).toEqual({
       kind: "env_var", env_var: "KEY", header_name: "x-key", prefix: "",
     });
-    expect(formToConfig({ ...AUTH_FORM_DEFAULTS, kind: "apikey", envVar: "KEY", headerName: "  " }).header_name).toBe("x-api-key");
+    const blankHeader = formToConfig({ ...AUTH_FORM_DEFAULTS, kind: "apikey", envVar: "KEY", headerName: "  " });
+    expect(blankHeader.kind === "env_var" ? blankHeader.header_name : null).toBe("x-api-key");
   });
 
   it("oauth2 → none (not editable here)", () => {
