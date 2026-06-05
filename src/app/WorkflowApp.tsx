@@ -20,7 +20,8 @@ import { DiscardDraftDialog } from "@/features/catalog/DiscardDraftDialog";
 import { needsDiscardConfirm } from "@/features/catalog/discardGuard";
 import { saveNewRequest } from "@/features/catalog/save";
 import { useAutosaveDraft } from "@/features/catalog/useAutosaveDraft";
-import { suggestSavePath, findSavedLocations } from "@/features/catalog/grouping";
+import { findSavedLocations } from "@/features/catalog/grouping";
+import { newId } from "@/lib/ids";
 
 function renderView(view: ViewMode, onRequestSave: () => void) {
   switch (view) {
@@ -113,6 +114,11 @@ export function WorkflowApp() {
     pending?.();
   }
 
+  const createFolder = (collectionId: string, parentId: string | null, name: string) => {
+    const id = newId();
+    return cat.addItem(collectionId, parentId, { type: "folder", id, name, items: [] }).then(() => id);
+  };
+
   // Opening a request / starting a new draft must reveal Focus — close any open overview first.
   const openRequest = (collectionId: string, req: SavedRequestIpc) =>
     guardedRun(() => {
@@ -180,12 +186,13 @@ export function WorkflowApp() {
           setSaveOpen(o);
           if (!o) pendingOpenRef.current = null;
         }}
-        metas={cat.tree}
-        loadCollection={(id) => Promise.resolve(cat.tree.find((c) => c.id === id)!)}
+        collections={cat.tree}
         defaultName={draft?.method ?? ""}
+        draftService={draft?.service ?? ""}
+        draftMethod={draft?.method ?? ""}
         onSave={handleSave}
         onCreateCollection={cat.createCollection}
-        suggestedPath={draft ? suggestSavePath(draft.address, draft.service) : []}
+        onCreateFolder={createFolder}
         existingLocations={
           draft
             ? findSavedLocations(cat.tree, {
