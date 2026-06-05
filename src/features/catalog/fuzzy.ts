@@ -1,5 +1,3 @@
-import type { CatalogService } from "./model";
-
 export interface FuzzyResult {
   matched: boolean;
   score: number; // higher is better; 0 when query is empty
@@ -41,27 +39,4 @@ export function fuzzyMatch(query: string, target: string): FuzzyResult {
   }
   score += Math.max(0, 5 - (t.length - q.length) / 4); // prefer tighter targets
   return { matched: true, score, indices };
-}
-
-export interface RankedService {
-  service: CatalogService;
-  score: number;
-  indices: number[]; // label match indices (for optional highlighting)
-}
-
-/** Rank services by fuzzy match on label (falling back to address); favorites break ties. */
-export function rankServices(query: string, services: CatalogService[]): RankedService[] {
-  const ranked: RankedService[] = [];
-  for (const service of services) {
-    const onLabel = fuzzyMatch(query, service.label);
-    const onAddr = fuzzyMatch(query, service.address);
-    if (!onLabel.matched && !onAddr.matched) continue;
-    const best = onLabel.score >= onAddr.score ? onLabel : onAddr;
-    let score = best.score;
-    if (service.favorite) score += 2;
-    ranked.push({ service, score, indices: onLabel.matched ? onLabel.indices : [] });
-  }
-  return ranked.sort(
-    (a, b) => b.score - a.score || a.service.label.localeCompare(b.service.label),
-  );
 }
