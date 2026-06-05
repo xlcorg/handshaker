@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { CollectionIpc } from "@/ipc/bindings";
+import { filterCollections } from "./sort";
 import { allContainerIds, flattenVisible } from "./treeNav";
 
 export interface PickTarget {
@@ -14,24 +15,10 @@ export interface CollectionPickerProps {
   onChange: (t: PickTarget) => void;
 }
 
-/** Case-insensitive substring filter that keeps a container if it OR any descendant matches. */
-function filterTree(collections: CollectionIpc[], q: string): CollectionIpc[] {
-  const needle = q.trim().toLowerCase();
-  if (!needle) return collections;
-  const keepItems = (items: CollectionIpc["items"]): CollectionIpc["items"] =>
-    items
-      .filter((it) => it.type === "folder")
-      .map((it) => (it.type === "folder" ? { ...it, items: keepItems(it.items) } : it))
-      .filter((it) => it.type === "folder" && (it.name.toLowerCase().includes(needle) || it.items.length > 0));
-  return collections
-    .map((c) => ({ ...c, items: keepItems(c.items) }))
-    .filter((c) => c.name.toLowerCase().includes(needle) || c.items.length > 0);
-}
-
 export function CollectionPicker({ collections, query, value, onChange }: CollectionPickerProps) {
   const [open, setOpen] = useState<Set<string>>(new Set());
 
-  const filtered = useMemo(() => filterTree(collections, query), [collections, query]);
+  const filtered = useMemo(() => filterCollections(collections, query), [collections, query]);
   const filtering = query.trim().length > 0;
   const effectiveOpen = useMemo(
     () => (filtering ? new Set(allContainerIds(filtered)) : open),
@@ -60,12 +47,12 @@ export function CollectionPicker({ collections, query, value, onChange }: Collec
   return (
     <div role="tree" aria-label="save-destination" className="min-h-0 flex-1 overflow-auto rounded-md border border-input p-1">
       {visible.map((n) => {
-        const expandable = n.kind !== "request";
         const expanded = effectiveOpen.has(n.id);
         return (
           <div
             key={n.id}
             role="treeitem"
+            aria-expanded={expanded}
             data-selected={isSelected(n)}
             aria-selected={isSelected(n)}
             onClick={() => onChange({ collectionId: n.collectionId, parentId: n.kind === "collection" ? null : n.id })}
@@ -74,21 +61,18 @@ export function CollectionPicker({ collections, query, value, onChange }: Collec
               isSelected(n) ? "bg-accent" : ""
             }`}
           >
-            {expandable ? (
-              <button
-                type="button"
-                aria-label={`expand ${n.name}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggle(n.id);
-                }}
-                className="w-4 text-muted-foreground"
-              >
-                {expanded ? "▾" : "▸"}
-              </button>
-            ) : (
-              <span className="w-4" />
-            )}
+            <button
+              type="button"
+              aria-label={`${expanded ? "collapse" : "expand"} ${n.name}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (filtering) return;
+                toggle(n.id);
+              }}
+              className="w-4 text-muted-foreground"
+            >
+              {expanded ? "▾" : "▸"}
+            </button>
             <span>📁</span>
             <span className="truncate">{n.name}</span>
           </div>

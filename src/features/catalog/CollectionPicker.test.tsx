@@ -57,4 +57,13 @@ describe("CollectionPicker", () => {
     setup();
     expect(screen.getByText("My APIs").closest("[data-selected='true']")).toBeTruthy();
   });
+
+  it("marks a selected folder", () => {
+    const onChange = vi.fn();
+    render(
+      <CollectionPicker collections={tree} query="" value={{ collectionId: "c1", parentId: "f1" }} onChange={onChange} />,
+    );
+    fireEvent.click(screen.getByLabelText("expand My APIs"));
+    expect(screen.getByText("Staging").closest("[data-selected='true']")).toBeTruthy();
+  });
 });
