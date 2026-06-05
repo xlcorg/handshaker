@@ -3,8 +3,9 @@ import { Button } from "@/components/ui/button";
 import { CallPanel } from "./CallPanel";
 import { StepRow } from "./StepRow";
 import { useActiveWorkflow, workflowStore } from "./store";
-import { removeStep, reorderStep, setActiveStep } from "./reducers";
+import { removeStep, reorderStep, setActiveStep, updateStep } from "./reducers";
 import { makeDragHandlers } from "./dnd";
+import type { Step } from "./model";
 
 const dragFor = makeDragHandlers((from, to) =>
   workflowStore.update((w) => reorderStep(w, from, to)),
@@ -47,7 +48,12 @@ export function LedgerView() {
               />
               {active ? (
                 <div className="h-[480px] border-y border-border">
-                  <CallPanel step={step} />
+                  <CallPanel
+                    step={step}
+                    onPatch={(patch: Partial<Step>) =>
+                      workflowStore.update((w) => updateStep(w, step.id, patch))
+                    }
+                  />
                 </div>
               ) : null}
             </Fragment>

@@ -1,6 +1,8 @@
 import { CallPanel } from "./CallPanel";
 import { StepList } from "./StepList";
-import { useActiveWorkflow } from "./store";
+import { useActiveWorkflow, workflowStore } from "./store";
+import { updateStep } from "./reducers";
+import type { Step } from "./model";
 
 export function ListView() {
   const wf = useActiveWorkflow();
@@ -21,7 +23,12 @@ export function ListView() {
       </div>
       <div className="min-w-0 flex-1">
         {active ? (
-          <CallPanel step={active} />
+          <CallPanel
+            step={active}
+            onPatch={(patch: Partial<Step>) =>
+              workflowStore.update((w) => updateStep(w, active.id, patch))
+            }
+          />
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
             Выбери шаг слева.
