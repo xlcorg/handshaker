@@ -6,6 +6,9 @@ import { envActiveSet } from "@/ipc/client";
 export interface DraftOrigin {
   collectionId: string;
   requestId: string;
+  /** Display names for the header breadcrumb; absent for legacy/unknown origins. */
+  collectionName?: string;
+  requestName?: string;
 }
 
 const CONTENT_KEYS = ["address", "tls", "service", "method", "auth", "requestJson", "metadata"] as const;
