@@ -170,11 +170,6 @@ export async function collectionRestoreItem(collectionId: string, snapshot: Item
   if (r.status === "error") throw r.error;
 }
 
-export async function authSetForEnv(collectionId: string, itemId: string | null, envName: string, config: SavedAuthConfigIpc | null): Promise<void> {
-  const r = await commands.authSetForEnv(collectionId, itemId, envName, config);
-  if (r.status === "error") throw r.error;
-}
-
 export async function authResolve(
   config: SavedAuthConfigIpc,
 ): Promise<AuthCredentialsIpc | null> {
@@ -217,7 +212,6 @@ export const ipc = {
   collectionDuplicateItem,
   collectionDeleteItem,
   collectionRestoreItem,
-  authSetForEnv,
   authResolve,
   collectionSetNodeAuth,
 };
