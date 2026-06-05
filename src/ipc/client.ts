@@ -172,6 +172,15 @@ export async function authResolve(
   return r.data;
 }
 
+export async function collectionSetNodeAuth(
+  collectionId: string,
+  itemId: string | null,
+  config: SavedAuthConfigIpc,
+): Promise<void> {
+  const r = await commands.collectionSetNodeAuth(collectionId, itemId, config);
+  if (r.status === "error") throw r.error;
+}
+
 export const ipc = {
   appVersion,
   grpcDescribe,
@@ -198,4 +207,5 @@ export const ipc = {
   collectionRestoreItem,
   authSetForEnv,
   authResolve,
+  collectionSetNodeAuth,
 };
