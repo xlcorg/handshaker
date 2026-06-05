@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { workflowStore } from "./store";
+import { isContentPatch } from "./store";
 import { newStep } from "./model";
 import { addStep, updateStep } from "./reducers";
 
@@ -141,5 +142,72 @@ describe("global pending-draft", () => {
     expect(workflowStore.getState().draft).toBe(draft); // not dropped when state is rebuilt
     workflowStore.setActiveWorkflow(first);
     expect(workflowStore.getState().draft).toBe(draft); // one global draft across workflows
+  });
+});
+
+describe("draft origin + dirty", () => {
+  beforeEach(() => workflowStore.reset());
+
+  it("starts unbound and clean", () => {
+    expect(workflowStore.getState().draftOrigin).toBeNull();
+    expect(workflowStore.getState().draftDirty).toBe(false);
+  });
+
+  it("setDraft(step) leaves it unbound and clean", () => {
+    workflowStore.setDraft(newStep({ address: "h", tls: false, service: "S", method: "M" }));
+    expect(workflowStore.getState().draftOrigin).toBeNull();
+    expect(workflowStore.getState().draftDirty).toBe(false);
+  });
+
+  it("setDraft(step, origin) binds the origin and is clean", () => {
+    const origin = { collectionId: "c1", requestId: "r1" };
+    workflowStore.setDraft(newStep({ address: "h", tls: false, service: "S", method: "M" }), origin);
+    expect(workflowStore.getState().draftOrigin).toEqual(origin);
+    expect(workflowStore.getState().draftDirty).toBe(false);
+  });
+
+  it("content edits on an UNBOUND draft set dirty", () => {
+    workflowStore.setDraft(newStep({ address: "h", tls: false, service: "S", method: "M" }));
+    workflowStore.updateDraft({ requestJson: '{"a":1}' });
+    expect(workflowStore.getState().draftDirty).toBe(true);
+  });
+
+  it("transient (non-content) edits never set dirty", () => {
+    workflowStore.setDraft(newStep({ address: "h", tls: false, service: "S", method: "M" }));
+    workflowStore.updateDraft({ status: "sending", requestId: "req-1" });
+    expect(workflowStore.getState().draftDirty).toBe(false);
+  });
+
+  it("content edits on a BOUND draft do NOT set dirty (autosave path)", () => {
+    workflowStore.setDraft(newStep({ address: "h", tls: false, service: "S", method: "M" }), {
+      collectionId: "c1", requestId: "r1",
+    });
+    workflowStore.updateDraft({ requestJson: '{"a":1}' });
+    expect(workflowStore.getState().draftDirty).toBe(false);
+  });
+
+  it("setDraftOrigin binds and clears dirty (used after Save)", () => {
+    workflowStore.setDraft(newStep({ address: "h", tls: false, service: "S", method: "M" }));
+    workflowStore.updateDraft({ requestJson: '{"a":1}' }); // dirty now
+    workflowStore.setDraftOrigin({ collectionId: "c1", requestId: "r1" });
+    expect(workflowStore.getState().draftOrigin).toEqual({ collectionId: "c1", requestId: "r1" });
+    expect(workflowStore.getState().draftDirty).toBe(false);
+  });
+
+  it("clearDraft resets origin and dirty", () => {
+    workflowStore.setDraft(newStep({ address: "h", tls: false, service: "S", method: "M" }), {
+      collectionId: "c1", requestId: "r1",
+    });
+    workflowStore.clearDraft();
+    expect(workflowStore.getState().draftOrigin).toBeNull();
+    expect(workflowStore.getState().draftDirty).toBe(false);
+  });
+
+  it("isContentPatch detects content vs transient keys", () => {
+    expect(isContentPatch({ requestJson: "x" })).toBe(true);
+    expect(isContentPatch({ metadata: [] })).toBe(true);
+    expect(isContentPatch({ address: "h" })).toBe(true);
+    expect(isContentPatch({ status: "ok" })).toBe(false);
+    expect(isContentPatch({ requestId: "r" })).toBe(false);
   });
 });

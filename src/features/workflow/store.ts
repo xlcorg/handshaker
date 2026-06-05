@@ -3,15 +3,29 @@ import { newWorkflow, type Step, type Workflow } from "./model";
 import { addStep, setWorkflowEnv as setWorkflowEnvReducer } from "./reducers";
 import { envActiveSet } from "@/ipc/client";
 
+export interface DraftOrigin {
+  collectionId: string;
+  requestId: string;
+}
+
+const CONTENT_KEYS = ["address", "tls", "service", "method", "auth", "requestJson", "metadata"] as const;
+
+/** True when a draft patch changes saved content (so an unbound draft becomes dirty). */
+export function isContentPatch(patch: Partial<Step>): boolean {
+  return CONTENT_KEYS.some((k) => k in patch);
+}
+
 export interface WorkflowState {
   workflows: Workflow[];
   activeWorkflowId: string;
   draft: Step | null;
+  draftOrigin: DraftOrigin | null;
+  draftDirty: boolean;
 }
 
 function initialState(): WorkflowState {
   const wf = newWorkflow("workflow-1");
-  return { workflows: [wf], activeWorkflowId: wf.id, draft: null };
+  return { workflows: [wf], activeWorkflowId: wf.id, draft: null, draftOrigin: null, draftDirty: false };
 }
 
 let state: WorkflowState = initialState();
@@ -46,17 +60,23 @@ export const workflowStore = {
     };
     emit();
   },
-  setDraft(step: Step | null) {
-    state = { ...state, draft: step };
+  setDraft(step: Step | null, origin: DraftOrigin | null = null) {
+    state = { ...state, draft: step, draftOrigin: origin, draftDirty: false };
+    emit();
+  },
+  setDraftOrigin(origin: DraftOrigin | null) {
+    state = { ...state, draftOrigin: origin, draftDirty: false };
     emit();
   },
   updateDraft(patch: Partial<Step>) {
     if (!state.draft) return;
-    state = { ...state, draft: { ...state.draft, ...patch } };
+    const dirty =
+      state.draftDirty || (state.draftOrigin === null && isContentPatch(patch));
+    state = { ...state, draft: { ...state.draft, ...patch }, draftDirty: dirty };
     emit();
   },
   clearDraft() {
-    state = { ...state, draft: null };
+    state = { ...state, draft: null, draftOrigin: null, draftDirty: false };
     emit();
   },
   /** Append a frozen executed snapshot to the active workflow's history. */
@@ -95,4 +115,14 @@ export function useActiveWorkflow(): Workflow {
 export function useDraft(): Step | null {
   useWorkflowState(); // subscribe
   return workflowStore.getState().draft;
+}
+
+export function useDraftOrigin(): DraftOrigin | null {
+  useWorkflowState(); // subscribe
+  return workflowStore.getState().draftOrigin;
+}
+
+export function useDraftDirty(): boolean {
+  useWorkflowState(); // subscribe
+  return workflowStore.getState().draftDirty;
 }
