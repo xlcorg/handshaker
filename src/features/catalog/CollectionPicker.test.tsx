@@ -66,4 +66,12 @@ describe("CollectionPicker", () => {
     // Auto-reveal: My APIs is auto-expanded because f1 is selected, so Staging is already visible.
     expect(screen.getByText("Staging").closest("[data-selected='true']")).toBeTruthy();
   });
+
+  it("collapsing an expanded collection hides its folders", () => {
+    setup(); // value=c1 → "My APIs" auto-expanded, folders visible
+    expect(screen.getByText("Staging")).toBeTruthy();
+    fireEvent.click(screen.getByLabelText("collapse My APIs"));
+    expect(screen.queryByText("Staging")).toBeNull();
+    expect(screen.queryByText("Prod")).toBeNull();
+  });
 });
