@@ -52,3 +52,44 @@ export function sortCollections(collections: CollectionIpc[], key: SortKey): Col
     (a, b) => Number(b.pinned) - Number(a.pinned) || byKey(a, b, key),
   );
 }
+
+function nameMatches(name: string, q: string): boolean {
+  return name.toLowerCase().includes(q);
+}
+
+function requestMatches(it: Extract<ItemIpc, { type: "request" }>, q: string): boolean {
+  return [it.name, it.service, it.method, it.address_template].some((s) =>
+    s.toLowerCase().includes(q),
+  );
+}
+
+function filterItems(items: ItemIpc[], q: string): ItemIpc[] {
+  const out: ItemIpc[] = [];
+  for (const it of items) {
+    if (it.type === "request") {
+      if (requestMatches(it, q)) out.push(it);
+    } else if (nameMatches(it.name, q)) {
+      out.push(it); // folder name matches -> keep whole subtree
+    } else {
+      const kids = filterItems(it.items, q);
+      if (kids.length) out.push({ ...it, items: kids });
+    }
+  }
+  return out;
+}
+
+/** Prune the collection forest to nodes matching `query` (name/service/method/address). */
+export function filterCollections(collections: CollectionIpc[], query: string): CollectionIpc[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return collections;
+  const out: CollectionIpc[] = [];
+  for (const c of collections) {
+    if (nameMatches(c.name, q)) {
+      out.push(c); // collection name matches -> keep whole
+      continue;
+    }
+    const items = filterItems(c.items, q);
+    if (items.length) out.push({ ...c, items });
+  }
+  return out;
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { aggregateUsage, sortCollections } from "./sort";
+import { aggregateUsage, sortCollections, filterCollections } from "./sort";
 import type { CollectionIpc, ItemIpc, SavedRequestIpc } from "@/ipc/bindings";
 
 function req(over: Partial<SavedRequestIpc> = {}): ItemIpc {
@@ -106,5 +106,60 @@ describe("sortCollections", () => {
     const input = [col({ name: "B" }), col({ name: "A" })];
     sortCollections(input, "alpha");
     expect(input.map((c) => c.name)).toEqual(["B", "A"]);
+  });
+});
+
+describe("filterCollections", () => {
+  it("returns the input unchanged for an empty/whitespace query", () => {
+    const input = [col({ name: "A" })];
+    expect(filterCollections(input, "   ")).toBe(input);
+  });
+
+  it("keeps only requests matching service/method/address and prunes siblings + empty branches", () => {
+    const hit = req({ id: "hit", service: "payments.v1.Pay", method: "Charge" });
+    const miss = req({ id: "miss", service: "orders.v1.Ord", method: "List" });
+    const out = filterCollections(
+      [
+        col({ id: "c1", name: "C1", items: [folder([hit, miss])] }),
+        col({ id: "c2", name: "C2", items: [miss] }),
+      ],
+      "charge",
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0].id).toBe("c1");
+    const f = out[0].items[0];
+    expect(f.type).toBe("folder");
+    if (f.type === "folder") {
+      expect(f.items.map((i) => i.id)).toEqual(["hit"]);
+    }
+  });
+
+  it("matches a request by name", () => {
+    const out = filterCollections([col({ items: [req({ id: "x", name: "GetBalance" })] })], "balance");
+    expect(out[0].items.map((i) => i.id)).toEqual(["x"]);
+  });
+
+  it("keeps a folder's whole subtree when the folder name matches", () => {
+    const keep = folder([req({ id: "a" }), req({ id: "b" })]);
+    if (keep.type === "folder") keep.name = "Billing";
+    const out = filterCollections([col({ items: [keep] })], "bill");
+    const f = out[0].items[0];
+    expect(f.type === "folder" && f.items.map((i) => i.id)).toEqual(["a", "b"]);
+  });
+
+  it("keeps a whole collection when the collection name matches", () => {
+    const out = filterCollections([col({ id: "c", name: "Payments", items: [req({ id: "a" })] })], "paym");
+    expect(out).toHaveLength(1);
+    expect(out[0].items.map((i) => i.id)).toEqual(["a"]);
+  });
+
+  it("returns [] when nothing matches", () => {
+    expect(filterCollections([col({ items: [req()] })], "zzz")).toEqual([]);
+  });
+
+  it("does not mutate the input collection", () => {
+    const input = [col({ id: "c", name: "C", items: [req({ id: "a" }), req({ id: "b", name: "keep" })] })];
+    filterCollections(input, "keep");
+    expect(input[0].items).toHaveLength(2);
   });
 });
