@@ -27,6 +27,7 @@ describe("FocusView Save affordance", () => {
     workflowStore.setDraft(newStep({ address: "h:443", tls: false, service: "p.S", method: "GetX" }));
     render(<FocusView onRequestSave={onRequestSave} />);
     expect(screen.getByText("CALL:GetX")).toBeInTheDocument();
+    expect(screen.queryByTestId("draft-dirty-dot")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Сохранить" }));
     expect(onRequestSave).toHaveBeenCalledTimes(1);
     expect(screen.queryByTestId("autosave-status")).not.toBeInTheDocument();
