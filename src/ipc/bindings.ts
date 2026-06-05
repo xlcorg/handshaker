@@ -196,6 +196,14 @@ async collectionMoveItem(collectionId: string, itemId: string, newParentId: stri
     else return { status: "error", error: e  as any };
 }
 },
+async collectionMoveItemAcross(sourceCollectionId: string, itemId: string, targetCollectionId: string, newParentId: string | null, position: number) : Promise<Result<null, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("collection_move_item_across", { sourceCollectionId, itemId, targetCollectionId, newParentId, position }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async collectionDuplicateItem(collectionId: string, itemId: string) : Promise<Result<string, IpcError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("collection_duplicate_item", { collectionId, itemId }) };

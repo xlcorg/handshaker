@@ -142,6 +142,17 @@ export async function collectionMoveItem(collectionId: string, itemId: string, n
   if (r.status === "error") throw r.error;
 }
 
+export async function collectionMoveItemAcross(
+  sourceCollectionId: string,
+  itemId: string,
+  targetCollectionId: string,
+  newParentId: string | null,
+  position: number,
+): Promise<void> {
+  const r = await commands.collectionMoveItemAcross(sourceCollectionId, itemId, targetCollectionId, newParentId, position);
+  if (r.status === "error") throw r.error;
+}
+
 export async function collectionDuplicateItem(collectionId: string, itemId: string): Promise<string> {
   const r = await commands.collectionDuplicateItem(collectionId, itemId);
   if (r.status === "error") throw r.error;
@@ -202,6 +213,7 @@ export const ipc = {
   collectionAddItem,
   collectionRenameItem,
   collectionMoveItem,
+  collectionMoveItemAcross,
   collectionDuplicateItem,
   collectionDeleteItem,
   collectionRestoreItem,
