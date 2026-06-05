@@ -230,7 +230,9 @@ describe("WorkflowApp Save flow", () => {
     await user.keyboard("{Control>}s{/Control}");
     await user.click(await screen.findByText("do-save"));
     await waitFor(() => {
-      expect(workflowStore.getState().draftOrigin).toEqual({ collectionId: "c1", requestId: "req-new" });
+      expect(workflowStore.getState().draftOrigin).toEqual({
+        collectionId: "c1", requestId: "req-new", collectionName: "C1", requestName: "GetX",
+      });
     });
     expect(saveNewRequest).toHaveBeenCalledTimes(1);
   });
