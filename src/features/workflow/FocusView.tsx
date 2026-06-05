@@ -1,5 +1,7 @@
+import { Save } from "lucide-react";
 import { CallPanel } from "./CallPanel";
-import { useDraft, useDraftOrigin, workflowStore } from "./store";
+import { useDraft, useDraftDirty, useDraftOrigin, workflowStore } from "./store";
+import { draftBreadcrumb } from "./draftHeader";
 import type { Step } from "./model";
 
 export interface FocusViewProps {
@@ -10,11 +12,15 @@ export interface FocusViewProps {
 export function FocusView({ onRequestSave }: FocusViewProps = {}) {
   const draft = useDraft();
   const origin = useDraftOrigin();
+  const dirty = useDraftDirty();
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       {draft && (
-        <div className="flex h-8 items-center justify-end gap-2 border-b border-border px-3 text-xs">
+        <div className="flex h-9 items-center justify-between gap-2 border-b border-border px-3 text-xs">
+          <span className="min-w-0 truncate text-muted-foreground" data-testid="draft-breadcrumb">
+            {draftBreadcrumb(draft, origin)}
+          </span>
           {origin ? (
             <span className="text-muted-foreground" data-testid="autosave-status">
               Сохранено
@@ -22,10 +28,19 @@ export function FocusView({ onRequestSave }: FocusViewProps = {}) {
           ) : (
             <button
               type="button"
+              aria-label="Сохранить"
               onClick={() => onRequestSave?.()}
-              className="rounded border border-border px-2 py-0.5 hover:bg-accent"
+              className="inline-flex items-center gap-1.5 rounded border border-border px-2 py-0.5 hover:bg-accent"
             >
+              <Save className="size-3.5" />
               Сохранить
+              {dirty && (
+                <span
+                  data-testid="draft-dirty-dot"
+                  className="ml-0.5 size-1.5 rounded-full bg-warn"
+                  aria-hidden
+                />
+              )}
             </button>
           )}
         </div>

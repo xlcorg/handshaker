@@ -41,4 +41,26 @@ describe("FocusView Save affordance", () => {
     expect(screen.getByTestId("autosave-status")).toHaveTextContent("Сохранено");
     expect(screen.queryByRole("button", { name: "Сохранить" })).not.toBeInTheDocument();
   });
+
+  it("shows the breadcrumb 'New request' for an unbound draft", () => {
+    workflowStore.setDraft(newStep({ address: "h:443", tls: false, service: "p.S", method: "GetX" }));
+    render(<FocusView onRequestSave={vi.fn()} />);
+    expect(screen.getByTestId("draft-breadcrumb")).toHaveTextContent("New request");
+  });
+
+  it("shows a dirty dot once the unbound draft is edited", () => {
+    workflowStore.setDraft(newStep({ address: "h:443", tls: false, service: "p.S", method: "GetX" }));
+    workflowStore.updateDraft({ requestJson: '{"a":1}' });
+    render(<FocusView onRequestSave={vi.fn()} />);
+    expect(screen.getByTestId("draft-dirty-dot")).toBeInTheDocument();
+  });
+
+  it("shows the collection breadcrumb for a bound draft", () => {
+    workflowStore.setDraft(
+      newStep({ address: "h:443", tls: false, service: "p.S", method: "GetX" }),
+      { collectionId: "c1", requestId: "r1", collectionName: "Notes", requestName: "Create" },
+    );
+    render(<FocusView onRequestSave={vi.fn()} />);
+    expect(screen.getByTestId("draft-breadcrumb")).toHaveTextContent("Notes › Create");
+  });
 });
