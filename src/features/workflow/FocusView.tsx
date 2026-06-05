@@ -13,6 +13,7 @@ export function FocusView() {
             step={draft}
             onPatch={(patch: Partial<Step>) => workflowStore.updateDraft(patch)}
             onExecuted={(executed: Step) => workflowStore.commitExecutedStep(executed)}
+            editable
           />
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">

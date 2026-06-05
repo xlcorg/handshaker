@@ -3,6 +3,8 @@ import type { RespState } from "@/features/response/RespMeta";
 import { authResolve } from "@/ipc/client";
 import { ClientErrorBanner } from "./ClientErrorBanner";
 import { AddressBar } from "./AddressBar";
+import { DraftAddressBar } from "./DraftAddressBar";
+import { useDraftReflection } from "./useDraftReflection";
 import { RequestTabs } from "./RequestTabs";
 import {
   resolveAuthHeader,
@@ -11,6 +13,7 @@ import {
   shouldRecordExecuted,
   buildExecutedStep,
   cancelStep,
+  applyMethodSelection,
 } from "./actions";
 import { newId } from "@/lib/ids";
 import type { MetadataRow, Step } from "./model";
@@ -21,10 +24,12 @@ interface CallPanelProps {
   onPatch: (patch: Partial<Step>) => void;
   /** Draft only: record a completed call as an executed history snapshot. */
   onExecuted?: (executed: Step) => void;
+  /** Focus(draft) only: editable host + reflection + MethodPicker header. */
+  editable?: boolean;
 }
 
 /** The editable, sendable surface for one step — reused by Focus(draft)/List/Ledger. */
-export function CallPanel({ step, onPatch, onExecuted }: CallPanelProps) {
+export function CallPanel({ step, onPatch, onExecuted, editable }: CallPanelProps) {
   const onBody = (value: string) => onPatch({ requestJson: value });
   const onMetadata = (rows: MetadataRow[]) => onPatch({ metadata: rows });
 
@@ -46,9 +51,29 @@ export function CallPanel({ step, onPatch, onExecuted }: CallPanelProps) {
     if (step.requestId) void cancelStep(step.requestId);
   };
 
+  const reflection = useDraftReflection(step.address, step.tls, !!editable);
+
+  const header = editable ? (
+    <DraftAddressBar
+      step={step}
+      catalog={reflection.catalog}
+      reflecting={reflection.loading}
+      reflectError={reflection.error}
+      onAddress={(address) => onPatch({ address })}
+      onRefresh={reflection.refresh}
+      onSelectMethod={(m) =>
+        void applyMethodSelection(onPatch, { address: step.address, tls: step.tls }, m)
+      }
+      onSend={onSend}
+      onCancel={onCancel}
+    />
+  ) : (
+    <AddressBar step={step} onSend={onSend} onCancel={onCancel} />
+  );
+
   return (
     <div className="flex h-full flex-col">
-      <AddressBar step={step} onSend={onSend} onCancel={onCancel} />
+      {header}
       <div className="flex min-h-0 flex-1">
         <div className="min-w-0 flex-1 border-r border-border">
           <RequestTabs step={step} serviceAuth={step.auth} onBody={onBody} onMetadata={onMetadata} />
