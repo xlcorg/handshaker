@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Kbd } from "@/components/ui/kbd";
 import { Toaster } from "@/components/ui/toaster";
 import { FocusView } from "@/features/workflow/FocusView";
@@ -7,43 +7,77 @@ import { ListView } from "@/features/workflow/ListView";
 import { ViewSwitcher } from "@/features/workflow/ViewSwitcher";
 import { WorkflowSelector } from "@/features/workflow/WorkflowSelector";
 import { WorkflowEnvControl } from "@/features/workflow/WorkflowEnvControl";
-import { useActiveWorkflow } from "@/features/workflow/store";
+import { useActiveWorkflow, useDraft, workflowStore } from "@/features/workflow/store";
 import type { ViewMode } from "@/features/workflow/model";
+import type { SavedRequestIpc } from "@/ipc/bindings";
 import { SidebarShell } from "@/features/catalog/SidebarShell";
 import { CommandPalette } from "@/features/catalog/CommandPalette";
 import { CollectionOverview } from "@/features/catalog/overview/CollectionOverview";
 import { useCatalogTree } from "@/features/catalog/useCatalogTree";
-import { openSavedRequest } from "@/features/catalog/actions";
+import { openSavedRequest, newRequestDraft } from "@/features/catalog/actions";
+import { SaveRequestDialog } from "@/features/catalog/SaveRequestDialog";
+import { DiscardDraftDialog } from "@/features/catalog/DiscardDraftDialog";
+import { needsDiscardConfirm } from "@/features/catalog/discardGuard";
+import { saveNewRequest } from "@/features/catalog/save";
+import { useAutosaveDraft } from "@/features/catalog/useAutosaveDraft";
+import { suggestSavePath, findSavedLocations } from "@/features/catalog/grouping";
 
-function renderView(view: ViewMode) {
+function renderView(view: ViewMode, onRequestSave: () => void) {
   switch (view) {
     case "ledger":
       return <LedgerView />;
     case "list":
       return <ListView />;
     default:
-      return <FocusView />;
+      return <FocusView onRequestSave={onRequestSave} />;
   }
 }
 
 export function WorkflowApp() {
   const wf = useActiveWorkflow();
-  // One catalog snapshot for the ⌘K palette + the collection overview. The sidebar keeps its
-  // own instance; both reload on their own mutations (overview via onChanged below, palette via
-  // the open effect). Unifying them behind a context is a future refactor, not cleanup.
+  const draft = useDraft();
+  // One catalog snapshot for ⌘K + overview + Save dialog; the sidebar keeps its own instance.
   const cat = useCatalogTree();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [panelCollectionId, setPanelCollectionId] = useState<string | null>(null);
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [discardOpen, setDiscardOpen] = useState(false);
+  // The open-request/new-draft action deferred while the discard confirm is up.
+  const pendingOpenRef = useRef<(() => void) | null>(null);
+
+  // Debounced autosave of an origin-bound draft on every content edit (spec §6).
+  useAutosaveDraft(cat.updateItemContent);
+
+  // Run an open action, but confirm first if it would drop a dirty *unbound* draft (spec §6).
+  function guardedRun(action: () => void) {
+    const st = workflowStore.getState();
+    if (needsDiscardConfirm(st.draftOrigin, st.draftDirty)) {
+      pendingOpenRef.current = action;
+      setDiscardOpen(true);
+    } else {
+      action();
+    }
+  }
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
+      const mod = e.metaKey || e.ctrlKey;
+      if (mod && (e.key === "k" || e.key === "K")) {
         e.preventDefault();
         setPaletteOpen((v) => !v);
+      } else if (mod && (e.key === "s" || e.key === "S")) {
+        e.preventDefault();
+        // Save only opens the dialog for an UNBOUND draft; bound drafts already autosave.
+        const st = workflowStore.getState();
+        if (st.draft && st.draftOrigin === null) setSaveOpen(true);
+      } else if (mod && (e.key === "n" || e.key === "N")) {
+        e.preventDefault();
+        guardedRun(() => newRequestDraft());
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+    // guardedRun reads fresh store state and only calls stable setters; bind once.
   }, []);
 
   // Freshen the snapshot whenever the palette opens, so cross-instance edits are searchable.
@@ -51,8 +85,7 @@ export function WorkflowApp() {
     if (paletteOpen) void cat.reload();
   }, [paletteOpen, cat.reload]);
 
-  // Creating a call (sidebar / overview / ⌘K) adds a step and switches the workflow to Focus.
-  // Close any open collection overview so the new call is visible.
+  // Creating a call switches to Focus; close any open collection overview so it is visible.
   useEffect(() => {
     if (wf.activeStepId) setPanelCollectionId(null);
   }, [wf.activeStepId]);
@@ -60,6 +93,21 @@ export function WorkflowApp() {
   const panelCollection = panelCollectionId
     ? cat.tree.find((c) => c.id === panelCollectionId) ?? null
     : null;
+
+  // Save the current unbound draft as a new request, bind its origin, then run any pending open.
+  async function handleSave(dest: { collectionId: string; parentId: string | null; name: string }) {
+    const current = workflowStore.getState().draft;
+    if (!current) return;
+    const id = await saveNewRequest(cat.addItem, current, dest);
+    workflowStore.setDraftOrigin({ collectionId: dest.collectionId, requestId: id });
+    await cat.reload();
+    const pending = pendingOpenRef.current;
+    pendingOpenRef.current = null;
+    pending?.();
+  }
+
+  const openRequest = (collectionId: string, req: SavedRequestIpc) =>
+    guardedRun(() => openSavedRequest(collectionId, req));
 
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
@@ -79,17 +127,21 @@ export function WorkflowApp() {
       </div>
 
       <div className="flex min-h-0 flex-1">
-        <SidebarShell onOpenCollection={(id) => setPanelCollectionId(id)} />
+        <SidebarShell
+          onOpenCollection={(id) => setPanelCollectionId(id)}
+          onOpenRequest={openRequest}
+          onAddRequest={() => guardedRun(() => newRequestDraft())}
+        />
         <div className="min-h-0 flex-1">
           {panelCollection ? (
             <CollectionOverview
               collection={panelCollection}
               onChanged={() => void cat.reload()}
-              onSelectRequest={(collectionId, req) => openSavedRequest(collectionId, req)}
+              onSelectRequest={openRequest}
               onClose={() => setPanelCollectionId(null)}
             />
           ) : (
-            renderView(wf.view)
+            renderView(wf.view, () => setSaveOpen(true))
           )}
         </div>
       </div>
@@ -98,8 +150,46 @@ export function WorkflowApp() {
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}
         collections={cat.tree}
-        onOpen={(collectionId, req) => openSavedRequest(collectionId, req)}
+        onOpen={openRequest}
       />
+
+      <SaveRequestDialog
+        open={saveOpen}
+        onOpenChange={(o) => {
+          setSaveOpen(o);
+          if (!o) pendingOpenRef.current = null;
+        }}
+        metas={cat.tree}
+        loadCollection={(id) => Promise.resolve(cat.tree.find((c) => c.id === id)!)}
+        defaultName={draft?.method ?? ""}
+        onSave={handleSave}
+        onCreateCollection={cat.createCollection}
+        suggestedPath={draft ? suggestSavePath(draft.address, draft.service) : []}
+        existingLocations={
+          draft
+            ? findSavedLocations(cat.tree, {
+                service: draft.service,
+                method: draft.method,
+                address: draft.address,
+              })
+            : []
+        }
+      />
+
+      <DiscardDraftDialog
+        open={discardOpen}
+        onOpenChange={setDiscardOpen}
+        onDiscard={() => {
+          const a = pendingOpenRef.current;
+          pendingOpenRef.current = null;
+          a?.();
+        }}
+        onSaveFirst={() => {
+          setDiscardOpen(false);
+          setSaveOpen(true);
+        }}
+      />
+
       <Toaster />
     </div>
   );
