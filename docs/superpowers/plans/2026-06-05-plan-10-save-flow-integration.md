@@ -4,7 +4,14 @@
 > (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use
 > checkbox (`- [ ]`) syntax for tracking. **Detail is TDD-complete** — execute task-by-task.
 
-**Status:** 🚧 **TDD-detailed, ready to execute** (no tasks done yet).
+**Status:** ✅ **done** (`fadf452..067713c`, 6 commits — 1 plan doc + 4 feature/wiring +
+1 review-fix; plus this finalize-docs commit). Full front-end suite green: **412** tests /
+77 files. `pnpm lint` (`tsc -b`) green — **zero** TS errors. `pnpm build` green (`tsc -b` +
+Vite bundle, no unresolved imports). Rust unchanged from plan-09: `handshaker-core`
+129 passed / 1 ignored, `handshaker` 36 passed. Only remaining redesign follow-up is **Save As**
+— a tiny out-of-scope item (`SaveRequestDialog` has no Save-As control yet); everything else
+from spec §6/§11 (visible Save button + Ctrl/Cmd+S, origin-bound autosave, open-over-dirty
+`DiscardDraftDialog`, Ctrl/Cmd+N fresh draft, single `guardedRun`) is now wired.
 **Branch:** `redesign/workflow-ui-spec-plans`
 **Spec:** `docs/superpowers/specs/2026-06-05-service-collection-sidebar-refactor-design.md`
 §6 «Создание и сохранение», §11 «Клавиатура». UX addendum (locked in this session):
