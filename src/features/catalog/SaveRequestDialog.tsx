@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -11,7 +11,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { CollectionIpc } from "@/ipc/bindings";
 import type { SaveLocation } from "./grouping";
+import { suggestSaveTarget } from "./grouping";
 import { CollectionPicker, type PickTarget } from "./CollectionPicker";
+import { newId } from "@/lib/ids";
+import { augmentTree, type PendingFolder } from "./savePicker";
 
 export interface SaveRequestDialogProps {
   open: boolean;
@@ -34,29 +37,74 @@ export interface SaveRequestDialogProps {
 }
 
 export function SaveRequestDialog(props: SaveRequestDialogProps) {
-  const { open, onOpenChange, collections, defaultName, onSave, originBound, existingLocations } = props;
+  const { open, onOpenChange, collections, defaultName, onSave, onCreateFolder, draftService, draftMethod, originBound, existingLocations } = props;
   const [name, setName] = useState(defaultName);
   const [query, setQuery] = useState("");
   const [target, setTarget] = useState<PickTarget | null>(null);
   const [busy, setBusy] = useState(false);
+  const [pendingFolders, setPendingFolders] = useState<PendingFolder[]>([]);
 
+  const prevOpenRef = useRef(false);
   useEffect(() => {
-    if (open) {
+    if (open && !prevOpenRef.current) {
       setName(defaultName);
       setQuery("");
+      setPendingFolders([]);
       setTarget(collections.length > 0 ? { collectionId: collections[0].id, parentId: null } : null);
     }
+    prevOpenRef.current = open;
   }, [open, defaultName, collections]);
 
+  const reco = draftService && draftMethod ? suggestSaveTarget(draftService, draftMethod) : null;
+  const augmented = augmentTree(collections, [], pendingFolders);
+  const selectedCollection = target ? augmented.find((c) => c.id === target.collectionId) ?? null : null;
+
+  function applyReco() {
+    if (!reco || !target) return;
+    const collection = augmented.find((c) => c.id === target.collectionId);
+    if (!collection) return;
+    // Reuse an existing root folder of the same name.
+    const existing = collection.items.find(
+      (it) => it.type === "folder" && it.name === reco.folderName,
+    );
+    if (existing) {
+      setTarget({ collectionId: target.collectionId, parentId: existing.id });
+      return;
+    }
+    const tempId = newId();
+    setPendingFolders((prev) => [
+      ...prev,
+      { tempId, collectionId: target.collectionId, parentId: null, name: reco.folderName },
+    ]);
+    setTarget({ collectionId: target.collectionId, parentId: tempId });
+  }
+
   async function submit() {
-    if (!name.trim() || !target) return;
+    if (!name.trim()) return;
+    if (originBound) {
+      setBusy(true);
+      try {
+        await onSave({ collectionId: "", parentId: null, name: name.trim() });
+        onOpenChange(false);
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+    if (!target) return;
     setBusy(true);
     try {
-      if (originBound) {
-        await onSave({ collectionId: "", parentId: null, name: name.trim() });
-      } else {
-        await onSave({ collectionId: target.collectionId, parentId: target.parentId, name: name.trim() });
+      // Resolve the (possibly pending) target into a real {collectionId, parentId}.
+      const idMap = new Map<string, string>();
+      for (const pf of pendingFolders) {
+        const realCollectionId = idMap.get(pf.collectionId) ?? pf.collectionId;
+        const realParentId = pf.parentId ? idMap.get(pf.parentId) ?? pf.parentId : null;
+        const newRealId = await onCreateFolder(realCollectionId, realParentId, pf.name);
+        idMap.set(pf.tempId, newRealId);
       }
+      const finalCollectionId = idMap.get(target.collectionId) ?? target.collectionId;
+      const finalParentId = target.parentId ? idMap.get(target.parentId) ?? target.parentId : null;
+      await onSave({ collectionId: finalCollectionId, parentId: finalParentId, name: name.trim() });
       onOpenChange(false);
     } finally {
       setBusy(false);
@@ -97,13 +145,26 @@ export function SaveRequestDialog(props: SaveRequestDialogProps) {
               </div>
             )}
 
+            {reco && reco.folderName && (
+              <div className="rounded-md border border-blue-500/60 bg-blue-500/10 px-2.5 py-2 text-xs">
+                <div className="mb-0.5 text-blue-400">✨ Рекомендуем сохранить как</div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-mono text-foreground">
+                    {(selectedCollection?.name ?? "") + " / " + reco.folderName + " / " + name.trim()}
+                  </span>
+                  <Button size="sm" variant="secondary" onClick={applyReco}>Добавить</Button>
+                </div>
+              </div>
+            )}
+
             <Input
+              aria-label="Search collections"
               placeholder="🔍 Search collection or folder"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
 
-            <CollectionPicker collections={collections} query={query} value={target} onChange={setTarget} />
+            <CollectionPicker collections={augmented} query={query} value={target} onChange={setTarget} />
           </>
         )}
 

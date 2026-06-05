@@ -70,3 +70,39 @@ describe("SaveRequestDialog — shell", () => {
     expect(screen.queryByPlaceholderText(/search/i)).toBeNull();
   });
 });
+
+describe("SaveRequestDialog — recommendation chip", () => {
+  it("shows the recommended full path from the selected collection", () => {
+    render(<SaveRequestDialog {...props()} />);
+    // first collection = "My APIs"; service NotesApiService → folder "NotesApi"; name "Create"
+    expect(screen.getByText(/My APIs\s*\/\s*NotesApi\s*\/\s*Create/)).toBeTruthy();
+  });
+
+  it("hides the chip when the draft has no method", () => {
+    render(<SaveRequestDialog {...props({ draftMethod: "", draftService: "" })} />);
+    expect(screen.queryByText(/Рекомендуем/i)).toBeNull();
+  });
+
+  it("'Добавить' adds the recommended folder and saves into it", async () => {
+    const p = props();
+    render(<SaveRequestDialog {...p} />);
+    fireEvent.click(screen.getByRole("button", { name: /Добавить/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(p.onCreateFolder).toHaveBeenCalledWith("c1", null, "NotesApi"));
+    await waitFor(() =>
+      expect(p.onSave).toHaveBeenCalledWith({ collectionId: "c1", parentId: "f-new", name: "Create" }),
+    );
+  });
+
+  it("'Добавить' reuses an existing folder of the same name (no duplicate)", async () => {
+    const withFolder = [col("c1", "My APIs", [folder("nf", "NotesApi")]), col("c2", "Sandbox")];
+    const p = props({ collections: withFolder });
+    render(<SaveRequestDialog {...p} />);
+    fireEvent.click(screen.getByRole("button", { name: /Добавить/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(p.onSave).toHaveBeenCalledWith({ collectionId: "c1", parentId: "nf", name: "Create" }),
+    );
+    expect(p.onCreateFolder).not.toHaveBeenCalled();
+  });
+});
