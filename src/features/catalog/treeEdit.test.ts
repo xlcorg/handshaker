@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
-import type { CollectionIpc, ItemIpc } from "@/ipc/bindings";
+import type { CollectionIpc, ItemIpc, SavedRequestIpc } from "@/ipc/bindings";
 import {
   renameItemInTree, removeItemFromTree, insertItemInTree,
   renameCollectionInTree, setCollectionPinned, removeCollectionFromTree,
+  replaceItemInTree,
 } from "./treeEdit";
 
 function req(id: string, name = id): Extract<ItemIpc, { type: "request" }> {
@@ -72,5 +73,38 @@ describe("collection transforms", () => {
   });
   it("removes a collection", () => {
     expect(removeCollectionFromTree(tree(), "c1").map((c) => c.id)).toEqual(["c2"]);
+  });
+});
+
+describe("replaceItemInTree", () => {
+  it("swaps content fields but preserves id, name, and usage", () => {
+    const tree = [col("c1", [folder("f1", [req("r2", "Original")])])];
+    // give the original some usage to prove it is preserved
+    const f1 = tree[0].items[0] as Extract<ItemIpc, { type: "folder" }>;
+    (f1.items[0] as Extract<ItemIpc, { type: "request" }>).use_count = 7;
+    (f1.items[0] as Extract<ItemIpc, { type: "request" }>).last_used_at = 123;
+
+    const content: SavedRequestIpc = {
+      id: "ignored", name: "ignored", address_template: "new:443", service: "p.v2.S",
+      method: "NewM", body_template: '{"b":2}',
+      metadata: [{ key: "k", value: "v", enabled: false }],
+      auth: { kind: "env_var", env_var: "T", header_name: "authorization", prefix: "Bearer " },
+      tls_override: true, last_used_at: null, use_count: 0,
+    };
+    const after = replaceItemInTree(tree, "c1", "r2", content);
+    const target = (after[0].items[0] as Extract<ItemIpc, { type: "folder" }>).items[0] as Extract<
+      ItemIpc, { type: "request" }
+    >;
+    expect(target.id).toBe("r2"); // preserved
+    expect(target.name).toBe("Original"); // preserved
+    expect(target.use_count).toBe(7); // preserved
+    expect(target.last_used_at).toBe(123); // preserved
+    expect(target.address_template).toBe("new:443"); // swapped
+    expect(target.service).toBe("p.v2.S");
+    expect(target.method).toBe("NewM");
+    expect(target.body_template).toBe('{"b":2}');
+    expect(target.metadata).toEqual([{ key: "k", value: "v", enabled: false }]);
+    expect(target.tls_override).toBe(true);
+    expect(target.type).toBe("request");
   });
 });

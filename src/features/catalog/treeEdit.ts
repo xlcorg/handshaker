@@ -1,4 +1,4 @@
-import type { CollectionIpc, ItemIpc } from "@/ipc/bindings";
+import type { CollectionIpc, ItemIpc, SavedRequestIpc } from "@/ipc/bindings";
 
 function mapCollection(
   tree: CollectionIpc[],
@@ -81,6 +81,31 @@ export function setCollectionPinned(
   pinned: boolean,
 ): CollectionIpc[] {
   return mapCollection(tree, collectionId, (c) => ({ ...c, pinned }));
+}
+
+/** Swap a saved request's content fields in place, preserving id/name/usage/type. */
+export function replaceItemInTree(
+  tree: CollectionIpc[],
+  collectionId: string,
+  itemId: string,
+  content: SavedRequestIpc,
+): CollectionIpc[] {
+  return mapCollection(tree, collectionId, (c) => ({
+    ...c,
+    items: mapItemsDeep(c.items, itemId, (it) => {
+      if (it.type !== "request") return it;
+      return {
+        ...it,
+        address_template: content.address_template,
+        service: content.service,
+        method: content.method,
+        body_template: content.body_template,
+        metadata: content.metadata,
+        auth: content.auth,
+        tls_override: content.tls_override,
+      };
+    }),
+  }));
 }
 
 export function removeCollectionFromTree(
