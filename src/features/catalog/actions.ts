@@ -1,8 +1,10 @@
 import * as ipc from "@/ipc/client";
-import type { GrpcTargetIpc, ServiceCatalogIpc } from "@/ipc/bindings";
+import type { GrpcTargetIpc, ServiceCatalogIpc, SavedRequestIpc } from "@/ipc/bindings";
 import { workflowStore } from "@/features/workflow/store";
 import { setView } from "@/features/workflow/reducers";
 import { createStepFromMethod } from "@/features/workflow/actions";
+import { newStep } from "@/features/workflow/model";
+import { savedRequestToDraft } from "./mapping";
 import { catalogStore } from "./store";
 import type { CatalogService } from "./model";
 
@@ -45,4 +47,16 @@ export async function openCallFromMethod(
   );
   workflowStore.update((w) => setView(w, "focus"));
   workflowStore.setDraft(step);
+}
+
+/** Open a saved request in Focus as the global pending-draft. */
+export function openSavedRequest(saved: SavedRequestIpc): void {
+  workflowStore.update((w) => setView(w, "focus"));
+  workflowStore.setDraft(savedRequestToDraft(saved));
+}
+
+/** Start a fresh, empty pending-draft in Focus (header `+` / menu "Add request"). */
+export function newRequestDraft(): void {
+  workflowStore.update((w) => setView(w, "focus"));
+  workflowStore.setDraft(newStep({ address: "", tls: false, service: "", method: "" }));
 }
