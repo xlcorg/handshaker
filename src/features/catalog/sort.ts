@@ -32,7 +32,7 @@ function byKey(a: CollectionIpc, b: CollectionIpc, key: SortKey): number {
     case "alpha":
       return a.name.localeCompare(b.name);
     case "created":
-      return b.created_at - a.created_at; // newest first
+      return b.created_at - a.created_at || a.name.localeCompare(b.name); // newest first, name tie-break
     case "recent": {
       const al = aggregateUsage(a).lastUsedAt ?? -Infinity;
       const bl = aggregateUsage(b).lastUsedAt ?? -Infinity;
@@ -78,7 +78,12 @@ function filterItems(items: ItemIpc[], q: string): ItemIpc[] {
   return out;
 }
 
-/** Prune the collection forest to nodes matching `query` (name/service/method/address). */
+/**
+ * Prune the collection forest to nodes matching `query` (name/service/method/address).
+ * Inputs are never mutated. Kept-whole nodes (empty query, name-matched collections/folders)
+ * are returned by reference — consumers treat the result as read-only/immutable, matching
+ * the store's immutable-update convention; this preserves React referential equality.
+ */
 export function filterCollections(collections: CollectionIpc[], query: string): CollectionIpc[] {
   const q = query.trim().toLowerCase();
   if (!q) return collections;

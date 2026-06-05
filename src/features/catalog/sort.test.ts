@@ -79,6 +79,14 @@ describe("sortCollections", () => {
     expect(out.map((c) => c.name)).toEqual(["new", "old"]);
   });
 
+  it("created: breaks equal-created_at ties by name", () => {
+    const out = sortCollections(
+      [col({ name: "B", created_at: 5 }), col({ name: "A", created_at: 5 })],
+      "created",
+    );
+    expect(out.map((c) => c.name)).toEqual(["A", "B"]);
+  });
+
   it("recent: highest aggregated last_used_at first, unused last", () => {
     const out = sortCollections(
       [
