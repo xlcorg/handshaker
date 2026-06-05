@@ -132,4 +132,14 @@ describe("global pending-draft", () => {
     expect(wf.activeStepId).toBe(snap.id);
     expect(workflowStore.getState().draft).toBe(draft); // draft remains in Focus
   });
+
+  it("the global draft survives createWorkflow and setActiveWorkflow (regression: dd6001f)", () => {
+    const draft = newStep({ address: "h", tls: false, service: "S", method: "M" });
+    workflowStore.setDraft(draft);
+    const first = workflowStore.getState().activeWorkflowId;
+    workflowStore.createWorkflow("wf-2");
+    expect(workflowStore.getState().draft).toBe(draft); // not dropped when state is rebuilt
+    workflowStore.setActiveWorkflow(first);
+    expect(workflowStore.getState().draft).toBe(draft); // one global draft across workflows
+  });
 });
