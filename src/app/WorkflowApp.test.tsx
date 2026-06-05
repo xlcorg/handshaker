@@ -3,18 +3,32 @@ import { render, screen, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 // Stub the heavy children so this test focuses on the shell's panel ↔ Focus logic.
-vi.mock("@/features/catalog/Sidebar", () => ({
-  Sidebar: ({ onOpenService }: { onOpenService: (s: { id: string }) => void }) => (
-    <button type="button" onClick={() => onOpenService({ id: "svc1" })}>
-      open-svc
+vi.mock("@/features/catalog/SidebarShell", () => ({
+  SidebarShell: ({ onOpenCollection }: { onOpenCollection: (id: string) => void }) => (
+    <button type="button" onClick={() => onOpenCollection("c1")}>
+      open-col
     </button>
   ),
 }));
-vi.mock("@/features/catalog/ServicePanel", () => ({
-  ServicePanel: ({ serviceId }: { serviceId: string }) => <div>PANEL:{serviceId}</div>,
+vi.mock("@/features/catalog/overview/CollectionOverview", () => ({
+  CollectionOverview: ({ collection }: { collection: { id: string } }) => (
+    <div>OVERVIEW:{collection.id}</div>
+  ),
 }));
 vi.mock("@/features/catalog/CommandPalette", () => ({
   CommandPalette: () => null,
+}));
+vi.mock("@/features/catalog/actions", () => ({
+  openSavedRequest: vi.fn(),
+}));
+// One controlled catalog tree so opening collection "c1" finds a collection object.
+vi.mock("@/features/catalog/useCatalogTree", () => ({
+  useCatalogTree: () => ({
+    tree: [{ id: "c1", name: "C1", items: [], variables: {}, auth: { kind: "none" } }],
+    loading: false,
+    error: null,
+    reload: vi.fn().mockResolvedValue(undefined),
+  }),
 }));
 vi.mock("@/features/workflow/FocusView", () => ({
   FocusView: () => <div>FOCUS</div>,
@@ -34,7 +48,7 @@ beforeEach(() => {
   workflowStore.reset();
 });
 
-// What every create-call entry point (sidebar, panel, ⌘K) does via openCallFromMethod.
+// What every create-call entry point (sidebar, overview, ⌘K) ultimately does to the store.
 function createCall() {
   act(() => {
     workflowStore.update((w) =>
@@ -44,26 +58,26 @@ function createCall() {
 }
 
 describe("WorkflowApp shell", () => {
-  it("shows FocusView by default and the service panel after opening a service", async () => {
+  it("shows FocusView by default and the collection overview after opening a collection", async () => {
     const user = userEvent.setup();
     render(<WorkflowApp />);
     expect(screen.getByText("FOCUS")).toBeInTheDocument();
 
-    await user.click(screen.getByText("open-svc"));
-    expect(screen.getByText("PANEL:svc1")).toBeInTheDocument();
+    await user.click(screen.getByText("open-col"));
+    expect(screen.getByText("OVERVIEW:c1")).toBeInTheDocument();
     expect(screen.queryByText("FOCUS")).not.toBeInTheDocument();
   });
 
-  it("closes the open service panel and returns to Focus when a call is created", async () => {
+  it("closes the open collection overview and returns to Focus when a call is created", async () => {
     const user = userEvent.setup();
     render(<WorkflowApp />);
-    await user.click(screen.getByText("open-svc"));
-    expect(screen.getByText("PANEL:svc1")).toBeInTheDocument();
+    await user.click(screen.getByText("open-col"));
+    expect(screen.getByText("OVERVIEW:c1")).toBeInTheDocument();
 
     createCall();
 
     expect(screen.getByText("FOCUS")).toBeInTheDocument();
-    expect(screen.queryByText("PANEL:svc1")).not.toBeInTheDocument();
+    expect(screen.queryByText("OVERVIEW:c1")).not.toBeInTheDocument();
   });
 });
 

@@ -9,10 +9,11 @@ import { WorkflowSelector } from "@/features/workflow/WorkflowSelector";
 import { WorkflowEnvControl } from "@/features/workflow/WorkflowEnvControl";
 import { useActiveWorkflow } from "@/features/workflow/store";
 import type { ViewMode } from "@/features/workflow/model";
-import { Sidebar } from "@/features/catalog/Sidebar";
+import { SidebarShell } from "@/features/catalog/SidebarShell";
 import { CommandPalette } from "@/features/catalog/CommandPalette";
-import { ServicePanel } from "@/features/catalog/ServicePanel";
-import type { CatalogService } from "@/features/catalog/model";
+import { CollectionOverview } from "@/features/catalog/overview/CollectionOverview";
+import { useCatalogTree } from "@/features/catalog/useCatalogTree";
+import { openSavedRequest } from "@/features/catalog/actions";
 
 function renderView(view: ViewMode) {
   switch (view) {
@@ -27,8 +28,12 @@ function renderView(view: ViewMode) {
 
 export function WorkflowApp() {
   const wf = useActiveWorkflow();
+  // One catalog snapshot for the ⌘K palette + the collection overview. The sidebar keeps its
+  // own instance; both reload on their own mutations (overview via onChanged below, palette via
+  // the open effect). Unifying them behind a context is a future refactor, not cleanup.
+  const cat = useCatalogTree();
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [panelServiceId, setPanelServiceId] = useState<string | null>(null);
+  const [panelCollectionId, setPanelCollectionId] = useState<string | null>(null);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -41,13 +46,20 @@ export function WorkflowApp() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // Creating a call (sidebar / service panel / ⌘K) adds a step and switches the
-  // workflow to Focus. Close any open service panel so the new call is visible.
+  // Freshen the snapshot whenever the palette opens, so cross-instance edits are searchable.
   useEffect(() => {
-    if (wf.activeStepId) setPanelServiceId(null);
+    if (paletteOpen) void cat.reload();
+  }, [paletteOpen, cat.reload]);
+
+  // Creating a call (sidebar / overview / ⌘K) adds a step and switches the workflow to Focus.
+  // Close any open collection overview so the new call is visible.
+  useEffect(() => {
+    if (wf.activeStepId) setPanelCollectionId(null);
   }, [wf.activeStepId]);
 
-  const openService = (svc: CatalogService) => setPanelServiceId(svc.id);
+  const panelCollection = panelCollectionId
+    ? cat.tree.find((c) => c.id === panelCollectionId) ?? null
+    : null;
 
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
@@ -67,23 +79,26 @@ export function WorkflowApp() {
       </div>
 
       <div className="flex min-h-0 flex-1">
-        <Sidebar onOpenService={openService} onOpenPalette={() => setPaletteOpen(true)} />
+        <SidebarShell onOpenCollection={(id) => setPanelCollectionId(id)} />
         <div className="min-h-0 flex-1">
-          {panelServiceId ? (
-            <ServicePanel serviceId={panelServiceId} onClose={() => setPanelServiceId(null)} />
+          {panelCollection ? (
+            <CollectionOverview
+              collection={panelCollection}
+              onChanged={() => void cat.reload()}
+              onSelectRequest={(collectionId, req) => openSavedRequest(collectionId, req)}
+              onClose={() => setPanelCollectionId(null)}
+            />
           ) : (
             renderView(wf.view)
           )}
         </div>
       </div>
 
-      {/* TODO(plan-09): wire `collections` from useCatalogTree + onOpen=openSavedRequest
-          with dirty-confirm. Placeholders keep the rewritten palette type-correct. */}
       <CommandPalette
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}
-        collections={[]}
-        onOpen={() => {}}
+        collections={cat.tree}
+        onOpen={(collectionId, req) => openSavedRequest(collectionId, req)}
       />
       <Toaster />
     </div>
