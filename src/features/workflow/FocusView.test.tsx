@@ -1,9 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { CollectionIpc } from "@/ipc/bindings";
 
 vi.mock("./CallPanel", () => ({
   CallPanel: ({ step }: { step: { method: string } }) => <div>CALL:{step.method}</div>,
+}));
+
+const cat = vi.hoisted(() => ({ tree: [] as CollectionIpc[] }));
+vi.mock("@/features/catalog/CatalogProvider", () => ({
+  useCatalog: () => ({ tree: cat.tree }),
 }));
 
 import { FocusView } from "./FocusView";
@@ -12,6 +18,7 @@ import { newStep } from "./model";
 
 beforeEach(() => {
   workflowStore.reset();
+  cat.tree = [];
 });
 
 describe("FocusView Save affordance", () => {
@@ -43,10 +50,10 @@ describe("FocusView Save affordance", () => {
     expect(screen.queryByRole("button", { name: "Сохранить" })).not.toBeInTheDocument();
   });
 
-  it("shows the breadcrumb 'New request' for an unbound draft", () => {
+  it("shows the unbound breadcrumb label for a draft with no origin", () => {
     workflowStore.setDraft(newStep({ address: "h:443", tls: false, service: "p.S", method: "GetX" }));
     render(<FocusView onRequestSave={vi.fn()} />);
-    expect(screen.getByTestId("draft-breadcrumb")).toHaveTextContent("New request");
+    expect(screen.getByTestId("draft-breadcrumb")).toHaveTextContent("Новый реквест");
   });
 
   it("shows a dirty dot once the unbound draft is edited", () => {
@@ -63,5 +70,32 @@ describe("FocusView Save affordance", () => {
     );
     render(<FocusView onRequestSave={vi.fn()} />);
     expect(screen.getByTestId("draft-breadcrumb")).toHaveTextContent("Notes › Create");
+  });
+
+  it("shows the full live path from the catalog for a bound draft", () => {
+    cat.tree = [
+      {
+        id: "c1", name: "Notes", default_tls: false, skip_tls_verify: false,
+        pinned: false, description: null, created_at: 0, variables: {}, auth: { kind: "none" },
+        items: [
+          {
+            type: "folder", id: "f1", name: "Staging",
+            items: [
+              {
+                type: "request", id: "r1", name: "Create", address_template: "h:443",
+                service: "p.v1.S", method: "M", body_template: "{}", metadata: [],
+                auth: { kind: "none" }, tls_override: null, last_used_at: null, use_count: 0,
+              },
+            ],
+          },
+        ],
+      },
+    ];
+    workflowStore.setDraft(
+      newStep({ address: "h:443", tls: false, service: "p.S", method: "GetX" }),
+      { collectionId: "c1", requestId: "r1", collectionName: "Notes", requestName: "Create" },
+    );
+    render(<FocusView onRequestSave={vi.fn()} />);
+    expect(screen.getByTestId("draft-breadcrumb")).toHaveTextContent("Notes › Staging › Create");
   });
 });
