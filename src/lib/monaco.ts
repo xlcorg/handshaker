@@ -181,6 +181,18 @@ export const READ_ONLY_OPTIONS = {
   readOnly: true,
 } as const;
 
+/** Body-view options: folding gutter ON (Postman-style node collapse). */
+export const BODY_EDIT_OPTIONS = {
+  ...EDITOR_OPTIONS,
+  folding: true,
+} as const;
+
+export const BODY_READONLY_OPTIONS = {
+  ...EDITOR_OPTIONS,
+  folding: true,
+  readOnly: true,
+} as const;
+
 export type ThemeMode = "dark" | "light";
 
 export function monacoThemeFor(theme: ThemeMode): string {

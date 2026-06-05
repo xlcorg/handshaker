@@ -189,6 +189,17 @@ body {
   color: hsl(var(--muted-foreground));
 }
 
+/* bodyview elision badge (muted pill, injected via Monaco decoration) */
+.bodyview-badge {
+  color: hsl(var(--muted-foreground));
+  background: hsl(var(--muted));
+  border-radius: 4px;
+  padding: 0 6px;
+  margin-left: 4px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
 ::selection { background: hsl(var(--foreground) / .15); }
 
 body, .font-sans {
