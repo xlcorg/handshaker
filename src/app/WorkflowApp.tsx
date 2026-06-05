@@ -114,9 +114,12 @@ export function WorkflowApp() {
     pending?.();
   }
 
-  const createFolder = (collectionId: string, parentId: string | null, name: string) => {
+  const draftMethod = draft?.method ?? "";
+
+  const createFolder = async (collectionId: string, parentId: string | null, name: string) => {
     const id = newId();
-    return cat.addItem(collectionId, parentId, { type: "folder", id, name, items: [] }).then(() => id);
+    await cat.addItem(collectionId, parentId, { type: "folder", id, name, items: [] });
+    return id;
   };
 
   // Opening a request / starting a new draft must reveal Focus — close any open overview first.
@@ -187,9 +190,9 @@ export function WorkflowApp() {
           if (!o) pendingOpenRef.current = null;
         }}
         collections={cat.tree}
-        defaultName={draft?.method ?? ""}
+        defaultName={draftMethod}
         draftService={draft?.service ?? ""}
-        draftMethod={draft?.method ?? ""}
+        draftMethod={draftMethod}
         onSave={handleSave}
         onCreateCollection={cat.createCollection}
         onCreateFolder={createFolder}
