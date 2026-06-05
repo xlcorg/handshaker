@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { workflowStore } from "./store";
+import { workflowStore, useDraft } from "./store";
 import { newStep } from "./model";
 import { addStep, updateStep } from "./reducers";
 
@@ -88,5 +88,48 @@ describe("parallel send independence", () => {
     expect(stepsAfter.find((s) => s.id === stepA.id)!.status).toBe("ok");
     expect(stepsAfter.find((s) => s.id === stepB.id)!.status).toBe("sending");
     expect(stepsAfter.find((s) => s.id === stepB.id)!.requestId).toBe("req-b");
+  });
+});
+
+describe("global pending-draft", () => {
+  beforeEach(() => workflowStore.reset());
+
+  it("starts with no draft", () => {
+    expect(workflowStore.getState().draft).toBeNull();
+  });
+
+  it("setDraft stores a draft and notifies; clearDraft removes it", () => {
+    let calls = 0;
+    const unsub = workflowStore.subscribe(() => calls++);
+    const d = newStep({ address: "h", tls: false, service: "S", method: "M" });
+    workflowStore.setDraft(d);
+    expect(workflowStore.getState().draft).toBe(d);
+    workflowStore.clearDraft();
+    expect(workflowStore.getState().draft).toBeNull();
+    expect(calls).toBe(2);
+    unsub();
+  });
+
+  it("updateDraft merges a patch onto the current draft", () => {
+    workflowStore.setDraft(newStep({ address: "h", tls: false, service: "S", method: "M" }));
+    workflowStore.updateDraft({ status: "sending", requestId: "req-1" });
+    expect(workflowStore.getState().draft?.status).toBe("sending");
+    expect(workflowStore.getState().draft?.requestId).toBe("req-1");
+  });
+
+  it("updateDraft is a no-op when there is no draft", () => {
+    workflowStore.updateDraft({ status: "ok" });
+    expect(workflowStore.getState().draft).toBeNull();
+  });
+
+  it("commitExecutedStep appends a snapshot to the active workflow and activates it; draft untouched", () => {
+    const draft = newStep({ address: "h", tls: false, service: "S", method: "M" });
+    workflowStore.setDraft(draft);
+    const snap = newStep({ address: "h", tls: false, service: "S", method: "M" });
+    workflowStore.commitExecutedStep(snap);
+    const wf = workflowStore.activeWorkflow();
+    expect(wf.steps.map((s) => s.id)).toEqual([snap.id]);
+    expect(wf.activeStepId).toBe(snap.id);
+    expect(workflowStore.getState().draft).toBe(draft); // draft remains in Focus
   });
 });

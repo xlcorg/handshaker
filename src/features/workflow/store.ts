@@ -1,16 +1,17 @@
 import { useSyncExternalStore } from "react";
-import { newWorkflow, type Workflow } from "./model";
-import { setWorkflowEnv as setWorkflowEnvReducer } from "./reducers";
+import { newWorkflow, type Step, type Workflow } from "./model";
+import { addStep, setWorkflowEnv as setWorkflowEnvReducer } from "./reducers";
 import { envActiveSet } from "@/ipc/client";
 
 export interface WorkflowState {
   workflows: Workflow[];
   activeWorkflowId: string;
+  draft: Step | null;
 }
 
 function initialState(): WorkflowState {
   const wf = newWorkflow("workflow-1");
-  return { workflows: [wf], activeWorkflowId: wf.id };
+  return { workflows: [wf], activeWorkflowId: wf.id, draft: null };
 }
 
 let state: WorkflowState = initialState();
@@ -45,6 +46,23 @@ export const workflowStore = {
     };
     emit();
   },
+  setDraft(step: Step | null) {
+    state = { ...state, draft: step };
+    emit();
+  },
+  updateDraft(patch: Partial<Step>) {
+    if (!state.draft) return;
+    state = { ...state, draft: { ...state.draft, ...patch } };
+    emit();
+  },
+  clearDraft() {
+    state = { ...state, draft: null };
+    emit();
+  },
+  /** Append a frozen executed snapshot to the active workflow's history. */
+  commitExecutedStep(step: Step) {
+    workflowStore.update((w) => addStep(w, step));
+  },
   createWorkflow(name: string): Workflow {
     const wf = newWorkflow(name);
     state = { workflows: [...state.workflows, wf], activeWorkflowId: wf.id };
@@ -72,4 +90,9 @@ export function useWorkflowState(): WorkflowState {
 export function useActiveWorkflow(): Workflow {
   useWorkflowState(); // subscribe
   return workflowStore.activeWorkflow();
+}
+
+export function useDraft(): Step | null {
+  useWorkflowState(); // subscribe
+  return workflowStore.getState().draft;
 }
