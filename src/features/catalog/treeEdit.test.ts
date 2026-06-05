@@ -3,7 +3,7 @@ import type { CollectionIpc, ItemIpc, SavedRequestIpc } from "@/ipc/bindings";
 import {
   renameItemInTree, removeItemFromTree, insertItemInTree,
   renameCollectionInTree, setCollectionPinned, removeCollectionFromTree,
-  replaceItemInTree,
+  replaceItemInTree, moveItemWithinTree, moveItemAcrossTree,
 } from "./treeEdit";
 
 function req(id: string, name = id): Extract<ItemIpc, { type: "request" }> {
@@ -13,6 +13,7 @@ function req(id: string, name = id): Extract<ItemIpc, { type: "request" }> {
     last_used_at: null, use_count: 0,
   };
 }
+const reqItem = req; // alias: move-helper tests use reqItem (same shape as req)
 function folder(id: string, items: ItemIpc[]): Extract<ItemIpc, { type: "folder" }> {
   return { type: "folder", id, name: id, items };
 }
@@ -106,5 +107,65 @@ describe("replaceItemInTree", () => {
     expect(target.metadata).toEqual([{ key: "k", value: "v", enabled: false }]);
     expect(target.tls_override).toBe(true);
     expect(target.type).toBe("request");
+  });
+});
+
+describe("moveItemWithinTree", () => {
+  // c1: [ f1{ r2 }, r3, r4 ]
+  const base = (): CollectionIpc[] => [
+    {
+      id: "c1", name: "c1", variables: {}, auth: { kind: "none" }, default_tls: false,
+      skip_tls_verify: false, pinned: false, description: null, created_at: 0,
+      items: [
+        { type: "folder", id: "f1", name: "f1", items: [reqItem("r2")] },
+        reqItem("r3"),
+        reqItem("r4"),
+      ],
+    },
+  ];
+
+  it("reorders within the root container (remove then insert at position)", () => {
+    const after = moveItemWithinTree(base(), "c1", "r3", null, 2);
+    expect(after[0].items.map((i) => i.id)).toEqual(["f1", "r4", "r3"]);
+  });
+
+  it("moves an item into a folder", () => {
+    const after = moveItemWithinTree(base(), "c1", "r3", "f1", 1);
+    const f1 = after[0].items.find((i) => i.id === "f1") as Extract<ItemIpc, { type: "folder" }>;
+    expect(f1.items.map((i) => i.id)).toEqual(["r2", "r3"]);
+    expect(after[0].items.map((i) => i.id)).toEqual(["f1", "r4"]);
+  });
+
+  it("is a no-op when the item id is absent", () => {
+    const after = moveItemWithinTree(base(), "c1", "nope", null, 0);
+    expect(after[0].items.map((i) => i.id)).toEqual(["f1", "r3", "r4"]);
+  });
+});
+
+describe("moveItemAcrossTree", () => {
+  const base = (): CollectionIpc[] => [
+    {
+      id: "c1", name: "c1", variables: {}, auth: { kind: "none" }, default_tls: false,
+      skip_tls_verify: false, pinned: false, description: null, created_at: 0,
+      items: [reqItem("r2")],
+    },
+    {
+      id: "c2", name: "c2", variables: {}, auth: { kind: "none" }, default_tls: false,
+      skip_tls_verify: false, pinned: false, description: null, created_at: 0,
+      items: [{ type: "folder", id: "f5", name: "f5", items: [] }],
+    },
+  ];
+
+  it("detaches from source and inserts into target", () => {
+    const after = moveItemAcrossTree(base(), "c1", "r2", "c2", "f5", 0);
+    expect(after[0].items).toEqual([]);
+    const f5 = after[1].items.find((i) => i.id === "f5") as Extract<ItemIpc, { type: "folder" }>;
+    expect(f5.items.map((i) => i.id)).toEqual(["r2"]);
+  });
+
+  it("is a no-op when the source item is absent", () => {
+    const after = moveItemAcrossTree(base(), "c1", "nope", "c2", null, 0);
+    expect(after[0].items.map((i) => i.id)).toEqual(["r2"]);
+    expect(after[1].items.map((i) => i.id)).toEqual(["f5"]);
   });
 });

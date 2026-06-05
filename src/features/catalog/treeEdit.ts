@@ -114,3 +114,84 @@ export function removeCollectionFromTree(
 ): CollectionIpc[] {
   return tree.filter((c) => c.id !== collectionId);
 }
+
+function detachDeep(items: ItemIpc[], itemId: string): { items: ItemIpc[]; removed: ItemIpc | null } {
+  let removed: ItemIpc | null = null;
+  const out: ItemIpc[] = [];
+  for (const it of items) {
+    if (it.id === itemId) {
+      removed = it;
+      continue;
+    }
+    if (it.type === "folder") {
+      const r = detachDeep(it.items, itemId);
+      if (r.removed) removed = r.removed;
+      out.push({ ...it, items: r.items });
+    } else {
+      out.push(it);
+    }
+  }
+  return { items: out, removed };
+}
+
+function insertAtDeep(
+  items: ItemIpc[],
+  parentId: string | null,
+  position: number,
+  item: ItemIpc,
+): ItemIpc[] {
+  if (parentId === null) {
+    const next = [...items];
+    next.splice(Math.max(0, Math.min(position, next.length)), 0, item);
+    return next;
+  }
+  return items.map((it) => {
+    if (it.type !== "folder") return it;
+    if (it.id === parentId) {
+      const next = [...it.items];
+      next.splice(Math.max(0, Math.min(position, next.length)), 0, item);
+      return { ...it, items: next };
+    }
+    return { ...it, items: insertAtDeep(it.items, parentId, position, item) };
+  });
+}
+
+/** Move an item within one collection: remove it, then insert at `parentId`/`position`. */
+export function moveItemWithinTree(
+  tree: CollectionIpc[],
+  collectionId: string,
+  itemId: string,
+  parentId: string | null,
+  position: number,
+): CollectionIpc[] {
+  return tree.map((c) => {
+    if (c.id !== collectionId) return c;
+    const det = detachDeep(c.items, itemId);
+    if (!det.removed) return c;
+    return { ...c, items: insertAtDeep(det.items, parentId, position, det.removed) };
+  });
+}
+
+/** Move an item from one collection to another: detach from source, insert into target. */
+export function moveItemAcrossTree(
+  tree: CollectionIpc[],
+  sourceCollectionId: string,
+  itemId: string,
+  targetCollectionId: string,
+  parentId: string | null,
+  position: number,
+): CollectionIpc[] {
+  let moved: ItemIpc | null = null;
+  const afterDetach = tree.map((c) => {
+    if (c.id !== sourceCollectionId) return c;
+    const det = detachDeep(c.items, itemId);
+    moved = det.removed;
+    return { ...c, items: det.items };
+  });
+  if (!moved) return tree;
+  return afterDetach.map((c) =>
+    c.id === targetCollectionId
+      ? { ...c, items: insertAtDeep(c.items, parentId, position, moved as ItemIpc) }
+      : c,
+  );
+}
