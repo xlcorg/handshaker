@@ -137,9 +137,9 @@ export function MethodPicker({ selected, catalog, onSelect, maxLabel = 160, clas
                         active ? "bg-accent text-foreground" : "text-foreground/85 hover:bg-accent/60",
                       )}
                     >
-                      <span className="truncate flex-1">{m.name}</span>
-                      <span className="text-[10px] text-muted-foreground">
-                        {m.req} → {m.res}
+                      <span className="min-w-0 flex-1 truncate font-medium text-foreground">{m.name}</span>
+                      <span className="max-w-[50%] flex-none truncate text-[10px] text-muted-foreground">
+                        {shortService(m.req)} → {shortService(m.res)}
                       </span>
                       <KindDot kind={m.kind} />
                     </button>
