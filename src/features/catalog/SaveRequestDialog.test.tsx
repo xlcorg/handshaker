@@ -1,58 +1,72 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { SaveRequestDialog } from "./SaveRequestDialog";
-import type { CollectionIpc, CollectionMetaIpc } from "@/ipc/bindings";
+import type { CollectionIpc, ItemIpc } from "@/ipc/bindings";
 
-const metas: CollectionMetaIpc[] = [{ id: "c1", name: "My Collection" }];
-const collection: CollectionIpc = {
-  id: "c1", name: "My Collection", items: [], variables: {}, auth: { kind: "none" },
-  default_tls: false, skip_tls_verify: false, pinned: false, description: null, created_at: 0,
-};
+function folder(id: string, name: string, items: ItemIpc[] = []): ItemIpc {
+  return { type: "folder", id, name, items };
+}
+function col(id: string, name: string, items: ItemIpc[] = []): CollectionIpc {
+  return {
+    id, name, items, variables: {}, auth: { kind: "none" },
+    default_tls: false, skip_tls_verify: false, pinned: false, description: null, created_at: 0,
+  };
+}
+
+const collections = [col("c1", "My APIs", [folder("f1", "Staging")]), col("c2", "Sandbox")];
 
 function props(over = {}) {
   return {
     open: true,
     onOpenChange: vi.fn(),
-    metas,
-    loadCollection: vi.fn().mockResolvedValue(collection),
-    defaultName: "GetX",
+    collections,
+    defaultName: "Create",
+    draftService: "notes.v1.NotesApiService",
+    draftMethod: "Create",
     onSave: vi.fn().mockResolvedValue(undefined),
     onCreateCollection: vi.fn().mockResolvedValue("c-new"),
-    suggestedPath: ["payments", "PaymentService"],
+    onCreateFolder: vi.fn().mockResolvedValue("f-new"),
     existingLocations: [],
     ...over,
   };
 }
 
-describe("SaveRequestDialog", () => {
-  it("defaults the name to the method and saves to the chosen collection", async () => {
+describe("SaveRequestDialog — shell", () => {
+  it("prefills the name from defaultName", () => {
+    render(<SaveRequestDialog {...props()} />);
+    expect((screen.getByLabelText("Request name") as HTMLInputElement).value).toBe("Create");
+  });
+
+  it("saves to the selected collection root by default (first collection)", async () => {
     const p = props();
     render(<SaveRequestDialog {...p} />);
-    expect((screen.getByPlaceholderText("My request") as HTMLInputElement).value).toBe("GetX");
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    await Promise.resolve();
-    expect(p.onSave).toHaveBeenCalledWith(
-      expect.objectContaining({ collectionId: "c1", parentId: null, name: "GetX" }),
+    await waitFor(() =>
+      expect(p.onSave).toHaveBeenCalledWith({ collectionId: "c1", parentId: null, name: "Create" }),
     );
   });
 
-  it("shows the suggested Host > Service path hint", () => {
+  it("saves into a folder the user selects", async () => {
+    const p = props();
+    render(<SaveRequestDialog {...p} />);
+    fireEvent.click(screen.getByLabelText("expand My APIs"));
+    fireEvent.click(screen.getByText("Staging"));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(p.onSave).toHaveBeenCalledWith({ collectionId: "c1", parentId: "f1", name: "Create" }),
+    );
+  });
+
+  it("filters the tree via the search box", () => {
     render(<SaveRequestDialog {...props()} />);
-    expect(screen.getByText(/payments\s*›\s*PaymentService/)).toBeTruthy();
+    fireEvent.change(screen.getByPlaceholderText(/search/i), { target: { value: "sandbox" } });
+    expect(screen.getByText("Sandbox")).toBeTruthy();
+    expect(screen.queryByText("My APIs")).toBeNull();
   });
 
-  it("shows where the request is already saved", () => {
-    render(
-      <SaveRequestDialog
-        {...props({
-          existingLocations: [
-            { collectionId: "c1", collectionName: "My Collection", folderPath: ["api"], requestId: "r0", requestName: "GetX" },
-          ],
-        })}
-      />,
-    );
-    expect(screen.getByText(/Already saved in/i)).toBeTruthy();
-    // "My Collection" also appears in the Collection <option>, so scope to the saved-copy list entry.
-    expect(screen.getByText(/My Collection\s*›\s*api/)).toBeTruthy();
+  it("originBound mode shows only the name field titled 'Update request'", () => {
+    render(<SaveRequestDialog {...props({ originBound: true })} />);
+    expect(screen.getByText("Update request")).toBeTruthy();
+    expect(screen.queryByPlaceholderText(/search/i)).toBeNull();
   });
 });
