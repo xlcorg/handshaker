@@ -37,7 +37,7 @@ export function DraftAddressBar({
             type="button"
             onClick={() => onTls(!step.tls)}
             aria-label={step.tls ? "TLS enabled" : "Plaintext"}
-            className="flex flex-none items-center text-muted-foreground hover:text-foreground"
+            className="flex flex-none items-center text-muted-foreground hover:text-foreground focus-visible:outline-none"
           >
             {step.tls ? <Lock className="size-3.5" /> : <Unlock className="size-3.5" />}
           </button>
@@ -55,7 +55,7 @@ export function DraftAddressBar({
         catalog={catalog}
         onSelect={onSelectMethod}
         reflection={{ loading: reflecting, error: reflectError, onRefresh }}
-        className="flex-1 justify-between"
+        className="flex-1"
       />
       {sending ? (
         <Button size="sm" variant="outline" onClick={onCancel}>

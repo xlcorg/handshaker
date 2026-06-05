@@ -70,7 +70,7 @@ export function MethodPicker({ selected, catalog, onSelect, maxLabel = 160, clas
             {selected.method}
           </span>
           {selected.kind !== "unary" && <KindBadge kind={selected.kind} />}
-          <ChevronDown className="size-2.5 text-muted-foreground/70 ml-0.5 flex-none" />
+          <ChevronDown className="size-2.5 text-muted-foreground/70 ml-auto flex-none" />
         </>
       ) : (
         <>
