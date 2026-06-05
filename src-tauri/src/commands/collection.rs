@@ -115,7 +115,12 @@ impl AppState {
         // position. On error we return before either upsert, so stored state is untouched.
         tree::restore_item(&mut tgt.items, snap.item, new_parent, position as usize)?;
 
-        // No global transaction across stores; persist source (removal) then target (insert).
+        // No cross-store transaction primitive exists (the store is per-collection atomic only).
+        // We persist source-removal then target-insert: if the second upsert failed, the item
+        // would be lost rather than duplicated. Loss is the accepted tradeoff here because both
+        // upserts target an in-memory store backed by a single data dir and effectively cannot
+        // fail independently in practice; should that change, prefer target-first (duplicate over
+        // loss).
         self.collection_store.upsert(src)?;
         self.collection_store.upsert(tgt)
     }
@@ -413,6 +418,7 @@ mod tests {
             _ => panic!("expected folder"),
         };
         assert_eq!(folder.items.len(), 1);
+        assert_eq!(state.collection_get_impl(&cid(1)).unwrap().items.len(), 0); // removed from source
     }
 
     #[test]
