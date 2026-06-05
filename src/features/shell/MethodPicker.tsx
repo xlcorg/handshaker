@@ -54,24 +54,27 @@ export function MethodPicker({ selected, catalog, onSelect, maxLabel = 160, clas
   }, [catalog, q]);
 
   const hasMethod = selected.method.trim().length > 0;
-  const triggerLabel = hasMethod ? (
+  const triggerLabel = (
     <>
       <Box className="size-3 text-muted-foreground flex-none" />
-      <span className="text-muted-foreground truncate" style={{ maxWidth: maxLabel }}>
-        {shortService(selected.service)}
-      </span>
-      <span className="text-muted-foreground/50">/</span>
-      <span className="text-foreground font-medium truncate" style={{ maxWidth: maxLabel }}>
-        {selected.method}
-      </span>
-      {selected.kind !== "unary" && <KindBadge kind={selected.kind} />}
-      <ChevronDown className="size-2.5 text-muted-foreground/70 ml-0.5 flex-none" />
-    </>
-  ) : (
-    <>
-      <Box className="size-3 text-muted-foreground flex-none" />
-      <span className="text-muted-foreground truncate">Select a method</span>
-      <ChevronDown className="size-2.5 text-muted-foreground/70 ml-auto flex-none" />
+      {hasMethod ? (
+        <>
+          <span className="text-muted-foreground truncate" style={{ maxWidth: maxLabel }}>
+            {shortService(selected.service)}
+          </span>
+          <span className="text-muted-foreground/50">/</span>
+          <span className="text-foreground font-medium truncate" style={{ maxWidth: maxLabel }}>
+            {selected.method}
+          </span>
+          {selected.kind !== "unary" && <KindBadge kind={selected.kind} />}
+          <ChevronDown className="size-2.5 text-muted-foreground/70 ml-0.5 flex-none" />
+        </>
+      ) : (
+        <>
+          <span className="text-muted-foreground truncate">Select a method</span>
+          <ChevronDown className="size-2.5 text-muted-foreground/70 ml-auto flex-none" />
+        </>
+      )}
     </>
   );
 
