@@ -97,4 +97,37 @@ describe("optimistic mutations + rollback", () => {
     expect(ipc.collectionDuplicateItem).toHaveBeenCalledWith("c1", "r1");
     expect(result.current.tree[0].name).toBe("c1-reloaded");
   });
+
+  it("updateItemContent replaces content optimistically and upserts the collection", async () => {
+    const { result } = await loaded();
+    vi.mocked(ipc.collectionUpsert).mockResolvedValue(undefined);
+    const content = {
+      id: "r1", name: "ignored", address_template: "new:443", service: "p.v2.S", method: "NewM",
+      body_template: '{"b":2}', metadata: [], auth: { kind: "none" as const },
+      tls_override: null, last_used_at: null, use_count: 0,
+    };
+    await act(async () => { await result.current.updateItemContent("c1", "r1", content); });
+    const item = result.current.tree[0].items[0] as Extract<typeof content & { type: "request" }, { type: "request" }>;
+    expect(item.method).toBe("NewM");
+    expect(item.name).toBe("r1"); // preserved from the original
+    expect(ipc.collectionUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "c1" }),
+    );
+  });
+
+  it("updateItemContent rolls back when the upsert rejects", async () => {
+    const { result } = await loaded();
+    vi.mocked(ipc.collectionUpsert).mockRejectedValue({ message: "disk full" });
+    const content = {
+      id: "r1", name: "x", address_template: "new", service: "S", method: "NewM",
+      body_template: "{}", metadata: [], auth: { kind: "none" as const },
+      tls_override: null, last_used_at: null, use_count: 0,
+    };
+    await act(async () => {
+      await expect(result.current.updateItemContent("c1", "r1", content)).rejects.toBeTruthy();
+    });
+    const item = result.current.tree[0].items[0] as Extract<{ type: "request"; method: string }, { type: "request" }>;
+    expect(item.method).toBe("m"); // reverted to the seeded value
+    expect(result.current.error).toBe("disk full");
+  });
 });

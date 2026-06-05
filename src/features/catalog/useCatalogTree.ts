@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ipc } from "@/ipc/client";
-import type { CollectionIpc, ItemIpc } from "@/ipc/bindings";
+import type { CollectionIpc, ItemIpc, SavedRequestIpc } from "@/ipc/bindings";
 import { newId } from "@/lib/ids";
 import {
   insertItemInTree,
@@ -8,6 +8,7 @@ import {
   removeItemFromTree,
   renameCollectionInTree,
   renameItemInTree,
+  replaceItemInTree,
   setCollectionPinned,
 } from "./treeEdit";
 
@@ -22,6 +23,7 @@ export interface UseCatalogTree {
   setPinned: (collectionId: string, pinned: boolean) => Promise<void>;
   addItem: (collectionId: string, parentId: string | null, item: ItemIpc) => Promise<void>;
   renameItem: (collectionId: string, itemId: string, name: string) => Promise<void>;
+  updateItemContent: (collectionId: string, itemId: string, content: SavedRequestIpc) => Promise<void>;
   deleteItem: (collectionId: string, itemId: string) => Promise<void>;
   duplicateItem: (collectionId: string, itemId: string) => Promise<void>;
 }
@@ -151,6 +153,15 @@ export function useCatalogTree(): UseCatalogTree {
     [optimistic],
   );
 
+  const updateItemContent = useCallback(
+    (collectionId: string, itemId: string, content: SavedRequestIpc) =>
+      optimistic(
+        (prev) => replaceItemInTree(prev, collectionId, itemId, content),
+        () => ipc.collectionUpsert(treeRef.current.find((c) => c.id === collectionId)!),
+      ),
+    [optimistic],
+  );
+
   const deleteItem = useCallback(
     (collectionId: string, itemId: string) =>
       optimistic(
@@ -186,6 +197,7 @@ export function useCatalogTree(): UseCatalogTree {
     setPinned,
     addItem,
     renameItem,
+    updateItemContent,
     deleteItem,
     duplicateItem,
   };
