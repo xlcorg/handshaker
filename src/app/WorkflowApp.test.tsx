@@ -57,10 +57,12 @@ vi.mock("@/features/catalog/SaveRequestDialog", () => ({
 vi.mock("@/features/catalog/DiscardDraftDialog", () => ({
   DiscardDraftDialog: ({
     open,
+    onOpenChange,
     onDiscard,
     onSaveFirst,
   }: {
     open: boolean;
+    onOpenChange: (open: boolean) => void;
     onDiscard: () => void;
     onSaveFirst: () => void;
   }) =>
@@ -68,6 +70,7 @@ vi.mock("@/features/catalog/DiscardDraftDialog", () => ({
       <div>
         <button type="button" onClick={onDiscard}>discard-confirm</button>
         <button type="button" onClick={onSaveFirst}>discard-savefirst</button>
+        <button type="button" onClick={() => onOpenChange(false)}>discard-cancel</button>
       </div>
     ) : null,
 }));
@@ -242,5 +245,18 @@ describe("WorkflowApp open-over-dirty guard", () => {
     await user.click(await screen.findByText("do-save"));
     await waitFor(() => expect(openSavedRequest).toHaveBeenCalledTimes(1));
     expect(saveNewRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it("Ctrl+S after cancelling a discard does not re-run the cancelled open", async () => {
+    const user = userEvent.setup();
+    render(<WorkflowApp />);
+    setDirtyUnboundDraft();
+    await user.click(screen.getByText("open-req")); // guarded → discard prompt
+    await user.click(screen.getByText("discard-cancel")); // cancel the prompt
+    // A fresh, direct Ctrl+S save of the still-unbound draft must NOT resurrect the cancelled open.
+    await user.keyboard("{Control>}s{/Control}");
+    await user.click(await screen.findByText("do-save"));
+    await waitFor(() => expect(saveNewRequest).toHaveBeenCalledTimes(1));
+    expect(openSavedRequest).not.toHaveBeenCalled();
   });
 });

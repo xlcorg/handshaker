@@ -69,7 +69,11 @@ export function WorkflowApp() {
         e.preventDefault();
         // Save only opens the dialog for an UNBOUND draft; bound drafts already autosave.
         const st = workflowStore.getState();
-        if (st.draft && st.draftOrigin === null) setSaveOpen(true);
+        if (st.draft && st.draftOrigin === null) {
+          // A direct save is not a continuation of a deferred open — drop any pending action.
+          pendingOpenRef.current = null;
+          setSaveOpen(true);
+        }
       } else if (mod && (e.key === "n" || e.key === "N")) {
         e.preventDefault();
         guardedRun(() => newRequestDraft());
@@ -141,7 +145,11 @@ export function WorkflowApp() {
               onClose={() => setPanelCollectionId(null)}
             />
           ) : (
-            renderView(wf.view, () => setSaveOpen(true))
+            renderView(wf.view, () => {
+              // A direct save is not a continuation of a deferred open — drop any pending action.
+              pendingOpenRef.current = null;
+              setSaveOpen(true);
+            })
           )}
         </div>
       </div>
