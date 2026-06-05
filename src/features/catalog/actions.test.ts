@@ -29,7 +29,9 @@ describe("openSavedRequest", () => {
     const { id: _draftId, ...draftRest } = draft!;
     const { id: _expectedId, ...expectedRest } = savedRequestToDraft(saved);
     expect(draftRest).toEqual(expectedRest);
-    expect(workflowStore.getState().draftOrigin).toEqual({ collectionId: "c1", requestId: "req-1" });
+    expect(workflowStore.getState().draftOrigin).toEqual({
+      collectionId: "c1", requestId: "req-1", requestName: "GetX",
+    });
     expect(workflowStore.getState().draftDirty).toBe(false);
     expect(workflowStore.activeWorkflow().view).toBe("focus");
     expect(workflowStore.activeWorkflow().steps).toHaveLength(0);

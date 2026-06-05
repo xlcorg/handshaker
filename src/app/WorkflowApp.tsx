@@ -107,7 +107,10 @@ export function WorkflowApp() {
     const current = workflowStore.getState().draft;
     if (!current) return;
     const id = await saveNewRequest(cat.addItem, current, dest);
-    workflowStore.setDraftOrigin({ collectionId: dest.collectionId, requestId: id });
+    const collectionName = cat.tree.find((c) => c.id === dest.collectionId)?.name;
+    workflowStore.setDraftOrigin({
+      collectionId: dest.collectionId, requestId: id, collectionName, requestName: dest.name,
+    });
     await cat.reload();
     const pending = pendingOpenRef.current;
     pendingOpenRef.current = null;
