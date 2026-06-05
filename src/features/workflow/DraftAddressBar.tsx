@@ -1,7 +1,7 @@
-import { RefreshCw } from "lucide-react";
+import { Lock, Unlock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/cn";
+import { Tooltip } from "@/components/ui/tooltip";
 import { MethodPicker } from "@/features/shell/MethodPicker";
 import type { SelectedMethod } from "@/features/shell/SelectedMethod";
 import type { ServiceCatalogIpc } from "@/ipc/bindings";
@@ -13,48 +13,50 @@ export interface DraftAddressBarProps {
   reflecting: boolean;
   reflectError: string | null;
   onAddress: (address: string) => void;
+  onTls: (tls: boolean) => void;
   onRefresh: () => void;
   onSelectMethod: (m: SelectedMethod) => void;
   onSend: () => void;
   onCancel: () => void;
 }
 
-/** Editable Focus header for a draft: host input → reflection → MethodPicker → Send. */
+/** Editable Focus header for a draft: TLS lock + host → full-width MethodPicker → Send.
+ *  Reflection status & reload live inside the MethodPicker dropdown (Postman-style). */
 export function DraftAddressBar({
-  step, catalog, reflecting, reflectError, onAddress, onRefresh, onSelectMethod, onSend, onCancel,
+  step, catalog, reflecting, reflectError,
+  onAddress, onTls, onRefresh, onSelectMethod, onSend, onCancel,
 }: DraftAddressBarProps) {
   const sending = step.status === "sending";
   return (
     <div className="flex h-14 items-center gap-2 border-b border-border px-4">
-      <Input
-        aria-label="draft-address"
-        value={step.address}
-        onChange={(e) => onAddress(e.target.value)}
-        placeholder="host:port"
-        className="h-8 w-56 font-mono text-xs"
-      />
-      <Button
-        type="button"
-        size="icon"
-        variant="ghost"
-        aria-label="refresh-reflection"
-        onClick={onRefresh}
-        disabled={reflecting || step.address.trim().length === 0}
-      >
-        <RefreshCw className={cn("size-3.5", reflecting && "animate-spin")} />
-      </Button>
-      {catalog ? (
-        <MethodPicker
-          selected={{ service: step.service, method: step.method, kind: "unary" }}
-          catalog={catalog}
-          onSelect={onSelectMethod}
+      <div className="flex h-8 flex-none items-center gap-1.5 rounded-md border border-input bg-background pl-2 pr-1 focus-within:ring-1 focus-within:ring-ring">
+        <Tooltip
+          content={step.tls ? "TLS enabled — click to switch to plaintext" : "Plaintext — click to enable TLS"}
+        >
+          <button
+            type="button"
+            onClick={() => onTls(!step.tls)}
+            aria-label={step.tls ? "TLS enabled" : "Plaintext"}
+            className="flex flex-none items-center text-muted-foreground hover:text-foreground"
+          >
+            {step.tls ? <Lock className="size-3.5" /> : <Unlock className="size-3.5" />}
+          </button>
+        </Tooltip>
+        <Input
+          aria-label="draft-address"
+          value={step.address}
+          onChange={(e) => onAddress(e.target.value)}
+          placeholder="host:port"
+          className="h-7 w-44 border-0 bg-transparent px-1 font-mono text-xs focus-visible:ring-0"
         />
-      ) : (
-        <span className="truncate text-xs text-muted-foreground">
-          {reflecting ? "Reflecting…" : reflectError ? reflectError : "Enter a host to load methods"}
-        </span>
-      )}
-      <div className="flex-1" />
+      </div>
+      <MethodPicker
+        selected={{ service: step.service, method: step.method, kind: "unary" }}
+        catalog={catalog}
+        onSelect={onSelectMethod}
+        reflection={{ loading: reflecting, error: reflectError, onRefresh }}
+        className="flex-1 justify-between"
+      />
       {sending ? (
         <Button size="sm" variant="outline" onClick={onCancel}>
           ✕ Cancel
