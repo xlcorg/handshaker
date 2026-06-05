@@ -50,7 +50,8 @@ describe("augmentTree", () => {
     );
     const outer = out[0].items[0];
     expect(outer).toMatchObject({ id: "f1", name: "Outer" });
-    expect(outer.type === "folder" && outer.items).toEqual([
+    if (outer.type !== "folder") throw new Error("expected outer to be a folder");
+    expect(outer.items).toEqual([
       { type: "folder", id: "f2", name: "Inner", items: [] },
     ]);
   });
