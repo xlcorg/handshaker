@@ -7,6 +7,7 @@
 
 use handshaker_core::env::Environment;
 use handshaker_core::error::CoreError;
+use handshaker_core::persist::{atomic_write_json, Envelope};
 use tauri::State;
 
 use crate::ipc::env::EnvironmentIpc;
@@ -31,6 +32,11 @@ impl AppState {
             if self.env_store.get(n).is_none() {
                 return Err(CoreError::InvalidTarget(format!("no such env: `{n}`")));
             }
+        }
+        // Persist the selection before touching the in-memory lock, so a disk
+        // failure surfaces as an error rather than a silently-divergent state.
+        if let Some(path) = &self.active_env_path {
+            atomic_write_json(path, &Envelope::new(name.clone()))?;
         }
         *self.active_env.write().await = name;
         Ok(())
@@ -119,6 +125,7 @@ mod tests {
         AppState {
             env_store: Arc::new(store),
             active_env: RwLock::new(active.map(|s| s.to_string())),
+            active_env_path: None,
             collection_store: Arc::new(InMemoryCollectionStore::new()),
             contract_cache: Arc::new(InMemoryContractCache::new()),
             in_flight: std::sync::Mutex::new(std::collections::HashMap::new()),
