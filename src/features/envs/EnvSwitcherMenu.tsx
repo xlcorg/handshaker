@@ -11,6 +11,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { EnvironmentIpc } from "@/ipc/bindings";
 
+import { colorHex, resolveColorKey } from "./colors";
+
 export interface EnvSwitcherMenuProps {
   envs: EnvironmentIpc[];
   /** Inner content of the DropdownMenuTrigger — typically the env-pill button. */
@@ -44,7 +46,12 @@ export const EnvSwitcherMenu = forwardRef<HTMLButtonElement, EnvSwitcherMenuProp
           </DropdownMenuItem>
           {sorted.map((env) => (
             <div key={env.name} className="group flex items-center">
-              <DropdownMenuItem className="flex-1" onSelect={() => onActiveSet(env.name)}>
+              <DropdownMenuItem className="flex-1 gap-2" onSelect={() => onActiveSet(env.name)}>
+                <span
+                  aria-hidden
+                  className="size-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: colorHex(resolveColorKey(env)) }}
+                />
                 {env.name}
               </DropdownMenuItem>
               <DropdownMenuItem

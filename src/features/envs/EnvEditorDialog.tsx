@@ -15,6 +15,7 @@ import { cn } from "@/lib/cn";
 import { ipc } from "@/ipc/client";
 import type { EnvironmentIpc } from "@/ipc/bindings";
 
+import { ENV_COLORS, defaultColorKeyForName } from "./colors";
 import { VariablesTable } from "./VariablesTable";
 
 /** Read the target env's variables from the env list. `null` (create mode) ⇒ empty. */
@@ -29,6 +30,12 @@ function loadVars(originalName: string | null, envs: EnvironmentIpc[]): Record<s
     }
   }
   return out;
+}
+
+/** The env's stored color (edit mode) or null (create mode). */
+function loadColor(originalName: string | null, envs: EnvironmentIpc[]): string | null {
+  if (originalName === null) return null;
+  return envs.find((e) => e.name === originalName)?.color ?? null;
 }
 
 export interface EnvEditorDialogProps {
@@ -63,6 +70,7 @@ export function EnvEditorDialog({
   // initializer is sufficient — and, running once, it also can't be clobbered by a
   // background parent refetch of `envs`.
   const [vars, setVars] = useState<Record<string, string>>(() => loadVars(originalName, envs));
+  const [pickedColor, setPickedColor] = useState<string | null>(() => loadColor(originalName, envs));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -76,6 +84,8 @@ export function EnvEditorDialog({
     envs.some((e) => e.name === trimmedName);
   const canSave = !nameEmpty && !nameIsDuplicate;
 
+  const effectiveColor = pickedColor ?? defaultColorKeyForName(trimmedName);
+
   async function handleSave() {
     if (!canSave) return;
     const renamed = !isCreate && trimmedName !== originalName;
@@ -83,7 +93,7 @@ export function EnvEditorDialog({
     setError(null);
     try {
       // 1. Persist the (possibly renamed) env with its current variables.
-      await ipc.envUpsert({ name: trimmedName, variables: vars });
+      await ipc.envUpsert({ name: trimmedName, variables: vars, color: effectiveColor });
 
       // 2. Renaming the active env: switch active to the new name BEFORE
       //    deleting the old one (backend env_delete refuses to delete active).
@@ -144,6 +154,28 @@ export function EnvEditorDialog({
           <div className="space-y-1.5">
             <Label>Variables</Label>
             <VariablesTable value={vars} onChange={setVars} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Color</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {ENV_COLORS.map((c) => {
+                const selected = effectiveColor === c.key;
+                return (
+                  <button
+                    key={c.key}
+                    type="button"
+                    aria-label={c.label}
+                    aria-pressed={selected}
+                    onClick={() => setPickedColor(c.key)}
+                    className={cn(
+                      "size-6 rounded-full border-2 transition",
+                      selected ? "border-foreground" : "border-transparent hover:border-muted-foreground",
+                    )}
+                    style={{ backgroundColor: c.hex }}
+                  />
+                );
+              })}
+            </div>
           </div>
         </div>
         {error && (

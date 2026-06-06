@@ -9,8 +9,8 @@ function setup() {
   render(
     <EnvSwitcherMenu
       envs={[
-        { name: "local", variables: {} },
-        { name: "prod", variables: {} },
+        { name: "local", variables: {}, color: null },
+        { name: "prod", variables: {}, color: null },
       ]}
       trigger={<button type="button">env-trigger</button>}
       onActiveSet={onActiveSet}
@@ -46,7 +46,7 @@ describe("EnvSwitcherMenu", () => {
     const onEditEnv = vi.fn();
     render(
       <EnvSwitcherMenu
-        envs={[{ name: "local", variables: {} }, { name: "prod", variables: {} }]}
+        envs={[{ name: "local", variables: {}, color: null }, { name: "prod", variables: {}, color: null }]}
         trigger={<button type="button">env-trigger</button>}
         onActiveSet={() => {}}
         onEditEnv={onEditEnv}

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ConfirmDeleteEnvDialog } from "@/features/envs/ConfirmDeleteEnvDialog";
 import { EnvEditorDialog } from "@/features/envs/EnvEditorDialog";
 import { EnvSwitcherMenu } from "@/features/envs/EnvSwitcherMenu";
+import { colorHex, resolveColorKey } from "@/features/envs/colors";
 import { envList } from "@/ipc/client";
 import type { EnvironmentIpc } from "@/ipc/bindings";
 
@@ -37,6 +38,7 @@ export function WorkflowEnvControl() {
 
   const activeEnv = wf.envName;
   const label = activeEnv ?? "No environment";
+  const activeEnvObj = envs.find((e) => e.name === activeEnv) ?? null;
 
   return (
     <>
@@ -47,6 +49,13 @@ export function WorkflowEnvControl() {
             type="button"
             className="flex items-center gap-1 rounded px-2 py-0.5 text-xs text-muted-foreground hover:bg-accent"
           >
+            {activeEnv && (
+              <span
+                aria-hidden
+                className="size-2 shrink-0 rounded-full"
+                style={{ backgroundColor: colorHex(resolveColorKey(activeEnvObj ?? { name: activeEnv, color: null })) }}
+              />
+            )}
             <span className="max-w-[180px] truncate text-foreground">{label}</span>
             <ChevronDown className="size-3" aria-hidden />
           </button>

@@ -41,7 +41,7 @@ describe("EnvEditorDialog name validation", () => {
         open
         originalName="prod"
         activeEnv="prod"
-        envs={[{ name: "prod", variables: { host: "api:443" } }]}
+        envs={[{ name: "prod", variables: { host: "api:443" }, color: null }]}
         onOpenChange={() => {}}
         onSaved={() => {}}
       />,
@@ -57,7 +57,7 @@ describe("EnvEditorDialog name validation", () => {
         open
         originalName={null}
         activeEnv={null}
-        envs={[{ name: "prod", variables: {} }]}
+        envs={[{ name: "prod", variables: {}, color: null }]}
         onOpenChange={() => {}}
         onSaved={() => {}}
       />,
@@ -75,7 +75,7 @@ describe("EnvEditorDialog name validation", () => {
         open
         originalName="prod"
         activeEnv="prod"
-        envs={[{ name: "prod", variables: {} }]}
+        envs={[{ name: "prod", variables: {}, color: null }]}
         onOpenChange={() => {}}
         onSaved={() => {}}
         onRequestDelete={onRequestDelete}
@@ -98,5 +98,25 @@ describe("EnvEditorDialog name validation", () => {
       />,
     );
     expect(screen.queryByRole("button", { name: /delete/i })).not.toBeInTheDocument();
+  });
+
+  it("save includes the env color (name-derived default)", async () => {
+    const user = userEvent.setup();
+    render(
+      <EnvEditorDialog
+        open
+        originalName={null}
+        activeEnv={null}
+        envs={[]}
+        onOpenChange={() => {}}
+        onSaved={() => {}}
+      />,
+    );
+    await user.type(screen.getByLabelText("Name"), "prod");
+    await user.click(screen.getByRole("button", { name: /create/i }));
+    const { ipc } = await import("@/ipc/client");
+    expect(ipc.envUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "prod", color: "red" }),
+    );
   });
 });

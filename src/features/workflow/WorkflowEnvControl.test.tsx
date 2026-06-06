@@ -4,8 +4,8 @@ import { render, screen, act } from "@testing-library/react";
 vi.mock("@/ipc/client", () => ({
   // The control loads envs on mount; the store's setWorkflowEnv syncs the backend.
   envList: vi.fn().mockResolvedValue([
-    { name: "staging", variables: {} },
-    { name: "prod", variables: {} },
+    { name: "staging", variables: {}, color: null },
+    { name: "prod", variables: {}, color: null },
   ]),
   envActiveSet: vi.fn().mockResolvedValue(undefined),
 }));
