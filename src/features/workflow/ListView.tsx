@@ -11,7 +11,7 @@ export function ListView() {
   if (wf.steps.length === 0) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-        Нет шагов — создай вызов в сайдбаре или ⌘K.
+        Нет шагов — создай вызов в сайдбаре.
       </div>
     );
   }

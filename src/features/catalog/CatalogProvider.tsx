@@ -3,7 +3,7 @@ import { useCatalogTree, type UseCatalogTree } from "./useCatalogTree";
 
 const CatalogContext = createContext<UseCatalogTree | null>(null);
 
-/** Owns the ONE catalog-tree instance shared by the sidebar, overview, ⌘K and Save flow. */
+/** Owns the ONE catalog-tree instance shared by the sidebar, overview and Save flow. */
 export function CatalogProvider({ children }: { children: ReactNode }) {
   const catalog = useCatalogTree();
   return <CatalogContext.Provider value={catalog}>{children}</CatalogContext.Provider>;

@@ -55,7 +55,7 @@ export function FocusView({ onRequestSave }: FocusViewProps = {}) {
           />
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            Нет активного реквеста — выбери метод в сайдбаре или нажми ⌘K.
+            Нет активного реквеста — выбери метод в сайдбаре.
           </div>
         )}
       </div>
