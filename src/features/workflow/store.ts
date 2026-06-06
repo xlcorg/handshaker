@@ -97,6 +97,11 @@ export const workflowStore = {
     workflowStore.update((w) => setWorkflowEnvReducer(w, name));
     void envActiveSet(name);
   },
+  /** Set the active workflow's env from a persisted source WITHOUT echoing back to
+   * the backend (used to hydrate on startup from envActiveGet). */
+  hydrateEnv(name: string | null) {
+    workflowStore.update((w) => setWorkflowEnvReducer(w, name));
+  },
   setActiveWorkflow(id: string) {
     const next = state.workflows.find((w) => w.id === id);
     if (!next) return;

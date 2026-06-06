@@ -1,13 +1,19 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+
+vi.mock("@/ipc/client", () => ({
+  envActiveSet: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { workflowStore } from "./store";
 import { isContentPatch } from "./store";
+import { envActiveSet } from "@/ipc/client";
 import { newStep } from "./model";
 import { addStep, updateStep } from "./reducers";
 
-const envActiveSet = vi.fn().mockResolvedValue(undefined);
-vi.mock("@/ipc/client", () => ({ envActiveSet: (n: string | null) => envActiveSet(n) }));
-
-beforeEach(() => workflowStore.reset());
+beforeEach(() => {
+  vi.clearAllMocks();
+  workflowStore.reset();
+});
 
 describe("workflowStore", () => {
   it("starts with one empty workflow that is active", () => {
@@ -209,5 +215,20 @@ describe("draft origin + dirty", () => {
     expect(isContentPatch({ address: "h" })).toBe(true);
     expect(isContentPatch({ status: "ok" })).toBe(false);
     expect(isContentPatch({ requestId: "r" })).toBe(false);
+  });
+});
+
+describe("workflowStore.hydrateEnv", () => {
+  it("sets the active workflow env without calling envActiveSet", () => {
+    workflowStore.hydrateEnv("staging");
+    expect(workflowStore.activeWorkflow().envName).toBe("staging");
+    expect(envActiveSet).not.toHaveBeenCalled();
+  });
+
+  it("accepts null (no environment)", () => {
+    workflowStore.hydrateEnv("staging");
+    workflowStore.hydrateEnv(null);
+    expect(workflowStore.activeWorkflow().envName).toBeNull();
+    expect(envActiveSet).not.toHaveBeenCalled();
   });
 });
