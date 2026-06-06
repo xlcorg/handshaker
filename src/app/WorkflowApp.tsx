@@ -1,17 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import { Kbd } from "@/components/ui/kbd";
 import { Toaster } from "@/components/ui/toaster";
 import { FocusView } from "@/features/workflow/FocusView";
 import { LedgerView } from "@/features/workflow/LedgerView";
 import { ListView } from "@/features/workflow/ListView";
-import { ViewSwitcher } from "@/features/workflow/ViewSwitcher";
-import { WorkflowSelector } from "@/features/workflow/WorkflowSelector";
-import { WorkflowEnvControl } from "@/features/workflow/WorkflowEnvControl";
 import { useActiveWorkflow, useDraft, workflowStore } from "@/features/workflow/store";
 import type { ViewMode } from "@/features/workflow/model";
 import type { SavedRequestIpc } from "@/ipc/bindings";
+import { Titlebar } from "@/features/shell/Titlebar";
+import { SettingsDialog } from "@/features/settings/SettingsDialog";
+import { envActiveGet } from "@/ipc/client";
 import { SidebarShell } from "@/features/catalog/SidebarShell";
-import { CommandPalette } from "@/features/catalog/CommandPalette";
 import { CollectionOverview } from "@/features/catalog/overview/CollectionOverview";
 import { useCatalog } from "@/features/catalog/CatalogProvider";
 import { openSavedRequest, newRequestDraft } from "@/features/catalog/actions";
@@ -37,9 +35,9 @@ function renderView(view: ViewMode, onRequestSave: () => void) {
 export function WorkflowApp() {
   const wf = useActiveWorkflow();
   const draft = useDraft();
-  // The ONE shared catalog instance — feeds ⌘K + overview + Save dialog AND the sidebar.
+  // The ONE shared catalog instance — feeds overview + Save dialog AND the sidebar.
   const cat = useCatalog();
-  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [panelCollectionId, setPanelCollectionId] = useState<string | null>(null);
   const [saveOpen, setSaveOpen] = useState(false);
   const [discardOpen, setDiscardOpen] = useState(false);
@@ -48,6 +46,11 @@ export function WorkflowApp() {
 
   // Debounced autosave of an origin-bound draft on every content edit (spec §6).
   useAutosaveDraft(cat.updateItemContent);
+
+  // Подхватить сохранённый бэкендом активный env при старте (спека §4).
+  useEffect(() => {
+    void envActiveGet().then((name) => workflowStore.hydrateEnv(name));
+  }, []);
 
   // Run an open action, but confirm first if it would drop a dirty *unbound* draft (spec §6).
   function guardedRun(action: () => void) {
@@ -63,10 +66,7 @@ export function WorkflowApp() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;
-      if (mod && (e.key === "k" || e.key === "K")) {
-        e.preventDefault();
-        setPaletteOpen((v) => !v);
-      } else if (mod && (e.key === "s" || e.key === "S")) {
+      if (mod && (e.key === "s" || e.key === "S")) {
         e.preventDefault();
         // Save only opens the dialog for an UNBOUND draft; bound drafts already autosave.
         const st = workflowStore.getState();
@@ -87,11 +87,6 @@ export function WorkflowApp() {
     return () => window.removeEventListener("keydown", onKey);
     // guardedRun reads fresh store state and only calls stable setters; bind once.
   }, []);
-
-  // Freshen the snapshot whenever the palette opens, so cross-instance edits are searchable.
-  useEffect(() => {
-    if (paletteOpen) void cat.reload();
-  }, [paletteOpen, cat.reload]);
 
   // Creating a call switches to Focus; close any open collection overview so it is visible.
   useEffect(() => {
@@ -140,20 +135,7 @@ export function WorkflowApp() {
 
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
-      <div className="flex h-9 items-center gap-3 border-b border-border px-3 text-sm">
-        <span className="font-semibold">⚡ Handshaker</span>
-        <WorkflowSelector />
-        <WorkflowEnvControl />
-        <div className="flex-1" />
-        <ViewSwitcher />
-        <button
-          type="button"
-          onClick={() => setPaletteOpen(true)}
-          className="flex items-center gap-1 rounded border border-border px-2 py-0.5 text-xs text-muted-foreground hover:bg-accent"
-        >
-          <Kbd>⌘K</Kbd>
-        </button>
-      </div>
+      <Titlebar onOpenSettings={() => setSettingsOpen(true)} />
 
       <div className="flex min-h-0 flex-1">
         <SidebarShell
@@ -178,13 +160,6 @@ export function WorkflowApp() {
           )}
         </div>
       </div>
-
-      <CommandPalette
-        open={paletteOpen}
-        onClose={() => setPaletteOpen(false)}
-        collections={cat.tree}
-        onOpen={openRequest}
-      />
 
       <SaveRequestDialog
         open={saveOpen}
@@ -223,6 +198,8 @@ export function WorkflowApp() {
           setSaveOpen(true);
         }}
       />
+
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
 
       <Toaster />
     </div>

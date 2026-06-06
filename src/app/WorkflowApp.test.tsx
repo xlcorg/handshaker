@@ -1,6 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen, act, waitFor } from "@testing-library/react";
+import { render as rtlRender, screen, act, waitFor } from "@testing-library/react";
+import type * as React from "react";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import userEvent from "@testing-library/user-event";
+
+function render(ui: React.ReactElement) {
+  return rtlRender(<TooltipProvider>{ui}</TooltipProvider>);
+}
 
 vi.mock("@/features/catalog/SidebarShell", () => ({
   SidebarShell: ({
@@ -35,8 +41,11 @@ vi.mock("@/features/catalog/overview/CollectionOverview", () => ({
     </div>
   ),
 }));
-vi.mock("@/features/catalog/CommandPalette", () => ({
-  CommandPalette: () => null,
+vi.mock("@tauri-apps/api/window", () => ({
+  getCurrentWindow: () => ({ minimize: vi.fn(), toggleMaximize: vi.fn(), close: vi.fn() }),
+}));
+vi.mock("@/features/settings/SettingsDialog", () => ({
+  SettingsDialog: ({ open }: { open: boolean }) => (open ? <div>SETTINGS-DIALOG</div> : null),
 }));
 vi.mock("@/features/catalog/actions", () => ({
   openSavedRequest: vi.fn(),
@@ -107,6 +116,7 @@ vi.mock("@/features/workflow/FocusView", () => ({
 vi.mock("@/ipc/client", () => ({
   envList: vi.fn().mockResolvedValue([]),
   envActiveSet: vi.fn().mockResolvedValue(undefined),
+  envActiveGet: vi.fn().mockResolvedValue(null),
 }));
 
 import { WorkflowApp } from "./WorkflowApp";
@@ -115,6 +125,7 @@ import { addStep, setView } from "@/features/workflow/reducers";
 import { newStep } from "@/features/workflow/model";
 import { saveNewRequest } from "@/features/catalog/save";
 import { openSavedRequest, newRequestDraft } from "@/features/catalog/actions";
+import { envActiveGet } from "@/ipc/client";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -207,16 +218,16 @@ describe("WorkflowApp titlebar + view dispatch", () => {
     render(<WorkflowApp />);
     expect(screen.getByRole("button", { name: /workflow-1/ })).toBeInTheDocument();
     expect(await screen.findByText(/No environment/i)).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: "Лента" })).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: "Список" })).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: "Фокус" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Ledger" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "List" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Focus" })).toBeInTheDocument();
   });
 
   it("defaults to Focus and switches to the real List view", async () => {
     const user = userEvent.setup();
     render(<WorkflowApp />);
     expect(screen.getByText("FOCUS")).toBeInTheDocument();
-    await user.click(screen.getByRole("radio", { name: "Список" }));
+    await user.click(screen.getByRole("radio", { name: "List" }));
     expect(screen.queryByText("FOCUS")).not.toBeInTheDocument();
     expect(screen.getByText(/Нет шагов/)).toBeInTheDocument();
   });
@@ -304,5 +315,21 @@ describe("WorkflowApp open-over-dirty guard", () => {
     await user.click(await screen.findByText("do-save"));
     await waitFor(() => expect(saveNewRequest).toHaveBeenCalledTimes(1));
     expect(openSavedRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe("WorkflowApp env hydration + settings", () => {
+  it("hydrates the active workflow env from envActiveGet on mount", async () => {
+    (envActiveGet as ReturnType<typeof vi.fn>).mockResolvedValueOnce("staging");
+    render(<WorkflowApp />);
+    expect(await screen.findByText("staging")).toBeInTheDocument();
+  });
+
+  it("opens the settings dialog from the titlebar settings button", async () => {
+    const user = userEvent.setup();
+    render(<WorkflowApp />);
+    expect(screen.queryByText("SETTINGS-DIALOG")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Settings" }));
+    expect(screen.getByText("SETTINGS-DIALOG")).toBeInTheDocument();
   });
 });
