@@ -14,7 +14,7 @@ export interface BodyControllerDeps {
   onBadgeExpand?: (nodeId: string) => void;
 }
 
-const BADGE_CLASS = "bodyview-badge";
+export const BADGE_CLASS = "bodyview-badge";
 
 export function attachBodyController(editor: EditorLike, deps: BodyControllerDeps): DisposableLike {
   const sub = editor.onMouseDown((e) => {

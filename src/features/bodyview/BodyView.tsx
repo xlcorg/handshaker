@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useMemo, useRef } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef } from "react";
 import type * as Monaco from "monaco-editor";
 import { MonacoEditor, monacoThemeFor, BODY_EDIT_OPTIONS, BODY_READONLY_OPTIONS } from "@/lib/monaco";
 import { usePrefs } from "@/lib/use-prefs";
@@ -6,8 +6,9 @@ import { parseWithSpans } from "./parse";
 import { renderJsonTree, type Badge } from "./render";
 import type { JsonTree } from "./jsonTree";
 import type { ValueSpan } from "./spans";
+import type { DisposableLike } from "./editorLike";
 import { exceedsByteCeiling } from "./elide";
-import { attachBodyController } from "./controller";
+import { attachBodyController, BADGE_CLASS } from "./controller";
 
 type Mode = "request" | "response";
 
@@ -25,9 +26,8 @@ interface Live {
   badges: Badge[];
   decorations: Monaco.editor.IEditorDecorationsCollection | null;
   expanded: Set<string>;
+  controller: DisposableLike | null;
 }
-
-const BADGE_CLASS = "bodyview-badge";
 
 export function BodyView({ mode, value, onChange }: BodyViewProps) {
   const [prefs] = usePrefs();
@@ -101,9 +101,12 @@ export function BodyView({ mode, value, onChange }: BodyViewProps) {
   // --- mount -------------------------------------------------------------
   const onMount = useCallback(
     (editor: Monaco.editor.IStandaloneCodeEditor, monaco: typeof Monaco) => {
+      // Keyed remount fires onMount fresh per response value; tear down the
+      // prior mount's subscription before attaching a new one.
+      live.current?.controller?.dispose();
       live.current = {
         editor, monaco, tree: null, spans: [], badges: [],
-        decorations: null, expanded: new Set(),
+        decorations: null, expanded: new Set(), controller: null,
       };
       if (mode === "response") {
         renderResponse(editor.getValue());
@@ -112,7 +115,7 @@ export function BodyView({ mode, value, onChange }: BodyViewProps) {
         live.current.tree = parsed?.tree ?? null;
         live.current.spans = parsed?.spans ?? [];
       }
-      attachBodyController(editor, {
+      live.current.controller = attachBodyController(editor, {
         getTree: () => live.current?.tree ?? null,
         getSpans: () => live.current?.spans ?? [],
         getBadgeNodeIdAt: mode === "response" ? badgeNodeIdAt : undefined,
@@ -121,6 +124,9 @@ export function BodyView({ mode, value, onChange }: BodyViewProps) {
     },
     [mode],
   );
+
+  // Dispose the controller subscription when BodyView itself unmounts.
+  useEffect(() => () => { live.current?.controller?.dispose(); }, []);
 
   // Request: refresh tree/spans from the user's text on each edit.
   const handleChange = useCallback(

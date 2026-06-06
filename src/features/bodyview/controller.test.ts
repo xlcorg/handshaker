@@ -12,9 +12,10 @@ function fakeEditor(text: string) {
     setValue: vi.fn(),
     getValueInRange: (range) => text.slice(range.startColumn - 1, range.endColumn - 1),
   };
+  const dispose = vi.fn();
   const editor: EditorLike = {
     getModel: () => model,
-    onMouseDown: (cb) => { handler = cb; return { dispose: vi.fn() }; },
+    onMouseDown: (cb) => { handler = cb; return { dispose }; },
   };
   const fire = (offset: number, over: Partial<EditorMouseEventLike["event"]> & { element?: HTMLElement | null }) => {
     const { element = null, ...ev } = over;
@@ -23,7 +24,7 @@ function fakeEditor(text: string) {
       target: { element, position: { lineNumber: 1, column: offset + 1 } },
     });
   };
-  return { editor, fire };
+  return { editor, fire, dispose };
 }
 
 beforeEach(() => {
@@ -68,5 +69,14 @@ describe("attachBodyController", () => {
     });
     fire(5, { detail: 1, element: badgeEl });
     expect(onBadgeExpand).toHaveBeenCalledWith("n1");
+  });
+
+  it("returns a disposable that tears down the mouse-down subscription", () => {
+    const text = `{"name":"Ada"}`;
+    const parsed = parseWithSpans(text)!;
+    const { editor, dispose } = fakeEditor(text);
+    const handle = attachBodyController(editor, { getTree: () => parsed.tree, getSpans: () => parsed.spans });
+    handle.dispose();
+    expect(dispose).toHaveBeenCalledTimes(1);
   });
 });
