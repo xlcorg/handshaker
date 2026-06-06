@@ -14,4 +14,20 @@ describe("Toaster", () => {
     act(() => { vi.advanceTimersByTime(2000); });
     expect(screen.queryByText("Скопировано")).not.toBeInTheDocument();
   });
+
+  it("styles an error toast with the destructive class and an alert role", () => {
+    render(<Toaster />);
+    act(() => { toast("boom", "error"); });
+    const row = screen.getByText("boom").closest("[role='alert']");
+    expect(row).not.toBeNull();
+    expect(row!.className).toContain("bg-destructive");
+  });
+
+  it("renders a success toast with the neutral pill (no destructive class)", () => {
+    render(<Toaster />);
+    act(() => { toast("Сохранено", "success"); });
+    const row = screen.getByText("Сохранено").closest("div");
+    expect(row!.className).toContain("bg-foreground");
+    expect(row!.className).not.toContain("bg-destructive");
+  });
 });
