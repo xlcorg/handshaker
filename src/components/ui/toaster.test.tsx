@@ -9,10 +9,10 @@ afterEach(() => { vi.useRealTimers(); });
 describe("Toaster", () => {
   it("renders active toasts and auto-dismisses them after the timeout", () => {
     render(<Toaster />);
-    act(() => { toast("Скопировано"); });
-    expect(screen.getByText("Скопировано")).toBeInTheDocument();
+    act(() => { toast("Copied"); });
+    expect(screen.getByText("Copied")).toBeInTheDocument();
     act(() => { vi.advanceTimersByTime(2000); });
-    expect(screen.queryByText("Скопировано")).not.toBeInTheDocument();
+    expect(screen.queryByText("Copied")).not.toBeInTheDocument();
   });
 
   it("styles an error toast with the destructive class and an alert role", () => {
@@ -25,8 +25,8 @@ describe("Toaster", () => {
 
   it("renders a success toast with the neutral pill (no destructive class)", () => {
     render(<Toaster />);
-    act(() => { toast("Сохранено", "success"); });
-    const row = screen.getByText("Сохранено").closest("div");
+    act(() => { toast("Saved", "success"); });
+    const row = screen.getByText("Saved").closest("div");
     expect(row!.className).toContain("bg-foreground");
     expect(row!.className).not.toContain("bg-destructive");
   });

@@ -37,7 +37,7 @@ export function attachBodyController(editor: EditorLike, deps: BodyControllerDep
       const text = copyAtOffset(tree, deps.getSpans(), offset);
       if (text !== null) {
         e.event.browserEvent.preventDefault();
-        void copyToClipboard(text, `Скопировано: ${toastSnippet(text)}`);
+        void copyToClipboard(text, `Copied: ${toastSnippet(text)}`);
       }
     }
   });

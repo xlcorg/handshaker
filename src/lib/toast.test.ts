@@ -7,9 +7,9 @@ describe("toast store", () => {
   it("appends a toast and notifies subscribers", () => {
     let ticks = 0;
     const unsub = toastStore.subscribe(() => { ticks++; });
-    toast("Скопировано");
+    toast("Copied");
     expect(toastStore.getState()).toHaveLength(1);
-    expect(toastStore.getState()[0].message).toBe("Скопировано");
+    expect(toastStore.getState()[0].message).toBe("Copied");
     expect(ticks).toBe(1);
     unsub();
   });

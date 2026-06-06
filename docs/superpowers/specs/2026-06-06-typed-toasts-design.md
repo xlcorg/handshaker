@@ -48,11 +48,11 @@ export interface ToastItem {
 export function toast(message: string, type: ToastType = "info"): string;
 ```
 
-Дефолт `type = "info"` сохраняет обратную совместимость: текущие вызовы
-`toast("Скопировано")` и `toast("Не удалось скопировать")` ([clipboard.ts](../../../src/lib/clipboard.ts))
-остаются валидными. **Уточнение:** в рамках этой работы вызов ошибки clipboard
-обновляется до `toast("Не удалось скопировать", "error")` — это и есть «тост-ошибка»
-из спека unified-body-view (§5).
+Дефолт `type = "info"` сохраняет обратную совместимость: однопараметрические вызовы
+`toast(msg)` остаются валидными. **Уточнение:** в рамках этой работы вызов ошибки
+clipboard обновляется до `toast("Couldn't copy", "error")` — это и есть «тост-ошибка»
+из спека unified-body-view (§5). Все тосты приложения переведены на английский
+(`"Copied"` / `"Couldn't copy"` и каталог §3).
 
 Store (`getState`/`subscribe`/`dismiss`/`reset`/`emit`) и иммутабельная замена
 массива — без изменений.
@@ -121,20 +121,21 @@ const optimistic = useCallback(
 
 | Операция | `ok` | `err` |
 |---|---|---|
-| `createCollection` | «Коллекция создана» | «Не удалось создать коллекцию» |
-| `deleteCollection` | «Коллекция удалена» | «Не удалось удалить коллекцию» |
-| `renameCollection` | «Коллекция переименована» | «Не удалось переименовать коллекцию» |
-| `setPinned` | — (опущен) | «Не удалось обновить закрепление» |
-| `addItem` | «Реквест добавлен» | «Не удалось добавить реквест» |
-| `renameItem` | «Реквест переименован» | «Не удалось переименовать реквест» |
-| `updateItemContent` | «Сохранено» | «Не удалось сохранить» |
-| `deleteItem` | «Реквест удалён» | «Не удалось удалить реквест» |
-| `duplicateItem` | «Реквест продублирован» | «Не удалось продублировать реквест» |
-| `moveItem` | — (опущен) | «Не удалось переместить» |
-| `moveItemAcross` | — (опущен) | «Не удалось переместить» |
+| `createCollection` | "Collection created" | "Couldn't create collection" |
+| `deleteCollection` | "Collection deleted" | "Couldn't delete collection" |
+| `renameCollection` | "Collection renamed" | "Couldn't rename collection" |
+| `setPinned` | — (опущен) | "Couldn't update pin" |
+| `addItem` | "Request added" | "Couldn't add request" |
+| `renameItem` | "Request renamed" | "Couldn't rename request" |
+| `updateItemContent` | "Saved" | "Couldn't save" |
+| `deleteItem` | "Request deleted" | "Couldn't delete request" |
+| `duplicateItem` | "Request duplicated" | "Couldn't duplicate request" |
+| `moveItem` | — (опущен) | "Couldn't move" |
+| `moveItemAcross` | — (опущен) | "Couldn't move" |
 | `reload` | — | `errMsg(e)` (как сейчас) |
 
-Тексты — финальные строки; правятся при ревью спека, не при имплементации.
+Тексты UI — на английском (тосты приложения англоязычны; остальной UI пока на
+русском). `errMsg(e)` — динамическое сообщение бэкенда.
 
 ## 4. Обработка ошибок и пределы
 

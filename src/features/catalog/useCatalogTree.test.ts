@@ -100,7 +100,7 @@ describe("optimistic mutations + rollback", () => {
     await act(async () => { await result.current.duplicateItem("c1", "r1"); });
     expect(ipc.collectionDuplicateItem).toHaveBeenCalledWith("c1", "r1");
     expect(result.current.tree[0].name).toBe("c1-reloaded");
-    expect(toast).toHaveBeenCalledWith("Реквест продублирован", "success");
+    expect(toast).toHaveBeenCalledWith("Request duplicated", "success");
   });
 
   it("updateItemContent replaces content optimistically and upserts the collection", async () => {
@@ -139,7 +139,7 @@ describe("optimistic mutations + rollback", () => {
     const { result } = await loaded();
     vi.mocked(ipc.collectionRenameItem).mockResolvedValue(undefined);
     await act(async () => { await result.current.renameItem("c1", "r1", "Renamed"); });
-    expect(toast).toHaveBeenCalledWith("Реквест переименован", "success");
+    expect(toast).toHaveBeenCalledWith("Request renamed", "success");
   });
 
   it("emits an error toast and rolls back when the operation rejects", async () => {
@@ -149,7 +149,7 @@ describe("optimistic mutations + rollback", () => {
       await expect(result.current.renameItem("c1", "r1", "Renamed")).rejects.toBeTruthy();
     });
     expect(result.current.tree[0].items[0].name).toBe("r1"); // reverted
-    expect(toast).toHaveBeenCalledWith("Не удалось переименовать реквест", "error");
+    expect(toast).toHaveBeenCalledWith("Couldn't rename request", "error");
   });
 
   it("emits no success toast for setPinned (ok label omitted)", async () => {
@@ -214,6 +214,6 @@ describe("useCatalogTree move", () => {
       await expect(result.current.moveItem("c1", "r3", "f1", 0)).rejects.toBeTruthy();
     });
     expect(JSON.stringify(result.current.tree)).toBe(before);
-    expect(toast).toHaveBeenCalledWith("Не удалось переместить", "error");
+    expect(toast).toHaveBeenCalledWith("Couldn't move", "error");
   });
 });

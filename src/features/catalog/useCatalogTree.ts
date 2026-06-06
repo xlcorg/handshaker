@@ -116,8 +116,8 @@ export function useCatalogTree(): UseCatalogTree {
     async (name: string) => {
       const c = emptyCollection(name);
       await optimistic((prev) => [...prev, c], () => ipc.collectionUpsert(c), {
-        ok: "Коллекция создана",
-        err: "Не удалось создать коллекцию",
+        ok: "Collection created",
+        err: "Couldn't create collection",
       });
       return c.id;
     },
@@ -129,7 +129,7 @@ export function useCatalogTree(): UseCatalogTree {
       optimistic(
         (prev) => removeCollectionFromTree(prev, collectionId),
         () => ipc.collectionDelete(collectionId),
-        { ok: "Коллекция удалена", err: "Не удалось удалить коллекцию" },
+        { ok: "Collection deleted", err: "Couldn't delete collection" },
       ),
     [optimistic],
   );
@@ -139,7 +139,7 @@ export function useCatalogTree(): UseCatalogTree {
       optimistic(
         (prev) => renameCollectionInTree(prev, collectionId, name),
         () => ipc.collectionUpsert(treeRef.current.find((c) => c.id === collectionId)!),
-        { ok: "Коллекция переименована", err: "Не удалось переименовать коллекцию" },
+        { ok: "Collection renamed", err: "Couldn't rename collection" },
       ),
     [optimistic],
   );
@@ -149,7 +149,7 @@ export function useCatalogTree(): UseCatalogTree {
       optimistic(
         (prev) => setCollectionPinned(prev, collectionId, pinned),
         () => ipc.collectionUpsert(treeRef.current.find((c) => c.id === collectionId)!),
-        { err: "Не удалось обновить закрепление" },
+        { err: "Couldn't update pin" },
       ),
     [optimistic],
   );
@@ -159,7 +159,7 @@ export function useCatalogTree(): UseCatalogTree {
       optimistic(
         (prev) => insertItemInTree(prev, collectionId, parentId, item),
         () => ipc.collectionAddItem(collectionId, parentId, item),
-        { ok: "Реквест добавлен", err: "Не удалось добавить реквест" },
+        { ok: "Request added", err: "Couldn't add request" },
       ),
     [optimistic],
   );
@@ -169,7 +169,7 @@ export function useCatalogTree(): UseCatalogTree {
       optimistic(
         (prev) => renameItemInTree(prev, collectionId, itemId, name),
         () => ipc.collectionRenameItem(collectionId, itemId, name),
-        { ok: "Реквест переименован", err: "Не удалось переименовать реквест" },
+        { ok: "Request renamed", err: "Couldn't rename request" },
       ),
     [optimistic],
   );
@@ -179,7 +179,7 @@ export function useCatalogTree(): UseCatalogTree {
       optimistic(
         (prev) => replaceItemInTree(prev, collectionId, itemId, content),
         () => ipc.collectionUpsert(treeRef.current.find((c) => c.id === collectionId)!),
-        { ok: "Сохранено", err: "Не удалось сохранить" },
+        { ok: "Saved", err: "Couldn't save" },
       ),
     [optimistic],
   );
@@ -189,7 +189,7 @@ export function useCatalogTree(): UseCatalogTree {
       optimistic(
         (prev) => removeItemFromTree(prev, collectionId, itemId),
         () => ipc.collectionDeleteItem(collectionId, itemId),
-        { ok: "Реквест удалён", err: "Не удалось удалить реквест" },
+        { ok: "Request deleted", err: "Couldn't delete request" },
       ),
     [optimistic],
   );
@@ -201,9 +201,9 @@ export function useCatalogTree(): UseCatalogTree {
         await ipc.collectionDuplicateItem(collectionId, itemId);
         const fresh = await ipc.collectionGet(collectionId);
         apply(treeRef.current.map((c) => (c.id === collectionId ? fresh : c)));
-        toast("Реквест продублирован", "success");
+        toast("Request duplicated", "success");
       } catch (e) {
-        toast("Не удалось продублировать реквест", "error");
+        toast("Couldn't duplicate request", "error");
         throw e;
       }
     },
@@ -215,7 +215,7 @@ export function useCatalogTree(): UseCatalogTree {
       optimistic(
         (prev) => moveItemWithinTree(prev, collectionId, itemId, parentId, position),
         () => ipc.collectionMoveItem(collectionId, itemId, parentId, position),
-        { err: "Не удалось переместить" },
+        { err: "Couldn't move" },
       ),
     [optimistic],
   );
@@ -231,7 +231,7 @@ export function useCatalogTree(): UseCatalogTree {
       optimistic(
         (prev) => moveItemAcrossTree(prev, sourceCollectionId, itemId, targetCollectionId, parentId, position),
         () => ipc.collectionMoveItemAcross(sourceCollectionId, itemId, targetCollectionId, parentId, position),
-        { err: "Не удалось переместить" },
+        { err: "Couldn't move" },
       ),
     [optimistic],
   );

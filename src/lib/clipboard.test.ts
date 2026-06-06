@@ -10,11 +10,11 @@ describe("copyToClipboard", () => {
     Object.assign(navigator, { clipboard: { writeText } });
     await copyToClipboard("payload-123");
     expect(writeText).toHaveBeenCalledWith("payload-123");
-    expect(toastStore.getState()[0].message).toMatch(/копировано/i);
+    expect(toastStore.getState()[0].message).toMatch(/copied/i);
   });
   it("shows a failure toast when the write rejects", async () => {
     Object.assign(navigator, { clipboard: { writeText: vi.fn().mockRejectedValue(new Error("denied")) } });
     await copyToClipboard("x");
-    expect(toastStore.getState()[0].message).toMatch(/не удалось/i);
+    expect(toastStore.getState()[0].message).toMatch(/couldn't copy/i);
   });
 });
