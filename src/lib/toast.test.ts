@@ -21,4 +21,11 @@ describe("toast store", () => {
     toastStore.reset();
     expect(toastStore.getState()).toEqual([]);
   });
+  it("defaults type to info and records an explicit type", () => {
+    toast("plain");
+    toast("boom", "error");
+    const state = toastStore.getState();
+    expect(state[0]).toMatchObject({ message: "plain", type: "info" });
+    expect(state[1]).toMatchObject({ message: "boom", type: "error" });
+  });
 });
