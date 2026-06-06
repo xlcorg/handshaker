@@ -1,3 +1,4 @@
+import { Check } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -168,11 +169,20 @@ export function EnvEditorDialog({
                     aria-pressed={selected}
                     onClick={() => setPickedColor(c.key)}
                     className={cn(
-                      "size-6 rounded-full border-2 transition",
-                      selected ? "border-foreground" : "border-transparent hover:border-muted-foreground",
+                      "relative size-6 rounded-full transition focus:outline-none",
+                      selected
+                        ? "ring-2 ring-foreground ring-offset-2 ring-offset-background"
+                        : "hover:ring-2 hover:ring-muted-foreground hover:ring-offset-2 hover:ring-offset-background",
                     )}
                     style={{ backgroundColor: c.hex }}
-                  />
+                  >
+                    {selected && (
+                      <Check
+                        className="absolute inset-0 m-auto size-3.5 text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.6)]"
+                        aria-hidden
+                      />
+                    )}
+                  </button>
                 );
               })}
             </div>
