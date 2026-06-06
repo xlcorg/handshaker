@@ -1,14 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 
-vi.mock("@tanstack/react-virtual", () => ({
-  useVirtualizer: ({ count }: { count: number }) => ({
-    getTotalSize: () => count * 22,
-    getVirtualItems: () =>
-      Array.from({ length: count }, (_, index) => ({ key: index, index, start: index * 22, size: 22 })),
-    scrollToIndex: vi.fn(),
-  }),
+vi.mock("@/lib/monaco", () => ({
+  MonacoEditor: ({ value, options }: { value: string; options?: { readOnly?: boolean } }) => (
+    <pre data-testid="monaco" data-readonly={String(!!options?.readOnly)}>{value}</pre>
+  ),
+  monacoThemeFor: () => "handshaker-dark",
+  BODY_EDIT_OPTIONS: { readOnly: false },
+  BODY_READONLY_OPTIONS: { readOnly: true },
 }));
+vi.mock("@/lib/use-prefs", () => ({ usePrefs: () => [{ theme: "dark" }] }));
 
 import { ResponsePanel } from "./ResponsePanel";
 import type { InvokeOutcomeIpc } from "@/ipc/bindings";
@@ -27,17 +28,17 @@ const err: InvokeOutcomeIpc = {
 };
 
 describe("ResponsePanel", () => {
-  it("renders the custom JSON tree for a successful body", () => {
+  it("renders the Monaco body view for a successful response", () => {
     render(<ResponsePanel state="success" outcome={ok} />);
-    expect(screen.getByRole("tree")).toBeInTheDocument();
-    expect(screen.getByText(`"id"`)).toBeInTheDocument();
-    expect(screen.getByText(`"echo"`)).toBeInTheDocument();
+    const el = screen.getByTestId("monaco");
+    expect(el.getAttribute("data-readonly")).toBe("true");
+    expect(el.textContent).toContain("echo");
   });
   it("renders the Postman-style error face for a non-OK status", () => {
     render(<ResponsePanel state="error" outcome={err} />);
     // "NOT_FOUND" appears in both the RespMeta status pill (header) and the ErrorView face.
     expect(screen.getAllByText("NOT_FOUND").length).toBeGreaterThan(0);
     expect(screen.getByText("NOT_FOUND: nope")).toBeInTheDocument();
-    expect(screen.queryByRole("tree")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("monaco")).not.toBeInTheDocument();
   });
 });
