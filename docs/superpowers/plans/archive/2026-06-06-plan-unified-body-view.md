@@ -1,5 +1,11 @@
 # Unified Body View Implementation Plan
 
+> **✅ ЗАВЕРШЁН (2026-06-06).** Все 12 задач выполнены и закоммичены на ветке
+> `redesign/workflow-ui-spec-plans` (последний коммит `a52028f`). `tsc -b` чист,
+> полный набор тестов зелёный (454). Осталась ручная Monaco-верификация (см.
+> «Manual Verification» ниже). Файл перенесён в архив. Спек:
+> `docs/superpowers/specs/archive/2026-06-06-unified-body-view-design.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Render the gRPC request body and response body through one shared Monaco-based viewer with identical features — text selection, Postman-style fold gutter, native Ctrl+F, Ctrl+double-click rich copy, and per-value elision of huge strings.
@@ -8,7 +14,7 @@
 
 **Tech Stack:** React 18, TypeScript, Monaco (`@monaco-editor/react` 4.7 / `monaco-editor` 0.55.1), Vitest 2 + jsdom + Testing Library.
 
-**Spec:** `docs/superpowers/specs/2026-06-06-unified-body-view-design.md`
+**Spec:** `docs/superpowers/specs/archive/2026-06-06-unified-body-view-design.md`
 
 **Branch:** `redesign/workflow-ui-spec-plans`
 
