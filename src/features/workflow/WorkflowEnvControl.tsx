@@ -1,7 +1,6 @@
 import { ChevronDown } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
-import { Button } from "@/components/ui/button";
 import { ConfirmDeleteEnvDialog } from "@/features/envs/ConfirmDeleteEnvDialog";
 import { EnvEditorDialog } from "@/features/envs/EnvEditorDialog";
 import { EnvSwitcherMenu } from "@/features/envs/EnvSwitcherMenu";
@@ -45,10 +44,13 @@ export function WorkflowEnvControl() {
         envs={envs}
         activeEnv={activeEnv}
         trigger={
-          <Button variant="ghost" size="sm" className="gap-1 font-mono">
-            {label}
-            <ChevronDown className="w-3 h-3" aria-hidden />
-          </Button>
+          <button
+            type="button"
+            className="flex items-center gap-1 rounded px-2 py-0.5 text-xs text-muted-foreground hover:bg-accent"
+          >
+            <span className="max-w-[180px] truncate text-foreground">{label}</span>
+            <ChevronDown className="size-3" aria-hidden />
+          </button>
         }
         onActiveSet={(next) => workflowStore.setWorkflowEnv(next)}
         onEditEnv={(name) => setEditor({ originalName: name })}

@@ -25,6 +25,15 @@ describe("WorkflowEnvControl", () => {
     expect(await screen.findByText("No environment")).toBeInTheDocument();
   });
 
+  it("renders the trigger to match WorkflowSelector (no font-mono, text-xs)", async () => {
+    render(<WorkflowEnvControl />);
+    const label = await screen.findByText("No environment");
+    const trigger = label.closest("button");
+    expect(trigger).not.toBeNull();
+    expect(trigger!.className).not.toContain("font-mono");
+    expect(trigger!.className).toContain("text-xs");
+  });
+
   it("re-renders the trigger label when the active workflow's env changes", async () => {
     render(<WorkflowEnvControl />);
     expect(await screen.findByText("No environment")).toBeInTheDocument();
