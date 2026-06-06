@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 
 vi.mock("@/lib/monaco", () => ({
@@ -13,10 +13,6 @@ vi.mock("@/lib/use-prefs", () => ({ usePrefs: () => [{ theme: "dark" }] }));
 
 import { ResponsePanel } from "./ResponsePanel";
 import type { InvokeOutcomeIpc } from "@/ipc/bindings";
-
-beforeEach(() => {
-  Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
-});
 
 const ok: InvokeOutcomeIpc = {
   status_code: 0, status_message: "OK",
