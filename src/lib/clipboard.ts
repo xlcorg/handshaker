@@ -6,6 +6,6 @@ export async function copyToClipboard(text: string, okMessage = "Скопиро�
     await navigator.clipboard.writeText(text);
     toast(okMessage);
   } catch {
-    toast("Не удалось скопировать");
+    toast("Не удалось скопировать", "error");
   }
 }
