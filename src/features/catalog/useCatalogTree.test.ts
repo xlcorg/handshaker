@@ -158,6 +158,28 @@ describe("optimistic mutations + rollback", () => {
     await act(async () => { await result.current.setPinned("c1", true); });
     expect(toast).not.toHaveBeenCalledWith(expect.anything(), "success");
   });
+
+  it("addItem toasts success when adding a request", async () => {
+    const { result } = await loaded();
+    vi.mocked(ipc.collectionAddItem).mockResolvedValue(undefined);
+    await act(async () => {
+      await result.current.addItem("c1", null, {
+        type: "request", id: "r9", name: "R", address_template: "h", service: "s",
+        method: "m", body_template: "{}", metadata: [], auth: { kind: "none" },
+        tls_override: null, last_used_at: null, use_count: 0,
+      });
+    });
+    expect(toast).toHaveBeenCalledWith("Request added", "success");
+  });
+
+  it("addItem does not toast success when adding a folder", async () => {
+    const { result } = await loaded();
+    vi.mocked(ipc.collectionAddItem).mockResolvedValue(undefined);
+    await act(async () => {
+      await result.current.addItem("c1", null, { type: "folder", id: "f9", name: "F", items: [] });
+    });
+    expect(toast).not.toHaveBeenCalledWith(expect.anything(), "success");
+  });
 });
 
 describe("useCatalogTree move", () => {

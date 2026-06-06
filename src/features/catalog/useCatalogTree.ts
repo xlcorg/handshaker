@@ -159,7 +159,10 @@ export function useCatalogTree(): UseCatalogTree {
       optimistic(
         (prev) => insertItemInTree(prev, collectionId, parentId, item),
         () => ipc.collectionAddItem(collectionId, parentId, item),
-        { ok: "Request added", err: "Couldn't add request" },
+        // Folders are silent on success; requests confirm. Errors stay typed per kind.
+        item.type === "folder"
+          ? { err: "Couldn't add folder" }
+          : { ok: "Request added", err: "Couldn't add request" },
       ),
     [optimistic],
   );
