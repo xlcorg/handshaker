@@ -119,29 +119,31 @@ const optimistic = useCallback(
 Каждый call-сайт передаёт свою пару. `ok` опускается там, где успех визуально
 очевиден и операция может идти пачкой (DnD, пин) — чтобы не спамить тостами.
 
-Сообщения **динамические** — содержат имя и тип изменённого объекта (`collection` /
-`folder` / `request`). Часть операций молчит на успех (success опущен), но всегда
-сообщает об ошибке. `{kind}` = `item.type`; имя/тип берутся из дерева до операции
-(для delete/move/save/duplicate — рекурсивный `findItemById`).
+Сообщения различают **тип** объекта (`collection` / `folder` / `request`), **без
+имени**. Часть операций молчит на успех (success опущен), но всегда сообщает об
+ошибке. `{kind}` (`folder`/`request`) для операций, получающих только `itemId`
+(delete/rename/duplicate), резолвится из дерева рекурсивным `findItemById` (папки
+вложены). `addItem` берёт `item.type` напрямую; move/pin/collection-операции типа
+не требуют.
 
 | Операция | `ok` (success) | `err` |
 |---|---|---|
-| `createCollection` | — (молчит) | `Couldn't create {name} collection` |
-| `renameCollection` | `{name} collection was renamed` | `Couldn't rename {name} collection` |
-| `deleteCollection` | `{name} collection was deleted` | `Couldn't delete {name} collection` |
-| `setPinned` | `{name} pinned` / `{name} unpinned` | `Couldn't update {name}` |
-| `addItem` | — (молчит) | `Couldn't add {name} {kind}` |
-| `renameItem` | `{name} {kind} was renamed` | `Couldn't rename {name} {kind}` |
-| `updateItemContent` | — (молчит) | `Couldn't save {name} request` |
-| `deleteItem` | `{name} {kind} was deleted` | `Couldn't delete {name} {kind}` |
-| `duplicateItem` | — (молчит) | `Couldn't duplicate {name} {kind}` |
-| `moveItem` | `{name} was moved` | `Couldn't move {name}` |
-| `moveItemAcross` | `{name} was moved` | `Couldn't move {name}` |
+| `createCollection` | — (молчит) | `Couldn't create collection` |
+| `renameCollection` | `Collection renamed` | `Couldn't rename collection` |
+| `deleteCollection` | `Collection deleted` | `Couldn't delete collection` |
+| `setPinned` | `Pinned` / `Unpinned` | `Couldn't update pin` |
+| `addItem` | — (молчит) | `Couldn't add {kind}` |
+| `renameItem` | `Folder renamed` / `Request renamed` | `Couldn't rename {kind}` |
+| `updateItemContent` | — (молчит) | `Couldn't save request` |
+| `deleteItem` | `Folder deleted` / `Request deleted` | `Couldn't delete {kind}` |
+| `duplicateItem` | — (молчит) | `Couldn't duplicate {kind}` |
+| `moveItem` | `Moved` | `Couldn't move` |
+| `moveItemAcross` | `Moved` | `Couldn't move` |
 | `reload` | — | `errMsg(e)` (сообщение бэкенда) |
 
 Тексты UI — на английском (тосты приложения англоязычны; остальной UI пока на
 русском). Молчащие на успех: `createCollection`, `addItem`, `updateItemContent`,
-`duplicateItem` — по решению пользователя.
+`duplicateItem`.
 
 ## 4. Обработка ошибок и пределы
 

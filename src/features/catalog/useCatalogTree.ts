@@ -128,7 +128,7 @@ export function useCatalogTree(): UseCatalogTree {
     async (name: string) => {
       const c = emptyCollection(name);
       await optimistic((prev) => [...prev, c], () => ipc.collectionUpsert(c), {
-        err: `Couldn't create ${name} collection`,
+        err: "Couldn't create collection",
       });
       return c.id;
     },
@@ -136,14 +136,12 @@ export function useCatalogTree(): UseCatalogTree {
   );
 
   const deleteCollection = useCallback(
-    (collectionId: string) => {
-      const name = treeRef.current.find((c) => c.id === collectionId)?.name ?? "collection";
-      return optimistic(
+    (collectionId: string) =>
+      optimistic(
         (prev) => removeCollectionFromTree(prev, collectionId),
         () => ipc.collectionDelete(collectionId),
-        { ok: `${name} collection was deleted`, err: `Couldn't delete ${name} collection` },
-      );
-    },
+        { ok: "Collection deleted", err: "Couldn't delete collection" },
+      ),
     [optimistic],
   );
 
@@ -152,20 +150,18 @@ export function useCatalogTree(): UseCatalogTree {
       optimistic(
         (prev) => renameCollectionInTree(prev, collectionId, name),
         () => ipc.collectionUpsert(treeRef.current.find((c) => c.id === collectionId)!),
-        { ok: `${name} collection was renamed`, err: `Couldn't rename ${name} collection` },
+        { ok: "Collection renamed", err: "Couldn't rename collection" },
       ),
     [optimistic],
   );
 
   const setPinned = useCallback(
-    (collectionId: string, pinned: boolean) => {
-      const name = treeRef.current.find((c) => c.id === collectionId)?.name ?? "collection";
-      return optimistic(
+    (collectionId: string, pinned: boolean) =>
+      optimistic(
         (prev) => setCollectionPinned(prev, collectionId, pinned),
         () => ipc.collectionUpsert(treeRef.current.find((c) => c.id === collectionId)!),
-        { ok: `${name} ${pinned ? "pinned" : "unpinned"}`, err: `Couldn't update ${name}` },
-      );
-    },
+        { ok: pinned ? "Pinned" : "Unpinned", err: "Couldn't update pin" },
+      ),
     [optimistic],
   );
 
@@ -175,7 +171,7 @@ export function useCatalogTree(): UseCatalogTree {
         (prev) => insertItemInTree(prev, collectionId, parentId, item),
         () => ipc.collectionAddItem(collectionId, parentId, item),
         // Adds are silent on success; only report failure.
-        { err: `Couldn't add ${item.name} ${item.type}` },
+        { err: `Couldn't add ${item.type}` },
       ),
     [optimistic],
   );
@@ -187,35 +183,31 @@ export function useCatalogTree(): UseCatalogTree {
       return optimistic(
         (prev) => renameItemInTree(prev, collectionId, itemId, name),
         () => ipc.collectionRenameItem(collectionId, itemId, name),
-        { ok: `${name} ${kind} was renamed`, err: `Couldn't rename ${name} ${kind}` },
+        { ok: kind === "folder" ? "Folder renamed" : "Request renamed", err: `Couldn't rename ${kind}` },
       );
     },
     [optimistic],
   );
 
   const updateItemContent = useCallback(
-    (collectionId: string, itemId: string, content: SavedRequestIpc) => {
-      const items = treeRef.current.find((c) => c.id === collectionId)?.items ?? [];
-      const name = findItemById(items, itemId)?.name ?? "request";
-      return optimistic(
+    (collectionId: string, itemId: string, content: SavedRequestIpc) =>
+      optimistic(
         (prev) => replaceItemInTree(prev, collectionId, itemId, content),
         () => ipc.collectionUpsert(treeRef.current.find((c) => c.id === collectionId)!),
         // Saves are silent on success; only report failure.
-        { err: `Couldn't save ${name} request` },
-      );
-    },
+        { err: "Couldn't save request" },
+      ),
     [optimistic],
   );
 
   const deleteItem = useCallback(
     (collectionId: string, itemId: string) => {
       const items = treeRef.current.find((c) => c.id === collectionId)?.items ?? [];
-      const item = findItemById(items, itemId);
-      const label = item ? `${item.name} ${item.type}` : "item";
+      const kind = findItemById(items, itemId)?.type ?? "request";
       return optimistic(
         (prev) => removeItemFromTree(prev, collectionId, itemId),
         () => ipc.collectionDeleteItem(collectionId, itemId),
-        { ok: `${label} was deleted`, err: `Couldn't delete ${label}` },
+        { ok: kind === "folder" ? "Folder deleted" : "Request deleted", err: `Couldn't delete ${kind}` },
       );
     },
     [optimistic],
@@ -225,15 +217,14 @@ export function useCatalogTree(): UseCatalogTree {
   const duplicateItem = useCallback(
     async (collectionId: string, itemId: string) => {
       const items = treeRef.current.find((c) => c.id === collectionId)?.items ?? [];
-      const item = findItemById(items, itemId);
-      const label = item ? `${item.name} ${item.type}` : "item";
+      const kind = findItemById(items, itemId)?.type ?? "request";
       try {
         await ipc.collectionDuplicateItem(collectionId, itemId);
         const fresh = await ipc.collectionGet(collectionId);
         apply(treeRef.current.map((c) => (c.id === collectionId ? fresh : c)));
         // Duplicates are silent on success; only report failure.
       } catch (e) {
-        toast(`Couldn't duplicate ${label}`, "error");
+        toast(`Couldn't duplicate ${kind}`, "error");
         throw e;
       }
     },
@@ -241,15 +232,12 @@ export function useCatalogTree(): UseCatalogTree {
   );
 
   const moveItem = useCallback(
-    (collectionId: string, itemId: string, parentId: string | null, position: number) => {
-      const items = treeRef.current.find((c) => c.id === collectionId)?.items ?? [];
-      const name = findItemById(items, itemId)?.name ?? "item";
-      return optimistic(
+    (collectionId: string, itemId: string, parentId: string | null, position: number) =>
+      optimistic(
         (prev) => moveItemWithinTree(prev, collectionId, itemId, parentId, position),
         () => ipc.collectionMoveItem(collectionId, itemId, parentId, position),
-        { ok: `${name} was moved`, err: `Couldn't move ${name}` },
-      );
-    },
+        { ok: "Moved", err: "Couldn't move" },
+      ),
     [optimistic],
   );
 
@@ -260,15 +248,12 @@ export function useCatalogTree(): UseCatalogTree {
       targetCollectionId: string,
       parentId: string | null,
       position: number,
-    ) => {
-      const items = treeRef.current.find((c) => c.id === sourceCollectionId)?.items ?? [];
-      const name = findItemById(items, itemId)?.name ?? "item";
-      return optimistic(
+    ) =>
+      optimistic(
         (prev) => moveItemAcrossTree(prev, sourceCollectionId, itemId, targetCollectionId, parentId, position),
         () => ipc.collectionMoveItemAcross(sourceCollectionId, itemId, targetCollectionId, parentId, position),
-        { ok: `${name} was moved`, err: `Couldn't move ${name}` },
-      );
-    },
+        { ok: "Moved", err: "Couldn't move" },
+      ),
     [optimistic],
   );
 

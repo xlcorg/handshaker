@@ -139,7 +139,7 @@ describe("optimistic mutations + rollback", () => {
     const { result } = await loaded();
     vi.mocked(ipc.collectionRenameItem).mockResolvedValue(undefined);
     await act(async () => { await result.current.renameItem("c1", "r1", "Renamed"); });
-    expect(toast).toHaveBeenCalledWith("Renamed request was renamed", "success");
+    expect(toast).toHaveBeenCalledWith("Request renamed", "success");
   });
 
   it("emits an error toast and rolls back when the operation rejects", async () => {
@@ -149,14 +149,14 @@ describe("optimistic mutations + rollback", () => {
       await expect(result.current.renameItem("c1", "r1", "Renamed")).rejects.toBeTruthy();
     });
     expect(result.current.tree[0].items[0].name).toBe("r1"); // reverted
-    expect(toast).toHaveBeenCalledWith("Couldn't rename Renamed request", "error");
+    expect(toast).toHaveBeenCalledWith("Couldn't rename request", "error");
   });
 
-  it("setPinned toasts success with the collection name", async () => {
+  it("setPinned toasts Pinned on success", async () => {
     const { result } = await loaded();
     vi.mocked(ipc.collectionUpsert).mockResolvedValue(undefined);
     await act(async () => { await result.current.setPinned("c1", true); });
-    expect(toast).toHaveBeenCalledWith("c1 pinned", "success");
+    expect(toast).toHaveBeenCalledWith("Pinned", "success");
   });
 
   it("addItem is silent on success (request and folder)", async () => {
@@ -173,11 +173,11 @@ describe("optimistic mutations + rollback", () => {
     expect(toast).not.toHaveBeenCalledWith(expect.anything(), "success");
   });
 
-  it("deleteItem names the item and its kind", async () => {
+  it("deleteItem toasts the item kind", async () => {
     const { result } = await loaded();
     vi.mocked(ipc.collectionDeleteItem).mockResolvedValue(null);
     await act(async () => { await result.current.deleteItem("c1", "r1"); });
-    expect(toast).toHaveBeenCalledWith("r1 request was deleted", "success");
+    expect(toast).toHaveBeenCalledWith("Request deleted", "success");
   });
 });
 
@@ -235,6 +235,6 @@ describe("useCatalogTree move", () => {
       await expect(result.current.moveItem("c1", "r3", "f1", 0)).rejects.toBeTruthy();
     });
     expect(JSON.stringify(result.current.tree)).toBe(before);
-    expect(toast).toHaveBeenCalledWith("Couldn't move r3", "error");
+    expect(toast).toHaveBeenCalledWith("Couldn't move", "error");
   });
 });
