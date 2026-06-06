@@ -10,7 +10,10 @@
 
 **Spec:** `docs/superpowers/specs/2026-06-05-draft-breadcrumb-and-tabs-refactor-design.md`
 
-**Status banner:** not started · branch `redesign/workflow-ui-spec-plans` · mode subagent-driven.
+**Status banner:** ✅ **done** (реализовано: `4cab4d9` pathNamesToItem, `6dc3ece`
+draftBreadcrumb segments, `f2bfe6e` FocusView full-path breadcrumb, `0d59885`
+unified underline tab strip) · branch `redesign/workflow-ui-spec-plans` ·
+mode subagent-driven. Прежний баннер «not started» устарел; работа влита, файл архивирован.
 
 **Commands:**
 - Single test file: `pnpm exec vitest run <path>`

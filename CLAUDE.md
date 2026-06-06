@@ -4,28 +4,30 @@ Handshaker — десктопный gRPC-клиент (Tauri 2 + React 18 + Rust
 Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src-tauri` (IPC) ·
 `src` (React-фронтенд).
 
-## Active work — Рефакторинг коллекции сервисов (Postman-style библиотека)
+## Active work — нет активного плана
 
-- **Спец:** `docs/superpowers/specs/2026-06-05-service-collection-sidebar-refactor-design.md`
-- **Планы реализации:** `docs/superpowers/plans/2026-06-05-plan-0N-*.md` — несколько
-  файлов по 8 фазам §16 спека (бэкенд → маппинг → workflow-модель → сайдбар →
-  create/save → overview+⌘K → DnD → зачистка). Детализировать до TDD перед
-  исполнением; режим — **subagent-driven**. Источник истины по статусу — баннер
-  план-файла, не эта строка.
-- Суть: заменить выводимое каталог-дерево (`CatalogService`/curated/`catalogStore`)
-  на персистентную пользователь-редактируемую библиотеку поверх `CollectionIpc`-бэкенда
-  (с точечными правками бэкенда: metadata-rows, single-auth, pinned/usage,
-  персист контракт-кэша). Лист = сохранённый вызов; create — request-first.
+Все спланированные фичи **завершены** и перенесены в
+`docs/superpowers/{specs,plans}/archive/` (см. правило «Архивирование завершённых
+планов и спеков» ниже). Новую работу начинай с брейншторма/спека → плана, и пока
+план активен — держи его описание здесь. Ветка разработки: `redesign/workflow-ui-spec-plans`.
 
-### Завершённый предшественник — Workflow-центричный редизайн UI (#1–#5)
+### Завершённые фичи (всё в `archive/`)
 
-- Спек и планы #1–#5 + #4b — **завершены** («🎉 Redesign feature-complete»), перенесены
-  в `docs/superpowers/{specs,plans}/archive/`. Это база, поверх которой идёт текущий
-  рефакторинг. Старый shell `src/App.tsx` и легаси `src/features/collections/*` —
-  мёртвый код, удаляются в фазе 8 текущего плана.
-- Стратегия редизайна была: полная замена UI, shell с нуля, без миграции данных.
-  Текущий рефакторинг **вводит персист** для библиотеки реквестов (поверх уже
-  персистентного `CollectionIpc`).
+- **Workflow-центричный редизайн UI (#1–#5 + #4b)** — база всего UI. Старый shell
+  `src/App.tsx` и легаси `src/features/collections/*` удалены как мёртвый код.
+- **Рефакторинг коллекции сервисов (Postman-style библиотека)** — `plan-00-index` …
+  `plan-11` (🎉 feature-complete). Каталог-дерево заменено персистентной
+  пользователь-редактируемой библиотекой поверх `CollectionIpc` (metadata-rows,
+  single-auth, pinned/usage, персист контракт-кэша). Лист = сохранённый вызов;
+  create — request-first. Остаток вне scope: «Save As» на `SaveRequestDialog`.
+- **Draft address-bar redesign** и **Draft breadcrumb + unified tab strip** — хедер
+  черновика (full-path брэдкрамб, TLS-замок в host, full-width MethodPicker с
+  reflection-футером, единый underline-таб-стрип).
+- **Unified body view** — общий Monaco-вьюер запрос/ответ (folding, native Ctrl+F,
+  Ctrl+dblclick copy, элизия >4096). Остаток: ручной Monaco-прогон.
+
+Источник истины по статусу любой фичи — статус-баннер её план-файла в `archive/`,
+не эта строка.
 
 ## Build / test
 
