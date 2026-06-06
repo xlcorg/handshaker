@@ -119,6 +119,7 @@ mod tests {
                 .upsert(Environment {
                     name: name.to_string(),
                     variables: map,
+                    color: None,
                 })
                 .unwrap();
         }

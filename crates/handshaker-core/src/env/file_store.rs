@@ -72,7 +72,33 @@ mod tests {
         Environment {
             name: name.to_string(),
             variables: kv.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect(),
+            color: None,
         }
+    }
+
+    #[test]
+    fn color_persists_across_reload() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("environments.json");
+        let store = FileEnvironmentStore::load(path.clone()).unwrap();
+        store
+            .upsert(Environment { name: "prod".into(), variables: Default::default(), color: Some("red".into()) })
+            .unwrap();
+        drop(store);
+        let store2 = FileEnvironmentStore::load(path).unwrap();
+        assert_eq!(store2.get("prod").unwrap().color, Some("red".to_string()));
+    }
+
+    #[test]
+    fn missing_color_deserializes_as_none() {
+        // A pre-color environments.json must still load (color defaults to None).
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("environments.json");
+        // Hand-write a v1 envelope WITHOUT the color field.
+        let raw = r#"{"schema_version":1,"data":[{"name":"prod","variables":{}}]}"#;
+        std::fs::write(&path, raw).unwrap();
+        let store = FileEnvironmentStore::load(path).unwrap();
+        assert_eq!(store.get("prod").unwrap().color, None);
     }
 
     #[test]

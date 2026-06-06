@@ -17,6 +17,10 @@ pub mod in_memory;
 pub struct Environment {
     pub name: String,
     pub variables: HashMap<String, String>,
+    /// Optional palette-key color marker (e.g. "red"). `None` ⇒ frontend derives a
+    /// default from the name. Stored opaquely; not validated here.
+    #[serde(default)]
+    pub color: Option<String>,
 }
 
 /// Storage abstraction for environments. Implementations: [`in_memory::InMemoryEnvironmentStore`].

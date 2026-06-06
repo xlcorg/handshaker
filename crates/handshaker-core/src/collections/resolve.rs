@@ -78,6 +78,7 @@ mod tests {
         Environment {
             name: name.to_string(),
             variables: kv.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect(),
+            color: None,
         }
     }
 

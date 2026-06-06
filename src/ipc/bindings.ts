@@ -276,7 +276,7 @@ export type ContractUpdated = {
  * Stable key identifying the target whose contract just refreshed.
  */
 target_key: string }
-export type EnvironmentIpc = { name: string; variables: Partial<{ [key in string]: string }> }
+export type EnvironmentIpc = { name: string; variables: Partial<{ [key in string]: string }>; color: string | null }
 export type FolderIpc = { id: string; name: string; items: ItemIpc[] }
 export type GrpcTargetIpc = { address: string; tls: boolean; skip_verify: boolean }
 export type InvokeOutcomeIpc = { status_code: number; status_message: string; response_json: string | null; trailing_metadata: Partial<{ [key in string]: string }>; 

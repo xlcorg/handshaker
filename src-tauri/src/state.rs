@@ -84,7 +84,7 @@ mod tests {
         let state = AppState::load(dir.path()).unwrap();
         state
             .env_store
-            .upsert(Environment { name: "prod".into(), variables: Default::default() })
+            .upsert(Environment { name: "prod".into(), variables: Default::default(), color: None })
             .unwrap();
         state.env_active_set_impl(Some("prod".into())).await.unwrap();
 
@@ -100,7 +100,7 @@ mod tests {
         let state = AppState::load(dir.path()).unwrap();
         state
             .env_store
-            .upsert(Environment { name: "prod".into(), variables: Default::default() })
+            .upsert(Environment { name: "prod".into(), variables: Default::default(), color: None })
             .unwrap();
         state.env_active_set_impl(Some("prod".into())).await.unwrap();
         // Env vanishes out-of-band (bypassing the active-delete guard).

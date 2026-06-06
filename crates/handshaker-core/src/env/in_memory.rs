@@ -27,6 +27,7 @@ impl InMemoryEnvironmentStore {
             Environment {
                 name: "Default".to_string(),
                 variables: HashMap::new(),
+                color: None,
             },
         );
         Self { inner: RwLock::new(map) }
@@ -92,13 +93,13 @@ mod tests {
         let s = InMemoryEnvironmentStore::new();
         let mut vars = HashMap::new();
         vars.insert("k".to_string(), "v1".to_string());
-        s.upsert(Environment { name: "e1".into(), variables: vars }).unwrap();
+        s.upsert(Environment { name: "e1".into(), variables: vars, color: None }).unwrap();
         assert_eq!(s.get("e1").unwrap().variables.get("k"), Some(&"v1".to_string()));
 
         // Replace
         let mut vars2 = HashMap::new();
         vars2.insert("k".to_string(), "v2".to_string());
-        s.upsert(Environment { name: "e1".into(), variables: vars2 }).unwrap();
+        s.upsert(Environment { name: "e1".into(), variables: vars2, color: None }).unwrap();
         assert_eq!(s.get("e1").unwrap().variables.get("k"), Some(&"v2".to_string()));
     }
 
@@ -108,6 +109,7 @@ mod tests {
         let err = s.upsert(Environment {
             name: "".into(),
             variables: HashMap::new(),
+            color: None,
         }).unwrap_err();
         match err {
             CoreError::InvalidTarget(msg) => assert!(msg.contains("invalid env name")),
@@ -118,7 +120,7 @@ mod tests {
     #[test]
     fn delete_removes_silently_idempotent() {
         let s = InMemoryEnvironmentStore::new();
-        s.upsert(Environment { name: "e".into(), variables: HashMap::new() }).unwrap();
+        s.upsert(Environment { name: "e".into(), variables: HashMap::new(), color: None }).unwrap();
         s.delete("e").unwrap();
         assert!(s.get("e").is_none());
         // Idempotent — delete missing returns Ok.
@@ -135,7 +137,7 @@ mod tests {
                 let name = format!("env_{i}");
                 let mut vars = HashMap::new();
                 vars.insert("k".to_string(), format!("v_{i}"));
-                s.upsert(Environment { name, variables: vars }).unwrap();
+                s.upsert(Environment { name, variables: vars, color: None }).unwrap();
                 let _ = s.list();
             }));
         }
