@@ -3,33 +3,45 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Tooltip } from "@/components/ui/tooltip";
 import { usePrefs } from "@/lib/use-prefs";
 import { cn } from "@/lib/cn";
+import { WorkflowSelector } from "@/features/workflow/WorkflowSelector";
+import { WorkflowEnvControl } from "@/features/workflow/WorkflowEnvControl";
+import { ViewSwitcher } from "@/features/workflow/ViewSwitcher";
 
-export function Titlebar({
-  envSlot,
-  onOpenSettings,
-}: {
-  envSlot: React.ReactNode;
-  onOpenSettings: () => void;
-}) {
+const btn =
+  "h-5 w-6 rounded-sm inline-flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground";
+
+/**
+ * Единый титлбар: лого + workflow/env слева, view-switcher по центру,
+ * утилиты (сайдбар/тема/настройки) и кнопки окна справа. Весь бар — drag-зона
+ * (`data-tauri-drag-region`); атрибут не наследуется детьми, поэтому он продублирован
+ * на неинтерактивных зонах (корень, ячейки grid, лого/wordmark). Кнопки и дропдауны
+ * перетаскивание не перехватывают — это нужное поведение.
+ */
+export function Titlebar({ onOpenSettings }: { onOpenSettings: () => void }) {
   const [prefs, setPref] = usePrefs();
   return (
-    <div className="tb-drag h-9 flex-none flex items-center px-2.5 gap-2.5 bg-card border-b border-border select-none relative z-40">
-      <div className="tb-nodrag flex items-center gap-2.5 min-w-0">
-        <span className="flex items-center gap-1.5">
+    <div
+      data-tauri-drag-region
+      className="grid h-9 flex-none grid-cols-[1fr_auto_1fr] items-center gap-2 bg-card border-b border-border px-2.5 select-none relative z-40"
+    >
+      <div data-tauri-drag-region className="flex items-center gap-2.5 min-w-0 justify-self-start">
+        <span data-tauri-drag-region className="flex items-center gap-1.5">
           <LogoMark size={13} className="text-foreground/85" />
-          <span className="text-[13px] font-semibold tracking-tight text-foreground">Handshaker</span>
+          <span data-tauri-drag-region className="text-[13px] font-semibold tracking-tight text-foreground">
+            Handshaker
+          </span>
         </span>
-        {envSlot}
+        <WorkflowSelector />
+        <WorkflowEnvControl />
       </div>
-      <span className="flex-1" />
-      <div className="tb-nodrag flex items-center gap-0.5 mr-1.5">
+
+      <div className="justify-self-center">
+        <ViewSwitcher />
+      </div>
+
+      <div data-tauri-drag-region className="flex items-center gap-0.5 justify-self-end">
         <Tooltip content="Toggle sidebar" side="bottom">
-          <button
-            type="button"
-            onClick={() => setPref("sidebar", !prefs.sidebar)}
-            className="h-5 w-6 rounded-sm inline-flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground"
-            aria-label="Toggle sidebar"
-          >
+          <button type="button" onClick={() => setPref("sidebar", !prefs.sidebar)} className={btn} aria-label="Toggle sidebar">
             <PanelLeft size={13} />
           </button>
         </Tooltip>
@@ -37,46 +49,29 @@ export function Titlebar({
           <button
             type="button"
             onClick={() => setPref("theme", prefs.theme === "dark" ? "light" : "dark")}
-            className="h-5 w-6 rounded-sm inline-flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground"
+            className={btn}
             aria-label="Toggle theme"
           >
             {prefs.theme === "dark" ? <Sun size={13} /> : <Moon size={13} />}
           </button>
         </Tooltip>
         <Tooltip content="Settings" side="bottom">
-          <button
-            type="button"
-            onClick={onOpenSettings}
-            className="h-5 w-6 rounded-sm inline-flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground"
-            aria-label="Settings"
-          >
+          <button type="button" onClick={onOpenSettings} className={btn} aria-label="Settings">
             <Settings size={13} />
           </button>
         </Tooltip>
-      </div>
-      <span className="h-3.5 w-px bg-border" />
-      <div className="tb-nodrag flex items-center gap-0.5 ml-1.5">
-        <Tooltip content="Minimize" side="left">
-          <button
-            type="button"
-            onClick={() => getCurrentWindow().minimize()}
-            className="h-5 w-6 rounded-sm inline-flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground"
-            aria-label="Minimize window"
-          >
+        <span className="h-3.5 w-px bg-border mx-1" />
+        <Tooltip content="Minimize" side="bottom">
+          <button type="button" onClick={() => getCurrentWindow().minimize()} className={btn} aria-label="Minimize window">
             <Minus size={11} strokeWidth={1.5} />
           </button>
         </Tooltip>
-        <Tooltip content="Maximize" side="left">
-          <button
-            type="button"
-            onClick={() => getCurrentWindow().toggleMaximize()}
-            className="h-5 w-6 rounded-sm inline-flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground"
-            aria-label="Maximize window"
-          >
+        <Tooltip content="Maximize" side="bottom">
+          <button type="button" onClick={() => getCurrentWindow().toggleMaximize()} className={btn} aria-label="Maximize window">
             <Square size={9} strokeWidth={1.5} />
           </button>
         </Tooltip>
-        <Tooltip content="Close" side="left">
+        <Tooltip content="Close" side="bottom">
           <button
             type="button"
             onClick={() => getCurrentWindow().close()}
