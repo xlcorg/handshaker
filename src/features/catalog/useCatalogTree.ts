@@ -18,7 +18,6 @@ import {
 export interface UseCatalogTree {
   tree: CollectionIpc[];
   loading: boolean;
-  error: string | null;
   reload: () => Promise<void>;
   createCollection: (name: string) => Promise<string>;
   deleteCollection: (collectionId: string) => Promise<void>;
@@ -62,7 +61,6 @@ function errMsg(e: unknown): string {
 export function useCatalogTree(): UseCatalogTree {
   const [tree, setTree] = useState<CollectionIpc[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const treeRef = useRef<CollectionIpc[]>([]);
 
   const apply = useCallback((t: CollectionIpc[]) => {
@@ -72,7 +70,6 @@ export function useCatalogTree(): UseCatalogTree {
 
   const reload = useCallback(async () => {
     setLoading(true);
-    setError(null);
     try {
       const metas = await ipc.collectionList();
       if (metas.length === 0) {
@@ -84,7 +81,6 @@ export function useCatalogTree(): UseCatalogTree {
         apply(cols);
       }
     } catch (e) {
-      setError(errMsg(e));
       toast(errMsg(e), "error");
     } finally {
       setLoading(false);
@@ -109,7 +105,6 @@ export function useCatalogTree(): UseCatalogTree {
         if (labels.ok) toast(labels.ok, "success");
       } catch (e) {
         apply(snapshot);
-        setError(errMsg(e));
         toast(labels.err, "error");
         throw e;
       }
@@ -208,7 +203,6 @@ export function useCatalogTree(): UseCatalogTree {
         apply(treeRef.current.map((c) => (c.id === collectionId ? fresh : c)));
         toast("Реквест продублирован", "success");
       } catch (e) {
-        setError(errMsg(e));
         toast("Не удалось продублировать реквест", "error");
         throw e;
       }
@@ -245,7 +239,6 @@ export function useCatalogTree(): UseCatalogTree {
   return {
     tree,
     loading,
-    error,
     reload,
     createCollection,
     deleteCollection,

@@ -83,7 +83,6 @@ describe("optimistic mutations + rollback", () => {
       await expect(result.current.renameItem("c1", "r1", "Renamed")).rejects.toBeTruthy();
     });
     expect(result.current.tree[0].items[0].name).toBe("r1"); // reverted
-    expect(result.current.error).toBe("boom");
   });
 
   it("setPinned upserts the patched collection", async () => {
@@ -133,7 +132,6 @@ describe("optimistic mutations + rollback", () => {
     });
     const item = result.current.tree[0].items[0] as Extract<{ type: "request"; method: string }, { type: "request" }>;
     expect(item.method).toBe("m"); // reverted to the seeded value
-    expect(result.current.error).toBe("disk full");
   });
 
   it("emits a success toast when an operation with an ok label resolves", async () => {
@@ -215,6 +213,5 @@ describe("useCatalogTree move", () => {
       await expect(result.current.moveItem("c1", "r3", "f1", 0)).rejects.toBeTruthy();
     });
     expect(JSON.stringify(result.current.tree)).toBe(before);
-    expect(result.current.error).toBe("boom");
   });
 });
