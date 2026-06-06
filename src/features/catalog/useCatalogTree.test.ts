@@ -100,6 +100,7 @@ describe("optimistic mutations + rollback", () => {
     await act(async () => { await result.current.duplicateItem("c1", "r1"); });
     expect(ipc.collectionDuplicateItem).toHaveBeenCalledWith("c1", "r1");
     expect(result.current.tree[0].name).toBe("c1-reloaded");
+    expect(toast).toHaveBeenCalledWith("Реквест продублирован", "success");
   });
 
   it("updateItemContent replaces content optimistically and upserts the collection", async () => {
@@ -213,5 +214,6 @@ describe("useCatalogTree move", () => {
       await expect(result.current.moveItem("c1", "r3", "f1", 0)).rejects.toBeTruthy();
     });
     expect(JSON.stringify(result.current.tree)).toBe(before);
+    expect(toast).toHaveBeenCalledWith("Не удалось переместить", "error");
   });
 });
