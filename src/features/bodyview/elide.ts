@@ -18,3 +18,9 @@ export function elideString(value: string, limit = ELIDE_LIMIT): Elision | null 
   const label = m ? `${m[1]} · ${size}` : size;
   return { preview: value.slice(0, PREVIEW_CHARS), label };
 }
+
+export const BODY_MAX_BYTES = 50 * 1024 * 1024; // 50 MB, mirrors Postman's default
+
+export function exceedsByteCeiling(text: string, max = BODY_MAX_BYTES): boolean {
+  return new TextEncoder().encode(text).length > max;
+}

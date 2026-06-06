@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { elideString, ELIDE_LIMIT, PREVIEW_CHARS } from "./elide";
+import { elideString, ELIDE_LIMIT, PREVIEW_CHARS, exceedsByteCeiling } from "./elide";
 
 describe("elideString", () => {
   it("returns null at or below the limit", () => {
@@ -22,5 +22,12 @@ describe("elideString", () => {
   it("does not guess a type for a non-data: long string", () => {
     const e = elideString("A".repeat(ELIDE_LIMIT + 1))!;
     expect(e.label).not.toContain("·");
+  });
+});
+
+describe("exceedsByteCeiling", () => {
+  it("is false below the limit and true above it (custom limit keeps the test cheap)", () => {
+    expect(exceedsByteCeiling("hello", 10)).toBe(false);
+    expect(exceedsByteCeiling("hello world!", 10)).toBe(true);
   });
 });

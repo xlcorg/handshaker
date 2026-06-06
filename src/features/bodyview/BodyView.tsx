@@ -6,6 +6,7 @@ import { parseWithSpans } from "./parse";
 import { renderJsonTree, type Badge } from "./render";
 import type { JsonTree } from "./jsonTree";
 import type { ValueSpan } from "./spans";
+import { exceedsByteCeiling } from "./elide";
 import { attachBodyController } from "./controller";
 
 type Mode = "request" | "response";
@@ -36,6 +37,13 @@ export function BodyView({ mode, value, onChange }: BodyViewProps) {
   const renderResponse = (text: string) => {
     const l = live.current;
     if (!l) return;
+    if (exceedsByteCeiling(text)) {
+      l.tree = null; l.spans = []; l.badges = [];
+      l.editor.updateOptions({ folding: false });
+      l.editor.getModel()?.setValue(text);
+      l.decorations?.clear();
+      return;
+    }
     const parsed = parseWithSpans(text);
     if (!parsed) {
       // Invalid JSON: show raw, no spans/badges.
