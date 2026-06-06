@@ -16,7 +16,10 @@ vi.mock("@/ipc/client", () => ({
   },
 }));
 
+vi.mock("@/lib/toast", () => ({ toast: vi.fn() }));
+
 import { ipc } from "@/ipc/client";
+import { toast } from "@/lib/toast";
 import type { CollectionIpc } from "@/ipc/bindings";
 import { useCatalogTree } from "./useCatalogTree";
 
@@ -131,6 +134,30 @@ describe("optimistic mutations + rollback", () => {
     const item = result.current.tree[0].items[0] as Extract<{ type: "request"; method: string }, { type: "request" }>;
     expect(item.method).toBe("m"); // reverted to the seeded value
     expect(result.current.error).toBe("disk full");
+  });
+
+  it("emits a success toast when an operation with an ok label resolves", async () => {
+    const { result } = await loaded();
+    vi.mocked(ipc.collectionRenameItem).mockResolvedValue(undefined);
+    await act(async () => { await result.current.renameItem("c1", "r1", "Renamed"); });
+    expect(toast).toHaveBeenCalledWith("Реквест переименован", "success");
+  });
+
+  it("emits an error toast and rolls back when the operation rejects", async () => {
+    const { result } = await loaded();
+    vi.mocked(ipc.collectionRenameItem).mockRejectedValue({ message: "boom" });
+    await act(async () => {
+      await expect(result.current.renameItem("c1", "r1", "Renamed")).rejects.toBeTruthy();
+    });
+    expect(result.current.tree[0].items[0].name).toBe("r1"); // reverted
+    expect(toast).toHaveBeenCalledWith("Не удалось переименовать реквест", "error");
+  });
+
+  it("emits no success toast for setPinned (ok label omitted)", async () => {
+    const { result } = await loaded();
+    vi.mocked(ipc.collectionUpsert).mockResolvedValue(undefined);
+    await act(async () => { await result.current.setPinned("c1", true); });
+    expect(toast).not.toHaveBeenCalledWith(expect.anything(), "success");
   });
 });
 

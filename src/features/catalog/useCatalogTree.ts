@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ipc } from "@/ipc/client";
 import type { CollectionIpc, ItemIpc, SavedRequestIpc } from "@/ipc/bindings";
 import { newId } from "@/lib/ids";
+import { toast } from "@/lib/toast";
 import {
   insertItemInTree,
   moveItemAcrossTree,
@@ -84,6 +85,7 @@ export function useCatalogTree(): UseCatalogTree {
       }
     } catch (e) {
       setError(errMsg(e));
+      toast(errMsg(e), "error");
     } finally {
       setLoading(false);
     }
@@ -93,16 +95,22 @@ export function useCatalogTree(): UseCatalogTree {
     void reload();
   }, [reload]);
 
-  /** Apply a local transform, run the IPC call, and roll back on rejection. */
+  /** Apply a local transform, run the IPC call, toast the result, roll back on rejection. */
   const optimistic = useCallback(
-    async (next: (prev: CollectionIpc[]) => CollectionIpc[], call: () => Promise<unknown>) => {
+    async (
+      next: (prev: CollectionIpc[]) => CollectionIpc[],
+      call: () => Promise<unknown>,
+      labels: { ok?: string; err: string },
+    ) => {
       const snapshot = treeRef.current;
       apply(next(snapshot));
       try {
         await call();
+        if (labels.ok) toast(labels.ok, "success");
       } catch (e) {
         apply(snapshot);
         setError(errMsg(e));
+        toast(labels.err, "error");
         throw e;
       }
     },
@@ -112,7 +120,10 @@ export function useCatalogTree(): UseCatalogTree {
   const createCollection = useCallback(
     async (name: string) => {
       const c = emptyCollection(name);
-      await optimistic((prev) => [...prev, c], () => ipc.collectionUpsert(c));
+      await optimistic((prev) => [...prev, c], () => ipc.collectionUpsert(c), {
+        ok: "Коллекция создана",
+        err: "Не удалось создать коллекцию",
+      });
       return c.id;
     },
     [optimistic],
@@ -123,6 +134,7 @@ export function useCatalogTree(): UseCatalogTree {
       optimistic(
         (prev) => removeCollectionFromTree(prev, collectionId),
         () => ipc.collectionDelete(collectionId),
+        { ok: "Коллекция удалена", err: "Не удалось удалить коллекцию" },
       ),
     [optimistic],
   );
@@ -132,6 +144,7 @@ export function useCatalogTree(): UseCatalogTree {
       optimistic(
         (prev) => renameCollectionInTree(prev, collectionId, name),
         () => ipc.collectionUpsert(treeRef.current.find((c) => c.id === collectionId)!),
+        { ok: "Коллекция переименована", err: "Не удалось переименовать коллекцию" },
       ),
     [optimistic],
   );
@@ -141,6 +154,7 @@ export function useCatalogTree(): UseCatalogTree {
       optimistic(
         (prev) => setCollectionPinned(prev, collectionId, pinned),
         () => ipc.collectionUpsert(treeRef.current.find((c) => c.id === collectionId)!),
+        { err: "Не удалось обновить закрепление" },
       ),
     [optimistic],
   );
@@ -150,6 +164,7 @@ export function useCatalogTree(): UseCatalogTree {
       optimistic(
         (prev) => insertItemInTree(prev, collectionId, parentId, item),
         () => ipc.collectionAddItem(collectionId, parentId, item),
+        { ok: "Реквест добавлен", err: "Не удалось добавить реквест" },
       ),
     [optimistic],
   );
@@ -159,6 +174,7 @@ export function useCatalogTree(): UseCatalogTree {
       optimistic(
         (prev) => renameItemInTree(prev, collectionId, itemId, name),
         () => ipc.collectionRenameItem(collectionId, itemId, name),
+        { ok: "Реквест переименован", err: "Не удалось переименовать реквест" },
       ),
     [optimistic],
   );
@@ -168,6 +184,7 @@ export function useCatalogTree(): UseCatalogTree {
       optimistic(
         (prev) => replaceItemInTree(prev, collectionId, itemId, content),
         () => ipc.collectionUpsert(treeRef.current.find((c) => c.id === collectionId)!),
+        { ok: "Сохранено", err: "Не удалось сохранить" },
       ),
     [optimistic],
   );
@@ -177,6 +194,7 @@ export function useCatalogTree(): UseCatalogTree {
       optimistic(
         (prev) => removeItemFromTree(prev, collectionId, itemId),
         () => ipc.collectionDeleteItem(collectionId, itemId),
+        { ok: "Реквест удалён", err: "Не удалось удалить реквест" },
       ),
     [optimistic],
   );
@@ -188,8 +206,10 @@ export function useCatalogTree(): UseCatalogTree {
         await ipc.collectionDuplicateItem(collectionId, itemId);
         const fresh = await ipc.collectionGet(collectionId);
         apply(treeRef.current.map((c) => (c.id === collectionId ? fresh : c)));
+        toast("Реквест продублирован", "success");
       } catch (e) {
         setError(errMsg(e));
+        toast("Не удалось продублировать реквест", "error");
         throw e;
       }
     },
@@ -201,6 +221,7 @@ export function useCatalogTree(): UseCatalogTree {
       optimistic(
         (prev) => moveItemWithinTree(prev, collectionId, itemId, parentId, position),
         () => ipc.collectionMoveItem(collectionId, itemId, parentId, position),
+        { err: "Не удалось переместить" },
       ),
     [optimistic],
   );
@@ -216,6 +237,7 @@ export function useCatalogTree(): UseCatalogTree {
       optimistic(
         (prev) => moveItemAcrossTree(prev, sourceCollectionId, itemId, targetCollectionId, parentId, position),
         () => ipc.collectionMoveItemAcross(sourceCollectionId, itemId, targetCollectionId, parentId, position),
+        { err: "Не удалось переместить" },
       ),
     [optimistic],
   );
