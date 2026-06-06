@@ -100,7 +100,7 @@ describe("optimistic mutations + rollback", () => {
     await act(async () => { await result.current.duplicateItem("c1", "r1"); });
     expect(ipc.collectionDuplicateItem).toHaveBeenCalledWith("c1", "r1");
     expect(result.current.tree[0].name).toBe("c1-reloaded");
-    expect(toast).toHaveBeenCalledWith("Request duplicated", "success");
+    expect(toast).not.toHaveBeenCalledWith(expect.anything(), "success");
   });
 
   it("updateItemContent replaces content optimistically and upserts the collection", async () => {
@@ -139,7 +139,7 @@ describe("optimistic mutations + rollback", () => {
     const { result } = await loaded();
     vi.mocked(ipc.collectionRenameItem).mockResolvedValue(undefined);
     await act(async () => { await result.current.renameItem("c1", "r1", "Renamed"); });
-    expect(toast).toHaveBeenCalledWith("Request renamed", "success");
+    expect(toast).toHaveBeenCalledWith("Renamed request was renamed", "success");
   });
 
   it("emits an error toast and rolls back when the operation rejects", async () => {
@@ -149,17 +149,17 @@ describe("optimistic mutations + rollback", () => {
       await expect(result.current.renameItem("c1", "r1", "Renamed")).rejects.toBeTruthy();
     });
     expect(result.current.tree[0].items[0].name).toBe("r1"); // reverted
-    expect(toast).toHaveBeenCalledWith("Couldn't rename request", "error");
+    expect(toast).toHaveBeenCalledWith("Couldn't rename Renamed request", "error");
   });
 
-  it("emits no success toast for setPinned (ok label omitted)", async () => {
+  it("setPinned toasts success with the collection name", async () => {
     const { result } = await loaded();
     vi.mocked(ipc.collectionUpsert).mockResolvedValue(undefined);
     await act(async () => { await result.current.setPinned("c1", true); });
-    expect(toast).not.toHaveBeenCalledWith(expect.anything(), "success");
+    expect(toast).toHaveBeenCalledWith("c1 pinned", "success");
   });
 
-  it("addItem toasts success when adding a request", async () => {
+  it("addItem is silent on success (request and folder)", async () => {
     const { result } = await loaded();
     vi.mocked(ipc.collectionAddItem).mockResolvedValue(undefined);
     await act(async () => {
@@ -168,17 +168,16 @@ describe("optimistic mutations + rollback", () => {
         method: "m", body_template: "{}", metadata: [], auth: { kind: "none" },
         tls_override: null, last_used_at: null, use_count: 0,
       });
-    });
-    expect(toast).toHaveBeenCalledWith("Request added", "success");
-  });
-
-  it("addItem does not toast success when adding a folder", async () => {
-    const { result } = await loaded();
-    vi.mocked(ipc.collectionAddItem).mockResolvedValue(undefined);
-    await act(async () => {
       await result.current.addItem("c1", null, { type: "folder", id: "f9", name: "F", items: [] });
     });
     expect(toast).not.toHaveBeenCalledWith(expect.anything(), "success");
+  });
+
+  it("deleteItem names the item and its kind", async () => {
+    const { result } = await loaded();
+    vi.mocked(ipc.collectionDeleteItem).mockResolvedValue(null);
+    await act(async () => { await result.current.deleteItem("c1", "r1"); });
+    expect(toast).toHaveBeenCalledWith("r1 request was deleted", "success");
   });
 });
 
@@ -236,6 +235,6 @@ describe("useCatalogTree move", () => {
       await expect(result.current.moveItem("c1", "r3", "f1", 0)).rejects.toBeTruthy();
     });
     expect(JSON.stringify(result.current.tree)).toBe(before);
-    expect(toast).toHaveBeenCalledWith("Couldn't move", "error");
+    expect(toast).toHaveBeenCalledWith("Couldn't move r3", "error");
   });
 });

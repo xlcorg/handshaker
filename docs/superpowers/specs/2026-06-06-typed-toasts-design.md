@@ -119,23 +119,29 @@ const optimistic = useCallback(
 Каждый call-сайт передаёт свою пару. `ok` опускается там, где успех визуально
 очевиден и операция может идти пачкой (DnD, пин) — чтобы не спамить тостами.
 
-| Операция | `ok` | `err` |
+Сообщения **динамические** — содержат имя и тип изменённого объекта (`collection` /
+`folder` / `request`). Часть операций молчит на успех (success опущен), но всегда
+сообщает об ошибке. `{kind}` = `item.type`; имя/тип берутся из дерева до операции
+(для delete/move/save/duplicate — рекурсивный `findItemById`).
+
+| Операция | `ok` (success) | `err` |
 |---|---|---|
-| `createCollection` | "Collection created" | "Couldn't create collection" |
-| `deleteCollection` | "Collection deleted" | "Couldn't delete collection" |
-| `renameCollection` | "Collection renamed" | "Couldn't rename collection" |
-| `setPinned` | — (опущен) | "Couldn't update pin" |
-| `addItem` | "Request added" | "Couldn't add request" |
-| `renameItem` | "Request renamed" | "Couldn't rename request" |
-| `updateItemContent` | "Saved" | "Couldn't save" |
-| `deleteItem` | "Request deleted" | "Couldn't delete request" |
-| `duplicateItem` | "Request duplicated" | "Couldn't duplicate request" |
-| `moveItem` | — (опущен) | "Couldn't move" |
-| `moveItemAcross` | — (опущен) | "Couldn't move" |
-| `reload` | — | `errMsg(e)` (как сейчас) |
+| `createCollection` | — (молчит) | `Couldn't create {name} collection` |
+| `renameCollection` | `{name} collection was renamed` | `Couldn't rename {name} collection` |
+| `deleteCollection` | `{name} collection was deleted` | `Couldn't delete {name} collection` |
+| `setPinned` | `{name} pinned` / `{name} unpinned` | `Couldn't update {name}` |
+| `addItem` | — (молчит) | `Couldn't add {name} {kind}` |
+| `renameItem` | `{name} {kind} was renamed` | `Couldn't rename {name} {kind}` |
+| `updateItemContent` | — (молчит) | `Couldn't save {name} request` |
+| `deleteItem` | `{name} {kind} was deleted` | `Couldn't delete {name} {kind}` |
+| `duplicateItem` | — (молчит) | `Couldn't duplicate {name} {kind}` |
+| `moveItem` | `{name} was moved` | `Couldn't move {name}` |
+| `moveItemAcross` | `{name} was moved` | `Couldn't move {name}` |
+| `reload` | — | `errMsg(e)` (сообщение бэкенда) |
 
 Тексты UI — на английском (тосты приложения англоязычны; остальной UI пока на
-русском). `errMsg(e)` — динамическое сообщение бэкенда.
+русском). Молчащие на успех: `createCollection`, `addItem`, `updateItemContent`,
+`duplicateItem` — по решению пользователя.
 
 ## 4. Обработка ошибок и пределы
 
