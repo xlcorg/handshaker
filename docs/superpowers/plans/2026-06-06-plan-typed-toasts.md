@@ -2,7 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Status:** not started · **Branch:** redesign/workflow-ui-spec-plans ·
+**Status:** ✅ done (all 6 tasks + toast messages switched to English; 461 tests green) ·
+**Branch:** redesign/workflow-ui-spec-plans ·
 **Spec:** [docs/superpowers/specs/2026-06-06-typed-toasts-design.md](../specs/2026-06-06-typed-toasts-design.md)
 
 **Goal:** Show the result of every optimistic collection operation as a transient
