@@ -1,4 +1,4 @@
-import { Plus, Settings } from "lucide-react";
+import { Pencil, Plus } from "lucide-react";
 import { forwardRef } from "react";
 
 import {
@@ -39,7 +39,7 @@ export const EnvSwitcherMenu = forwardRef<HTMLButtonElement, EnvSwitcherMenuProp
           <DropdownMenuLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">
             Environments
           </DropdownMenuLabel>
-          <DropdownMenuItem onSelect={() => onActiveSet(null)} className="text-muted-foreground">
+          <DropdownMenuItem onSelect={() => onActiveSet(null)} className="font-light text-muted-foreground">
             No environment
           </DropdownMenuItem>
           {sorted.map((env) => (
@@ -48,11 +48,11 @@ export const EnvSwitcherMenu = forwardRef<HTMLButtonElement, EnvSwitcherMenuProp
                 {env.name}
               </DropdownMenuItem>
               <DropdownMenuItem
-                aria-label={`Settings for ${env.name}`}
+                aria-label={`Edit ${env.name}`}
                 onSelect={() => onEditEnv(env.name)}
                 className="mr-1 h-6 w-6 justify-center p-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
               >
-                <Settings className="h-3.5 w-3.5" />
+                <Pencil className="h-3.5 w-3.5" />
               </DropdownMenuItem>
             </div>
           ))}

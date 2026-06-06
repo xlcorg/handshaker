@@ -41,7 +41,7 @@ describe("EnvSwitcherMenu", () => {
     expect(onActiveSet).toHaveBeenCalledWith(null);
   });
 
-  it("the gear opens edit for that env", async () => {
+  it("the edit icon opens edit for that env", async () => {
     const user = userEvent.setup();
     const onEditEnv = vi.fn();
     render(
@@ -54,7 +54,7 @@ describe("EnvSwitcherMenu", () => {
       />,
     );
     await user.click(screen.getByText("env-trigger"));
-    await user.click(await screen.findByLabelText("Settings for local"));
+    await user.click(await screen.findByLabelText("Edit local"));
     expect(onEditEnv).toHaveBeenCalledWith("local");
   });
 });
