@@ -39,7 +39,7 @@ export const EnvSwitcherMenu = forwardRef<HTMLButtonElement, EnvSwitcherMenuProp
           <DropdownMenuLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">
             Environments
           </DropdownMenuLabel>
-          <DropdownMenuItem onSelect={() => onActiveSet(null)} className="font-light text-muted-foreground">
+          <DropdownMenuItem onSelect={() => onActiveSet(null)} className="font-thin text-muted-foreground">
             No environment
           </DropdownMenuItem>
           {sorted.map((env) => (
