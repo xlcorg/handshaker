@@ -40,7 +40,7 @@ describe("workflowStore", () => {
 });
 
 describe("workflow env sync", () => {
-  beforeEach(() => { workflowStore.reset(); envActiveSet.mockClear(); });
+  beforeEach(() => { workflowStore.reset(); vi.mocked(envActiveSet).mockClear(); });
 
   it("setWorkflowEnv updates active workflow and pushes to backend", () => {
     workflowStore.setWorkflowEnv("prod");
@@ -50,7 +50,7 @@ describe("workflow env sync", () => {
 
   it("createWorkflow syncs backend to the new workflow's env (null)", () => {
     workflowStore.setWorkflowEnv("prod"); // current wf → prod, backend = prod
-    envActiveSet.mockClear();
+    vi.mocked(envActiveSet).mockClear();
     workflowStore.createWorkflow("wf-2"); // new active wf has envName null
     expect(envActiveSet).toHaveBeenLastCalledWith(null);
   });
@@ -58,7 +58,7 @@ describe("workflow env sync", () => {
   it("switching workflows re-syncs backend to that workflow's env", () => {
     workflowStore.setWorkflowEnv("prod");            // current wf → prod
     const wf2 = workflowStore.createWorkflow("wf-2"); // new wf (envName null) becomes active
-    envActiveSet.mockClear();
+    vi.mocked(envActiveSet).mockClear();
     workflowStore.setActiveWorkflow(
       workflowStore.getState().workflows[0].id,       // back to first wf
     );
