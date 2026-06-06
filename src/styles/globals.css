@@ -176,10 +176,6 @@ body {
 .pulse-dot { animation: hs-pulse 1.4s ease-in-out infinite; }
 @keyframes hs-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
 
-/* drag region */
-.tb-drag { -webkit-app-region: drag; }
-.tb-nodrag { -webkit-app-region: no-drag; }
-
 /* small-caps section labels */
 .label-cap {
   font-size: 10.5px;
