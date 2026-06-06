@@ -4,9 +4,9 @@ import { setView } from "./reducers";
 import type { ViewMode } from "./model";
 
 const OPTIONS = [
-  { value: "ledger", label: "Лента" },
-  { value: "list", label: "Список" },
-  { value: "focus", label: "Фокус" },
+  { value: "ledger", label: "Ledger" },
+  { value: "list", label: "List" },
+  { value: "focus", label: "Focus" },
 ];
 
 export function ViewSwitcher() {

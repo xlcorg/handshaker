@@ -7,17 +7,17 @@ import { ViewSwitcher } from "./ViewSwitcher";
 beforeEach(() => workflowStore.reset());
 
 describe("ViewSwitcher", () => {
-  it("offers the three modes and reflects the active one", () => {
+  it("renders English labels Ledger / List / Focus", () => {
     render(<ViewSwitcher />);
-    expect(screen.getByRole("radio", { name: "Лента" })).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: "Список" })).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: "Фокус" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Ledger" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "List" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Focus" })).toBeInTheDocument();
   });
 
   it("switching updates the active workflow's view", async () => {
     const user = userEvent.setup();
     render(<ViewSwitcher />);
-    await user.click(screen.getByRole("radio", { name: "Список" }));
+    await user.click(screen.getByRole("radio", { name: "List" }));
     expect(workflowStore.activeWorkflow().view).toBe("list");
   });
 });
