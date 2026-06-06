@@ -29,7 +29,10 @@ export function FocusView({ onRequestSave }: FocusViewProps = {}) {
             data-testid="draft-breadcrumb"
           >
             {prefix.length > 0 && (
-              <span className="truncate">{prefix.join(" › ")} › </span>
+              // Trailing separator uses a non-breaking space: a normal trailing
+              // space inside a `white-space: nowrap` flex item is stripped by the
+              // browser, which would glue the chevron to the last segment.
+              <span className="truncate">{`${prefix.join(" › ")} › `}</span>
             )}
             <span className="flex-none">{last}</span>
           </span>

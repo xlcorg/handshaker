@@ -69,7 +69,12 @@ describe("FocusView Save affordance", () => {
       { collectionId: "c1", requestId: "r1", collectionName: "Notes", requestName: "Create" },
     );
     render(<FocusView onRequestSave={vi.fn()} />);
-    expect(screen.getByTestId("draft-breadcrumb")).toHaveTextContent("Notes › Create");
+    const crumb = screen.getByTestId("draft-breadcrumb");
+    expect(crumb).toHaveTextContent("Notes › Create");
+    // The separator before the last segment must be a non-breaking space — a
+    // normal trailing space inside the `truncate` (white-space: nowrap) span is
+    // stripped by the browser, gluing the chevron to the request name.
+    expect(crumb.textContent).toContain("› Create");
   });
 
   it("shows the full live path from the catalog for a bound draft", () => {
