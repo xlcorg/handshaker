@@ -42,6 +42,8 @@ export interface EnvEditorDialogProps {
   onOpenChange: (open: boolean) => void;
   /** Called after a successful save. Parent should refetch envs + sync activeEnv. */
   onSaved: (savedName: string, becameActive: boolean) => void;
+  /** Edit mode only: request deletion of this env (parent opens the confirm dialog). */
+  onRequestDelete?: (name: string) => void;
 }
 
 export function EnvEditorDialog({
@@ -51,6 +53,7 @@ export function EnvEditorDialog({
   envs,
   onOpenChange,
   onSaved,
+  onRequestDelete,
 }: EnvEditorDialogProps) {
   const isCreate = originalName === null;
   const [name, setName] = useState<string>(originalName ?? "");
@@ -149,6 +152,16 @@ export function EnvEditorDialog({
           </div>
         )}
         <DialogFooter>
+          {!isCreate && onRequestDelete && (
+            <Button
+              variant="ghost"
+              onClick={() => onRequestDelete(originalName as string)}
+              disabled={busy}
+              className="mr-auto text-destructive hover:bg-destructive/10 hover:text-destructive"
+            >
+              Delete
+            </Button>
+          )}
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>
             Cancel
           </Button>

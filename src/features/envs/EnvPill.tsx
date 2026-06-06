@@ -30,7 +30,6 @@ export const EnvPill = forwardRef<HTMLButtonElement, EnvPillProps>(function EnvP
       <EnvSwitcherMenu
         ref={ref}
         envs={envs}
-        activeEnv={activeEnv}
         trigger={
           <Button variant="ghost" size="sm" className="gap-1 font-mono">
             {label}
@@ -42,7 +41,6 @@ export const EnvPill = forwardRef<HTMLButtonElement, EnvPillProps>(function EnvP
           void ipc.envActiveSet(next);
         }}
         onEditEnv={(name) => setEditor({ originalName: name })}
-        onDeleteEnv={(name) => setDeleteTarget(name)}
         onNewEnv={() => setEditor({ originalName: null })}
       />
       {editor && (
@@ -57,6 +55,10 @@ export const EnvPill = forwardRef<HTMLButtonElement, EnvPillProps>(function EnvP
           onSaved={async (savedName, becameActive) => {
             await onEnvsChanged();
             if (becameActive) onActiveEnvChanged(savedName);
+          }}
+          onRequestDelete={(name) => {
+            setEditor(null);
+            setDeleteTarget(name);
           }}
         />
       )}

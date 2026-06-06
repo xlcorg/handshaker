@@ -42,7 +42,6 @@ export function WorkflowEnvControl() {
     <>
       <EnvSwitcherMenu
         envs={envs}
-        activeEnv={activeEnv}
         trigger={
           <button
             type="button"
@@ -54,7 +53,6 @@ export function WorkflowEnvControl() {
         }
         onActiveSet={(next) => workflowStore.setWorkflowEnv(next)}
         onEditEnv={(name) => setEditor({ originalName: name })}
-        onDeleteEnv={(name) => setDeleteTarget(name)}
         onNewEnv={() => setEditor({ originalName: null })}
       />
       {editor && (
@@ -69,6 +67,10 @@ export function WorkflowEnvControl() {
           onSaved={async (savedName, becameActive) => {
             await refreshEnvs();
             if (becameActive) workflowStore.setWorkflowEnv(savedName);
+          }}
+          onRequestDelete={(name) => {
+            setEditor(null);
+            setDeleteTarget(name);
           }}
         />
       )}

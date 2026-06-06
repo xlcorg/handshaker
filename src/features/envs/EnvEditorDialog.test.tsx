@@ -66,4 +66,37 @@ describe("EnvEditorDialog name validation", () => {
     expect(screen.getByText(/already exists/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /create/i })).toBeDisabled();
   });
+
+  it("shows a Delete button in edit mode that calls onRequestDelete", async () => {
+    const user = userEvent.setup();
+    const onRequestDelete = vi.fn();
+    render(
+      <EnvEditorDialog
+        open
+        originalName="prod"
+        activeEnv="prod"
+        envs={[{ name: "prod", variables: {} }]}
+        onOpenChange={() => {}}
+        onSaved={() => {}}
+        onRequestDelete={onRequestDelete}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /delete/i }));
+    expect(onRequestDelete).toHaveBeenCalledWith("prod");
+  });
+
+  it("shows no Delete button in create mode", () => {
+    render(
+      <EnvEditorDialog
+        open
+        originalName={null}
+        activeEnv={null}
+        envs={[]}
+        onOpenChange={() => {}}
+        onSaved={() => {}}
+        onRequestDelete={() => {}}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /delete/i })).not.toBeInTheDocument();
+  });
 });
