@@ -1,5 +1,10 @@
 # Draft Address-Bar Redesign — Implementation Plan
 
+> **Status banner:** ✅ **done** (реализовано: `c16d48f` redesign DraftAddressBar —
+> TLS-замок в host, full-width picker, refresh в дропдаун; `e49fa95` ReflectionFooter;
+> + полиш `57b6902`/`a275854`/`d5a6b84`) · branch `redesign/workflow-ui-spec-plans` ·
+> mode subagent-driven. У плана не было статус-баннера; работа влита, файл архивирован.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Перекомпоновать верх окна черновика под раскладку gRPC-запроса Postman — хедер с брэдкрамбом и Save-иконкой, строка адреса с тихим замком TLS внутри host, `MethodPicker` на всю ширину с плейсхолдером и футером рефлексии (куда переезжает кнопка обновления контракта).

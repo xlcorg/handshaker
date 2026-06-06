@@ -13,6 +13,13 @@ export default defineConfig({
     },
   },
   clearScreen: false,
+  // Dev-only: pre-bundle Monaco eagerly at server start so Vite doesn't
+  // "discover" these heavy deps mid-load and trigger a full-page reload
+  // (the long white screen on a cold cache after install/branch-switch).
+  // No effect on the production build.
+  optimizeDeps: {
+    include: ["monaco-editor", "@monaco-editor/react", "@monaco-editor/loader"],
+  },
   server: {
     port: 1420,
     strictPort: true,

@@ -125,12 +125,6 @@ export function SidebarShell({ onOpenCollection, onOpenRequest, onAddRequest }: 
         onMoveItemAcross={cat.moveItemAcross}
       />
 
-      {cat.error ? (
-        <div className="border-t border-destructive bg-destructive/5 px-2 py-1 text-[11px] text-destructive">
-          {cat.error}
-        </div>
-      ) : null}
-
       {/* Resize handle */}
       <div
         role="separator"

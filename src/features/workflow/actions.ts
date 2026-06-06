@@ -11,6 +11,17 @@ export interface CallTargetInit {
   tls: boolean;
 }
 
+/** Best-effort `{{var}}` resolution for a connection address. Unresolved placeholders are
+ *  left literal (the subsequent gRPC call surfaces the failure), mirroring the Send path so
+ *  reflection/skeleton dial the same resolved host the eventual invoke will. */
+export async function resolveAddressSafe(address: string): Promise<string> {
+  try {
+    return (await ipc.varsResolve(address)).resolved;
+  } catch {
+    return address;
+  }
+}
+
 /** Fetch a request-body skeleton for a method; never throws — falls back to "{}". */
 export async function buildRequestSkeletonSafe(
   target: CallTargetInit,
@@ -18,8 +29,9 @@ export async function buildRequestSkeletonSafe(
   method: string,
 ): Promise<string> {
   try {
+    const address = await resolveAddressSafe(target.address);
     return await ipc.grpcBuildRequestSkeleton(
-      { address: target.address, tls: target.tls, skip_verify: false },
+      { address, tls: target.tls, skip_verify: false },
       service,
       method,
     );

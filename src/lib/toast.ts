@@ -1,8 +1,11 @@
 import { newId } from "@/lib/ids";
 
+export type ToastType = "success" | "error" | "info";
+
 export interface ToastItem {
   id: string;
   message: string;
+  type: ToastType;
 }
 
 type Listener = () => void;
@@ -25,8 +28,8 @@ export const toastStore = {
 };
 
 /** Show a transient toast; returns its id. */
-export function toast(message: string): string {
-  const item: ToastItem = { id: newId(), message };
+export function toast(message: string, type: ToastType = "info"): string {
+  const item: ToastItem = { id: newId(), message, type };
   items = [...items, item];
   emit();
   return item.id;

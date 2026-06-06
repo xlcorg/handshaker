@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { BodyEditor } from "@/features/invoke/BodyEditor";
-import { cn } from "@/lib/cn";
+import { UnderlineTabs } from "@/components/ui/underline-tabs";
 import type { SavedAuthConfigIpc } from "@/ipc/bindings";
 import { MetadataEditor } from "./MetadataEditor";
 import type { MetadataRow, Step } from "./model";
@@ -16,29 +16,18 @@ export interface RequestTabsProps {
 
 export function RequestTabs({ step, serviceAuth, onBody, onMetadata }: RequestTabsProps) {
   const [tab, setTab] = useState<Tab>("request");
-  const tabs: { id: Tab; label: string }[] = [
-    { id: "request", label: "Request" },
-    { id: "metadata", label: "Metadata" },
-    { id: "auth", label: "Auth" },
-  ];
   return (
     <div className="flex h-full flex-col">
-      <div role="tablist" className="flex flex-none gap-1 border-b border-border px-2 py-1">
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            role="tab"
-            aria-selected={tab === t.id}
-            onClick={() => setTab(t.id)}
-            className={cn(
-              "rounded px-2 py-0.5 text-xs",
-              tab === t.id ? "bg-accent text-foreground" : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
+      <div className="h-10 flex-none flex items-center border-b border-border px-3.5">
+        <UnderlineTabs<Tab>
+          value={tab}
+          onChange={setTab}
+          items={[
+            { value: "request", label: "Request" },
+            { value: "metadata", label: "Metadata" },
+            { value: "auth", label: "Auth" },
+          ]}
+        />
       </div>
       <div className="min-h-0 flex-1 overflow-auto">
         {tab === "request" ? <BodyEditor value={step.requestJson} onChange={onBody} /> : null}

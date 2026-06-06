@@ -398,6 +398,18 @@ describe("buildRequestSkeletonSafe", () => {
     vi.mocked(ipc.grpcBuildRequestSkeleton).mockRejectedValue(new Error("nope"));
     expect(await buildRequestSkeletonSafe({ address: "h", tls: false }, "p.S", "M")).toBe("{}");
   });
+
+  it("resolves {{var}} in the address before building the skeleton (mirrors Send)", async () => {
+    vi.mocked(ipc.varsResolve).mockImplementation(async (tpl: string) => ({
+      resolved: tpl.replace("{{host}}", "api.internal"),
+      unresolved_vars: [], cycle_chain: null,
+    }));
+    vi.mocked(ipc.grpcBuildRequestSkeleton).mockResolvedValue("{}");
+    await buildRequestSkeletonSafe({ address: "{{host}}:443", tls: true }, "p.S", "M");
+    expect(ipc.grpcBuildRequestSkeleton).toHaveBeenCalledWith(
+      { address: "api.internal:443", tls: true, skip_verify: false }, "p.S", "M",
+    );
+  });
 });
 
 describe("applyMethodSelection", () => {

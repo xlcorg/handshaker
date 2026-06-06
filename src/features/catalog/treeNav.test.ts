@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { CollectionIpc, ItemIpc, SavedRequestIpc } from "@/ipc/bindings";
-import { countRequests, allContainerIds, pathToItem, flattenVisible } from "./treeNav";
+import { countRequests, allContainerIds, pathToItem, flattenVisible, pathNamesToItem } from "./treeNav";
 
 function req(id: string, name = id): Extract<ItemIpc, { type: "request" }> {
   return {
@@ -52,6 +52,32 @@ describe("pathToItem", () => {
   it("returns null for unknown id or null", () => {
     expect(pathToItem(tree, "nope")).toBeNull();
     expect(pathToItem(tree, null)).toBeNull();
+  });
+});
+
+describe("pathNamesToItem", () => {
+  it("returns [collectionName] for a collection root", () => {
+    expect(pathNamesToItem(tree, "c1")).toEqual(["c1"]);
+  });
+
+  it("returns [collection, request] for a top-level request", () => {
+    expect(pathNamesToItem(tree, "r1")).toEqual(["c1", "r1"]);
+  });
+
+  it("returns the full nested path including the request itself", () => {
+    expect(pathNamesToItem(tree, "r3")).toEqual(["c1", "f1", "f2", "r3"]);
+  });
+
+  it("returns the path to a folder including the folder itself", () => {
+    expect(pathNamesToItem(tree, "f2")).toEqual(["c1", "f1", "f2"]);
+  });
+
+  it("returns null for an unknown id", () => {
+    expect(pathNamesToItem(tree, "nope")).toBeNull();
+  });
+
+  it("returns null for a null id", () => {
+    expect(pathNamesToItem(tree, null)).toBeNull();
   });
 });
 

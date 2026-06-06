@@ -47,6 +47,32 @@ export function pathToItem(collections: CollectionIpc[], itemId: string | null):
   return null;
 }
 
+function findNamePath(items: ItemIpc[], itemId: string, acc: string[]): string[] | null {
+  for (const it of items) {
+    if (it.id === itemId) return [...acc, it.name];
+    if (it.type === "folder") {
+      const r = findNamePath(it.items, itemId, [...acc, it.name]);
+      if (r) return r;
+    }
+  }
+  return null;
+}
+
+/** Ordered display names `[collectionName, ...folderNames, itemName]` to reach `itemId`
+ *  (the path INCLUDES the target item's own name), or null when not found. */
+export function pathNamesToItem(
+  collections: CollectionIpc[],
+  itemId: string | null,
+): string[] | null {
+  if (!itemId) return null;
+  for (const c of collections) {
+    if (c.id === itemId) return [c.name];
+    const sub = findNamePath(c.items, itemId, [c.name]);
+    if (sub) return sub;
+  }
+  return null;
+}
+
 export type VisibleNode =
   | { kind: "collection"; collectionId: string; id: string; name: string; depth: number }
   | { kind: "folder"; collectionId: string; id: string; name: string; depth: number }

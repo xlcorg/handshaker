@@ -2,6 +2,7 @@ import { Save } from "lucide-react";
 import { CallPanel } from "./CallPanel";
 import { useDraft, useDraftDirty, useDraftOrigin, workflowStore } from "./store";
 import { draftBreadcrumb } from "./draftHeader";
+import { useCatalog } from "@/features/catalog/CatalogProvider";
 import type { Step } from "./model";
 
 export interface FocusViewProps {
@@ -13,13 +14,27 @@ export function FocusView({ onRequestSave }: FocusViewProps = {}) {
   const draft = useDraft();
   const origin = useDraftOrigin();
   const dirty = useDraftDirty();
+  const { tree } = useCatalog();
+
+  const segments = draft ? draftBreadcrumb(draft, origin, tree) : [];
+  const prefix = segments.slice(0, -1);
+  const last = segments[segments.length - 1] ?? "";
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       {draft && (
         <div className="flex h-9 items-center justify-between gap-2 border-b border-border px-3 text-xs">
-          <span className="min-w-0 truncate text-muted-foreground" data-testid="draft-breadcrumb">
-            {draftBreadcrumb(draft, origin)}
+          <span
+            className="flex min-w-0 items-center text-muted-foreground"
+            data-testid="draft-breadcrumb"
+          >
+            {prefix.length > 0 && (
+              // Trailing separator uses a non-breaking space: a normal trailing
+              // space inside a `white-space: nowrap` flex item is stripped by the
+              // browser, which would glue the chevron to the last segment.
+              <span className="truncate">{`${prefix.join(" › ")} › `}</span>
+            )}
+            <span className="flex-none">{last}</span>
           </span>
           {origin ? (
             <span className="text-muted-foreground" data-testid="autosave-status">

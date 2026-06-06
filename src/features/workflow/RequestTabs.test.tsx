@@ -44,4 +44,19 @@ describe("RequestTabs", () => {
     // read-only: no editable inputs in the Auth pane
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
   });
+
+  it("renders a tablist with underline-style tabs (no pill bg-accent on the active tab)", async () => {
+    const user = userEvent.setup();
+    const p = setup();
+    render(<RequestTabs {...p} />);
+    expect(screen.getByRole("tablist")).toBeInTheDocument();
+
+    const requestTab = screen.getByRole("tab", { name: /request/i });
+    expect(requestTab).toHaveAttribute("aria-selected", "true");
+    expect(requestTab.className).not.toContain("bg-accent");
+
+    await user.click(screen.getByRole("tab", { name: /metadata/i }));
+    expect(screen.getByRole("tab", { name: /metadata/i })).toHaveAttribute("aria-selected", "true");
+    expect(requestTab).toHaveAttribute("aria-selected", "false");
+  });
 });

@@ -7,7 +7,6 @@ function makeTreeHook() {
   return {
     tree: [] as CollectionIpc[],
     loading: false,
-    error: null as string | null,
     reload: vi.fn(),
     createCollection: vi.fn().mockResolvedValue("c-new"),
     deleteCollection: vi.fn(),

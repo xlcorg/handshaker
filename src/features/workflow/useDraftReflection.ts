@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import * as ipc from "@/ipc/client";
 import type { ServiceCatalogIpc } from "@/ipc/bindings";
+import { resolveAddressSafe } from "./actions";
 
 const DEBOUNCE_MS = 400;
 
@@ -35,7 +36,8 @@ export function useDraftReflection(address: string, tls: boolean, enabled = true
       setLoading(true);
       setError(null);
       try {
-        const target = { address: addr, tls, skip_verify: false };
+        const resolved = await resolveAddressSafe(addr);
+        const target = { address: resolved, tls, skip_verify: false };
         const c = force ? await ipc.grpcRefreshContract(target) : await ipc.grpcDescribe(target);
         setCatalog(c);
       } catch (e) {
