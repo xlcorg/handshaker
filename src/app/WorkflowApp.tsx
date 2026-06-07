@@ -26,6 +26,8 @@ import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/componen
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { usePrefs, readPrefs } from "@/lib/use-prefs";
 import type { PanelImperativeHandle } from "react-resizable-panels";
+import { useUpdateCheck } from "@/features/updater/useUpdateCheck";
+import { UpdateBanner } from "@/features/updater/UpdateBanner";
 
 function renderView(view: ViewMode, onRequestSave: () => void) {
   switch (view) {
@@ -49,6 +51,7 @@ export function WorkflowApp() {
   const [saveOpen, setSaveOpen] = useState(false);
   const [discardOpen, setDiscardOpen] = useState(false);
   const [prefs, setPref] = usePrefs();
+  const update = useUpdateCheck();
   const sidebarPanelRef = useRef<PanelImperativeHandle>(null);
   // The open-request/new-draft action deferred while the discard confirm is up.
   const pendingOpenRef = useRef<(() => void) | null>(null);
@@ -176,6 +179,14 @@ export function WorkflowApp() {
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
       <Titlebar onOpenSettings={() => setSettingsOpen(true)} />
+
+      <UpdateBanner
+        phase={update.phase}
+        version={update.version}
+        progress={update.progress}
+        onUpdate={update.install}
+        onDismiss={update.dismiss}
+      />
 
       <SidebarProvider className="min-h-0 flex-1">
         <ResizablePanelGroup

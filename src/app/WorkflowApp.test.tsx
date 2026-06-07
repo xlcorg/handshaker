@@ -122,6 +122,10 @@ vi.mock("@/ipc/client", () => ({
   envActiveSet: vi.fn().mockResolvedValue(undefined),
   envActiveGet: vi.fn().mockResolvedValue(null),
 }));
+vi.mock("@tauri-apps/plugin-updater", () => ({
+  check: vi.fn().mockResolvedValue({ version: "9.9.9", downloadAndInstall: vi.fn() }),
+}));
+vi.mock("@tauri-apps/plugin-process", () => ({ relaunch: vi.fn() }));
 
 import { WorkflowApp } from "./WorkflowApp";
 import { workflowStore } from "@/features/workflow/store";
@@ -335,5 +339,13 @@ describe("WorkflowApp env hydration + settings", () => {
     expect(screen.queryByText("SETTINGS-DIALOG")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Settings" }));
     expect(screen.getByText("SETTINGS-DIALOG")).toBeInTheDocument();
+  });
+});
+
+describe("WorkflowApp update banner", () => {
+  it("shows the update banner when an update is available", async () => {
+    render(<WorkflowApp />);
+    expect(await screen.findByText(/9\.9\.9/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /update now/i })).toBeInTheDocument();
   });
 });
