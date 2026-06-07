@@ -26,10 +26,10 @@ pnpm install
 1. Generate / refresh typed IPC bindings whenever Rust commands change:
 
    ```sh
-   cargo run -p handshaker --bin export-bindings --quiet
+   cargo run -p handshaker --bin export-bindings --features export-bindings --quiet
    ```
 
-   This writes `src/ipc/bindings.ts` (gitignored). The dedicated bin is the regen path because the `cfg(debug_assertions)` export inside `lib.rs::run()` only fires when the windowed app actually starts.
+   This writes `src/ipc/bindings.ts` (gitignored). The dedicated bin is the regen path because the `cfg(debug_assertions)` export inside `lib.rs::run()` only fires when the windowed app actually starts. It is gated behind the `export-bindings` feature so `tauri build` doesn't try to bundle it (the bundler skips `[[bin]]` targets whose required-features are off).
 
 2. Launch the dev app:
 

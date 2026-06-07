@@ -7,9 +7,10 @@
 //! whose import table can't be satisfied without the full Tauri main-binary
 //! setup. A real `[[bin]]` mirrors the main exe's linkage and works.
 //!
-//! Run with:
+//! Gated behind the `export-bindings` Cargo feature so `tauri build` does not try
+//! to bundle it. Run with:
 //!
-//!     cargo run -p handshaker --bin export-bindings
+//!     cargo run -p handshaker --bin export-bindings --features export-bindings
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
