@@ -12,14 +12,18 @@ default-run = "handshaker"
 name = "handshaker_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
-# Dev-only bindings generator. Gated behind the `export-bindings` feature so it is
-# NOT built (or bundled) by default — `tauri build` skips [[bin]] targets whose
-# required-features are off, which avoids the bundler trying to copy a binary that
-# isn't lipo'd for the universal-apple-darwin target. Run it with:
+# Dev-only bindings generator. Two things keep it out of `tauri build`'s bundle:
+#   1. `required-features` — tauri-cli skips explicit [[bin]] targets whose features
+#      are off, so this isn't built by default.
+#   2. The source lives in `src/` (NOT `src/bin/`) on purpose: tauri-cli ALSO scans
+#      `src/bin/*.rs` and bundles a binary per file-stem with NO feature filtering,
+#      which previously added a phantom `export_bindings` the universal-apple-darwin
+#      bundler then failed to copy (it isn't lipo'd).
+# Run it with:
 #   cargo run -p handshaker --bin export-bindings --features export-bindings
 [[bin]]
 name = "export-bindings"
-path = "src/bin/export_bindings.rs"
+path = "src/export_bindings.rs"
 required-features = ["export-bindings"]
 
 [build-dependencies]
