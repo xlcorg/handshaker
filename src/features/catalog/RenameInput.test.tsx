@@ -3,6 +3,11 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { RenameInput } from "./RenameInput";
 
 describe("RenameInput", () => {
+  it("renders the shadcn Input (data-slot=input)", () => {
+    render(<RenameInput initial="old" onCommit={vi.fn()} onCancel={vi.fn()} />);
+    expect(screen.getByLabelText("rename-input")).toHaveAttribute("data-slot", "input");
+  });
+
   it("commits a trimmed, changed value on Enter", () => {
     const onCommit = vi.fn();
     const onCancel = vi.fn();

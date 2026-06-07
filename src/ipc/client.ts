@@ -13,6 +13,7 @@ import type {
   ItemSnapshotIpc,
   SavedAuthConfigIpc,
   AuthCredentialsIpc,
+  UiStateIpc,
 } from "./bindings";
 
 /**
@@ -187,6 +188,26 @@ export async function collectionSetNodeAuth(
   if (r.status === "error") throw r.error;
 }
 
+export async function collectionSetExpanded(
+  collectionId: string,
+  itemId: string | null,
+  expanded: boolean,
+): Promise<void> {
+  const r = await commands.collectionSetExpanded(collectionId, itemId, expanded);
+  if (r.status === "error") throw r.error;
+}
+
+export async function appSettingsGet(): Promise<UiStateIpc> {
+  const r = await commands.appSettingsGet();
+  if (r.status === "error") throw r.error;
+  return r.data;
+}
+
+export async function appSettingsSet(patch: UiStateIpc): Promise<void> {
+  const r = await commands.appSettingsSet(patch);
+  if (r.status === "error") throw r.error;
+}
+
 export const ipc = {
   appVersion,
   grpcDescribe,
@@ -214,4 +235,7 @@ export const ipc = {
   collectionRestoreItem,
   authResolve,
   collectionSetNodeAuth,
+  collectionSetExpanded,
+  appSettingsGet,
+  appSettingsSet,
 };

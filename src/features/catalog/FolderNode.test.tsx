@@ -1,8 +1,14 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ItemIpc } from "@/ipc/bindings";
 import type { TreeCallbacks } from "./treeTypes";
 import { FolderNode } from "./FolderNode";
+import { SidebarProvider } from "@/components/ui/sidebar";
+
+function renderWithSidebar(ui: React.ReactElement) {
+  return render(<SidebarProvider>{ui}</SidebarProvider>);
+}
 
 function req(id: string): Extract<ItemIpc, { type: "request" }> {
   return {
@@ -12,7 +18,7 @@ function req(id: string): Extract<ItemIpc, { type: "request" }> {
   };
 }
 const folder: Extract<ItemIpc, { type: "folder" }> = {
-  type: "folder", id: "f1", name: "Folder One", items: [req("r1")],
+  type: "folder", id: "f1", name: "Folder One", items: [req("r1")], expanded: false,
 };
 
 function makeCb(over: Partial<TreeCallbacks> = {}): TreeCallbacks {
@@ -29,32 +35,95 @@ function makeCb(over: Partial<TreeCallbacks> = {}): TreeCallbacks {
 
 describe("FolderNode", () => {
   it("hides children when collapsed, shows them when open", () => {
-    const { rerender } = render(<FolderNode collectionId="c1" folder={folder} depth={1} cb={makeCb()} />);
+    const { rerender } = renderWithSidebar(
+      <FolderNode collectionId="c1" folder={folder} cb={makeCb()} />,
+    );
     expect(screen.queryByText("r1")).toBeNull();
-    rerender(<FolderNode collectionId="c1" folder={folder} depth={1} cb={makeCb({ open: new Set(["f1"]) })} />);
+    rerender(
+      <SidebarProvider>
+        <FolderNode collectionId="c1" folder={folder} cb={makeCb({ open: new Set(["f1"]) })} />
+      </SidebarProvider>,
+    );
     expect(screen.getByText("r1")).toBeTruthy();
   });
 
-  it("toggles on name click", () => {
+  it("open children render inside a [data-sidebar=menu-sub]", () => {
+    renderWithSidebar(
+      <FolderNode collectionId="c1" folder={folder} cb={makeCb({ open: new Set(["f1"]) })} />,
+    );
+    const r1Node = screen.getByText("r1");
+    const menuSub = r1Node.closest("[data-sidebar='menu-sub']");
+    expect(menuSub).toBeTruthy();
+  });
+
+  it("open children's data-node-id is a descendant of [data-sidebar=menu-sub]", () => {
+    renderWithSidebar(
+      <FolderNode collectionId="c1" folder={folder} cb={makeCb({ open: new Set(["f1"]) })} />,
+    );
+    const r1Row = document.querySelector("[data-node-id='r1']");
+    expect(r1Row).toBeTruthy();
+    const menuSub = r1Row?.closest("[data-sidebar='menu-sub']");
+    expect(menuSub).toBeTruthy();
+  });
+
+  it("chevron click toggles", () => {
     const onToggle = vi.fn();
-    render(<FolderNode collectionId="c1" folder={folder} depth={1} cb={makeCb({ onToggle })} />);
-    fireEvent.click(screen.getByText("Folder One"));
+    renderWithSidebar(
+      <FolderNode collectionId="c1" folder={folder} cb={makeCb({ onToggle })} />,
+    );
+    fireEvent.click(screen.getByLabelText("toggle-folder"));
     expect(onToggle).toHaveBeenCalledWith("f1");
   });
 
-  it("menu offers Add request / Add folder / Rename / Delete", () => {
+  it("name click toggles", () => {
+    const onToggle = vi.fn();
+    renderWithSidebar(
+      <FolderNode collectionId="c1" folder={folder} cb={makeCb({ onToggle })} />,
+    );
+    fireEvent.click(screen.getByLabelText("expand-folder"));
+    expect(onToggle).toHaveBeenCalledWith("f1");
+  });
+
+  it("repeat name click toggles", () => {
+    const onToggle = vi.fn();
+    renderWithSidebar(
+      <FolderNode collectionId="c1" folder={folder} cb={makeCb({ onToggle })} />,
+    );
+    const expandBtn = screen.getByLabelText("expand-folder");
+    fireEvent.click(expandBtn);
+    fireEvent.click(expandBtn);
+    expect(onToggle).toHaveBeenCalledTimes(2);
+  });
+
+  it("double-click name triggers rename", () => {
+    const onEditingChange = vi.fn();
+    renderWithSidebar(
+      <FolderNode collectionId="c1" folder={folder} cb={makeCb({ onEditingChange })} />,
+    );
+    fireEvent.dblClick(screen.getByLabelText("expand-folder"));
+    expect(onEditingChange).toHaveBeenCalledWith("f1");
+  });
+
+  it("menu offers Add request / Add folder / Rename / Delete", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
     const onAddRequest = vi.fn();
     const onAddFolder = vi.fn();
     const onRequestDeleteItem = vi.fn();
-    render(<FolderNode collectionId="c1" folder={folder} depth={1} cb={makeCb({ onAddRequest, onAddFolder, onRequestDeleteItem })} />);
-    fireEvent.click(screen.getByLabelText("More options"));
-    fireEvent.click(screen.getByText("Add request"));
+    renderWithSidebar(
+      <FolderNode
+        collectionId="c1"
+        folder={folder}
+        cb={makeCb({ onAddRequest, onAddFolder, onRequestDeleteItem })}
+      />,
+    );
+    await user.click(screen.getByLabelText("More options"));
+    await user.click(screen.getByText("Add request"));
     expect(onAddRequest).toHaveBeenCalledWith("c1", "f1");
-    fireEvent.click(screen.getByLabelText("More options"));
-    fireEvent.click(screen.getByText("Add folder"));
+    await user.click(screen.getByLabelText("More options"));
+    await user.click(screen.getByText("Add folder"));
     expect(onAddFolder).toHaveBeenCalledWith("c1", "f1");
-    fireEvent.click(screen.getByLabelText("More options"));
-    fireEvent.click(screen.getByText("Delete"));
+    await user.click(screen.getByLabelText("More options"));
+    await user.click(screen.getByText("Delete"));
     expect(onRequestDeleteItem).toHaveBeenCalledWith("c1", "f1");
   });
 });

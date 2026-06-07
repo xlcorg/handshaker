@@ -202,6 +202,28 @@ impl AppState {
         }
         self.collection_store.upsert(c)
     }
+
+    /// Persist the `expanded` flag for a tree node. `item_id == None` targets the
+    /// collection root; `Some(id)` targets a folder within the tree.
+    pub fn collection_set_expanded_impl(
+        &self,
+        collection_id: &str,
+        item_id: Option<String>,
+        expanded: bool,
+    ) -> Result<(), CoreError> {
+        let cid = parse_collection_id(collection_id)?;
+        let mut c = self.require_collection(cid)?;
+        match item_id {
+            None => c.expanded = expanded,
+            Some(iid) => {
+                let iid = parse_item_id(&iid)?;
+                if !tree::set_expanded(&mut c.items, iid, expanded) {
+                    return Err(CoreError::InvalidTarget(format!("folder {iid:?} not found")));
+                }
+            }
+        }
+        self.collection_store.upsert(c)
+    }
 }
 
 // --- command wrappers -------------------------------------------------------
@@ -299,6 +321,17 @@ pub async fn collection_bump_usage(state: State<'_, AppState>, collection_id: St
     state.collection_bump_usage_impl(&collection_id, &item_id, used_at).map_err(IpcError::from)
 }
 
+#[tauri::command]
+#[specta::specta]
+pub async fn collection_set_expanded(
+    state: State<'_, AppState>,
+    collection_id: String,
+    item_id: Option<String>,
+    expanded: bool,
+) -> Result<(), IpcError> {
+    state.collection_set_expanded_impl(&collection_id, item_id, expanded).map_err(IpcError::from)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -317,6 +350,7 @@ mod tests {
             pinned: false,
             description: None,
             created_at: 0.0,
+            expanded: false,
         }
     }
 
@@ -341,6 +375,7 @@ mod tests {
             id: Uuid::from_u128(id).to_string(),
             name: name.into(),
             items: vec![],
+            expanded: false,
         })
     }
 
@@ -518,5 +553,27 @@ mod tests {
         };
         assert_eq!(req.last_used_at, Some(777.0));
         assert_eq!(req.use_count, 2);
+    }
+
+    #[test]
+    fn set_expanded_persists_collection_and_folder() {
+        let state = AppState::default();
+        state.collection_upsert_impl(empty_collection_ipc(1, "c")).unwrap();
+        state.collection_add_item_impl(&cid(1), None, folder_ipc(10, "f")).unwrap();
+        // collection-level (item_id = None)
+        state.collection_set_expanded_impl(&cid(1), None, true).unwrap();
+        assert!(state.collection_get_impl(&cid(1)).unwrap().expanded);
+        // folder-level
+        state.collection_set_expanded_impl(&cid(1), Some(cid(10)), true).unwrap();
+        let c = state.collection_get_impl(&cid(1)).unwrap();
+        assert!(matches!(&c.items[0], ItemIpc::Folder(f) if f.expanded));
+    }
+
+    #[test]
+    fn set_expanded_missing_folder_errors() {
+        let state = AppState::default();
+        state.collection_upsert_impl(empty_collection_ipc(1, "c")).unwrap();
+        let err = state.collection_set_expanded_impl(&cid(1), Some(cid(999)), true).unwrap_err();
+        assert!(matches!(err, CoreError::InvalidTarget(_)));
     }
 }

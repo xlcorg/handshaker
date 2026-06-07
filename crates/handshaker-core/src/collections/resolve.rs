@@ -94,6 +94,7 @@ mod tests {
             pinned: false,
             description: None,
             created_at: 0.0,
+            expanded: false,
         }
     }
 

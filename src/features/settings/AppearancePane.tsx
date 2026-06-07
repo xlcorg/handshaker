@@ -1,7 +1,7 @@
 import { SettingsGroup, SettingsRow } from "./SettingsDialog";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup } from "@/components/ui/toggle-group";
-import { usePrefs } from "@/lib/use-prefs";
+import { usePrefs, type GrpcIconStyle } from "@/lib/use-prefs";
 
 export function AppearancePane() {
   const [prefs, setPref] = usePrefs();
@@ -27,6 +27,17 @@ export function AppearancePane() {
               value={prefs.density}
               onValueChange={(v) => setPref("density", v as "compact" | "regular" | "cozy")}
               options={["compact", "regular", "cozy"]}
+            />
+          }
+        />
+        <SettingsRow
+          title="gRPC icon"
+          hint="Style of the gRPC method icon in the request list."
+          control={
+            <ToggleGroup
+              value={prefs.grpcIcon}
+              onValueChange={(v) => setPref("grpcIcon", v as GrpcIconStyle)}
+              options={["solid", "letter", "outline", "circle"]}
             />
           }
         />

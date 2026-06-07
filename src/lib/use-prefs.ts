@@ -5,13 +5,15 @@ export type Density = "compact" | "regular" | "cozy";
 export type SplitDir = "horizontal" | "vertical";
 export type FontUi = "inter" | "geist" | "system";
 export type FontMono = "jetbrains" | "geist-mono" | "ibm";
+export type GrpcIconStyle = "solid" | "letter" | "outline" | "circle";
 
 export interface Prefs {
   theme: ThemeMode;
   density: Density;
   sidebar: boolean;
-  /** Sidebar width in px (resizable, persisted). Clamped to [200, 600] by the shell. */
-  sidebarWidth: number;
+  /** Sidebar panel size as a percent of the window (resizable, persisted). Clamped to [12, 40]
+   *  by the ResizablePanel. */
+  sidebarPanel: number;
   split: SplitDir;
   fontUi: FontUi;
   fontMono: FontMono;
@@ -20,19 +22,21 @@ export interface Prefs {
   zoom: number;
   /** Per-request deadline in ms, applied backend-side via tokio timeout. */
   requestTimeoutMs: number;
+  grpcIcon: GrpcIconStyle;
 }
 
 export const PREFS_DEFAULTS: Prefs = {
   theme: "dark",
   density: "regular",
   sidebar: true,
-  sidebarWidth: 256,
+  sidebarPanel: 18,
   split: "horizontal",
   fontUi: "inter",
   fontMono: "jetbrains",
   dots: true,
   zoom: 1,
   requestTimeoutMs: 30000,
+  grpcIcon: "solid",
 };
 
 export const ZOOM_MIN = 0.5;

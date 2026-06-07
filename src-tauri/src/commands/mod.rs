@@ -4,4 +4,5 @@ pub mod env;
 pub mod events;
 pub mod grpc;
 pub mod meta;
+pub mod ui_state;
 pub mod vars;

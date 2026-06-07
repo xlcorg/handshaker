@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import type { CollectionIpc, SavedRequestIpc } from "@/ipc/bindings";
 import { CollectionNode } from "./CollectionNode";
 import { ConfirmDeleteDialog } from "./ConfirmDeleteDialog";
-import { allContainerIds, flattenVisible, pathToItem } from "./treeNav";
+import { allContainerIds, expandedIds, flattenVisible, pathToItem } from "./treeNav";
 import { planDrop, type DragData, type DropTarget, type DropZone } from "./dnd";
 import type { TreeCallbacks } from "./treeTypes";
+import { SidebarMenu } from "@/components/ui/sidebar";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 export interface CollectionTreeProps {
   collections: CollectionIpc[]; // already sorted + filtered by SidebarShell
@@ -30,7 +32,10 @@ export interface CollectionTreeProps {
     parentId: string | null,
     position: number,
   ) => void;
+  onSetExpanded: (collectionId: string, itemId: string | null, expanded: boolean) => void;
 }
+
+const AUTO_EXPAND_MS = 700;
 
 type DeleteTarget =
   | { kind: "item"; collectionId: string; itemId: string }
@@ -43,6 +48,19 @@ export function CollectionTree(props: CollectionTreeProps) {
   const [delTarget, setDelTarget] = useState<DeleteTarget | null>(null);
   const [drag, setDrag] = useState<DragData | null>(null);
   const [dropHint, setDropHint] = useState<{ id: string; zone: DropZone } | null>(null);
+  const seededRef = useRef(false);
+  const autoExpandRef = useRef<{ id: string | null; timer: ReturnType<typeof setTimeout> | null }>({
+    id: null,
+    timer: null,
+  });
+
+  // Seed open-state once from persisted expanded flags. After this, user toggles
+  // own the set, so later reloads must not re-seed.
+  useEffect(() => {
+    if (seededRef.current || collections.length === 0) return;
+    seededRef.current = true;
+    setOpen(new Set(expandedIds(collections)));
+  }, [collections]);
 
   // While filtering, treat everything as expanded.
   const effectiveOpen = useMemo(
@@ -64,6 +82,14 @@ export function CollectionTree(props: CollectionTreeProps) {
     if (focusedId && !visible.some((n) => n.id === focusedId)) setFocusedId(null);
   }, [visible, focusedId]);
 
+  const persistExpanded = (id: string, expanded: boolean) => {
+    const path = pathToItem(collections, id);
+    if (!path) return;
+    const collectionId = path[0];
+    const itemId = id === collectionId ? null : id;
+    props.onSetExpanded(collectionId, itemId, expanded);
+  };
+
   const setOpenId = (id: string, want: boolean) =>
     setOpen((prev) => {
       const next = new Set(prev);
@@ -72,13 +98,21 @@ export function CollectionTree(props: CollectionTreeProps) {
       return next;
     });
 
-  const toggle = (id: string) =>
-    setOpen((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  const toggle = (id: string) => {
+    const next = !open.has(id);
+    setOpenId(id, next);
+    persistExpanded(id, next);
+  };
+
+  const expand = (id: string) => {
+    setOpenId(id, true);
+    persistExpanded(id, true);
+  };
+
+  const collapse = (id: string) => {
+    setOpenId(id, false);
+    persistExpanded(id, false);
+  };
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (editingId) return; // rename input owns the keyboard
@@ -99,11 +133,11 @@ export function CollectionTree(props: CollectionTreeProps) {
       }
       case "ArrowRight":
         e.preventDefault();
-        if (cur && cur.kind !== "request") setOpenId(cur.id, true);
+        if (cur && cur.kind !== "request") expand(cur.id);
         break;
       case "ArrowLeft":
         e.preventDefault();
-        if (cur && cur.kind !== "request") setOpenId(cur.id, false);
+        if (cur && cur.kind !== "request") collapse(cur.id);
         break;
       case "Enter":
         e.preventDefault();
@@ -119,16 +153,45 @@ export function CollectionTree(props: CollectionTreeProps) {
     }
   };
 
+  const clearAutoExpand = () => {
+    if (autoExpandRef.current.timer) clearTimeout(autoExpandRef.current.timer);
+    autoExpandRef.current = { id: null, timer: null };
+  };
+
+  // Tear down any pending auto-expand timer on unmount.
+  useEffect(() => () => clearAutoExpand(), []);
+
   const onDragStartItem = (d: DragData) => setDrag(d);
   const onDragEndItem = () => {
+    clearAutoExpand();
     setDrag(null);
     setDropHint(null);
   };
   const onDragOverRow = (target: DropTarget, zone: DropZone) => {
     if (!drag) return;
     setDropHint({ id: target.id, zone });
+
+    // Postman-style: hovering a collapsed container during a drag auto-expands it.
+    if (target.kind === "request") {
+      clearAutoExpand(); // leaves never auto-expand
+      return;
+    }
+    const isCollapsed = !effectiveOpen.has(target.id);
+    if (!isCollapsed) {
+      clearAutoExpand(); // already open — nothing to schedule
+      return;
+    }
+    if (autoExpandRef.current.id === target.id) return; // timer already armed for this target
+    clearAutoExpand();
+    autoExpandRef.current.id = target.id;
+    autoExpandRef.current.timer = setTimeout(() => {
+      setOpenId(target.id, true);
+      persistExpanded(target.id, true);
+      autoExpandRef.current = { id: null, timer: null };
+    }, AUTO_EXPAND_MS);
   };
   const onDropRow = (target: DropTarget, zone: DropZone) => {
+    clearAutoExpand();
     const d = drag;
     setDrag(null);
     setDropHint(null);
@@ -180,16 +243,22 @@ export function CollectionTree(props: CollectionTreeProps) {
   };
 
   return (
-    <div
-      role="tree"
-      tabIndex={0}
-      aria-label="collections-tree"
-      onKeyDown={onKeyDown}
-      className="min-h-0 flex-1 overflow-auto py-1 outline-none"
-    >
-      {collections.map((c) => (
-        <CollectionNode key={c.id} col={c} cb={cb} />
-      ))}
+    <>
+      <ScrollArea className="min-h-0 flex-1">
+        <div
+          role="tree"
+          tabIndex={0}
+          aria-label="collections-tree"
+          onKeyDown={onKeyDown}
+          className="py-1 outline-none"
+        >
+          <SidebarMenu>
+            {collections.map((c) => (
+              <CollectionNode key={c.id} col={c} cb={cb} />
+            ))}
+          </SidebarMenu>
+        </div>
+      </ScrollArea>
 
       <ConfirmDeleteDialog
         open={delTarget !== null}
@@ -200,6 +269,6 @@ export function CollectionTree(props: CollectionTreeProps) {
           if (!o) setDelTarget(null);
         }}
       />
-    </div>
+    </>
   );
 }

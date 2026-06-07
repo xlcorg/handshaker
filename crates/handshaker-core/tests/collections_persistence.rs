@@ -40,6 +40,7 @@ fn collection_tree_survives_restart() {
             id: ItemId(Uuid::from_u128(1)),
             name: "Users".into(),
             items: vec![],
+            expanded: false,
         })],
         variables: HashMap::new(),
         auth: SavedAuthConfig::None,
@@ -48,6 +49,7 @@ fn collection_tree_survives_restart() {
         pinned: false,
         description: None,
         created_at: 0.0,
+        expanded: false,
     };
 
     // Add a request under the folder, then persist.

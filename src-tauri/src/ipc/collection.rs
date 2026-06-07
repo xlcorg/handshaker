@@ -107,6 +107,7 @@ pub struct FolderIpc {
     pub id: String,
     pub name: String,
     pub items: Vec<ItemIpc>,
+    pub expanded: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -138,6 +139,7 @@ impl ItemIpc {
                 id: f.id.0.to_string(),
                 name: f.name,
                 items: f.items.into_iter().map(ItemIpc::from_core).collect(),
+                expanded: f.expanded,
             }),
             Item::Request(r) => Self::Request(SavedRequestIpc {
                 id: r.id.0.to_string(),
@@ -163,6 +165,7 @@ impl ItemIpc {
                     id: parse_item_id(&f.id)?,
                     name: f.name,
                     items,
+                    expanded: f.expanded,
                 }))
             }
             Self::Request(r) => Ok(Item::Request(SavedRequest {
@@ -196,6 +199,7 @@ pub struct CollectionIpc {
     pub pinned: bool,
     pub description: Option<String>,
     pub created_at: f64,
+    pub expanded: bool,
 }
 
 impl CollectionIpc {
@@ -211,6 +215,7 @@ impl CollectionIpc {
             pinned: c.pinned,
             description: c.description,
             created_at: c.created_at,
+            expanded: c.expanded,
         }
     }
 
@@ -227,6 +232,7 @@ impl CollectionIpc {
             pinned: self.pinned,
             description: self.description,
             created_at: self.created_at,
+            expanded: self.expanded,
         })
     }
 }
@@ -285,6 +291,7 @@ mod tests {
                     last_used_at: Some(123.0),
                     use_count: 4,
                 })],
+                expanded: true,
             })],
             variables: HashMap::new(),
             auth: SavedAuthConfig::None,
@@ -293,6 +300,7 @@ mod tests {
             pinned: true,
             description: Some("d".into()),
             created_at: 1_700_000_000_000.0,
+            expanded: true,
         }
     }
 
@@ -324,6 +332,7 @@ mod tests {
             pinned: false,
             description: None,
             created_at: 0.0,
+            expanded: false,
         };
         assert!(matches!(ipc.into_core().unwrap_err(), CoreError::InvalidTarget(_)));
     }

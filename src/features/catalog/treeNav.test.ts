@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { CollectionIpc, ItemIpc, SavedRequestIpc } from "@/ipc/bindings";
-import { countRequests, allContainerIds, pathToItem, flattenVisible, pathNamesToItem } from "./treeNav";
+import { countRequests, allContainerIds, expandedIds, pathToItem, flattenVisible, pathNamesToItem, findSavedRequest } from "./treeNav";
 
 function req(id: string, name = id): Extract<ItemIpc, { type: "request" }> {
   return {
@@ -10,12 +10,12 @@ function req(id: string, name = id): Extract<ItemIpc, { type: "request" }> {
   };
 }
 function folder(id: string, items: ItemIpc[]): Extract<ItemIpc, { type: "folder" }> {
-  return { type: "folder", id, name: id, items };
+  return { type: "folder", id, name: id, items, expanded: false };
 }
 function col(id: string, items: ItemIpc[]): CollectionIpc {
   return {
     id, name: id, items, variables: {}, auth: { kind: "none" }, default_tls: false,
-    skip_tls_verify: false, pinned: false, description: null, created_at: 0,
+    skip_tls_verify: false, pinned: false, description: null, created_at: 0, expanded: false,
   };
 }
 
@@ -36,6 +36,34 @@ describe("countRequests", () => {
 describe("allContainerIds", () => {
   it("collects every collection and folder id (not requests)", () => {
     expect(allContainerIds(tree).sort()).toEqual(["c1", "c2", "f1", "f2"]);
+  });
+});
+
+describe("expandedIds", () => {
+  function efolder(id: string, items: ItemIpc[], expanded: boolean): Extract<ItemIpc, { type: "folder" }> {
+    return { type: "folder", id, name: id, items, expanded };
+  }
+  function ecol(id: string, items: ItemIpc[], expanded: boolean): CollectionIpc {
+    return {
+      id, name: id, items, variables: {}, auth: { kind: "none" }, default_tls: false,
+      skip_tls_verify: false, pinned: false, description: null, created_at: 0, expanded,
+    };
+  }
+
+  it("returns exactly the container ids whose expanded flag is true (recursive)", () => {
+    const t: CollectionIpc[] = [
+      ecol("c1", [
+        req("r1"),
+        efolder("f1", [req("r2"), efolder("f2", [req("r3")], true)], true),
+        efolder("f3", [], false),
+      ], true),
+      ecol("c2", [req("r4")], false),
+    ];
+    expect(expandedIds(t).sort()).toEqual(["c1", "f1", "f2"]);
+  });
+
+  it("returns an empty array when nothing is expanded", () => {
+    expect(expandedIds(tree)).toEqual([]);
   });
 });
 
@@ -78,6 +106,23 @@ describe("pathNamesToItem", () => {
 
   it("returns null for a null id", () => {
     expect(pathNamesToItem(tree, null)).toBeNull();
+  });
+});
+
+describe("findSavedRequest", () => {
+  it("finds a top-level request in the named collection", () => {
+    expect(findSavedRequest(tree, "c1", "r1")?.id).toBe("r1");
+    expect(findSavedRequest(tree, "c2", "r4")?.id).toBe("r4");
+  });
+  it("finds a request nested in folders", () => {
+    expect(findSavedRequest(tree, "c1", "r3")?.id).toBe("r3");
+  });
+  it("returns null when the collection is missing", () => {
+    expect(findSavedRequest(tree, "nope", "r1")).toBeNull();
+  });
+  it("returns null when the item is missing in that collection", () => {
+    expect(findSavedRequest(tree, "c1", "r4")).toBeNull();
+    expect(findSavedRequest(tree, "c1", "f1")).toBeNull(); // folder is not a request
   });
 });
 

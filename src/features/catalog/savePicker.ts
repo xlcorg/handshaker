@@ -28,6 +28,7 @@ function emptyCollection(id: string, name: string): CollectionIpc {
     pinned: false,
     description: null,
     created_at: 0,
+    expanded: false,
   };
 }
 
@@ -51,6 +52,7 @@ export function augmentTree(
       id: pf.tempId,
       name: pf.name,
       items: [],
+      expanded: false,
     });
   }
   return tree;

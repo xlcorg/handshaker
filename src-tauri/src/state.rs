@@ -10,11 +10,20 @@ use handshaker_core::env::in_memory::InMemoryEnvironmentStore;
 use handshaker_core::env::EnvironmentStore;
 use handshaker_core::error::CoreError;
 use handshaker_core::grpc::{ContractCache, FileContractCache, InMemoryContractCache};
+use handshaker_core::ui_state::FileUiStateStore;
 use tokio::sync::{Notify, RwLock};
 
 /// Per-request cancel registry: `request_id` → `Notify` fired by `grpc_cancel`.
 /// std `Mutex` — locked only for insert/remove/lookup, never across `.await`.
 pub type InFlight = Mutex<HashMap<String, Arc<Notify>>>;
+
+/// Process-unique suffix for the throwaway `default()` ui-state dir. Combines the
+/// pid with a monotonic counter so concurrent `default()` instances never collide.
+fn unique_temp_suffix() -> String {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    format!("{}-{}", std::process::id(), COUNTER.fetch_add(1, Ordering::Relaxed))
+}
 
 pub struct AppState {
     /// Environment store. Cold boot: empty.
@@ -29,18 +38,30 @@ pub struct AppState {
     /// Descriptor/contract cache. File-backed in `load` (persists across restarts, B7);
     /// in-memory under `default()`.
     pub contract_cache: Arc<dyn ContractCache>,
+    /// Persisted UI state (sort key + active request). File-backed
+    /// in `load`; under `default()` it points at a throwaway unique temp dir (the
+    /// store has no in-memory variant, so isolation per-instance is the next best
+    /// thing for tests).
+    pub ui_state_store: Arc<FileUiStateStore>,
     /// In-flight gRPC requests: `request_id` → cancellation `Notify`.
     pub in_flight: InFlight,
 }
 
 impl Default for AppState {
     fn default() -> Self {
+        // `FileUiStateStore` has no in-memory variant, so isolate each `default()`
+        // instance behind a unique throwaway dir under the OS temp dir. The dir is
+        // created lazily on first `set`; tests only need read-after-write isolation.
+        let ui_dir = std::env::temp_dir().join(format!("handshaker-ui-state-{}", unique_temp_suffix()));
         Self {
             env_store: Arc::new(InMemoryEnvironmentStore::new()),
             active_env: RwLock::new(None),
             active_env_path: None,
             collection_store: Arc::new(InMemoryCollectionStore::new()),
             contract_cache: Arc::new(InMemoryContractCache::new()),
+            ui_state_store: Arc::new(
+                FileUiStateStore::load(&ui_dir).expect("temp ui-state store load"),
+            ),
             in_flight: Mutex::new(HashMap::new()),
         }
     }
@@ -68,6 +89,7 @@ impl AppState {
             active_env_path: Some(active_env_path),
             collection_store: Arc::new(collection_store),
             contract_cache: Arc::new(FileContractCache::load(data_dir.join("contracts"))?),
+            ui_state_store: Arc::new(FileUiStateStore::load(data_dir)?),
             in_flight: Mutex::new(HashMap::new()),
         })
     }

@@ -123,12 +123,16 @@ mod tests {
                 })
                 .unwrap();
         }
+        let ui_dir = tempfile::tempdir().unwrap().keep();
         AppState {
             env_store: Arc::new(store),
             active_env: RwLock::new(active.map(|s| s.to_string())),
             active_env_path: None,
             collection_store: Arc::new(InMemoryCollectionStore::new()),
             contract_cache: Arc::new(InMemoryContractCache::new()),
+            ui_state_store: Arc::new(
+                handshaker_core::ui_state::FileUiStateStore::load(&ui_dir).unwrap(),
+            ),
             in_flight: std::sync::Mutex::new(std::collections::HashMap::new()),
         }
     }

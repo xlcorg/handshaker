@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
+
+import { Input } from "@/components/ui/input";
 
 export interface RenameInputProps {
   initial: string;
@@ -10,12 +12,6 @@ export interface RenameInputProps {
  *  Esc = cancel. Clicks are stopped so they don't bubble to the row's open handler. */
 export function RenameInput({ initial, onCommit, onCancel }: RenameInputProps) {
   const [value, setValue] = useState(initial);
-  const ref = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    ref.current?.focus();
-    ref.current?.select();
-  }, []);
 
   const commit = () => {
     const v = value.trim();
@@ -24,10 +20,11 @@ export function RenameInput({ initial, onCommit, onCancel }: RenameInputProps) {
   };
 
   return (
-    <input
-      ref={ref}
+    <Input
+      autoFocus
       value={value}
       aria-label="rename-input"
+      onFocus={(e) => e.currentTarget.select()}
       onChange={(e) => setValue(e.target.value)}
       onBlur={commit}
       onClick={(e) => e.stopPropagation()}
@@ -41,7 +38,7 @@ export function RenameInput({ initial, onCommit, onCancel }: RenameInputProps) {
           onCancel();
         }
       }}
-      className="h-5 min-w-0 flex-1 rounded border border-border bg-background px-1 text-xs"
+      className="h-6 min-w-0 flex-1 px-1 text-xs"
     />
   );
 }

@@ -13,6 +13,7 @@ vi.mock("@/ipc/client", () => ({
     collectionDuplicateItem: vi.fn(),
     collectionMoveItem: vi.fn(),
     collectionMoveItemAcross: vi.fn(),
+    collectionSetExpanded: vi.fn(),
   },
 }));
 
@@ -26,7 +27,7 @@ import { useCatalogTree } from "./useCatalogTree";
 function col(id: string, name = id): CollectionIpc {
   return {
     id, name, items: [], variables: {}, auth: { kind: "none" }, default_tls: false,
-    skip_tls_verify: false, pinned: false, description: null, created_at: 0,
+    skip_tls_verify: false, pinned: false, description: null, created_at: 0, expanded: false,
   };
 }
 
@@ -168,7 +169,7 @@ describe("optimistic mutations + rollback", () => {
         method: "m", body_template: "{}", metadata: [], auth: { kind: "none" },
         tls_override: null, last_used_at: null, use_count: 0,
       });
-      await result.current.addItem("c1", null, { type: "folder", id: "f9", name: "F", items: [] });
+      await result.current.addItem("c1", null, { type: "folder", id: "f9", name: "F", items: [], expanded: false });
     });
     expect(toast).not.toHaveBeenCalledWith(expect.anything(), "success");
   });
@@ -178,6 +179,47 @@ describe("optimistic mutations + rollback", () => {
     vi.mocked(ipc.collectionDeleteItem).mockResolvedValue(null);
     await act(async () => { await result.current.deleteItem("c1", "r1"); });
     expect(toast).toHaveBeenCalledWith("Request deleted", "success");
+  });
+});
+
+describe("useCatalogTree setExpanded", () => {
+  async function loadedWithFolder() {
+    vi.mocked(ipc.collectionList).mockResolvedValue([{ id: "c1", name: "c1" }]);
+    vi.mocked(ipc.collectionGet).mockResolvedValue({
+      ...col("c1"),
+      items: [{ type: "folder", id: "f1", name: "f1", items: [], expanded: false }],
+    });
+    const hook = renderHook(() => useCatalogTree());
+    await waitFor(() => expect(hook.result.current.loading).toBe(false));
+    return hook;
+  }
+
+  it("flips a folder's flag locally and calls collectionSetExpanded", async () => {
+    const { result } = await loadedWithFolder();
+    vi.mocked(ipc.collectionSetExpanded).mockResolvedValue(undefined);
+    await act(async () => { await result.current.setExpanded("c1", "f1", true); });
+    const f1 = result.current.tree[0].items[0] as Extract<typeof result.current.tree[0]["items"][number], { type: "folder" }>;
+    expect(f1.expanded).toBe(true);
+    expect(ipc.collectionSetExpanded).toHaveBeenCalledWith("c1", "f1", true);
+  });
+
+  it("flips the collection's flag with a null itemId", async () => {
+    const { result } = await loadedWithFolder();
+    vi.mocked(ipc.collectionSetExpanded).mockResolvedValue(undefined);
+    await act(async () => { await result.current.setExpanded("c1", null, true); });
+    expect(result.current.tree[0].expanded).toBe(true);
+    expect(ipc.collectionSetExpanded).toHaveBeenCalledWith("c1", null, true);
+  });
+
+  it("rolls back when collectionSetExpanded rejects", async () => {
+    const { result } = await loadedWithFolder();
+    vi.mocked(ipc.collectionSetExpanded).mockRejectedValue({ message: "boom" });
+    await act(async () => {
+      await expect(result.current.setExpanded("c1", "f1", true)).rejects.toBeTruthy();
+    });
+    const f1 = result.current.tree[0].items[0] as Extract<typeof result.current.tree[0]["items"][number], { type: "folder" }>;
+    expect(f1.expanded).toBe(false); // reverted
+    expect(toast).toHaveBeenCalledWith("Couldn't save expansion", "error");
   });
 });
 
@@ -192,7 +234,7 @@ describe("useCatalogTree move", () => {
   async function loadedTwo() {
     const c1 = {
       ...col("c1"),
-      items: [{ type: "folder", id: "f1", name: "f1", items: [] }, reqItem("r3")],
+      items: [{ type: "folder", id: "f1", name: "f1", items: [], expanded: false }, reqItem("r3")],
     } as CollectionIpc;
     const c2 = col("c2");
     vi.mocked(ipc.collectionList).mockResolvedValue([

@@ -49,7 +49,7 @@ function req(over: Partial<SavedRequestIpc> = {}): ItemIpc {
 }
 
 function folder(name: string, items: ItemIpc[], id = name): ItemIpc {
-  return { type: "folder", id, name, items };
+  return { type: "folder", id, name, items, expanded: false };
 }
 
 function col(over: Partial<CollectionIpc> = {}): CollectionIpc {
@@ -64,6 +64,7 @@ function col(over: Partial<CollectionIpc> = {}): CollectionIpc {
     pinned: false,
     description: null,
     created_at: 0,
+    expanded: false,
     ...over,
   };
 }

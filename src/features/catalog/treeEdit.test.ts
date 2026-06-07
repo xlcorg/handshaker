@@ -3,7 +3,7 @@ import type { CollectionIpc, ItemIpc, SavedRequestIpc } from "@/ipc/bindings";
 import {
   renameItemInTree, removeItemFromTree, insertItemInTree,
   renameCollectionInTree, setCollectionPinned, removeCollectionFromTree,
-  replaceItemInTree, moveItemWithinTree, moveItemAcrossTree,
+  replaceItemInTree, moveItemWithinTree, moveItemAcrossTree, setNodeExpanded,
 } from "./treeEdit";
 
 function req(id: string, name = id): Extract<ItemIpc, { type: "request" }> {
@@ -15,12 +15,12 @@ function req(id: string, name = id): Extract<ItemIpc, { type: "request" }> {
 }
 const reqItem = req; // alias: move-helper tests use reqItem (same shape as req)
 function folder(id: string, items: ItemIpc[]): Extract<ItemIpc, { type: "folder" }> {
-  return { type: "folder", id, name: id, items };
+  return { type: "folder", id, name: id, items, expanded: false };
 }
 function col(id: string, items: ItemIpc[]): CollectionIpc {
   return {
     id, name: id, items, variables: {}, auth: { kind: "none" }, default_tls: false,
-    skip_tls_verify: false, pinned: false, description: null, created_at: 0,
+    skip_tls_verify: false, pinned: false, description: null, created_at: 0, expanded: false,
   };
 }
 const tree = (): CollectionIpc[] => [
@@ -110,14 +110,40 @@ describe("replaceItemInTree", () => {
   });
 });
 
+describe("setNodeExpanded", () => {
+  it("flips the collection's expanded flag when itemId is null", () => {
+    const before = tree();
+    const after = setNodeExpanded(before, "c1", null, true);
+    expect(after[0].expanded).toBe(true);
+    expect(after[1].expanded).toBe(false); // unrelated collection untouched
+    expect(before[0].expanded).toBe(false); // input not mutated
+  });
+
+  it("flips a nested folder's expanded flag", () => {
+    const before = tree();
+    const after = setNodeExpanded(before, "c1", "f1", true);
+    const f1 = after[0].items.find((i) => i.id === "f1") as Extract<ItemIpc, { type: "folder" }>;
+    expect(f1.expanded).toBe(true);
+    const f1Before = before[0].items.find((i) => i.id === "f1") as Extract<ItemIpc, { type: "folder" }>;
+    expect(f1Before.expanded).toBe(false); // input not mutated
+  });
+
+  it("leaves request items unchanged if their id is passed", () => {
+    const after = setNodeExpanded(tree(), "c1", "r1", true);
+    const r1 = after[0].items.find((i) => i.id === "r1") as Extract<ItemIpc, { type: "request" }>;
+    expect(r1.type).toBe("request");
+    expect("expanded" in r1).toBe(false);
+  });
+});
+
 describe("moveItemWithinTree", () => {
   // c1: [ f1{ r2 }, r3, r4 ]
   const base = (): CollectionIpc[] => [
     {
       id: "c1", name: "c1", variables: {}, auth: { kind: "none" }, default_tls: false,
-      skip_tls_verify: false, pinned: false, description: null, created_at: 0,
+      skip_tls_verify: false, pinned: false, description: null, created_at: 0, expanded: false,
       items: [
-        { type: "folder", id: "f1", name: "f1", items: [reqItem("r2")] },
+        { type: "folder", id: "f1", name: "f1", items: [reqItem("r2")], expanded: false },
         reqItem("r3"),
         reqItem("r4"),
       ],
@@ -146,13 +172,13 @@ describe("moveItemAcrossTree", () => {
   const base = (): CollectionIpc[] => [
     {
       id: "c1", name: "c1", variables: {}, auth: { kind: "none" }, default_tls: false,
-      skip_tls_verify: false, pinned: false, description: null, created_at: 0,
+      skip_tls_verify: false, pinned: false, description: null, created_at: 0, expanded: false,
       items: [reqItem("r2")],
     },
     {
       id: "c2", name: "c2", variables: {}, auth: { kind: "none" }, default_tls: false,
-      skip_tls_verify: false, pinned: false, description: null, created_at: 0,
-      items: [{ type: "folder", id: "f5", name: "f5", items: [] }],
+      skip_tls_verify: false, pinned: false, description: null, created_at: 0, expanded: false,
+      items: [{ type: "folder", id: "f5", name: "f5", items: [], expanded: false }],
     },
   ];
 

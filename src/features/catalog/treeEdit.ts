@@ -83,6 +83,24 @@ export function setCollectionPinned(
   return mapCollection(tree, collectionId, (c) => ({ ...c, pinned }));
 }
 
+/** Set a container's expanded flag: `itemId === null` targets the collection, else a folder. */
+export function setNodeExpanded(
+  tree: CollectionIpc[],
+  collectionId: string,
+  itemId: string | null,
+  expanded: boolean,
+): CollectionIpc[] {
+  if (itemId === null) {
+    return mapCollection(tree, collectionId, (c) => ({ ...c, expanded }));
+  }
+  return mapCollection(tree, collectionId, (c) => ({
+    ...c,
+    items: mapItemsDeep(c.items, itemId, (it) =>
+      it.type === "folder" ? { ...it, expanded } : it,
+    ),
+  }));
+}
+
 /** Swap a saved request's content fields in place, preserving id/name/usage/type. */
 export function replaceItemInTree(
   tree: CollectionIpc[],

@@ -236,9 +236,36 @@ async collectionSetNodeAuth(collectionId: string, itemId: string | null, config:
     else return { status: "error", error: e  as any };
 }
 },
+async collectionSetExpanded(collectionId: string, itemId: string | null, expanded: boolean) : Promise<Result<null, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("collection_set_expanded", { collectionId, itemId, expanded }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async collectionBumpUsage(collectionId: string, itemId: string, usedAt: number) : Promise<Result<null, IpcError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("collection_bump_usage", { collectionId, itemId, usedAt }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async appSettingsGet() : Promise<Result<UiStateIpc, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("app_settings_get") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Replaces the entire persisted UI state — callers send the complete object, not a partial patch.
+ */
+async appSettingsSet(patch: UiStateIpc) : Promise<Result<null, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("app_settings_set", { patch }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -261,9 +288,10 @@ contractUpdated: "contract-updated"
 
 /** user-defined types **/
 
+export type ActiveRequestRefIpc = { collection_id: string; item_id: string }
 export type AppVersion = { version: string }
 export type AuthCredentialsIpc = { header_name: string; header_value: string }
-export type CollectionIpc = { id: string; name: string; items: ItemIpc[]; variables: Partial<{ [key in string]: string }>; auth: SavedAuthConfigIpc; default_tls: boolean; skip_tls_verify: boolean; pinned: boolean; description: string | null; created_at: number }
+export type CollectionIpc = { id: string; name: string; items: ItemIpc[]; variables: Partial<{ [key in string]: string }>; auth: SavedAuthConfigIpc; default_tls: boolean; skip_tls_verify: boolean; pinned: boolean; description: string | null; created_at: number; expanded: boolean }
 /**
  * Lightweight list entry (id + name only) for `collection_list`.
  */
@@ -277,7 +305,7 @@ export type ContractUpdated = {
  */
 target_key: string }
 export type EnvironmentIpc = { name: string; variables: Partial<{ [key in string]: string }>; color: string | null }
-export type FolderIpc = { id: string; name: string; items: ItemIpc[] }
+export type FolderIpc = { id: string; name: string; items: ItemIpc[]; expanded: boolean }
 export type GrpcTargetIpc = { address: string; tls: boolean; skip_verify: boolean }
 export type InvokeOutcomeIpc = { status_code: number; status_message: string; response_json: string | null; trailing_metadata: Partial<{ [key in string]: string }>; 
 /**
@@ -299,6 +327,7 @@ export type SavedAuthConfigIpc = { kind: "none" } | { kind: "env_var"; env_var: 
 export type SavedRequestIpc = { id: string; name: string; address_template: string; service: string; method: string; body_template: string; metadata: MetadataRowIpc[]; auth: SavedAuthConfigIpc; tls_override: boolean | null; last_used_at: number | null; use_count: number }
 export type ServiceCatalogIpc = { services: ServiceEntryIpc[] }
 export type ServiceEntryIpc = { full_name: string; methods: MethodEntryIpc[] }
+export type UiStateIpc = { sort_key: string | null; active_request: ActiveRequestRefIpc | null }
 
 /** tauri-specta globals **/
 

@@ -1,8 +1,16 @@
-import { useEffect, useRef, useState } from "react";
-import { FolderPlus, Plus } from "lucide-react";
+import { useEffect, useState } from "react";
+import { FilePlus, FolderPlus, Plus, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { readPrefs, usePrefs } from "@/lib/use-prefs";
+import { Tooltip } from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Sidebar, SidebarHeader, SidebarContent, SidebarGroupLabel } from "@/components/ui/sidebar";
+import { SettingsDialog } from "@/features/settings/SettingsDialog";
 import { newId } from "@/lib/ids";
 import type { ItemIpc, SavedRequestIpc } from "@/ipc/bindings";
 import { useCatalog } from "./CatalogProvider";
@@ -10,9 +18,7 @@ import { newRequestDraft, openSavedRequest } from "./actions";
 import { filterCollections, sortCollections, type SortKey } from "./sort";
 import { SortControl } from "./SortControl";
 import { CollectionTree } from "./CollectionTree";
-
-const MIN_WIDTH = 200;
-const MAX_WIDTH = 600;
+import { loadUiState, patchUiState } from "./uiState";
 
 export interface SidebarShellProps {
   /** Open a collection's overview (CollectionOverview lands in plan-07). */
@@ -21,37 +27,41 @@ export interface SidebarShellProps {
   onOpenRequest?: (collectionId: string, req: SavedRequestIpc) => void;
   /** Start a new request draft (default: direct `newRequestDraft`). Lets a parent guard it. */
   onAddRequest?: () => void;
+  /** Id of the currently-open saved request, highlighted in the tree. */
+  activeItemId?: string | null;
 }
 
-export function SidebarShell({ onOpenCollection, onOpenRequest, onAddRequest }: SidebarShellProps) {
+export function SidebarShell({
+  onOpenCollection,
+  onOpenRequest,
+  onAddRequest,
+  activeItemId = null,
+}: SidebarShellProps) {
   const openRequest = onOpenRequest ?? openSavedRequest;
   const addRequest = onAddRequest ?? newRequestDraft;
-  const [prefs, setPref] = usePrefs();
   const cat = useCatalog();
   const [filter, setFilter] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("alpha");
   const [editingId, setEditingId] = useState<string | null>(null);
-  const dragRef = useRef<{ startX: number; startW: number } | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
-  // Ctrl/Cmd+B toggles sidebar visibility.
+  // Restore the persisted sort key once on mount (via the shared uiState cache).
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && (e.key === "b" || e.key === "B")) {
-        e.preventDefault();
-        setPref("sidebar", !readPrefs().sidebar);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [setPref]);
+    void loadUiState().then((s) => {
+      if (s.sort_key) setSortKey(s.sort_key as SortKey);
+    });
+  }, []);
 
-  if (!prefs.sidebar) return null;
+  const onChangeSort = (k: SortKey) => {
+    setSortKey(k);
+    void patchUiState({ sort_key: k });
+  };
 
   const filterActive = filter.trim().length > 0;
   const visible = sortCollections(filterCollections(cat.tree, filter), sortKey);
 
   const onAddFolder = (collectionId: string, parentId: string | null) => {
-    const item: ItemIpc = { type: "folder", id: newId(), name: "New folder", items: [] };
+    const item: ItemIpc = { type: "folder", id: newId(), name: "New folder", items: [], expanded: false };
     void cat.addItem(collectionId, parentId, item);
     setEditingId(item.id);
   };
@@ -61,78 +71,78 @@ export function SidebarShell({ onOpenCollection, onOpenRequest, onAddRequest }: 
     setEditingId(id);
   };
 
-  const onResizePointerDown = (e: React.PointerEvent) => {
-    dragRef.current = { startX: e.clientX, startW: prefs.sidebarWidth };
-    const onMove = (ev: PointerEvent) => {
-      if (!dragRef.current) return;
-      const w = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, dragRef.current.startW + (ev.clientX - dragRef.current.startX)));
-      setPref("sidebarWidth", w);
-    };
-    const onUp = () => {
-      dragRef.current = null;
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-    };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-  };
-
   return (
-    <div
-      className="relative flex h-full flex-col border-r border-border bg-background"
-      style={{ width: prefs.sidebarWidth }}
-    >
-      <div className="flex items-center gap-2 border-b border-border p-2">
-        <Input
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          placeholder="Filter collections…"
-          className="h-8 text-xs"
-          aria-label="collection-filter"
+    <Sidebar collapsible="none" style={{ "--sidebar-width": "100%" } as React.CSSProperties} className="h-full">
+      <SidebarHeader className="gap-0 p-0">
+        <div className="flex items-center gap-1 border-b border-border p-1.5">
+          <Input
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder="Filter collections…"
+            className="h-7 text-xs"
+            aria-label="collection-filter"
+          />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="icon-sm" variant="ghost" aria-label="new-item" className="size-7">
+                <Plus className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem aria-label="new-request" onClick={() => addRequest()}>
+                <FilePlus />
+                New request
+              </DropdownMenuItem>
+              <DropdownMenuItem aria-label="new-collection" onClick={() => void onNewCollection()}>
+                <FolderPlus />
+                New collection
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        <div className="flex items-center justify-between border-b border-border px-2 py-1">
+          <SidebarGroupLabel className="h-auto text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Collections</SidebarGroupLabel>
+          <div className="flex items-center gap-1">
+            <SortControl value={sortKey} onChange={onChangeSort} />
+            <Tooltip content="Settings">
+              <Button
+                size="icon"
+                variant="ghost"
+                aria-label="open-settings"
+                onClick={() => setSettingsOpen(true)}
+              >
+                <Settings className="size-4" />
+              </Button>
+            </Tooltip>
+          </div>
+        </div>
+      </SidebarHeader>
+
+      <SidebarContent className="min-h-0 overflow-hidden">
+        <CollectionTree
+          collections={visible}
+          filterActive={filterActive}
+          activeItemId={activeItemId ?? null}
+          editingId={editingId}
+          onEditingChange={setEditingId}
+          onOpenRequest={(collectionId, req) => openRequest(collectionId, req)}
+          onOpenCollection={onOpenCollection ?? (() => {})}
+          onRenameItem={cat.renameItem}
+          onRenameCollection={cat.renameCollection}
+          onDuplicateItem={cat.duplicateItem}
+          onDeleteItem={cat.deleteItem}
+          onDeleteCollection={cat.deleteCollection}
+          onAddRequest={() => addRequest()}
+          onAddFolder={onAddFolder}
+          onSetPinned={cat.setPinned}
+          onMoveItem={cat.moveItem}
+          onMoveItemAcross={cat.moveItemAcross}
+          onSetExpanded={cat.setExpanded}
         />
-        <Button size="icon" variant="ghost" aria-label="new-request" onClick={() => addRequest()}>
-          <Plus className="size-4" />
-        </Button>
-        <Button size="icon" variant="ghost" aria-label="new-collection" onClick={() => void onNewCollection()}>
-          <FolderPlus className="size-4" />
-        </Button>
-      </div>
+      </SidebarContent>
 
-      <div className="flex items-center justify-between border-b border-border px-2 py-1">
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-          Collections
-        </span>
-        <SortControl value={sortKey} onChange={setSortKey} />
-      </div>
-
-      <CollectionTree
-        collections={visible}
-        filterActive={filterActive}
-        activeItemId={null}
-        editingId={editingId}
-        onEditingChange={setEditingId}
-        onOpenRequest={(collectionId, req) => openRequest(collectionId, req)}
-        onOpenCollection={onOpenCollection ?? (() => {})}
-        onRenameItem={cat.renameItem}
-        onRenameCollection={cat.renameCollection}
-        onDuplicateItem={cat.duplicateItem}
-        onDeleteItem={cat.deleteItem}
-        onDeleteCollection={cat.deleteCollection}
-        onAddRequest={() => addRequest()}
-        onAddFolder={onAddFolder}
-        onSetPinned={cat.setPinned}
-        onMoveItem={cat.moveItem}
-        onMoveItemAcross={cat.moveItemAcross}
-      />
-
-      {/* Resize handle */}
-      <div
-        role="separator"
-        aria-label="resize-sidebar"
-        aria-orientation="vertical"
-        onPointerDown={onResizePointerDown}
-        className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-accent"
-      />
-    </div>
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+    </Sidebar>
   );
 }

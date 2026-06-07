@@ -15,12 +15,12 @@ function req(id: string, name: string): Extract<ItemIpc, { type: "request" }> {
   };
 }
 function folder(id: string, name: string, items: ItemIpc[]): Extract<ItemIpc, { type: "folder" }> {
-  return { type: "folder", id, name, items };
+  return { type: "folder", id, name, items, expanded: false };
 }
 function col(id: string, name: string, items: ItemIpc[]): CollectionIpc {
   return {
     id, name, items, variables: {}, auth: { kind: "none" }, default_tls: false,
-    skip_tls_verify: false, pinned: false, description: null, created_at: 0,
+    skip_tls_verify: false, pinned: false, description: null, created_at: 0, expanded: false,
   };
 }
 

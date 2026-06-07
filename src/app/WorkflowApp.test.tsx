@@ -58,6 +58,10 @@ vi.mock("@/features/catalog/save", () => ({
 vi.mock("@/features/catalog/useAutosaveDraft", () => ({
   useAutosaveDraft: vi.fn(),
 }));
+vi.mock("@/features/catalog/uiState", () => ({
+  loadUiState: vi.fn().mockResolvedValue({ sort_key: null, active_request: null }),
+  patchUiState: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("@/features/catalog/SaveRequestDialog", () => ({
   SaveRequestDialog: ({
     open,

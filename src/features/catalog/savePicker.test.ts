@@ -6,6 +6,7 @@ function col(id: string, name: string, items: CollectionIpc["items"] = []): Coll
   return {
     id, name, items, variables: {}, auth: { kind: "none" },
     default_tls: false, skip_tls_verify: false, pinned: false, description: null, created_at: 0,
+    expanded: false,
   };
 }
 
@@ -27,7 +28,7 @@ describe("augmentTree", () => {
       [],
       [{ tempId: "f1", collectionId: "c1", parentId: null, name: "NotesApi" }],
     );
-    expect(out[0].items).toEqual([{ type: "folder", id: "f1", name: "NotesApi", items: [] }]);
+    expect(out[0].items).toEqual([{ type: "folder", id: "f1", name: "NotesApi", items: [], expanded: false }]);
   });
 
   it("inserts a pending folder inside a pending collection", () => {
@@ -36,7 +37,7 @@ describe("augmentTree", () => {
       [{ tempId: "t1", name: "New" }],
       [{ tempId: "f1", collectionId: "t1", parentId: null, name: "NotesApi" }],
     );
-    expect(out[0].items).toEqual([{ type: "folder", id: "f1", name: "NotesApi", items: [] }]);
+    expect(out[0].items).toEqual([{ type: "folder", id: "f1", name: "NotesApi", items: [], expanded: false }]);
   });
 
   it("nests a pending folder under an earlier pending folder", () => {
@@ -52,7 +53,7 @@ describe("augmentTree", () => {
     expect(outer).toMatchObject({ id: "f1", name: "Outer" });
     if (outer.type !== "folder") throw new Error("expected outer to be a folder");
     expect(outer.items).toEqual([
-      { type: "folder", id: "f2", name: "Inner", items: [] },
+      { type: "folder", id: "f2", name: "Inner", items: [], expanded: false },
     ]);
   });
 });

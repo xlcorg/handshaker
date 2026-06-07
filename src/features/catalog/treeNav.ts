@@ -25,6 +25,24 @@ export function allContainerIds(collections: CollectionIpc[]): string[] {
   return out;
 }
 
+/** Container ids (collections + folders) whose `expanded` flag is true, recursive. */
+export function expandedIds(collections: CollectionIpc[]): string[] {
+  const out: string[] = [];
+  const walk = (items: ItemIpc[]) => {
+    for (const it of items) {
+      if (it.type === "folder") {
+        if (it.expanded) out.push(it.id);
+        walk(it.items);
+      }
+    }
+  };
+  for (const c of collections) {
+    if (c.expanded) out.push(c.id);
+    walk(c.items);
+  }
+  return out;
+}
+
 function findAncestors(items: ItemIpc[], itemId: string, acc: string[]): string[] | null {
   for (const it of items) {
     if (it.id === itemId) return acc;
@@ -58,6 +76,18 @@ function findNamePath(items: ItemIpc[], itemId: string, acc: string[]): string[]
   return null;
 }
 
+function findRequest(items: ItemIpc[], itemId: string): SavedRequestIpc | null {
+  for (const it of items) {
+    if (it.type === "request") {
+      if (it.id === itemId) return it;
+    } else {
+      const r = findRequest(it.items, itemId);
+      if (r) return r;
+    }
+  }
+  return null;
+}
+
 /** Ordered display names `[collectionName, ...folderNames, itemName]` to reach `itemId`
  *  (the path INCLUDES the target item's own name), or null when not found. */
 export function pathNamesToItem(
@@ -71,6 +101,17 @@ export function pathNamesToItem(
     if (sub) return sub;
   }
   return null;
+}
+
+/** Deep-search `collectionId` for a request leaf with `itemId`. Null if either is missing. */
+export function findSavedRequest(
+  collections: CollectionIpc[],
+  collectionId: string,
+  itemId: string,
+): SavedRequestIpc | null {
+  const c = collections.find((c) => c.id === collectionId);
+  if (!c) return null;
+  return findRequest(c.items, itemId);
 }
 
 export type VisibleNode =

@@ -16,19 +16,36 @@ describe("requestTimeoutMs pref", () => {
   });
 });
 
-describe("prefs sidebarWidth", () => {
+describe("prefs sidebarPanel", () => {
   beforeEach(() => localStorage.clear());
 
-  it("defaults sidebarWidth to 256", () => {
-    expect(PREFS_DEFAULTS.sidebarWidth).toBe(256);
+  it("defaults sidebarPanel to 18 (percent of the window)", () => {
+    expect(PREFS_DEFAULTS.sidebarPanel).toBe(18);
   });
 
-  it("merges a persisted sidebarWidth over defaults", () => {
-    localStorage.setItem("handshaker.prefs.v1", JSON.stringify({ sidebarWidth: 320 }));
+  it("merges a persisted sidebarPanel over defaults", () => {
+    localStorage.setItem("handshaker.prefs.v1", JSON.stringify({ sidebarPanel: 30 }));
     // readPrefs() reflects the module-loaded snapshot; assert the merge shape instead.
-    const merged = { ...PREFS_DEFAULTS, sidebarWidth: 320 };
+    const merged = { ...PREFS_DEFAULTS, sidebarPanel: 30 };
     expect(merged.sidebar).toBe(true);
-    expect(merged.sidebarWidth).toBe(320);
-    expect(typeof readPrefs().sidebarWidth).toBe("number");
+    expect(merged.sidebarPanel).toBe(30);
+    expect(typeof readPrefs().sidebarPanel).toBe("number");
+  });
+});
+
+describe("grpcIcon pref", () => {
+  beforeEach(() => localStorage.clear());
+
+  it("defaults grpcIcon to 'solid'", () => {
+    expect(PREFS_DEFAULTS.grpcIcon).toBe("solid");
+  });
+
+  it("merges a persisted grpcIcon over defaults", () => {
+    localStorage.setItem("handshaker.prefs.v1", JSON.stringify({ grpcIcon: "circle" }));
+    // readPrefs() reflects the module-loaded snapshot; assert the merge shape instead.
+    const merged = { ...PREFS_DEFAULTS, grpcIcon: "circle" };
+    expect(merged.sidebar).toBe(true);
+    expect(merged.grpcIcon).toBe("circle");
+    expect(typeof readPrefs().grpcIcon).toBe("string");
   });
 });

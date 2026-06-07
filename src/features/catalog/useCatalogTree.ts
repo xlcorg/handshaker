@@ -13,6 +13,7 @@ import {
   renameItemInTree,
   replaceItemInTree,
   setCollectionPinned,
+  setNodeExpanded,
 } from "./treeEdit";
 
 export interface UseCatalogTree {
@@ -23,6 +24,7 @@ export interface UseCatalogTree {
   deleteCollection: (collectionId: string) => Promise<void>;
   renameCollection: (collectionId: string, name: string) => Promise<void>;
   setPinned: (collectionId: string, pinned: boolean) => Promise<void>;
+  setExpanded: (collectionId: string, itemId: string | null, expanded: boolean) => Promise<void>;
   addItem: (collectionId: string, parentId: string | null, item: ItemIpc) => Promise<void>;
   renameItem: (collectionId: string, itemId: string, name: string) => Promise<void>;
   updateItemContent: (collectionId: string, itemId: string, content: SavedRequestIpc) => Promise<void>;
@@ -50,6 +52,7 @@ function emptyCollection(name: string): CollectionIpc {
     pinned: false,
     description: null,
     created_at: Date.now(),
+    expanded: false,
   };
 }
 
@@ -165,6 +168,17 @@ export function useCatalogTree(): UseCatalogTree {
     [optimistic],
   );
 
+  const setExpanded = useCallback(
+    (collectionId: string, itemId: string | null, expanded: boolean) =>
+      optimistic(
+        (prev) => setNodeExpanded(prev, collectionId, itemId, expanded),
+        () => ipc.collectionSetExpanded(collectionId, itemId, expanded),
+        // Expansion is silent on success; only surface a failure.
+        { err: "Couldn't save expansion" },
+      ),
+    [optimistic],
+  );
+
   const addItem = useCallback(
     (collectionId: string, parentId: string | null, item: ItemIpc) =>
       optimistic(
@@ -265,6 +279,7 @@ export function useCatalogTree(): UseCatalogTree {
     deleteCollection,
     renameCollection,
     setPinned,
+    setExpanded,
     addItem,
     renameItem,
     updateItemContent,

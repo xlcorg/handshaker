@@ -33,7 +33,7 @@ function collection(over: Partial<CollectionIpc> = {}): CollectionIpc {
   return {
     id: "c1", name: "My Col", items: [req("r1", "GetX")], variables: { base: "x" },
     auth: { kind: "none" }, default_tls: false, skip_tls_verify: false, pinned: false,
-    description: null, created_at: 0, ...over,
+    description: null, created_at: 0, expanded: false, ...over,
   };
 }
 

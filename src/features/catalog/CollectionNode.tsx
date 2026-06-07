@@ -1,11 +1,13 @@
 import { ChevronRight, FilePlus, FolderPlus, Pencil, Trash2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type { CollectionIpc } from "@/ipc/bindings";
+import { SidebarMenuItem, SidebarMenuButton, SidebarMenuSub } from "@/components/ui/sidebar";
 import { RowMenu, type RowMenuItem } from "./RowMenu";
 import { RenameInput } from "./RenameInput";
 import { PinButton } from "./PinButton";
 import { FolderNode } from "./FolderNode";
 import { RequestRow } from "./RequestRow";
+import { bleedStyle } from "./bleed";
 import type { TreeCallbacks } from "./treeTypes";
 
 export interface CollectionNodeProps {
@@ -28,7 +30,7 @@ export function CollectionNode({ col, cb }: CollectionNodeProps) {
   ];
 
   return (
-    <div>
+    <SidebarMenuItem>
       <RowMenu items={items}>
         <div
           data-node-id={col.id}
@@ -41,8 +43,12 @@ export function CollectionNode({ col, cb }: CollectionNodeProps) {
             e.preventDefault();
             cb.onDropRow({ collectionId: col.id, id: col.id, kind: "collection" }, "inside");
           }}
+          // Full-bleed hover highlight, same mechanism as the rows below (see bleed.ts).
+          style={bleedStyle(0)}
           className={cn(
-            "group flex items-center gap-1 py-1 pr-8 pl-1.5 text-xs font-medium hover:bg-accent/50",
+            "group relative isolate flex items-center gap-1 pr-8 pl-1.5 text-xs font-medium",
+            "before:pointer-events-none before:absolute before:inset-y-0 before:left-[var(--bl)] before:right-[var(--br)] before:-z-10 before:rounded-md before:content-['']",
+            "hover:before:bg-sidebar-accent/50",
             focused && "ring-1 ring-inset ring-ring",
             hint === "inside" && "ring-1 ring-inset ring-primary bg-primary/5",
           )}
@@ -65,22 +71,30 @@ export function CollectionNode({ col, cb }: CollectionNodeProps) {
               onCancel={() => cb.onEditingChange(null)}
             />
           ) : (
-            <button
-              type="button"
-              aria-label="open-collection"
-              onClick={() => cb.onOpenCollection(col.id)}
-              onDoubleClick={() => cb.onEditingChange(col.id)}
-              className="min-w-0 flex-1 truncate text-left"
-            >
-              {col.name}
-            </button>
+            <SidebarMenuButton asChild size="sm">
+              <button
+                type="button"
+                aria-label="open-collection"
+                onClick={() => {
+                  cb.onOpenCollection(col.id);
+                  cb.onToggle(col.id);
+                }}
+                onDoubleClick={() => cb.onEditingChange(col.id)}
+                // Defer the highlight to the row's full-bleed ::before. `px-0` strips the
+                // SidebarMenuButton's inherent p-2 so the label sits tight to the chevron
+                // (the row's own gap-1 is the only spacing).
+                className="h-6! min-w-0 flex-1 truncate bg-transparent! px-0! text-left hover:bg-transparent! active:bg-transparent!"
+              >
+                <span className="truncate">{col.name}</span>
+              </button>
+            </SidebarMenuButton>
           )}
           <PinButton pinned={col.pinned} onToggle={() => cb.onSetPinned(col.id, !col.pinned)} />
         </div>
       </RowMenu>
 
       {open ? (
-        <div>
+        <SidebarMenuSub className="mx-2 gap-0.5 px-2 py-0 border-transparent hover:border-sidebar-border">
           {col.items.map((it) =>
             it.type === "folder" ? (
               <FolderNode key={it.id} collectionId={col.id} folder={it} depth={1} cb={cb} />
@@ -89,10 +103,10 @@ export function CollectionNode({ col, cb }: CollectionNodeProps) {
             ),
           )}
           {col.items.length === 0 ? (
-            <div className="py-1 pl-8 text-[11px] text-muted-foreground">Empty collection</div>
+            <li className="py-1 pl-2 text-[11px] text-muted-foreground">Empty collection</li>
           ) : null}
-        </div>
+        </SidebarMenuSub>
       ) : null}
-    </div>
+    </SidebarMenuItem>
   );
 }

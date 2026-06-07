@@ -9,6 +9,7 @@ pub mod env;
 pub mod error;
 pub mod grpc;
 pub mod persist;
+pub mod ui_state;
 pub mod vars;
 
 pub use error::CoreError;

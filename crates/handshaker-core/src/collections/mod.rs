@@ -47,6 +47,8 @@ pub struct Collection {
     pub pinned: bool,
     pub description: Option<String>,
     pub created_at: f64, // epoch ms, set by frontend
+    #[serde(default)]
+    pub expanded: bool,
 }
 
 /// A node in the tree.
@@ -63,6 +65,8 @@ pub struct Folder {
     pub id: ItemId,
     pub name: String,
     pub items: Vec<Item>,
+    #[serde(default)]
+    pub expanded: bool,
     // no auth: folders are pure organization (spec §7)
 }
 
@@ -144,6 +148,53 @@ mod model_tests {
         assert!(!r.metadata[1].enabled);
     }
 
+    /// Legacy persisted JSON, written before `expanded` existed, must still
+    /// deserialize: both `Collection.expanded` and `Folder.expanded` carry
+    /// `#[serde(default)]`, so an omitted key resolves to `false`. This is the
+    /// load-bearing backward-compat guarantee for on-disk collections (plan-01).
+    #[test]
+    fn legacy_json_without_expanded_deserializes_to_false() {
+        // No `expanded` key on the collection OR on the nested folder — exactly
+        // what an older build would have persisted.
+        let legacy = r#"{
+            "id": "00000000-0000-0000-0000-000000000002",
+            "name": "c",
+            "items": [
+                {
+                    "type": "folder",
+                    "id": "00000000-0000-0000-0000-000000000003",
+                    "name": "f",
+                    "items": []
+                }
+            ],
+            "variables": {},
+            "auth": { "kind": "none" },
+            "default_tls": false,
+            "skip_tls_verify": false,
+            "pinned": false,
+            "description": null,
+            "created_at": 1700000000000.0
+        }"#;
+
+        let collection: Collection = serde_json::from_str(legacy).unwrap();
+        assert!(!collection.expanded, "omitted Collection.expanded must default to false");
+
+        // The nested folder also omitted `expanded`.
+        let Item::Folder(folder) = &collection.items[0] else {
+            panic!("expected a folder item");
+        };
+        assert!(!folder.expanded, "omitted Folder.expanded must default to false");
+
+        // And a standalone Folder with no `expanded` key deserializes too.
+        let legacy_folder = r#"{
+            "id": "00000000-0000-0000-0000-000000000004",
+            "name": "g",
+            "items": []
+        }"#;
+        let folder: Folder = serde_json::from_str(legacy_folder).unwrap();
+        assert!(!folder.expanded, "omitted standalone Folder.expanded must default to false");
+    }
+
     #[test]
     fn collection_has_pinned_description_created_at_and_single_auth() {
         let c = Collection {
@@ -157,6 +208,7 @@ mod model_tests {
             pinned: true,
             description: Some("d".into()),
             created_at: 1_700_000_000_000.0,
+            expanded: false,
         };
         assert!(c.pinned);
         assert_eq!(c.description.as_deref(), Some("d"));

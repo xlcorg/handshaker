@@ -82,9 +82,10 @@ describe("FocusView Save affordance", () => {
       {
         id: "c1", name: "Notes", default_tls: false, skip_tls_verify: false,
         pinned: false, description: null, created_at: 0, variables: {}, auth: { kind: "none" },
+        expanded: false,
         items: [
           {
-            type: "folder", id: "f1", name: "Staging",
+            type: "folder", id: "f1", name: "Staging", expanded: false,
             items: [
               {
                 type: "request", id: "r1", name: "Create", address_template: "h:443",

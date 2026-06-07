@@ -10,12 +10,13 @@ function req(id: string, name = id): ItemIpc {
   } as SavedRequestIpc as ItemIpc;
 }
 function folder(id: string, items: ItemIpc[] = [], name = id): ItemIpc {
-  return { type: "folder", id, name, items };
+  return { type: "folder", id, name, items, expanded: false };
 }
 function col(id: string, items: ItemIpc[]): CollectionIpc {
   return {
     id, name: id, items, variables: {}, auth: { kind: "none" },
     default_tls: false, skip_tls_verify: false, pinned: false, description: null, created_at: 0,
+    expanded: false,
   };
 }
 

@@ -46,6 +46,22 @@ pub fn find_item_mut(items: &mut [Item], id: ItemId) -> Option<&mut Item> {
     None
 }
 
+/// Set the `expanded` flag of the folder with `id`, searching recursively. Returns whether found.
+pub fn set_expanded(items: &mut [Item], id: ItemId, expanded: bool) -> bool {
+    for it in items.iter_mut() {
+        if let Item::Folder(f) = it {
+            if f.id == id {
+                f.expanded = expanded;
+                return true;
+            }
+            if set_expanded(&mut f.items, id, expanded) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 /// Locate `id`: returns `(parent_folder_id_or_None_for_root, position)`.
 fn locate(items: &[Item], id: ItemId, current_parent: Option<ItemId>) -> Option<(Option<ItemId>, usize)> {
     if let Some(pos) = items.iter().position(|it| it.id() == id) {
@@ -209,6 +225,7 @@ mod tests {
             id,
             name: name.to_string(),
             items,
+            expanded: false,
         })
     }
 
@@ -282,6 +299,22 @@ mod tests {
         let mut items = vec![folder(iid(1), "outer", vec![folder(iid(2), "inner", vec![])])];
         let err = move_item(&mut items, iid(1), Some(iid(2)), 0).unwrap_err();
         assert!(matches!(err, CoreError::InvalidTarget(_)));
+    }
+
+    #[test]
+    fn set_expanded_toggles_folder_flag() {
+        let mut items = vec![Item::Folder(Folder {
+            id: iid(1),
+            name: "f".into(),
+            items: vec![],
+            expanded: false,
+        })];
+        assert!(set_expanded(&mut items, iid(1), true));
+        match &items[0] {
+            Item::Folder(f) => assert!(f.expanded),
+            _ => panic!(),
+        }
+        assert!(!set_expanded(&mut items, iid(999), true)); // missing → false
     }
 
     #[test]

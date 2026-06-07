@@ -1,8 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { ItemIpc } from "@/ipc/bindings";
 import type { TreeCallbacks } from "./treeTypes";
 import { RequestRow } from "./RequestRow";
+import { SidebarProvider } from "@/components/ui/sidebar";
 
 function req(name: string): Extract<ItemIpc, { type: "request" }> {
   return {
@@ -24,23 +26,33 @@ function makeCb(over: Partial<TreeCallbacks> = {}): TreeCallbacks {
   };
 }
 
+function renderWithSidebar(ui: React.ReactElement) {
+  return render(<SidebarProvider>{ui}</SidebarProvider>);
+}
+
 describe("RequestRow", () => {
+  it("renders the gRPC icon (default solid)", () => {
+    renderWithSidebar(<RequestRow collectionId="c1" req={req("My Req")} cb={makeCb()} />);
+    const icon = screen.getByLabelText("grpc");
+    expect(icon.getAttribute("data-variant")).toBe("solid");
+  });
+
   it("shows the name and opens the request on click", () => {
     const onOpenRequest = vi.fn();
     const cb = makeCb({ onOpenRequest });
-    render(<RequestRow collectionId="c1" req={req("My Req")} depth={1} cb={cb} />);
+    renderWithSidebar(<RequestRow collectionId="c1" req={req("My Req")} cb={cb} />);
     fireEvent.click(screen.getByText("My Req"));
     expect(onOpenRequest).toHaveBeenCalledWith("c1", expect.objectContaining({ id: "r1" }));
   });
 
   it("falls back to the method name when unnamed", () => {
-    render(<RequestRow collectionId="c1" req={req("")} depth={1} cb={makeCb()} />);
+    renderWithSidebar(<RequestRow collectionId="c1" req={req("")} cb={makeCb()} />);
     expect(screen.getByText("GetX")).toBeTruthy();
   });
 
   it("double-click enters rename (onEditingChange with the item id)", () => {
     const onEditingChange = vi.fn();
-    render(<RequestRow collectionId="c1" req={req("R")} depth={1} cb={makeCb({ onEditingChange })} />);
+    renderWithSidebar(<RequestRow collectionId="c1" req={req("R")} cb={makeCb({ onEditingChange })} />);
     fireEvent.doubleClick(screen.getByText("R"));
     expect(onEditingChange).toHaveBeenCalledWith("r1");
   });
@@ -49,7 +61,7 @@ describe("RequestRow", () => {
     const onRenameItem = vi.fn();
     const onEditingChange = vi.fn();
     const cb = makeCb({ editingId: "r1", onRenameItem, onEditingChange });
-    render(<RequestRow collectionId="c1" req={req("Old")} depth={1} cb={cb} />);
+    renderWithSidebar(<RequestRow collectionId="c1" req={req("Old")} cb={cb} />);
     const input = screen.getByLabelText("rename-input");
     fireEvent.change(input, { target: { value: "New" } });
     fireEvent.keyDown(input, { key: "Enter" });
@@ -57,11 +69,56 @@ describe("RequestRow", () => {
     expect(onRenameItem).toHaveBeenCalledWith("c1", "r1", "New");
   });
 
-  it("menu Delete requests deletion via onRequestDeleteItem", () => {
+  it("menu Delete requests deletion via onRequestDeleteItem", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
     const onRequestDeleteItem = vi.fn();
-    render(<RequestRow collectionId="c1" req={req("R")} depth={1} cb={makeCb({ onRequestDeleteItem })} />);
-    fireEvent.click(screen.getByLabelText("More options"));
-    fireEvent.click(screen.getByText("Delete"));
+    renderWithSidebar(<RequestRow collectionId="c1" req={req("R")} cb={makeCb({ onRequestDeleteItem })} />);
+    await user.click(screen.getByLabelText("More options"));
+    await user.click(screen.getByText("Delete"));
     expect(onRequestDeleteItem).toHaveBeenCalledWith("c1", "r1");
+  });
+
+  it("active row carries data-active=true", () => {
+    renderWithSidebar(
+      <RequestRow collectionId="c1" req={req("A")} cb={makeCb({ activeItemId: "r1" })} />,
+    );
+    const node = document.querySelector('[data-node-id="r1"]');
+    expect(node).not.toBeNull();
+    expect(node!.getAttribute("data-active")).toBe("true");
+  });
+
+  it("non-active row does not carry data-active=true", () => {
+    renderWithSidebar(
+      <RequestRow collectionId="c1" req={req("A")} cb={makeCb({ activeItemId: null })} />,
+    );
+    const node = document.querySelector('[data-node-id="r1"]');
+    expect(node).not.toBeNull();
+    expect(node!.getAttribute("data-active")).not.toBe("true");
+  });
+
+  it("row has data-slot=sidebar-menu-sub-button", () => {
+    renderWithSidebar(<RequestRow collectionId="c1" req={req("B")} cb={makeCb()} />);
+    const node = document.querySelector('[data-node-id="r1"]');
+    expect(node).not.toBeNull();
+    expect(node!.getAttribute("data-slot")).toBe("sidebar-menu-sub-button");
+  });
+
+  it("exposes depth-scaled bleed offsets for the full-width highlight", () => {
+    const { rerender } = renderWithSidebar(
+      <RequestRow collectionId="c1" req={req("B")} depth={1} cb={makeCb()} />,
+    );
+    const at = () => document.querySelector('[data-node-id="r1"]') as HTMLElement;
+    // depth 1 → 3 - 18 = -15px / 1 - 15 = -14px
+    expect(at().style.getPropertyValue("--bl")).toBe("-15px");
+    expect(at().style.getPropertyValue("--br")).toBe("-14px");
+
+    // Deeper rows break out further so the highlight still reaches the sidebar edges.
+    rerender(
+      <SidebarProvider>
+        <RequestRow collectionId="c1" req={req("B")} depth={2} cb={makeCb()} />
+      </SidebarProvider>,
+    );
+    expect(at().style.getPropertyValue("--bl")).toBe("-33px");
+    expect(at().style.getPropertyValue("--br")).toBe("-29px");
   });
 });
