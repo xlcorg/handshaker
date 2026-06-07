@@ -24,8 +24,8 @@ jobs:
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 9
+        # version is read from package.json "packageManager" (pnpm@9.0.0) — do not
+        # also pass `version:` here or pnpm/action-setup errors on the mismatch.
 
       - name: Install Node
         uses: actions/setup-node@v4
