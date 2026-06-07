@@ -46,16 +46,23 @@ export function useUpdateCheck(): UseUpdateCheck {
     let total = 0;
     let downloaded = 0;
     setState((s) => ({ ...s, phase: "downloading", progress: 0 }));
-    await update.downloadAndInstall((event) => {
-      if (event.event === "Started") {
-        total = event.data.contentLength ?? 0;
-      } else if (event.event === "Progress") {
-        downloaded += event.data.chunkLength;
-        const pct = total > 0 ? Math.min(100, Math.round((downloaded / total) * 100)) : 0;
-        setState((s) => ({ ...s, progress: pct }));
-      }
-    });
-    await relaunch();
+    try {
+      await update.downloadAndInstall((event) => {
+        if (event.event === "Started") {
+          total = event.data.contentLength ?? 0;
+        } else if (event.event === "Progress") {
+          downloaded += event.data.chunkLength;
+          const pct = total > 0 ? Math.min(100, Math.round((downloaded / total) * 100)) : 0;
+          setState((s) => ({ ...s, progress: pct }));
+        }
+      });
+      await relaunch();
+    } catch (err) {
+      // On success relaunch() ends the process and we never get here; reaching the
+      // catch means the download/install failed — restore the banner so the user can retry.
+      setState((s) => ({ ...s, phase: "available", progress: 0 }));
+      throw err;
+    }
   }, []);
 
   const dismiss = useCallback(() => {

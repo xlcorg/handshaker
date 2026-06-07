@@ -55,6 +55,22 @@ describe("useUpdateCheck", () => {
     });
     expect(downloadAndInstall).toHaveBeenCalledTimes(1);
     expect(relaunch).toHaveBeenCalledTimes(1);
+    expect(result.current.progress).toBe(100);
+  });
+
+  it("install() failure resets phase back to available and rethrows", async () => {
+    const downloadAndInstall = vi.fn(async () => {
+      throw new Error("network down");
+    });
+    check.mockResolvedValue(fakeUpdate({ downloadAndInstall }));
+    const { result } = renderHook(() => useUpdateCheck());
+    await waitFor(() => expect(result.current.phase).toBe("available"));
+    await expect(
+      act(async () => {
+        await result.current.install();
+      }),
+    ).rejects.toThrow("network down");
+    expect(result.current.phase).toBe("available");
   });
 
   it("dismiss() hides the banner", async () => {
