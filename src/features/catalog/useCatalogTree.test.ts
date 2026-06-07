@@ -17,10 +17,10 @@ vi.mock("@/ipc/client", () => ({
   },
 }));
 
-vi.mock("@/lib/toast", () => ({ toast: vi.fn() }));
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 import { ipc } from "@/ipc/client";
-import { toast } from "@/lib/toast";
+import { toast } from "sonner";
 import type { CollectionIpc } from "@/ipc/bindings";
 import { useCatalogTree } from "./useCatalogTree";
 
@@ -101,7 +101,16 @@ describe("optimistic mutations + rollback", () => {
     await act(async () => { await result.current.duplicateItem("c1", "r1"); });
     expect(ipc.collectionDuplicateItem).toHaveBeenCalledWith("c1", "r1");
     expect(result.current.tree[0].name).toBe("c1-reloaded");
-    expect(toast).not.toHaveBeenCalledWith(expect.anything(), "success");
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it("duplicateItem toasts the item name on failure", async () => {
+    const { result } = await loaded();
+    vi.mocked(ipc.collectionDuplicateItem).mockRejectedValue({ message: "boom" });
+    await act(async () => {
+      await expect(result.current.duplicateItem("c1", "r1")).rejects.toBeTruthy();
+    });
+    expect(toast.error).toHaveBeenCalledWith('Couldn\'t duplicate "r1"');
   });
 
   it("updateItemContent replaces content optimistically and upserts the collection", async () => {
@@ -140,7 +149,7 @@ describe("optimistic mutations + rollback", () => {
     const { result } = await loaded();
     vi.mocked(ipc.collectionRenameItem).mockResolvedValue(undefined);
     await act(async () => { await result.current.renameItem("c1", "r1", "Renamed"); });
-    expect(toast).toHaveBeenCalledWith("Request renamed", "success");
+    expect(toast.success).toHaveBeenCalledWith('Renamed to "Renamed"');
   });
 
   it("emits an error toast and rolls back when the operation rejects", async () => {
@@ -150,14 +159,58 @@ describe("optimistic mutations + rollback", () => {
       await expect(result.current.renameItem("c1", "r1", "Renamed")).rejects.toBeTruthy();
     });
     expect(result.current.tree[0].items[0].name).toBe("r1"); // reverted
-    expect(toast).toHaveBeenCalledWith("Couldn't rename request", "error");
+    expect(toast.error).toHaveBeenCalledWith('Couldn\'t rename "r1"');
   });
 
   it("setPinned toasts Pinned on success", async () => {
     const { result } = await loaded();
     vi.mocked(ipc.collectionUpsert).mockResolvedValue(undefined);
     await act(async () => { await result.current.setPinned("c1", true); });
-    expect(toast).toHaveBeenCalledWith("Pinned", "success");
+    expect(toast.success).toHaveBeenCalledWith('Pinned "c1"');
+  });
+
+  it("setPinned toasts Unpinned with the collection name", async () => {
+    const { result } = await loaded();
+    vi.mocked(ipc.collectionUpsert).mockResolvedValue(undefined);
+    await act(async () => { await result.current.setPinned("c1", false); });
+    expect(toast.success).toHaveBeenCalledWith('Unpinned "c1"');
+  });
+
+  it("createCollection toasts the name on failure", async () => {
+    const { result } = await loaded();
+    vi.mocked(ipc.collectionUpsert).mockRejectedValue({ message: "boom" });
+    await act(async () => {
+      await expect(result.current.createCollection("New Col")).rejects.toBeTruthy();
+    });
+    expect(toast.error).toHaveBeenCalledWith('Couldn\'t create "New Col"');
+  });
+
+  it("deleteCollection toasts the collection name on success and failure", async () => {
+    const { result } = await loaded();
+    vi.mocked(ipc.collectionDelete).mockResolvedValue(undefined);
+    await act(async () => { await result.current.deleteCollection("c1"); });
+    expect(toast.success).toHaveBeenCalledWith('Deleted "c1"');
+
+    const { result: r2 } = await loaded();
+    vi.mocked(ipc.collectionDelete).mockRejectedValue({ message: "boom" });
+    await act(async () => {
+      await expect(r2.current.deleteCollection("c1")).rejects.toBeTruthy();
+    });
+    expect(toast.error).toHaveBeenCalledWith('Couldn\'t delete "c1"');
+  });
+
+  it("renameCollection toasts the new name on success and the old name on failure", async () => {
+    const { result } = await loaded();
+    vi.mocked(ipc.collectionUpsert).mockResolvedValue(undefined);
+    await act(async () => { await result.current.renameCollection("c1", "Renamed Col"); });
+    expect(toast.success).toHaveBeenCalledWith('Renamed to "Renamed Col"');
+
+    const { result: r2 } = await loaded();
+    vi.mocked(ipc.collectionUpsert).mockRejectedValue({ message: "boom" });
+    await act(async () => {
+      await expect(r2.current.renameCollection("c1", "Renamed Col")).rejects.toBeTruthy();
+    });
+    expect(toast.error).toHaveBeenCalledWith('Couldn\'t rename "c1"');
   });
 
   it("addItem is silent on success (request and folder)", async () => {
@@ -171,14 +224,14 @@ describe("optimistic mutations + rollback", () => {
       });
       await result.current.addItem("c1", null, { type: "folder", id: "f9", name: "F", items: [], expanded: false });
     });
-    expect(toast).not.toHaveBeenCalledWith(expect.anything(), "success");
+    expect(toast.success).not.toHaveBeenCalled();
   });
 
   it("deleteItem toasts the item kind", async () => {
     const { result } = await loaded();
     vi.mocked(ipc.collectionDeleteItem).mockResolvedValue(null);
     await act(async () => { await result.current.deleteItem("c1", "r1"); });
-    expect(toast).toHaveBeenCalledWith("Request deleted", "success");
+    expect(toast.success).toHaveBeenCalledWith('Deleted "r1"');
   });
 });
 
@@ -219,7 +272,7 @@ describe("useCatalogTree setExpanded", () => {
     });
     const f1 = result.current.tree[0].items[0] as Extract<typeof result.current.tree[0]["items"][number], { type: "folder" }>;
     expect(f1.expanded).toBe(false); // reverted
-    expect(toast).toHaveBeenCalledWith("Couldn't save expansion", "error");
+    expect(toast.error).toHaveBeenCalledWith("Couldn't save expansion");
   });
 });
 
@@ -257,6 +310,7 @@ describe("useCatalogTree move", () => {
     const c1 = result.current.tree.find((c) => c.id === "c1")!;
     const f1 = c1.items.find((i) => i.id === "f1") as Extract<typeof c1.items[number], { type: "folder" }>;
     expect(f1.items.map((i) => i.id)).toEqual(["r3"]); // optimistic reshape
+    expect(toast.success).toHaveBeenCalledWith('Moved "r3"');
   });
 
   it("moveItemAcross calls collectionMoveItemAcross and relocates locally", async () => {
@@ -267,6 +321,7 @@ describe("useCatalogTree move", () => {
     });
     expect(ipc.collectionMoveItemAcross).toHaveBeenCalledWith("c1", "r3", "c2", null, 0);
     expect(result.current.tree.find((c) => c.id === "c2")!.items.map((i) => i.id)).toEqual(["r3"]);
+    expect(toast.success).toHaveBeenCalledWith('Moved "r3"');
   });
 
   it("rolls back moveItem when the IPC rejects", async () => {
@@ -277,6 +332,6 @@ describe("useCatalogTree move", () => {
       await expect(result.current.moveItem("c1", "r3", "f1", 0)).rejects.toBeTruthy();
     });
     expect(JSON.stringify(result.current.tree)).toBe(before);
-    expect(toast).toHaveBeenCalledWith("Couldn't move", "error");
+    expect(toast.error).toHaveBeenCalledWith('Couldn\'t move "r3"');
   });
 });

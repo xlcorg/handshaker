@@ -1,8 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { copyToClipboard } from "./clipboard";
-import { toastStore } from "./toast";
 
-beforeEach(() => toastStore.reset());
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+
+import { copyToClipboard } from "./clipboard";
+import { toast } from "sonner";
+
+beforeEach(() => vi.clearAllMocks());
 
 describe("copyToClipboard", () => {
   it("writes text and shows a confirmation toast", async () => {
@@ -10,11 +13,11 @@ describe("copyToClipboard", () => {
     Object.assign(navigator, { clipboard: { writeText } });
     await copyToClipboard("payload-123");
     expect(writeText).toHaveBeenCalledWith("payload-123");
-    expect(toastStore.getState()[0].message).toMatch(/copied/i);
+    expect(toast.success).toHaveBeenCalledWith(expect.stringMatching(/copied/i));
   });
   it("shows a failure toast when the write rejects", async () => {
     Object.assign(navigator, { clipboard: { writeText: vi.fn().mockRejectedValue(new Error("denied")) } });
     await copyToClipboard("x");
-    expect(toastStore.getState()[0].message).toMatch(/couldn't copy/i);
+    expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/couldn't copy/i));
   });
 });
