@@ -33,7 +33,7 @@ export function UpdateBanner({ phase, version, progress, onUpdate, onDismiss }: 
           type="button"
           onClick={onUpdate}
           disabled={downloading}
-          className="h-7 rounded-md bg-primary px-3 text-primary-foreground disabled:opacity-60"
+          className="h-7 rounded-md bg-primary px-3 text-primary-foreground disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed"
         >
           {downloading ? "Updating…" : "Update now"}
         </button>
@@ -41,7 +41,7 @@ export function UpdateBanner({ phase, version, progress, onUpdate, onDismiss }: 
           <button
             type="button"
             onClick={onDismiss}
-            className="h-7 rounded-md px-2 text-muted-foreground hover:text-foreground"
+            className="h-7 rounded-md px-2 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             Later
           </button>

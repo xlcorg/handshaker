@@ -40,4 +40,11 @@ describe("UpdateBanner", () => {
     expect(screen.getByText(/42%/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /updating|downloading/i })).toBeDisabled();
   });
+
+  it("renders nothing for phases other than available/downloading", () => {
+    const { container } = render(
+      <UpdateBanner phase="idle" version="" progress={0} onUpdate={() => {}} onDismiss={() => {}} />,
+    );
+    expect(container).toBeEmptyDOMElement();
+  });
 });
