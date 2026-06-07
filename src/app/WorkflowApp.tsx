@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Toaster } from "@/components/ui/toaster";
+import { Toaster } from "@/components/ui/sonner";
 import { FocusView } from "@/features/workflow/FocusView";
 import { LedgerView } from "@/features/workflow/LedgerView";
 import { ListView } from "@/features/workflow/ListView";
