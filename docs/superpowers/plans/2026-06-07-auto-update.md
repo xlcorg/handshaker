@@ -37,7 +37,7 @@ The plan's code/config tasks (1, 2, 4–8) are agent-runnable now; Task 3 (keys/
 | `src-tauri/src/lib.rs` | register both plugins on the Tauri builder |
 | `src-tauri/capabilities/default.json` | grant `updater:default` + `process:allow-restart` |
 | `src-tauri/tauri.conf.json` | enable bundle + `createUpdaterArtifacts`, `plugins.updater` block, drop `version` |
-| `package.json` | adjust `tauri:build` (drop `--no-bundle`) |
+| `package.json` | add `@tauri-apps/plugin-updater` + `@tauri-apps/plugin-process` JS deps; adjust `tauri:build` (drop `--no-bundle`) |
 | `src/features/updater/useUpdateCheck.ts` | hook: state machine over plugin `check/downloadAndInstall/relaunch` |
 | `src/features/updater/useUpdateCheck.test.tsx` | hook unit tests (mocked plugins) |
 | `src/features/updater/UpdateBanner.tsx` | presentational banner (props-driven) |
@@ -50,6 +50,12 @@ The plan's code/config tasks (1, 2, 4–8) are agent-runnable now; Task 3 (keys/
 ## Phase 1 — Front-end updater slice (TDD, agent-runnable, no Tauri runtime needed)
 
 Done first because it is fully unit-testable in jsdom with mocked plugins, independent of the Rust/CI work.
+
+> **Prereq (added during execution):** the JS plugin packages must be installed so the
+> hook's imports resolve at build/typecheck and `vi.mock` can intercept them (same as
+> the existing `Titlebar` test mocking `@tauri-apps/api/window`). Run once before Task 2:
+> `pnpm add @tauri-apps/plugin-updater@^2 @tauri-apps/plugin-process@^2`. Do NOT stub
+> the modules or alias them in `vitest.config.ts`.
 
 ### Task 1: `UpdateBanner` presentational component
 
