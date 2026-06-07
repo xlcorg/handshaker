@@ -97,6 +97,8 @@ pub fn run() {
 
     tauri::Builder::default()
         .invoke_handler(specta_builder.invoke_handler())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .setup(move |app| {
             specta_builder.mount_events(app);
             let data_dir = app

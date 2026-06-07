@@ -22,6 +22,8 @@ tauri-build.workspace = true
 [dependencies]
 handshaker-core = { path = "../crates/handshaker-core" }
 tauri = { workspace = true, features = ["devtools"] }
+tauri-plugin-updater = { workspace = true }
+tauri-plugin-process = { workspace = true }
 tauri-specta = { workspace = true }
 specta = { workspace = true }
 specta-typescript = { workspace = true }
