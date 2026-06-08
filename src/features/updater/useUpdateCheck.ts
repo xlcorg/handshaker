@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
-import type { UpdatePhase } from "./UpdateBanner";
+
+export type UpdatePhase =
+  | "idle"
+  | "checking"
+  | "available"
+  | "upToDate"
+  | "downloading"
+  | "installError"
+  | "error";
 
 interface UpdateState {
   phase: UpdatePhase;
@@ -59,8 +67,9 @@ export function useUpdateCheck(): UseUpdateCheck {
       await relaunch();
     } catch (err) {
       // On success relaunch() ends the process and we never get here; reaching the
-      // catch means the download/install failed — restore the banner so the user can retry.
-      setState((s) => ({ ...s, phase: "available", progress: 0 }));
+      // catch means the download/install failed — surface a distinct error phase
+      // (keeping the version) so the UI can show a failure + retry, not silently revert.
+      setState((s) => ({ ...s, phase: "installError", progress: 0 }));
       throw err;
     }
   }, []);

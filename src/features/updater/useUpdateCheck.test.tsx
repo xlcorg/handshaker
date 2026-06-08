@@ -58,19 +58,23 @@ describe("useUpdateCheck", () => {
     expect(result.current.progress).toBe(100);
   });
 
-  it("install() failure resets phase back to available and rethrows", async () => {
+  it("install() failure switches to installError (keeping the version) and rethrows", async () => {
     const downloadAndInstall = vi.fn(async () => {
       throw new Error("network down");
     });
     check.mockResolvedValue(fakeUpdate({ downloadAndInstall }));
     const { result } = renderHook(() => useUpdateCheck());
     await waitFor(() => expect(result.current.phase).toBe("available"));
-    await expect(
-      act(async () => {
-        await result.current.install();
-      }),
-    ).rejects.toThrow("network down");
-    expect(result.current.phase).toBe("available");
+    // Catch the rejection INSIDE act so React still flushes the catch-block state
+    // update; a rejection propagating out of act() bails before the flush.
+    let caught: unknown;
+    await act(async () => {
+      caught = await result.current.install().catch((e) => e);
+    });
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toBe("network down");
+    expect(result.current.phase).toBe("installError");
+    expect(result.current.version).toBe("0.2.0");
   });
 
   it("dismiss() hides the banner", async () => {

@@ -7,6 +7,7 @@ import { useActiveWorkflow, useDraft, useDraftOrigin, workflowStore } from "@/fe
 import type { ViewMode } from "@/features/workflow/model";
 import type { SavedRequestIpc } from "@/ipc/bindings";
 import { Titlebar } from "@/features/shell/Titlebar";
+import { AppVersionBadge } from "@/features/shell/AppVersionBadge";
 import { SettingsDialog } from "@/features/settings/SettingsDialog";
 import { envActiveGet } from "@/ipc/client";
 import { SidebarShell } from "@/features/catalog/SidebarShell";
@@ -27,7 +28,7 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { usePrefs, readPrefs } from "@/lib/use-prefs";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import { useUpdateCheck } from "@/features/updater/useUpdateCheck";
-import { UpdateBanner } from "@/features/updater/UpdateBanner";
+import { UpdateToast } from "@/features/updater/UpdateToast";
 
 function renderView(view: ViewMode, onRequestSave: () => void) {
   switch (view) {
@@ -180,14 +181,6 @@ export function WorkflowApp() {
     <div className="flex h-screen flex-col bg-background text-foreground">
       <Titlebar onOpenSettings={() => setSettingsOpen(true)} />
 
-      <UpdateBanner
-        phase={update.phase}
-        version={update.version}
-        progress={update.progress}
-        onUpdate={update.install}
-        onDismiss={update.dismiss}
-      />
-
       <SidebarProvider className="min-h-0 flex-1">
         <ResizablePanelGroup
           orientation="horizontal"
@@ -275,6 +268,14 @@ export function WorkflowApp() {
 
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
 
+      <UpdateToast
+        phase={update.phase}
+        version={update.version}
+        progress={update.progress}
+        onUpdate={update.install}
+        onDismiss={update.dismiss}
+      />
+      <AppVersionBadge />
       <Toaster />
     </div>
   );

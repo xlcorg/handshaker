@@ -121,6 +121,9 @@ vi.mock("@/ipc/client", () => ({
   envList: vi.fn().mockResolvedValue([]),
   envActiveSet: vi.fn().mockResolvedValue(undefined),
   envActiveGet: vi.fn().mockResolvedValue(null),
+  // AppVersionBadge calls ipc.appVersion(); keep it distinct from the 9.9.9 update toast
+  // so findByText(/9.9.9/) stays unambiguous.
+  ipc: { appVersion: vi.fn().mockResolvedValue("0.0.0-test") },
 }));
 vi.mock("@tauri-apps/plugin-updater", () => ({
   check: vi.fn().mockResolvedValue({ version: "9.9.9", downloadAndInstall: vi.fn() }),
