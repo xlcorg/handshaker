@@ -41,7 +41,7 @@ impl GrpcTransport for TonicTransport {
         endpoint
             .connect()
             .await
-            .map_err(|e| CoreError::Transport(format!("connect `{uri}`: {e}")))
+            .map_err(|e| CoreError::Transport(format!("connect `{uri}`: {}", error_chain(&e))))
     }
 
     async fn unary_dynamic(
@@ -55,7 +55,7 @@ impl GrpcTransport for TonicTransport {
         let mut grpc = tonic::client::Grpc::new(channel);
         grpc.ready()
             .await
-            .map_err(|e| CoreError::Transport(format!("channel not ready: {e}")))?;
+            .map_err(|e| CoreError::Transport(format!("channel not ready: {}", error_chain(&e))))?;
 
         let path: http::uri::PathAndQuery = method_path
             .parse()
@@ -135,6 +135,25 @@ fn metadata_to_map(md: &tonic::metadata::MetadataMap) -> HashMap<String, String>
                 out.insert(k.to_string(), s.to_string());
             }
         }
+    }
+    out
+}
+
+/// Render an error together with its `source()` chain, so the real cause behind an
+/// opaque wrapper is visible. tonic's `transport::Error` Displays as just "transport
+/// error"; the actual reason (e.g. `tcp connect error: Connection refused (os error …)`)
+/// lives one or more links down the chain. Joined with `: `, de-duplicating links
+/// whose message a parent already ends with.
+fn error_chain(e: &(dyn std::error::Error + 'static)) -> String {
+    let mut out = e.to_string();
+    let mut src = e.source();
+    while let Some(s) = src {
+        let msg = s.to_string();
+        if !msg.is_empty() && !out.ends_with(&msg) {
+            out.push_str(": ");
+            out.push_str(&msg);
+        }
+        src = s.source();
     }
     out
 }
@@ -239,7 +258,67 @@ mod tests {
         let t = TonicTransport::new();
         let target = GrpcTarget::new(addr.to_string(), false, false).unwrap();
         let err = t.channel(&target).await.unwrap_err();
-        assert!(matches!(err, CoreError::Transport(_)), "got {err:?}");
+        let msg = match err {
+            CoreError::Transport(m) => m,
+            other => panic!("expected Transport, got {other:?}"),
+        };
+        assert!(msg.contains("connect `"), "keeps the connect prefix: {msg}");
+        // The opaque tonic "transport error" must be enriched with the underlying
+        // cause from the source() chain (platform-dependent wording).
+        let lower = msg.to_lowercase();
+        assert!(
+            lower.contains("refused") || lower.contains("os error") || lower.contains("connect error"),
+            "transport error should include the underlying cause, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn error_chain_joins_sources_without_duplicating_tail() {
+        use std::fmt;
+
+        #[derive(Debug)]
+        struct Inner;
+        impl fmt::Display for Inner {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                write!(f, "Connection refused (os error 10061)")
+            }
+        }
+        impl std::error::Error for Inner {}
+
+        #[derive(Debug)]
+        struct Outer(Inner);
+        impl fmt::Display for Outer {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                write!(f, "transport error")
+            }
+        }
+        impl std::error::Error for Outer {
+            fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+                Some(&self.0)
+            }
+        }
+
+        assert_eq!(
+            error_chain(&Outer(Inner)),
+            "transport error: Connection refused (os error 10061)"
+        );
+        // A parent that already ends with its source's message is not duplicated.
+        #[derive(Debug)]
+        struct Repeat(Inner);
+        impl fmt::Display for Repeat {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                write!(f, "tcp connect error: Connection refused (os error 10061)")
+            }
+        }
+        impl std::error::Error for Repeat {
+            fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+                Some(&self.0)
+            }
+        }
+        assert_eq!(
+            error_chain(&Repeat(Inner)),
+            "tcp connect error: Connection refused (os error 10061)"
+        );
     }
 
     /// A response message whose fields are all at their proto3 default value must still
