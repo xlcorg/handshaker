@@ -32,6 +32,37 @@ export function bumpCargoToml(content, version) {
   return out.join(eol);
 }
 
+/**
+ * Replace the `version = "..."` line inside the `[[package]]` block whose
+ * `name = "<pkgName>"` in a Cargo.lock, leaving every other package untouched.
+ * Matches the name exactly (so `handshaker` does NOT touch `handshaker-core`).
+ * Original line endings (LF or CRLF) are preserved.
+ */
+export function bumpCargoLock(content, pkgName, version) {
+  const eol = content.includes("\r\n") ? "\r\n" : "\n";
+  const lines = content.split(/\r?\n/);
+  let currentName = null;
+  let done = false;
+  const out = lines.map((line) => {
+    if (/^\s*\[\[package\]\]\s*$/.test(line)) {
+      currentName = null;
+      return line;
+    }
+    const nameMatch = line.match(/^\s*name\s*=\s*"([^"]*)"\s*$/);
+    if (nameMatch) {
+      currentName = nameMatch[1];
+      return line;
+    }
+    if (!done && currentName === pkgName && /^\s*version\s*=\s*"[^"]*"/.test(line)) {
+      done = true;
+      return line.replace(/version\s*=\s*"[^"]*"/, `version = "${version}"`);
+    }
+    return line;
+  });
+  if (!done) throw new Error(`bumpCargoLock: package "${pkgName}" not found in Cargo.lock`);
+  return out.join(eol);
+}
+
 /** Replace the first (top-level) `"version": "..."` in a package.json, minimally. */
 export function bumpPackageJson(content, version) {
   const re = /("version"\s*:\s*)"[^"]*"/;
