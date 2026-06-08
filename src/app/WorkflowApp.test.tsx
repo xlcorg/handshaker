@@ -42,7 +42,13 @@ vi.mock("@/features/catalog/overview/CollectionOverview", () => ({
   ),
 }));
 vi.mock("@tauri-apps/api/window", () => ({
-  getCurrentWindow: () => ({ minimize: vi.fn(), toggleMaximize: vi.fn(), close: vi.fn() }),
+  getCurrentWindow: () => ({
+    minimize: vi.fn(),
+    toggleMaximize: vi.fn(),
+    close: vi.fn(),
+    isFullscreen: vi.fn().mockResolvedValue(false),
+    onResized: vi.fn().mockResolvedValue(() => {}),
+  }),
 }));
 vi.mock("@/features/settings/SettingsDialog", () => ({
   SettingsDialog: ({ open }: { open: boolean }) => (open ? <div>SETTINGS-DIALOG</div> : null),
