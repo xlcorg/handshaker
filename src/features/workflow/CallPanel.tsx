@@ -17,6 +17,8 @@ import {
 } from "./actions";
 import { newId } from "@/lib/ids";
 import type { MetadataRow, Step } from "./model";
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
+import { usePrefs } from "@/lib/use-prefs";
 
 interface CallPanelProps {
   step: Step;
@@ -30,6 +32,11 @@ interface CallPanelProps {
 
 /** The editable, sendable surface for one step — reused by Focus(draft)/List/Ledger. */
 export function CallPanel({ step, onPatch, onExecuted, editable }: CallPanelProps) {
+  const [prefs, setPref] = usePrefs();
+  // prefs.split is our own convention ("horizontal" = a horizontal divider = Top/Bottom);
+  // react-resizable-panels uses the inverse ("horizontal" = side-by-side), so flip it.
+  const orientation = prefs.split === "horizontal" ? "vertical" : "horizontal";
+
   const onBody = (value: string) => onPatch({ requestJson: value });
   const onMetadata = (rows: MetadataRow[]) => onPatch({ metadata: rows });
 
@@ -75,14 +82,26 @@ export function CallPanel({ step, onPatch, onExecuted, editable }: CallPanelProp
   return (
     <div className="flex h-full flex-col">
       {header}
-      <div className="flex min-h-0 flex-1">
-        <div className="min-w-0 flex-1 border-r border-border">
+      <ResizablePanelGroup
+        key={orientation}
+        orientation={orientation}
+        className="min-h-0 flex-1"
+        defaultLayout={{ request: prefs.bodyPanel, response: 100 - prefs.bodyPanel }}
+        onLayoutChanged={(layout: Record<string, number>) => {
+          const pct = layout["request"];
+          if (typeof pct === "number" && pct > 0) setPref("bodyPanel", pct);
+        }}
+      >
+        <ResizablePanel id="request" minSize="20%">
           <RequestTabs step={step} serviceAuth={step.auth} onBody={onBody} onMetadata={onMetadata} />
-        </div>
-        <div className="flex min-w-0 flex-1 flex-col">
-          <ResponseSlot step={step} />
-        </div>
-      </div>
+        </ResizablePanel>
+        <ResizableHandle withHandle />
+        <ResizablePanel id="response" minSize="20%">
+          <div className="flex h-full min-h-0 flex-col">
+            <ResponseSlot step={step} />
+          </div>
+        </ResizablePanel>
+      </ResizablePanelGroup>
     </div>
   );
 }
