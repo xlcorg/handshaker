@@ -1,5 +1,10 @@
 # macOS Titlebar Implementation Plan
 
+> **Статус: 🎉 feature-complete (2026-06-08).** Все задачи выполнены, влиты в `main`
+> merge-коммитом `ac2bab7`. Тесты 574/574, lint + build зелёные. Остаток: ручная
+> визуальная проверка на реальном Mac (`pnpm tauri dev`) — центрирование «светофора»
+> (`trafficLightPosition.y`) и схлопывание левого инсета в fullscreen.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Дать macOS отдельный идиоматичный стиль титлбара — нативный «светофор» (traffic lights) слева через Tauri `TitleBarStyle::Overlay`, без кастомных кнопок окна и без wordmark; Windows/Linux не меняются.

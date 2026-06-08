@@ -25,6 +25,10 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
   reflection-футером, единый underline-таб-стрип).
 - **Unified body view** — общий Monaco-вьюер запрос/ответ (folding, native Ctrl+F,
   Ctrl+dblclick copy, элизия >4096). Остаток: ручной Monaco-прогон.
+- **macOS-стиль титлбара** (🎉 feature-complete, merge `ac2bab7`) — нативный
+  «светофор» через Tauri `TitleBarStyle::Overlay` (`tauri.macos.conf.json`,
+  RFC7396-мердж), `isMacOS`/`useIsFullscreen`-ветвление `Titlebar.tsx` (без
+  wordmark/кнопок окна, левый инсет). Остаток: ручная визуальная проверка на Mac.
 
 Источник истины по статусу любой фичи — статус-баннер её план-файла в `archive/`,
 не эта строка.
