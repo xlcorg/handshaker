@@ -12,9 +12,11 @@ export interface RequestTabsProps {
   serviceAuth: SavedAuthConfigIpc;
   onBody: (value: string) => void;
   onMetadata: (rows: MetadataRow[]) => void;
+  /** Ctrl/Cmd+Enter inside the body editor → send. */
+  onSubmit?: () => void;
 }
 
-export function RequestTabs({ step, serviceAuth, onBody, onMetadata }: RequestTabsProps) {
+export function RequestTabs({ step, serviceAuth, onBody, onMetadata, onSubmit }: RequestTabsProps) {
   const [tab, setTab] = useState<Tab>("request");
   return (
     <div className="flex h-full flex-col">
@@ -30,7 +32,9 @@ export function RequestTabs({ step, serviceAuth, onBody, onMetadata }: RequestTa
         />
       </div>
       <div className="min-h-0 flex-1 overflow-hidden">
-        {tab === "request" ? <BodyEditor value={step.requestJson} onChange={onBody} /> : null}
+        {tab === "request" ? (
+          <BodyEditor value={step.requestJson} onChange={onBody} onSubmit={onSubmit} />
+        ) : null}
         {tab === "metadata" ? (
           <div className="h-full overflow-auto">
             <MetadataEditor rows={step.metadata} onChange={onMetadata} />

@@ -69,6 +69,14 @@ describe("DraftAddressBar", () => {
     expect(p.onSend).toHaveBeenCalledTimes(1);
   });
 
+  it("shows Cancel (not Send) while sending and calls onCancel when clicked", () => {
+    const p = props({ step: { ...base, status: "sending" } });
+    r(<DraftAddressBar {...p} />);
+    expect(screen.queryByRole("button", { name: /send/i })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
+    expect(p.onCancel).toHaveBeenCalledTimes(1);
+  });
+
   it("has no standalone refresh button in the bar (refresh lives in the dropdown)", () => {
     r(<DraftAddressBar {...props({ catalog: cat })} />);
     expect(screen.queryByLabelText("refresh-reflection")).toBeNull();

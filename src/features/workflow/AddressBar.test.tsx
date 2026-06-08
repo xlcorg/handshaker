@@ -13,10 +13,11 @@ describe("AddressBar cancel", () => {
     expect(screen.queryByRole("button", { name: /cancel/i })).not.toBeInTheDocument();
   });
 
-  it("shows Cancel while sending and calls onCancel when clicked", async () => {
+  it("shows Cancel (not Send) while sending and calls onCancel when clicked", async () => {
     const onCancel = vi.fn();
     const user = userEvent.setup();
     render(<AddressBar step={{ ...base, status: "sending" }} onSend={() => {}} onCancel={onCancel} />);
+    expect(screen.queryByRole("button", { name: /send/i })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /cancel/i }));
     expect(onCancel).toHaveBeenCalledOnce();
   });

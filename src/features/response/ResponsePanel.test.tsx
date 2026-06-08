@@ -30,6 +30,12 @@ describe("ResponsePanel", () => {
     expect(el.getAttribute("data-readonly")).toBe("true");
     expect(el.textContent).toContain("echo");
   });
+  it("shows the in-flight tab progress bar only while sending", () => {
+    const { rerender } = render(<ResponsePanel state="sending" outcome={null} />);
+    expect(screen.getByTestId("tab-progress")).toBeInTheDocument();
+    rerender(<ResponsePanel state="success" outcome={ok} />);
+    expect(screen.queryByTestId("tab-progress")).not.toBeInTheDocument();
+  });
   it("renders the Postman-style error face for a non-OK status", () => {
     render(<ResponsePanel state="error" outcome={err} />);
     // "NOT_FOUND" appears in both the RespMeta status pill (header) and the ErrorView face.

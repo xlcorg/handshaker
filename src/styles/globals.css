@@ -206,6 +206,22 @@ body {
 .pulse-dot { animation: hs-pulse 1.4s ease-in-out infinite; }
 @keyframes hs-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
 
+/* in-flight progress: a segment that grows out of the active tab's underline
+   (anchored at --bar-start) and sweeps to the right edge, then repeats. */
+.hs-tab-progress { overflow: hidden; }
+.hs-tab-progress::before {
+  content: ""; position: absolute; top: 0; bottom: 0;
+  left: var(--bar-start, 0); width: 0;
+  border-radius: 999px; background: hsl(var(--primary));
+  animation: hs-tab-progress 1.2s ease-in-out infinite;
+}
+@keyframes hs-tab-progress {
+  0%   { left: var(--bar-start, 0); width: 0; }
+  18%  { left: var(--bar-start, 0); width: 26px; }
+  70%  { left: var(--bar-start, 0); width: calc(100% - var(--bar-start, 0px)); }
+  100% { left: 100%; width: 0; }
+}
+
 /* small-caps section labels */
 .label-cap {
   font-size: 10.5px;

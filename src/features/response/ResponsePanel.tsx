@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { Activity } from "lucide-react";
 import { ResponseBody } from "./ResponseBody";
 import { EmptyState } from "./EmptyState";
@@ -18,6 +18,20 @@ type ResponseTab = "body" | "trailers" | "headers";
 export function ResponsePanel({ state, outcome }: ResponsePanelProps) {
   const [tab, setTab] = useState<ResponseTab>("body");
   const isError = state === "error";
+  const sending = state === "sending";
+
+  // While sending, the progress bar grows out of the active tab's underline.
+  // Measure that tab's left offset so the sweep starts exactly under it.
+  const headerRef = useRef<HTMLDivElement>(null);
+  const [barStart, setBarStart] = useState(0);
+  useLayoutEffect(() => {
+    if (!sending) return;
+    const activeTab = headerRef.current?.querySelector<HTMLElement>(
+      '[role="tab"][aria-selected="true"]',
+    );
+    // +8px aligns the sweep with the underline, which is inset (left-2) inside the tab.
+    if (activeTab) setBarStart(activeTab.offsetLeft + 8);
+  }, [sending, tab]);
   const trailers: KVRow[] = outcome
     ? Object.entries(outcome.trailing_metadata).map(([k, v]) => ({ k, v: v ?? "" }))
     : [];
@@ -26,7 +40,10 @@ export function ResponsePanel({ state, outcome }: ResponsePanelProps) {
 
   return (
     <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-background relative">
-      <div className="h-10 flex-none flex items-center gap-2.5 px-3.5 border-b border-border relative z-10 bg-background/85 backdrop-blur-sm">
+      <div
+        ref={headerRef}
+        className="h-10 flex-none flex items-center gap-2.5 px-3.5 border-b border-border relative z-10 bg-background/85 backdrop-blur-sm"
+      >
         <UnderlineTabs
           value={tab}
           onChange={(v) => setTab(v as ResponseTab)}
@@ -39,6 +56,14 @@ export function ResponsePanel({ state, outcome }: ResponsePanelProps) {
         <div className="ml-auto flex items-center gap-2.5">
           <RespMeta state={state} outcome={outcome} />
         </div>
+        {sending && (
+          <div
+            aria-hidden
+            data-testid="tab-progress"
+            className="hs-tab-progress pointer-events-none absolute inset-x-0 -bottom-px h-[1.5px]"
+            style={{ "--bar-start": `${barStart}px` } as CSSProperties}
+          />
+        )}
       </div>
       {state === "idle" && (
         <EmptyState

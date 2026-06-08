@@ -1,6 +1,7 @@
 import { Lock, Unlock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Kbd } from "@/components/ui/kbd";
 import { Tooltip } from "@/components/ui/tooltip";
 import { MethodPicker } from "@/features/shell/MethodPicker";
 import type { SelectedMethod } from "@/features/shell/SelectedMethod";
@@ -60,13 +61,16 @@ export function DraftAddressBar({
         className="flex-1"
       />
       {sending ? (
-        <Button size="sm" variant="outline" onClick={onCancel}>
-          ✕ Cancel
+        <Button size="sm" variant="ghost" onClick={onCancel} className="text-muted-foreground">
+          Cancel
         </Button>
-      ) : null}
-      <Button size="sm" onClick={onSend} disabled={sending || step.method.trim().length === 0}>
-        {sending ? "Sending…" : "▶ Send"}
-      </Button>
+      ) : (
+        <Tooltip content={<span>Send <Kbd>Ctrl</Kbd> <Kbd>Enter</Kbd></span>}>
+          <Button size="sm" onClick={onSend} disabled={step.method.trim().length === 0}>
+            ▶ Send
+          </Button>
+        </Tooltip>
+      )}
     </div>
   );
 }

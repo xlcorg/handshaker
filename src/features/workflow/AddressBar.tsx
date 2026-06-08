@@ -32,13 +32,14 @@ export function AddressBar({
         <span className="text-xs text-destructive">✕ error</span>
       ) : null}
       {sending ? (
-        <Button size="sm" variant="outline" onClick={onCancel}>
-          ✕ Cancel
+        <Button size="sm" variant="ghost" onClick={onCancel} className="text-muted-foreground">
+          Cancel
         </Button>
-      ) : null}
-      <Button size="sm" onClick={onSend} disabled={sending}>
-        {sending ? "Sending…" : "▶ Send"}
-      </Button>
+      ) : (
+        <Button size="sm" onClick={onSend}>
+          ▶ Send
+        </Button>
+      )}
     </div>
   );
 }

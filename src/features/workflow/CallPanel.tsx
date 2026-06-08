@@ -16,6 +16,7 @@ import {
   applyMethodSelection,
 } from "./actions";
 import { newId } from "@/lib/ids";
+import { useEffect, useRef } from "react";
 import type { MetadataRow, Step } from "./model";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { usePrefs } from "@/lib/use-prefs";
@@ -58,6 +59,26 @@ export function CallPanel({ step, onPatch, onExecuted, editable }: CallPanelProp
     if (step.requestId) void cancelStep(step.requestId);
   };
 
+  // Ctrl/Cmd+Enter sends the active draft (mirrors the Send button). Bound only
+  // for the editable Focus draft so history re-send panels don't all fire at once.
+  // A ref holds the freshest send logic so the window listener binds once.
+  const sendShortcutRef = useRef<() => void>(() => {});
+  sendShortcutRef.current = () => {
+    if (step.status === "sending" || step.method.trim().length === 0) return;
+    void onSend();
+  };
+  useEffect(() => {
+    if (!editable) return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+        e.preventDefault();
+        sendShortcutRef.current();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [editable]);
+
   const reflection = useDraftReflection(step.address, step.tls, !!editable);
 
   const header = editable ? (
@@ -93,7 +114,13 @@ export function CallPanel({ step, onPatch, onExecuted, editable }: CallPanelProp
         }}
       >
         <ResizablePanel id="request" minSize="20%">
-          <RequestTabs step={step} serviceAuth={step.auth} onBody={onBody} onMetadata={onMetadata} />
+          <RequestTabs
+            step={step}
+            serviceAuth={step.auth}
+            onBody={onBody}
+            onMetadata={onMetadata}
+            onSubmit={() => sendShortcutRef.current()}
+          />
         </ResizablePanel>
         <ResizableHandle withHandle />
         <ResizablePanel id="response" minSize="20%">

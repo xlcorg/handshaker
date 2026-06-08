@@ -16,6 +16,8 @@ export interface BodyViewProps {
   mode: Mode;
   value: string;
   onChange?: (next: string) => void;
+  /** Ctrl/Cmd+Enter inside the editor (Monaco swallows it, so we bind a command). */
+  onSubmit?: () => void;
 }
 
 interface Live {
@@ -29,9 +31,12 @@ interface Live {
   controller: DisposableLike | null;
 }
 
-export function BodyView({ mode, value, onChange }: BodyViewProps) {
+export function BodyView({ mode, value, onChange, onSubmit }: BodyViewProps) {
   const [prefs] = usePrefs();
   const live = useRef<Live | null>(null);
+  // Ref so the Monaco command (bound once in onMount) always calls the freshest handler.
+  const onSubmitRef = useRef(onSubmit);
+  onSubmitRef.current = onSubmit;
 
   // --- response rendering ------------------------------------------------
   const renderResponse = (text: string) => {
@@ -114,6 +119,20 @@ export function BodyView({ mode, value, onChange }: BodyViewProps) {
         const parsed = parseWithSpans(editor.getValue());
         live.current.tree = parsed?.tree ?? null;
         live.current.spans = parsed?.spans ?? [];
+      }
+      // Monaco intercepts Ctrl/Cmd+Enter (inserts a newline by default), so the
+      // window-level Send shortcut never sees it while the editor has focus.
+      // Bind it here to forward to the Send handler instead — but ONLY when this
+      // editor actually has a submit handler (i.e. the request editor). Monaco's
+      // addCommand registers the keybinding across *all* editor instances and the
+      // last registration wins (microsoft/monaco-editor#3345, #2947), so letting
+      // the read-only response editor register a no-op would clobber the request
+      // editor's command the moment a response renders — breaking the shortcut
+      // after the first send.
+      if (onSubmitRef.current) {
+        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
+          onSubmitRef.current?.();
+        });
       }
       live.current.controller = attachBodyController(editor, {
         getTree: () => live.current?.tree ?? null,

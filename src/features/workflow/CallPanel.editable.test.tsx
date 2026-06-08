@@ -49,4 +49,23 @@ describe("CallPanel editable", () => {
     fireEvent.click(screen.getByLabelText("TLS enabled"));
     expect(onPatch).toHaveBeenCalledWith({ tls: false });
   });
+
+  it("Ctrl+Enter sends the editable draft (sets status: sending)", () => {
+    const onPatch = vi.fn();
+    render(
+      <TooltipProvider>
+        <CallPanel step={draft} onPatch={onPatch} editable />
+      </TooltipProvider>
+    );
+    fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
+    // onSend's first effect is to mark the step as sending.
+    expect(onPatch).toHaveBeenCalledWith(expect.objectContaining({ status: "sending" }));
+  });
+
+  it("does not bind the send shortcut when not editable", () => {
+    const onPatch = vi.fn();
+    render(<CallPanel step={draft} onPatch={onPatch} />);
+    fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
+    expect(onPatch).not.toHaveBeenCalled();
+  });
 });
