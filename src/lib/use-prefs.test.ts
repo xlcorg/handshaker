@@ -49,3 +49,23 @@ describe("grpcIcon pref", () => {
     expect(typeof readPrefs().grpcIcon).toBe("string");
   });
 });
+
+describe("prefs bodyPanel", () => {
+  beforeEach(() => localStorage.clear());
+
+  it("defaults bodyPanel to 50 (percent of the call panel)", () => {
+    expect(PREFS_DEFAULTS.bodyPanel).toBe(50);
+  });
+
+  it("merges a persisted bodyPanel over defaults", () => {
+    const merged = { ...PREFS_DEFAULTS, bodyPanel: 35 };
+    expect(merged.bodyPanel).toBe(35);
+    expect(typeof readPrefs().bodyPanel).toBe("number");
+  });
+});
+
+describe("prefs split default", () => {
+  it("defaults split to 'vertical' (Left / Right) to preserve current layout", () => {
+    expect(PREFS_DEFAULTS.split).toBe("vertical");
+  });
+});
