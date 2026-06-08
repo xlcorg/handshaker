@@ -11,7 +11,7 @@ export interface RespMetaProps {
 
 export function RespMeta({ state, outcome }: RespMetaProps) {
   if (state === "idle") return <span className="text-xs text-muted-foreground">No response yet</span>;
-  if (state === "sending") return <span className="text-xs text-muted-foreground">awaiting…</span>;
+  if (state === "sending") return null;
   if (!outcome) return null;
   const base = "flex items-center gap-2 font-mono text-[11.5px]";
   const sizeLabel = formatBytes(outcome.response_json);

@@ -3,6 +3,7 @@ import { Activity } from "lucide-react";
 import { ResponseBody } from "./ResponseBody";
 import { EmptyState } from "./EmptyState";
 import { ErrorView } from "./ErrorView";
+import { ClientErrorView } from "./ClientErrorView";
 import { KVTable, type KVRow } from "./KVTable";
 import { RespMeta, type RespState } from "./RespMeta";
 import { UnderlineTabs } from "@/components/ui/underline-tabs";
@@ -11,11 +12,13 @@ import type { InvokeOutcomeIpc } from "@/ipc/bindings";
 export interface ResponsePanelProps {
   state: RespState;
   outcome: InvokeOutcomeIpc | null;
+  /** Client/transport error message (no gRPC outcome), shown in the Body tab. */
+  error?: string | null;
 }
 
 type ResponseTab = "body" | "trailers" | "headers";
 
-export function ResponsePanel({ state, outcome }: ResponsePanelProps) {
+export function ResponsePanel({ state, outcome, error }: ResponsePanelProps) {
   const [tab, setTab] = useState<ResponseTab>("body");
   const isError = state === "error";
   const sending = state === "sending";
@@ -72,19 +75,13 @@ export function ResponsePanel({ state, outcome }: ResponsePanelProps) {
           desc="Hit Send to invoke. Response body, trailers and timing will appear here."
         />
       )}
-      {state === "sending" && (
-        <EmptyState
-          icon={<span className="spinner" style={{ width: 18, height: 18 }} />}
-          title="Sending request…"
-          desc="Establishing channel and serializing message."
-        />
-      )}
       {state === "success" && outcome && tab === "body" && outcome.response_json !== null && (
         <ResponseBody json={outcome.response_json} />
       )}
       {state === "success" && outcome && tab === "trailers" && <KVTable rows={trailers} />}
       {state === "success" && outcome && tab === "headers" && <KVTable rows={headers} />}
       {isError && outcome && tab === "body" && <ErrorView outcome={outcome} />}
+      {isError && !outcome && error && tab === "body" && <ClientErrorView message={error} />}
       {isError && outcome && tab === "trailers" && <KVTable rows={trailers} />}
       {isError && outcome && tab === "headers" && <KVTable rows={headers} />}
     </div>

@@ -36,6 +36,11 @@ describe("ResponsePanel", () => {
     rerender(<ResponsePanel state="success" outcome={ok} />);
     expect(screen.queryByTestId("tab-progress")).not.toBeInTheDocument();
   });
+  it("shows a client/transport error in the Body tab when there is no gRPC outcome", () => {
+    render(<ResponsePanel state="error" outcome={null} error="connect `h:50023`: transport error" />);
+    expect(screen.getByText(/transport error/i)).toBeInTheDocument();
+    expect(screen.queryByTestId("monaco")).not.toBeInTheDocument();
+  });
   it("renders the Postman-style error face for a non-OK status", () => {
     render(<ResponsePanel state="error" outcome={err} />);
     // "NOT_FOUND" appears in both the RespMeta status pill (header) and the ErrorView face.

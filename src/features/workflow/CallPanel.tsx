@@ -1,7 +1,6 @@
 import { ResponsePanel } from "@/features/response/ResponsePanel";
 import type { RespState } from "@/features/response/RespMeta";
 import { authResolve } from "@/ipc/client";
-import { ClientErrorBanner } from "./ClientErrorBanner";
 import { AddressBar } from "./AddressBar";
 import { DraftAddressBar } from "./DraftAddressBar";
 import { useDraftReflection } from "./useDraftReflection";
@@ -145,10 +144,5 @@ function ResponseSlot({ step }: { step: Step }) {
             : "error"
           : "idle";
 
-  return (
-    <>
-      {step.error && !step.outcome ? <ClientErrorBanner message={step.error} /> : null}
-      <ResponsePanel state={respState} outcome={step.outcome} />
-    </>
-  );
+  return <ResponsePanel state={respState} outcome={step.outcome} error={step.error} />;
 }
