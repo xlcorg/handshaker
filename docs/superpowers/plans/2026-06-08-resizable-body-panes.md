@@ -272,17 +272,20 @@ describe("CallPanel body layout", () => {
     expect(container.querySelector('[data-slot="resizable-handle"]')).not.toBeNull();
   });
 
-  it("maps split='vertical' (Left/Right) to a horizontal-orientation group", () => {
+  // The react-resizable-panels v4 fork reflects orientation via the group's
+  // inline `flex-direction` style ("row" = horizontal, "column" = vertical) —
+  // NOT via aria-orientation/data-orientation (verified against the installed fork).
+  it("maps split='vertical' (Left/Right) to a row-direction (horizontal) group", () => {
     const { container } = render(<CallPanel step={draft} onPatch={() => {}} />);
-    const group = container.querySelector('[data-slot="resizable-panel-group"]')!;
-    expect(group.getAttribute("aria-orientation")).toBe("horizontal");
+    const group = container.querySelector('[data-slot="resizable-panel-group"]') as HTMLElement;
+    expect(group.style.flexDirection).toBe("row");
   });
 
-  it("maps split='horizontal' (Top/Bottom) to a vertical-orientation group", () => {
+  it("maps split='horizontal' (Top/Bottom) to a column-direction (vertical) group", () => {
     h.split = "horizontal";
     const { container } = render(<CallPanel step={draft} onPatch={() => {}} />);
-    const group = container.querySelector('[data-slot="resizable-panel-group"]')!;
-    expect(group.getAttribute("aria-orientation")).toBe("vertical");
+    const group = container.querySelector('[data-slot="resizable-panel-group"]') as HTMLElement;
+    expect(group.style.flexDirection).toBe("column");
   });
 });
 ```
