@@ -9,6 +9,8 @@ vi.mock("@tauri-apps/api/window", () => ({
     minimize: vi.fn(),
     toggleMaximize: vi.fn(),
     close: vi.fn(),
+    isFullscreen: vi.fn().mockResolvedValue(false),
+    onResized: vi.fn().mockResolvedValue(() => {}),
   }),
 }));
 vi.mock("@/ipc/client", () => ({
@@ -16,11 +18,19 @@ vi.mock("@/ipc/client", () => ({
   envActiveSet: vi.fn().mockResolvedValue(undefined),
 }));
 
+// isMacOS is a const evaluated at import; expose it through a getter so each
+// describe block can flip the platform before rendering.
+let mockIsMacOS = false;
+vi.mock("@/lib/platform", () => ({
+  get isMacOS() {
+    return mockIsMacOS;
+  },
+}));
+
 import { Titlebar } from "./Titlebar";
 import { workflowStore } from "@/features/workflow/store";
 
-// Titlebar uses <Tooltip>, which (like the live app's main.tsx) requires a
-// surrounding TooltipProvider. Wrap every render the same way the app does.
+// Titlebar uses <Tooltip>, which (like main.tsx) requires a TooltipProvider.
 function render(ui: React.ReactElement) {
   return rtlRender(<TooltipProvider>{ui}</TooltipProvider>);
 }
@@ -30,7 +40,11 @@ beforeEach(() => {
   workflowStore.reset();
 });
 
-describe("Titlebar", () => {
+describe("Titlebar (both platforms)", () => {
+  beforeEach(() => {
+    mockIsMacOS = false;
+  });
+
   it("renders workflow selector, env control and the English view switcher", async () => {
     render(<Titlebar onOpenSettings={() => {}} />);
     expect(screen.getByRole("button", { name: /workflow-1/ })).toBeInTheDocument();
@@ -38,13 +52,6 @@ describe("Titlebar", () => {
     expect(screen.getByRole("radio", { name: "Ledger" })).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "List" })).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "Focus" })).toBeInTheDocument();
-  });
-
-  it("renders the window control buttons", () => {
-    render(<Titlebar onOpenSettings={() => {}} />);
-    expect(screen.getByRole("button", { name: "Minimize window" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Maximize window" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Close window" })).toBeInTheDocument();
   });
 
   it("makes the bar a Tauri drag region", () => {
@@ -58,5 +65,47 @@ describe("Titlebar", () => {
     render(<Titlebar onOpenSettings={onOpenSettings} />);
     await user.click(screen.getByRole("button", { name: "Settings" }));
     expect(onOpenSettings).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("Titlebar on Windows/Linux", () => {
+  beforeEach(() => {
+    mockIsMacOS = false;
+  });
+
+  it("renders the custom window control buttons", () => {
+    render(<Titlebar onOpenSettings={() => {}} />);
+    expect(screen.getByRole("button", { name: "Minimize window" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Maximize window" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Close window" })).toBeInTheDocument();
+  });
+
+  it("shows the Handshaker wordmark", () => {
+    render(<Titlebar onOpenSettings={() => {}} />);
+    expect(screen.getByText("Handshaker")).toBeInTheDocument();
+  });
+});
+
+describe("Titlebar on macOS", () => {
+  beforeEach(() => {
+    mockIsMacOS = true;
+  });
+
+  it("omits the custom window control buttons (native traffic lights instead)", () => {
+    render(<Titlebar onOpenSettings={() => {}} />);
+    expect(screen.queryByRole("button", { name: "Minimize window" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Maximize window" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Close window" })).toBeNull();
+  });
+
+  it("omits the Handshaker wordmark", () => {
+    render(<Titlebar onOpenSettings={() => {}} />);
+    expect(screen.queryByText("Handshaker")).toBeNull();
+  });
+
+  it("still renders the sidebar/theme/settings utilities", () => {
+    render(<Titlebar onOpenSettings={() => {}} />);
+    expect(screen.getByRole("button", { name: "Toggle sidebar" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Settings" })).toBeInTheDocument();
   });
 });
