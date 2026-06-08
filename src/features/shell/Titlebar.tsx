@@ -3,6 +3,8 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Tooltip } from "@/components/ui/tooltip";
 import { usePrefs } from "@/lib/use-prefs";
 import { cn } from "@/lib/cn";
+import { isMacOS } from "@/lib/platform";
+import { useIsFullscreen } from "@/lib/use-fullscreen";
 import { WorkflowSelector } from "@/features/workflow/WorkflowSelector";
 import { WorkflowEnvControl } from "@/features/workflow/WorkflowEnvControl";
 import { ViewSwitcher } from "@/features/workflow/ViewSwitcher";
@@ -11,25 +13,37 @@ const btn =
   "h-5 w-6 rounded-sm inline-flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground";
 
 /**
- * Единый титлбар: лого + workflow/env слева, view-switcher по центру,
- * утилиты (сайдбар/тема/настройки) и кнопки окна справа. Весь бар — drag-зона
- * (`data-tauri-drag-region`); атрибут не наследуется детьми, поэтому он продублирован
- * на неинтерактивных зонах (корень, ячейки grid, лого/wordmark). Кнопки и дропдауны
- * перетаскивание не перехватывают — это нужное поведение.
+ * Единый титлбар: лого + workflow/env слева, view-switcher по центру, утилиты
+ * справа. Весь бар — drag-зона (`data-tauri-drag-region`); атрибут не наследуется
+ * детьми, поэтому продублирован на неинтерактивных зонах.
+ *
+ * Платформа:
+ * - Windows/Linux — фреймлес окно, кастомные min/max/close справа + wordmark.
+ * - macOS — нативный «светофор» (Tauri TitleBarStyle::Overlay) слева: добавляем
+ *   левый инсет под него (схлопывается в fullscreen), убираем wordmark и кнопки
+ *   окна.
  */
 export function Titlebar({ onOpenSettings }: { onOpenSettings: () => void }) {
   const [prefs, setPref] = usePrefs();
+  const fullscreen = useIsFullscreen();
+  const showTrafficInset = isMacOS && !fullscreen;
+
   return (
     <div
       data-tauri-drag-region
       className="grid h-9 flex-none grid-cols-[1fr_auto_1fr] items-center gap-2 bg-card border-b border-border px-2.5 select-none relative z-40"
     >
       <div data-tauri-drag-region className="flex items-center gap-2.5 min-w-0 justify-self-start">
+        {/* Width covers the native traffic-light cluster anchored at
+            trafficLightPosition.x in src-tauri/tauri.macos.conf.json — keep in sync. */}
+        {showTrafficInset && <span data-tauri-drag-region aria-hidden data-testid="mac-traffic-inset" className="w-[70px] flex-none" />}
         <span data-tauri-drag-region className="flex items-center gap-1.5">
           <LogoMark size={13} className="text-foreground/85" />
-          <span data-tauri-drag-region className="text-[13px] font-semibold tracking-tight text-foreground">
-            Handshaker
-          </span>
+          {!isMacOS && (
+            <span data-tauri-drag-region className="text-[13px] font-semibold tracking-tight text-foreground">
+              Handshaker
+            </span>
+          )}
         </span>
         <WorkflowSelector />
         <WorkflowEnvControl />
@@ -60,27 +74,31 @@ export function Titlebar({ onOpenSettings }: { onOpenSettings: () => void }) {
             <Settings size={13} />
           </button>
         </Tooltip>
-        <span className="h-3.5 w-px bg-border mx-1" />
-        <Tooltip content="Minimize" side="bottom">
-          <button type="button" onClick={() => getCurrentWindow().minimize()} className={btn} aria-label="Minimize window">
-            <Minus size={11} strokeWidth={1.5} />
-          </button>
-        </Tooltip>
-        <Tooltip content="Maximize" side="bottom">
-          <button type="button" onClick={() => getCurrentWindow().toggleMaximize()} className={btn} aria-label="Maximize window">
-            <Square size={9} strokeWidth={1.5} />
-          </button>
-        </Tooltip>
-        <Tooltip content="Close" side="bottom">
-          <button
-            type="button"
-            onClick={() => getCurrentWindow().close()}
-            className="h-5 w-6 rounded-sm inline-flex items-center justify-center text-muted-foreground hover:bg-destructive hover:text-destructive-foreground"
-            aria-label="Close window"
-          >
-            <X size={11} strokeWidth={1.5} />
-          </button>
-        </Tooltip>
+        {!isMacOS && (
+          <>
+            <span className="h-3.5 w-px bg-border mx-1" />
+            <Tooltip content="Minimize" side="bottom">
+              <button type="button" onClick={() => getCurrentWindow().minimize()} className={btn} aria-label="Minimize window">
+                <Minus size={11} strokeWidth={1.5} />
+              </button>
+            </Tooltip>
+            <Tooltip content="Maximize" side="bottom">
+              <button type="button" onClick={() => getCurrentWindow().toggleMaximize()} className={btn} aria-label="Maximize window">
+                <Square size={9} strokeWidth={1.5} />
+              </button>
+            </Tooltip>
+            <Tooltip content="Close" side="bottom">
+              <button
+                type="button"
+                onClick={() => getCurrentWindow().close()}
+                className="h-5 w-6 rounded-sm inline-flex items-center justify-center text-muted-foreground hover:bg-destructive hover:text-destructive-foreground"
+                aria-label="Close window"
+              >
+                <X size={11} strokeWidth={1.5} />
+              </button>
+            </Tooltip>
+          </>
+        )}
       </div>
     </div>
   );
