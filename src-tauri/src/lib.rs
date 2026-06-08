@@ -99,6 +99,7 @@ pub fn run() {
         .invoke_handler(specta_builder.invoke_handler())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_decorum::init())
         .setup(move |app| {
             specta_builder.mount_events(app);
             let data_dir = app
@@ -108,6 +109,20 @@ pub fn run() {
             let state = AppState::load(&data_dir)
                 .expect("initialize AppState from data dir");
             app.manage(state);
+
+            // macOS: vertically center the native traffic lights in our 36px (h-9)
+            // titlebar. decorum repositions the buttons and — unlike the static
+            // `trafficLightPosition` config — re-applies after resize / fullscreen-exit,
+            // fixing the position reset. y=16 centers a ~20px-tall button cluster in the
+            // 36px bar (button center = (button_height + y) / 2 ≈ 18). Tune via the inset.
+            #[cfg(target_os = "macos")]
+            {
+                use tauri_plugin_decorum::WebviewWindowExt;
+                if let Some(win) = app.get_webview_window("main") {
+                    let _ = win.set_traffic_lights_inset(14.0, 16.0);
+                }
+            }
+
             Ok(())
         })
         .run(tauri::generate_context!())

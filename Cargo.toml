@@ -39,6 +39,9 @@ tauri = { version = "2.11", features = [] }
 tauri-build = { version = "2", features = [] }
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
+# macOS traffic-light centering (set_traffic_lights_inset) — repositions native
+# window controls and re-applies on resize/fullscreen-exit. macOS-only at the call site.
+tauri-plugin-decorum = "1"
 tauri-specta = { version = "=2.0.0-rc.21", features = ["derive", "typescript"] }
 specta = "=2.0.0-rc.22"
 specta-typescript = "=0.0.9"
