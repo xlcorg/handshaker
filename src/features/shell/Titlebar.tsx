@@ -2,7 +2,6 @@ import { Minus, Moon, PanelLeft, Settings, Square, Sun, X } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Tooltip } from "@/components/ui/tooltip";
 import { usePrefs } from "@/lib/use-prefs";
-import { cn } from "@/lib/cn";
 import { isMacOS } from "@/lib/platform";
 import { useIsFullscreen } from "@/lib/use-fullscreen";
 import { WorkflowSelector } from "@/features/workflow/WorkflowSelector";
@@ -37,14 +36,11 @@ export function Titlebar({ onOpenSettings }: { onOpenSettings: () => void }) {
         {/* Width covers the native traffic-light cluster anchored at
             trafficLightPosition.x in src-tauri/tauri.macos.conf.json — keep in sync. */}
         {showTrafficInset && <span data-tauri-drag-region aria-hidden data-testid="mac-traffic-inset" className="w-[70px] flex-none" />}
-        <span data-tauri-drag-region className="flex items-center gap-1.5">
-          <LogoMark size={13} className="text-foreground/85" />
-          {!isMacOS && (
-            <span data-tauri-drag-region className="text-[13px] font-semibold tracking-tight text-foreground">
-              Handshaker
-            </span>
-          )}
-        </span>
+        {!isMacOS && (
+          <span data-tauri-drag-region className="text-[13px] font-semibold tracking-tight text-foreground">
+            Handshaker
+          </span>
+        )}
         <WorkflowSelector />
         <WorkflowEnvControl />
       </div>
@@ -101,26 +97,5 @@ export function Titlebar({ onOpenSettings }: { onOpenSettings: () => void }) {
         )}
       </div>
     </div>
-  );
-}
-
-function LogoMark({ size = 14, className }: { size?: number; className?: string }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={cn(className)}
-      aria-hidden
-    >
-      <path d="M4 9 L9 4 L13 8" />
-      <path d="M20 15 L15 20 L11 16" />
-      <path d="M8 12 L12 8 L16 12 L12 16 Z" />
-    </svg>
   );
 }

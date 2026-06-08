@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Box, ChevronDown, Search } from "lucide-react";
 import { ReflectionFooter, type ReflectionFooterProps } from "@/features/workflow/ReflectionFooter";
 import {
@@ -94,7 +94,10 @@ export function MethodPicker({ selected, catalog, onSelect, maxLabel = 160, clas
           {triggerLabel}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-[420px] p-0 overflow-hidden">
+      <DropdownMenuContent
+        align="start"
+        className="w-(--radix-dropdown-menu-trigger-width) min-w-[480px] max-w-[760px] p-0 overflow-hidden"
+      >
         <div className="relative border-b border-border">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
             <Search className="size-3" />
@@ -117,8 +120,8 @@ export function MethodPicker({ selected, catalog, onSelect, maxLabel = 160, clas
             groups.map((svc) => (
               <div key={svc.full} className="pb-1">
                 <div className="px-3 pt-2 pb-1 label-cap flex items-center gap-1.5">
-                  <Box className="size-2.5 opacity-60" />
-                  <span className="truncate">{svc.full}</span>
+                  <Box className="size-2.5 flex-none opacity-60" />
+                  <ServiceGroupLabel full={svc.full} short={svc.short} />
                 </div>
                 {svc.methods.map((m) => {
                   const active = selected.service === svc.full && selected.method === m.name;
@@ -153,6 +156,40 @@ export function MethodPicker({ selected, catalog, onSelect, maxLabel = 160, clas
         )}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+/**
+ * Group header for a service. Shows the full dotted name when it fits; if the
+ * namespace is too long for the (widened) dropdown, falls back to just the service
+ * name (last segment) so the meaningful part stays visible instead of being cut by a
+ * right-side ellipsis. Full name always available on hover via `title`.
+ */
+function ServiceGroupLabel({ full, short }: { full: string; short: string }) {
+  const wrapRef = useRef<HTMLSpanElement>(null);
+  const probeRef = useRef<HTMLSpanElement>(null);
+  const [overflow, setOverflow] = useState(false);
+
+  useLayoutEffect(() => {
+    const wrap = wrapRef.current;
+    const probe = probeRef.current;
+    if (!wrap || !probe) return;
+    const check = () => setOverflow(probe.scrollWidth > wrap.clientWidth);
+    check();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(check);
+    ro.observe(wrap);
+    return () => ro.disconnect();
+  }, [full]);
+
+  return (
+    <span ref={wrapRef} title={full} className="relative min-w-0 flex-1 truncate">
+      {/* Hidden probe measures the full name's natural width without affecting layout. */}
+      <span ref={probeRef} aria-hidden className="invisible absolute left-0 top-0 whitespace-nowrap">
+        {full}
+      </span>
+      {overflow ? short : full}
+    </span>
   );
 }
 
