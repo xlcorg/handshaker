@@ -27,6 +27,11 @@ vi.mock("@/lib/platform", () => ({
   },
 }));
 
+let mockFullscreen = false;
+vi.mock("@/lib/use-fullscreen", () => ({
+  useIsFullscreen: () => mockFullscreen,
+}));
+
 import { Titlebar } from "./Titlebar";
 import { workflowStore } from "@/features/workflow/store";
 
@@ -38,6 +43,7 @@ function render(ui: React.ReactElement) {
 beforeEach(() => {
   vi.clearAllMocks();
   workflowStore.reset();
+  mockFullscreen = false;
 });
 
 describe("Titlebar (both platforms)", () => {
@@ -107,5 +113,17 @@ describe("Titlebar on macOS", () => {
     render(<Titlebar onOpenSettings={() => {}} />);
     expect(screen.getByRole("button", { name: "Toggle sidebar" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Settings" })).toBeInTheDocument();
+  });
+
+  it("renders the traffic-light inset when not fullscreen", () => {
+    mockFullscreen = false;
+    render(<Titlebar onOpenSettings={() => {}} />);
+    expect(screen.getByTestId("mac-traffic-inset")).toBeInTheDocument();
+  });
+
+  it("collapses the traffic-light inset in fullscreen", () => {
+    mockFullscreen = true;
+    render(<Titlebar onOpenSettings={() => {}} />);
+    expect(screen.queryByTestId("mac-traffic-inset")).toBeNull();
   });
 });

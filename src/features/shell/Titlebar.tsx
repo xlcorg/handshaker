@@ -36,7 +36,7 @@ export function Titlebar({ onOpenSettings }: { onOpenSettings: () => void }) {
       <div data-tauri-drag-region className="flex items-center gap-2.5 min-w-0 justify-self-start">
         {/* Width covers the native traffic-light cluster anchored at
             trafficLightPosition.x in src-tauri/tauri.macos.conf.json — keep in sync. */}
-        {showTrafficInset && <span data-tauri-drag-region aria-hidden className="w-[70px] flex-none" />}
+        {showTrafficInset && <span data-tauri-drag-region aria-hidden data-testid="mac-traffic-inset" className="w-[70px] flex-none" />}
         <span data-tauri-drag-region className="flex items-center gap-1.5">
           <LogoMark size={13} className="text-foreground/85" />
           {!isMacOS && (
