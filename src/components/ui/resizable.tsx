@@ -11,7 +11,10 @@ function ResizablePanelGroup({
     <ResizablePrimitive.Group
       data-slot="resizable-panel-group"
       className={cn(
-        "flex h-full w-full aria-[orientation=vertical]:flex-col",
+        // Orientation drives flex-direction via the fork's inline style on this
+        // element (row/column); the Group carries no aria-orientation, so a
+        // Tailwind `aria-[orientation=...]` variant here would never match.
+        "flex h-full w-full",
         className
       )}
       {...props}

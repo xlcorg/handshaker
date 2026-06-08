@@ -7,7 +7,7 @@ export interface ResponseBodyProps {
 /** Response-body viewer: read-only Monaco with elision via the shared BodyView. */
 export function ResponseBody({ json }: ResponseBodyProps) {
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <BodyView mode="response" value={json} />
     </div>
   );

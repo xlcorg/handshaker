@@ -14,6 +14,9 @@ export interface Prefs {
   /** Sidebar panel size as a percent of the window (resizable, persisted). Clamped to [12, 40]
    *  by the ResizablePanel. */
   sidebarPanel: number;
+  /** Request body pane size as a percent of the call panel (resizable, persisted).
+   *  Clamped to [20, 80] by the ResizablePanel. Shared across split orientations. */
+  bodyPanel: number;
   split: SplitDir;
   fontUi: FontUi;
   fontMono: FontMono;
@@ -30,7 +33,8 @@ export const PREFS_DEFAULTS: Prefs = {
   density: "regular",
   sidebar: true,
   sidebarPanel: 18,
-  split: "horizontal",
+  bodyPanel: 50,
+  split: "vertical",
   fontUi: "inter",
   fontMono: "jetbrains",
   dots: true,

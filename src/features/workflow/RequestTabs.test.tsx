@@ -45,6 +45,22 @@ describe("RequestTabs", () => {
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
   });
 
+  it("does not wrap the Monaco request tab in overflow-auto (scrollbar bug)", () => {
+    const p = setup();
+    render(<RequestTabs {...p} />);
+    const container = screen.getByTestId("body-editor").parentElement!;
+    expect(container.className).toContain("overflow-hidden");
+    expect(container.className).not.toContain("overflow-auto");
+  });
+
+  it("gives the Metadata tab its own scroll wrapper", async () => {
+    const user = userEvent.setup();
+    const p = setup();
+    render(<RequestTabs {...p} />);
+    await user.click(screen.getByRole("tab", { name: /metadata/i }));
+    expect(screen.getByLabelText("metadata-key-0").closest(".overflow-auto")).not.toBeNull();
+  });
+
   it("renders a tablist with underline-style tabs (no pill bg-accent on the active tab)", async () => {
     const user = userEvent.setup();
     const p = setup();

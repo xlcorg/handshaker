@@ -29,10 +29,18 @@ export function RequestTabs({ step, serviceAuth, onBody, onMetadata }: RequestTa
           ]}
         />
       </div>
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div className="min-h-0 flex-1 overflow-hidden">
         {tab === "request" ? <BodyEditor value={step.requestJson} onChange={onBody} /> : null}
-        {tab === "metadata" ? <MetadataEditor rows={step.metadata} onChange={onMetadata} /> : null}
-        {tab === "auth" ? <AuthReadOnly auth={serviceAuth} /> : null}
+        {tab === "metadata" ? (
+          <div className="h-full overflow-auto">
+            <MetadataEditor rows={step.metadata} onChange={onMetadata} />
+          </div>
+        ) : null}
+        {tab === "auth" ? (
+          <div className="h-full overflow-auto">
+            <AuthReadOnly auth={serviceAuth} />
+          </div>
+        ) : null}
       </div>
     </div>
   );
