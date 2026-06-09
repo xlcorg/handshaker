@@ -10,7 +10,7 @@ vi.mock("@/ipc/client", () => ({
 
 import * as ipc from "@/ipc/client";
 import { createStepFromMethod, sendStep, stepPatchFromSendResult, resolveAuthHeader, shouldRecordExecuted, buildExecutedStep, cancelStep } from "./actions";
-import { buildRequestSkeletonSafe, applyMethodSelection } from "./actions";
+import { buildRequestSkeletonSafe, applyMethodSelection, isPristineBody } from "./actions";
 import { newStep } from "./model";
 
 beforeEach(() => {
@@ -419,5 +419,33 @@ describe("applyMethodSelection", () => {
     await applyMethodSelection(patch, { address: "h:443", tls: true }, { service: "p.S", method: "M" });
     expect(patch).toHaveBeenNthCalledWith(1, { service: "p.S", method: "M" });
     expect(patch).toHaveBeenNthCalledWith(2, { requestJson: '{"a":""}' });
+  });
+});
+
+describe("isPristineBody", () => {
+  const skel = '{"a":""}';
+
+  it("treats empty / {} bodies as pristine", () => {
+    expect(isPristineBody("", skel)).toBe(true);
+    expect(isPristineBody("   ", skel)).toBe(true);
+    expect(isPristineBody("{}", skel)).toBe(true);
+  });
+
+  it("ignores whitespace/formatting when comparing to the skeleton", () => {
+    expect(isPristineBody('{\n  "a": ""\n}', skel)).toBe(true);
+  });
+
+  it("treats an edited body as not pristine", () => {
+    expect(isPristineBody('{"a":"edited"}', skel)).toBe(false); // changed value
+    expect(isPristineBody('{"a":"","b":1}', skel)).toBe(false); // extra key
+  });
+
+  it("treats invalid JSON (mid-edit) as not pristine", () => {
+    expect(isPristineBody('{"a":', skel)).toBe(false);
+  });
+
+  it("falls back to a trimmed string compare when the skeleton is unparseable", () => {
+    expect(isPristineBody("not json", "not json")).toBe(true);
+    expect(isPristineBody("not json", "other")).toBe(false);
   });
 });

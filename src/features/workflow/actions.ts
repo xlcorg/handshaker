@@ -11,6 +11,27 @@ export interface CallTargetInit {
   tls: boolean;
 }
 
+/** Canonical JSON string (whitespace-normalized), or undefined if `s` is not JSON. */
+function canonicalJson(s: string): string | undefined {
+  try {
+    return JSON.stringify(JSON.parse(s));
+  } catch {
+    return undefined;
+  }
+}
+
+/** True when `body` is still the unedited skeleton (or empty), so a method switch may
+ *  safely replace it. Whitespace/formatting differences are NOT edits; invalid JSON is. */
+export function isPristineBody(body: string, skeleton: string): boolean {
+  const trimmed = body.trim();
+  if (trimmed === "" || trimmed === "{}") return true;
+  const cs = canonicalJson(skeleton);
+  if (cs === undefined) return trimmed === skeleton.trim(); // skeleton is non-JSON → string compare
+  const cb = canonicalJson(body);
+  if (cb === undefined) return false; // mid-edit, invalid JSON → preserve
+  return cb === cs;
+}
+
 /** Best-effort `{{var}}` resolution for a connection address. Unresolved placeholders are
  *  left literal (the subsequent gRPC call surfaces the failure), mirroring the Send path so
  *  reflection/skeleton dial the same resolved host the eventual invoke will. */
