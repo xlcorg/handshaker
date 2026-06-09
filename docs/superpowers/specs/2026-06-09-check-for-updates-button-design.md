@@ -24,6 +24,15 @@ follow-up: «a manual 'Check for updates' button in Settings → About»).
 
 Инлайн-статуса в About нет — панель содержит только кнопку.
 
+**Отложенное обновление («Later») остаётся видимым в иконке.** Если обновление
+найдено, пользователь может нажать «Later» — тост скрывается, но **иконка в
+тайтлбаре показывает бейдж «доступно обновление»** и держит его, пока обновление
+не установлено (или пока следующая проверка не подтвердит, что версия актуальна).
+Клик по иконке снова запускает проверку → тост с «Update now» / «Later»
+возвращается, и отложенное обновление можно установить. Значит, факт доступности
+обновления нужно **латчить** отдельно от фазы тоста (которую `dismiss` сбрасывает
+в `idle`).
+
 **Авто-проверка на старте остаётся «тихой»:** тост показывается только если
 найдено обновление (текущее поведение). Тост «You're on the latest version» и
 loading «Checking…» появляются **только для ручной проверки** — иначе при каждом
@@ -71,7 +80,7 @@ context, по образцу существующего `CatalogProvider`:
 
 ## Изменения по компонентам
 
-### 1. `useUpdateCheck` — `recheck()` + флаг `manual`
+### 1. `useUpdateCheck` — `recheck()` + флаги `manual` / `hasUpdate`
 
 Вынести логику проверки из mount-`useEffect` в стабильный
 `recheck = useCallback(...)`, который вызывается и на mount, и наружу.
@@ -81,13 +90,20 @@ context, по образцу существующего `CatalogProvider`:
 - **Флаг `manual`** в возвращаемом состоянии: `recheck()` извне ставит
   `manual: true`; авто-вызов на mount — `manual: false`. Тост по нему решает,
   показывать ли результат «тихих» фаз (`checking` / `upToDate` / `error`).
+- **Латч `hasUpdate: boolean` (+ сохранённый `version`)** — отдельно от `phase`.
+  Ставится `true`, когда найдено обновление; **переживает `dismiss()`** (чтобы
+  иконка держала бейдж после «Later»); сбрасывается в `false`, когда проверка
+  вернула `upToDate`. На `checking` / `error` латч и `version` сохраняются (бейдж
+  не мигает во время повторной проверки). Драйвит бейдж тайтлбара.
+- **`dismiss()`** теперь только гасит тост: `{ ...s, phase: "idle", progress: 0 }`
+  — `hasUpdate` и `version` сохраняются. (Раньше обнулял `version`.)
 - **Guard:** если уже идёт `checking` или `downloading` — no-op (через
   `inFlightRef`), чтобы повторные клики не накладывались и не запускали загрузку
   дважды. `install()` тоже выставляет `inFlight`, чтобы `recheck` не вмешивался в
   идущую загрузку.
 - Сохранить unmount-safety: `mountedRef`, чтобы не звать `setState` после
   размонтирования.
-- `install()` и `dismiss()` — поведение без изменений. `recheck` и `manual`
+- `install()` — поведение без изменений. `recheck`, `manual`, `hasUpdate`
   добавляются в интерфейс `UseUpdateCheck`.
 
 ### 2. Контекст апдейтера
@@ -101,6 +117,7 @@ context, по образцу существующего `CatalogProvider`:
 
 - `onCheckForUpdates?: () => void`
 - `updatePhase?: UpdatePhase`
+- `updateAvailable?: boolean` — латч доступности (переживает «Later»).
 
 Когда `onCheckForUpdates` передан — рендерить иконку-кнопку (`RefreshCw` из
 `lucide-react`) рядом с кнопкой Settings, с тултипом и поведением по фазе:
@@ -108,12 +125,17 @@ context, по образцу существующего `CatalogProvider`:
 - `checking` / `downloading` → тултип «Checking for updates…», иконка
   `animate-spin`, кнопка `disabled` (защита от двойного клика; результат всё равно
   придёт тостом);
-- `available` → тултип «Update available»;
+- иначе если `updateAvailable` → тултип «Update available»;
 - иначе → тултип «Check for updates».
+
+**Бейдж доступности:** когда `updateAvailable` — на иконке маленькая цветная
+точка (accent/primary) в углу, видимая и после «Later» (когда `phase` уже
+`idle`). Клик по кнопке всегда зовёт `recheck` → тост возвращается.
 
 `aria-label` кнопки — «Check for updates» (стабильный, для тестов). Пропсы
 опциональны ⇒ существующие рендеры `Titlebar` в тестах не трогаем. `WorkflowApp`
-передаёт `onCheckForUpdates={update.recheck}` и `updatePhase={update.phase}`.
+передаёт `onCheckForUpdates={update.recheck}`, `updatePhase={update.phase}`,
+`updateAvailable={update.hasUpdate}`.
 
 ### 4. Settings → About — кнопка
 
@@ -149,14 +171,18 @@ context, по образцу существующего `CatalogProvider`:
 
 - `useUpdateCheck.test.tsx` (дополнить): `recheck()` повторно зовёт `check` и
   переводит в `available`; `recheck()` ставит `manual: true`, авто-mount —
-  `manual: false`; `recheck()` — no-op во время `downloading`.
+  `manual: false`; `recheck()` — no-op во время `downloading`; найдено обновление
+  → `hasUpdate: true`; **`dismiss()` после `available` → `phase: "idle"`, но
+  `hasUpdate` остаётся `true` и `version` сохранён**; `upToDate` сбрасывает
+  `hasUpdate` в `false`.
 - `UpdateToast.test.tsx` (дополнить): при `manual` фаза `upToDate` → success-тост
   «You're on the latest version.»; `error` → error-тост; `checking` → loading.
   При `manual: false` те же фазы тост не показывают; `available` показывает в
   обоих случаях.
 - `Titlebar.test.tsx` (дополнить): при переданном `onCheckForUpdates` есть кнопка
   с `aria-label` «Check for updates», клик вызывает колбэк; при
-  `updatePhase="checking"` кнопка `disabled`.
+  `updatePhase="checking"` кнопка `disabled`; при `updateAvailable` (даже с
+  `updatePhase="idle"`) показан бейдж доступности.
 - `AboutPane.test.tsx` (новый): кнопка «Check for updates» есть; клик зовёт
   `recheck`. Рендер под `UpdaterContext.Provider` с фейковым значением; мок
   `@/ipc/client` (`ipc.appVersion`).
@@ -177,13 +203,13 @@ context, по образцу существующего `CatalogProvider`:
 
 | Файл | Изменение |
 |------|-----------|
-| `src/features/updater/useUpdateCheck.ts` | + `recheck()`, флаг `manual`, guard, в интерфейс |
-| `src/features/updater/useUpdateCheck.test.tsx` | + тесты на `recheck` / `manual` |
+| `src/features/updater/useUpdateCheck.ts` | + `recheck()`, флаги `manual` / `hasUpdate`, `dismiss` сохраняет латч, guard |
+| `src/features/updater/useUpdateCheck.test.tsx` | + тесты `recheck` / `manual` / `hasUpdate`-латч |
 | `src/features/updater/updaterContext.tsx` | новый: `UpdaterContext` + `useUpdater` |
 | `src/features/updater/UpdateToast.tsx` | + результат ручной проверки (`checking`/`upToDate`/`error`), проп `manual` |
 | `src/features/updater/UpdateToast.test.tsx` | + тесты manual-фаз |
-| `src/app/WorkflowApp.tsx` | обернуть в провайдер; пропсы в `Titlebar`; `manual` в `UpdateToast` |
-| `src/features/shell/Titlebar.tsx` | + опц. пропсы + иконка-кнопка |
-| `src/features/shell/Titlebar.test.tsx` | + тест кнопки |
+| `src/app/WorkflowApp.tsx` | обернуть в провайдер; пропсы в `Titlebar` (+ `updateAvailable`); `manual` в `UpdateToast` |
+| `src/features/shell/Titlebar.tsx` | + опц. пропсы + иконка-кнопка + бейдж доступности |
+| `src/features/shell/Titlebar.test.tsx` | + тест кнопки + бейджа |
 | `src/features/settings/AboutPane.tsx` | + группа Updates (одна кнопка) |
 | `src/features/settings/AboutPane.test.tsx` | новый |
