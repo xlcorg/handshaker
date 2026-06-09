@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { render, screen, fireEvent, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import type { ItemIpc } from "@/ipc/bindings";
 import type { TreeCallbacks } from "@/features/catalog/treeTypes";
@@ -53,6 +54,14 @@ describe("AppearancePane", () => {
     const outlineBtn = within(rowEl).getByLabelText("outline");
     fireEvent.click(outlineBtn);
     expect(readPrefs().grpcIcon).toBe("outline");
+  });
+
+  it("method list style dropdown updates the pref", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(<AppearancePane />);
+    await user.click(screen.getByLabelText("method-list-style"));
+    await user.click(screen.getByText("Tree"));
+    expect(readPrefs().methodGroupStyle).toBe("tree");
   });
 
   it("switching the toggle re-renders the request row icon live", () => {

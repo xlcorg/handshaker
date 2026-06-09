@@ -6,6 +6,8 @@ export type SplitDir = "horizontal" | "vertical";
 export type FontUi = "inter" | "geist" | "system";
 export type FontMono = "jetbrains" | "geist-mono" | "ibm";
 export type GrpcIconStyle = "solid" | "letter" | "outline" | "circle";
+/** How a service group header is visually separated from its methods in the MethodPicker dropdown. */
+export type MethodGroupStyle = "band" | "tree" | "weight" | "card" | "bar" | "chip" | "zebra";
 
 export interface Prefs {
   theme: ThemeMode;
@@ -26,6 +28,8 @@ export interface Prefs {
   /** Per-request deadline in ms, applied backend-side via tokio timeout. */
   requestTimeoutMs: number;
   grpcIcon: GrpcIconStyle;
+  /** Service-group header style in the MethodPicker dropdown. */
+  methodGroupStyle: MethodGroupStyle;
 }
 
 export const PREFS_DEFAULTS: Prefs = {
@@ -41,6 +45,7 @@ export const PREFS_DEFAULTS: Prefs = {
   zoom: 1,
   requestTimeoutMs: 30000,
   grpcIcon: "solid",
+  methodGroupStyle: "zebra",
 };
 
 export const ZOOM_MIN = 0.5;

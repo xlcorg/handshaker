@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Box, ChevronDown, Search } from "lucide-react";
 import { ReflectionFooter, type ReflectionFooterProps } from "@/features/workflow/ReflectionFooter";
 import {
@@ -9,6 +9,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Kbd } from "@/components/ui/kbd";
 import { cn } from "@/lib/cn";
+import { usePrefs } from "@/lib/use-prefs";
 import type { ServiceCatalogIpc } from "@/ipc/bindings";
 import { deriveKind, shortService, type MethodKind, type SelectedMethod } from "./SelectedMethod";
 
@@ -26,6 +27,7 @@ export function MethodPicker({ selected, catalog, onSelect, maxLabel = 160, clas
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const [prefs] = usePrefs();
 
   useEffect(() => {
     if (open) {
@@ -84,6 +86,7 @@ export function MethodPicker({ selected, catalog, onSelect, maxLabel = 160, clas
       <DropdownMenuTrigger asChild>
         <button
           type="button"
+          title={hasMethod ? `${selected.service}/${selected.method}` : undefined}
           className={cn(
             "group inline-flex items-center gap-2 h-7 px-2 -ml-1.5 rounded-md transition-colors font-mono text-xs",
             "hover:bg-accent",
@@ -113,36 +116,39 @@ export function MethodPicker({ selected, catalog, onSelect, maxLabel = 160, clas
             <Kbd>esc</Kbd>
           </span>
         </div>
-        <div className="max-h-[360px] overflow-auto scroll-thin py-1">
+        <div className="max-h-[360px] overflow-auto scroll-thin py-1" data-mp-style={prefs.methodGroupStyle}>
           {groups.length === 0 ? (
             <div className="px-4 py-8 text-center text-xs text-muted-foreground">No methods match "{q}"</div>
           ) : (
             groups.map((svc) => (
-              <div key={svc.full} className="pb-1">
-                <div className="px-3 pt-2 pb-1 label-cap flex items-center gap-1.5">
+              <div key={svc.full} className="mp-grp pb-1">
+                <div className="mp-ghead px-3 pt-2 pb-1 flex items-center gap-1.5 text-muted-foreground">
                   <Box className="size-2.5 flex-none opacity-60" />
                   <ServiceGroupLabel full={svc.full} short={svc.short} />
                 </div>
-                {svc.methods.map((m) => {
-                  const active = selected.service === svc.full && selected.method === m.name;
-                  return (
-                    <button
-                      type="button"
-                      key={m.name}
-                      onClick={() => {
-                        onSelect({ service: svc.full, method: m.name, kind: m.kind });
-                        setOpen(false);
-                      }}
-                      className={cn(
-                        "w-full flex items-center gap-2 px-3 pl-8 h-7 font-mono text-xs transition-colors text-left",
-                        active ? "bg-accent text-foreground" : "text-foreground/85 hover:bg-accent/60",
-                      )}
-                    >
-                      <span className="min-w-0 flex-1 truncate font-medium text-foreground">{m.name}</span>
-                      <KindDot kind={m.kind} />
-                    </button>
-                  );
-                })}
+                <div className="mp-gbody">
+                  {svc.methods.map((m) => {
+                    const active = selected.service === svc.full && selected.method === m.name;
+                    return (
+                      <button
+                        type="button"
+                        key={m.name}
+                        data-active={active}
+                        onClick={() => {
+                          onSelect({ service: svc.full, method: m.name, kind: m.kind });
+                          setOpen(false);
+                        }}
+                        className={cn(
+                          "mp-mrow w-full flex items-center gap-2 px-3 pl-8 h-7 font-mono text-xs transition-colors text-left",
+                          active ? "bg-accent text-foreground" : "text-foreground/85 hover:bg-accent/60",
+                        )}
+                      >
+                        <span className="mp-mname min-w-0 flex-1 truncate font-medium text-foreground">{m.name}</span>
+                        <KindDot kind={m.kind} />
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             ))
           )}
@@ -160,35 +166,16 @@ export function MethodPicker({ selected, catalog, onSelect, maxLabel = 160, clas
 }
 
 /**
- * Group header for a service. Shows the full dotted name when it fits; if the
- * namespace is too long for the (widened) dropdown, falls back to just the service
- * name (last segment) so the meaningful part stays visible instead of being cut by a
- * right-side ellipsis. Full name always available on hover via `title`.
+ * Group header for a service. Shows the short service name (last dotted segment)
+ * up front for quick reading, then the full dotted path as muted secondary text
+ * that truncates from the right when it doesn't fit. The full path is always
+ * available on hover via `title`.
  */
-function ServiceGroupLabel({ full, short }: { full: string; short: string }) {
-  const wrapRef = useRef<HTMLSpanElement>(null);
-  const probeRef = useRef<HTMLSpanElement>(null);
-  const [overflow, setOverflow] = useState(false);
-
-  useLayoutEffect(() => {
-    const wrap = wrapRef.current;
-    const probe = probeRef.current;
-    if (!wrap || !probe) return;
-    const check = () => setOverflow(probe.scrollWidth > wrap.clientWidth);
-    check();
-    if (typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(check);
-    ro.observe(wrap);
-    return () => ro.disconnect();
-  }, [full]);
-
+export function ServiceGroupLabel({ full, short }: { full: string; short: string }) {
   return (
-    <span ref={wrapRef} title={full} className="relative min-w-0 flex-1 truncate">
-      {/* Hidden probe measures the full name's natural width without affecting layout. */}
-      <span ref={probeRef} aria-hidden className="invisible absolute left-0 top-0 whitespace-nowrap">
-        {full}
-      </span>
-      {overflow ? short : full}
+    <span title={full} className="min-w-0 flex-1 flex items-baseline gap-2">
+      <span className="mp-sname flex-none text-xs font-semibold text-foreground/85">{short}</span>
+      <span className="mp-spath min-w-0 truncate font-mono text-[11px] text-muted-foreground/55">{full}</span>
     </span>
   );
 }

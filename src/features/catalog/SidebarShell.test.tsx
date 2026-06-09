@@ -127,13 +127,10 @@ describe("SidebarShell", () => {
     expect(patchUiState).toHaveBeenCalledWith({ sort_key: "created" });
   });
 
-  it("the gear button opens the Settings dialog", async () => {
+  it("does not render a settings button (settings live in the titlebar)", () => {
     renderShell();
+    expect(screen.queryByLabelText("open-settings")).toBeNull();
     expect(screen.queryByRole("dialog")).toBeNull();
-    fireEvent.click(screen.getByLabelText("open-settings"));
-    const dialog = await screen.findByRole("dialog");
-    expect(dialog).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Settings" })).toBeTruthy();
   });
 
   it("forwards activeItemId to the tree (active row highlighted)", () => {

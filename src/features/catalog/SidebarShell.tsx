@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
-import { FilePlus, FolderPlus, Plus, Settings } from "lucide-react";
+import { FilePlus, FolderPlus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Tooltip } from "@/components/ui/tooltip";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,7 +9,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Sidebar, SidebarHeader, SidebarContent, SidebarGroupLabel } from "@/components/ui/sidebar";
-import { SettingsDialog } from "@/features/settings/SettingsDialog";
 import { newId } from "@/lib/ids";
 import type { ItemIpc, SavedRequestIpc } from "@/ipc/bindings";
 import { useCatalog } from "./CatalogProvider";
@@ -43,7 +41,6 @@ export function SidebarShell({
   const [filter, setFilter] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("alpha");
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Restore the persisted sort key once on mount (via the shared uiState cache).
   useEffect(() => {
@@ -103,19 +100,7 @@ export function SidebarShell({
 
         <div className="flex items-center justify-between border-b border-border px-2 py-1">
           <SidebarGroupLabel className="h-auto text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Collections</SidebarGroupLabel>
-          <div className="flex items-center gap-1">
-            <SortControl value={sortKey} onChange={onChangeSort} />
-            <Tooltip content="Settings">
-              <Button
-                size="icon"
-                variant="ghost"
-                aria-label="open-settings"
-                onClick={() => setSettingsOpen(true)}
-              >
-                <Settings className="size-4" />
-              </Button>
-            </Tooltip>
-          </div>
+          <SortControl value={sortKey} onChange={onChangeSort} />
         </div>
       </SidebarHeader>
 
@@ -141,8 +126,6 @@ export function SidebarShell({
           onSetExpanded={cat.setExpanded}
         />
       </SidebarContent>
-
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
     </Sidebar>
   );
 }

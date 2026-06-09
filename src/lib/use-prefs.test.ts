@@ -50,6 +50,21 @@ describe("grpcIcon pref", () => {
   });
 });
 
+describe("methodGroupStyle pref", () => {
+  beforeEach(() => localStorage.clear());
+
+  it("defaults methodGroupStyle to 'zebra'", () => {
+    expect(PREFS_DEFAULTS.methodGroupStyle).toBe("zebra");
+  });
+
+  it("merges a persisted methodGroupStyle over defaults", () => {
+    const merged = { ...PREFS_DEFAULTS, methodGroupStyle: "tree" as const };
+    expect(merged.sidebar).toBe(true);
+    expect(merged.methodGroupStyle).toBe("tree");
+    expect(typeof readPrefs().methodGroupStyle).toBe("string");
+  });
+});
+
 describe("prefs bodyPanel", () => {
   beforeEach(() => localStorage.clear());
 

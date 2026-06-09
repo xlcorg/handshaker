@@ -1,7 +1,26 @@
+import { ChevronDown } from "lucide-react";
 import { SettingsGroup, SettingsRow } from "./SettingsDialog";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup } from "@/components/ui/toggle-group";
-import { usePrefs, type GrpcIconStyle } from "@/lib/use-prefs";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { usePrefs, type GrpcIconStyle, type MethodGroupStyle } from "@/lib/use-prefs";
+
+const METHOD_GROUP_STYLES: { key: MethodGroupStyle; label: string; hint: string }[] = [
+  { key: "band", label: "Band", hint: "Filled header strip" },
+  { key: "tree", label: "Tree", hint: "Indent guide to methods" },
+  { key: "weight", label: "Weight", hint: "Bold header, light methods" },
+  { key: "card", label: "Card", hint: "Each service in a box" },
+  { key: "bar", label: "Bar", hint: "Left accent bar" },
+  { key: "chip", label: "Chip", hint: "Service name as a pill" },
+  { key: "zebra", label: "Zebra", hint: "Header strip + striped rows" },
+];
 
 export function AppearancePane() {
   const [prefs, setPref] = usePrefs();
@@ -95,6 +114,42 @@ export function AppearancePane() {
                 { value: "ibm", label: "IBM Plex" },
               ]}
             />
+          }
+        />
+      </SettingsGroup>
+
+      <SettingsGroup title="Method picker">
+        <SettingsRow
+          title="Group style"
+          hint="How service groups are separated from their methods in the method dropdown."
+          control={
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="xs"
+                  aria-label="method-list-style"
+                  className="min-w-24 justify-between font-normal"
+                >
+                  {METHOD_GROUP_STYLES.find((s) => s.key === prefs.methodGroupStyle)?.label ?? "Band"}
+                  <ChevronDown className="opacity-60" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuRadioGroup
+                  value={prefs.methodGroupStyle}
+                  onValueChange={(v) => setPref("methodGroupStyle", v as MethodGroupStyle)}
+                >
+                  {METHOD_GROUP_STYLES.map((o) => (
+                    <DropdownMenuRadioItem key={o.key} value={o.key} className="gap-2">
+                      <span className="font-medium">{o.label}</span>
+                      <span className="text-muted-foreground text-[11px]">{o.hint}</span>
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
           }
         />
       </SettingsGroup>

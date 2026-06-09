@@ -264,6 +264,107 @@ body {
   cursor: pointer;
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+   MethodPicker service-group styles (pref `methodGroupStyle`). The dropdown
+   list carries data-mp-style; hooks .mp-grp/.mp-ghead/.mp-sname/.mp-spath/
+   .mp-gbody/.mp-mrow/.mp-mname mark the structure. Compound selectors here
+   (≥2 specificity) intentionally override the elements' base Tailwind classes.
+   Tints use hsl(var(--foreground)/α) so they read in both dark and light. */
+
+/* 2 · band — filled header strip */
+[data-mp-style="band"] .mp-ghead {
+  background: hsl(var(--foreground) / .05);
+  margin: 2px 4px;
+  padding: 6px 8px;
+  border-radius: 6px;
+}
+
+/* 4 · tree — indent guide from header down to methods */
+[data-mp-style="tree"] .mp-gbody {
+  margin-left: 17px;
+  border-left: 1px solid hsl(var(--border));
+}
+[data-mp-style="tree"] .mp-mrow {
+  position: relative;
+  padding-left: 16px;
+}
+[data-mp-style="tree"] .mp-mrow::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 9px;
+  height: 1px;
+  background: hsl(var(--border));
+}
+
+/* 5 · weight — bold/bright header, lighter & dimmer methods */
+[data-mp-style="weight"] .mp-sname {
+  font-weight: 700;
+  color: hsl(var(--foreground));
+}
+[data-mp-style="weight"] .mp-mname {
+  font-weight: 400;
+  color: hsl(var(--foreground) / .72);
+}
+
+/* 6 · card — each service group in its own boxed surface */
+[data-mp-style="card"] .mp-grp {
+  background: hsl(var(--foreground) / .03);
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  margin: 3px 7px;
+  padding: 2px 0 4px;
+  overflow: hidden;
+}
+
+/* 7 · bar — left accent bar marks the group */
+[data-mp-style="bar"] .mp-grp {
+  position: relative;
+  margin: 3px 8px;
+}
+[data-mp-style="bar"] .mp-grp::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 4px;
+  width: 2px;
+  border-radius: 2px;
+  background: hsl(var(--foreground) / .35);
+}
+[data-mp-style="bar"] .mp-ghead { padding-left: 12px; }
+[data-mp-style="bar"] .mp-mrow { padding-left: 24px; }
+[data-mp-style="bar"] .mp-sname { font-weight: 700; }
+
+/* 8 · chip — short service name as a pill */
+[data-mp-style="chip"] .mp-ghead {
+  align-items: center;
+  padding-top: 9px;
+  padding-bottom: 5px;
+}
+[data-mp-style="chip"] .mp-sname {
+  background: hsl(var(--accent));
+  border: 1px solid hsl(var(--border));
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* 9 · zebra — full-width header strip. No row striping; instead the active
+   method gets a left accent indicator (inset, no reflow) so a selected row
+   reads as "selected" and not as another header band. */
+[data-mp-style="zebra"] .mp-ghead {
+  background: hsl(var(--foreground) / .05);
+  border-bottom: 1px solid hsl(var(--border));
+  padding: 7px 12px;
+  margin-bottom: 2px;
+}
+[data-mp-style="zebra"] .mp-mrow[data-active="true"] {
+  box-shadow: inset 2px 0 0 hsl(var(--primary));
+}
+
 /* Accessibility: honour the OS "reduce motion" setting (WCAG 2.3.3). Neutralise
    all transitions/animations, but keep essential status feedback (loading spinner,
    streaming pulse) animated — they convey state, not decoration. */
