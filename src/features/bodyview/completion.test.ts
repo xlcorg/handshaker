@@ -144,3 +144,28 @@ describe("computeSuggestions", () => {
     expect(computeSuggestions(SCHEMA, '{ "nope": { ')).toEqual([]);
   });
 });
+
+// Coverage for map<string, Enum> value position + scalar-map non-descent.
+//   R { map<string, Status> roles }   enum Status { UNKNOWN, ACTIVE }
+const MAP_ENUM_SCHEMA: MessageSchemaIpc = {
+  root: "t.R",
+  enums: [{ full_name: "t.Status", values: ["UNKNOWN", "ACTIVE"] }],
+  messages: [
+    { full_name: "t.R", fields: [f("roles", "map<string, Status>", "map", { enum_type: "t.Status" })] },
+  ],
+};
+
+describe("map value suggestions", () => {
+  it("a map<string, Enum> value position suggests the enum's values", () => {
+    // path resolves to ["roles"] with the map key 'alice' as valueField; descend → {kind:'map'}.
+    expect(labels(computeSuggestions(MAP_ENUM_SCHEMA, '{ "roles": { "alice": '))).toEqual([
+      "UNKNOWN",
+      "ACTIVE",
+    ]);
+  });
+
+  it("descending past a scalar-valued map returns null", () => {
+    // `counts` is map<string,int32>; you cannot descend into a scalar map value.
+    expect(descendSchema(SCHEMA, ["counts", "anykey"])).toBeNull();
+  });
+});
