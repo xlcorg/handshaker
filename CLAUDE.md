@@ -4,25 +4,21 @@ Handshaker — десктопный gRPC-клиент (Tauri 2 + React 18 + Rust
 Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src-tauri` (IPC) ·
 `src` (React-фронтенд).
 
-## Active work — manual «Check for updates» button
+## Active work — нет активного плана
 
-Активный план: [`docs/superpowers/plans/2026-06-09-check-for-updates-button.md`](docs/superpowers/plans/2026-06-09-check-for-updates-button.md)
-(спек: [`…/specs/2026-06-09-check-for-updates-button-design.md`](docs/superpowers/specs/2026-06-09-check-for-updates-button-design.md)).
-Ветка `claude/modest-joliot-8efb0b`. Deferred follow-up основной фичи авто-обновления:
-ручная проверка из тайтлбара (иконка `RefreshCw` + бейдж доступности, переживающий
-«Later») и из Settings → About (кнопка). Результат всегда через тост; флаги
-`manual`/`hasUpdate` в `useUpdateCheck` + лёгкий `UpdaterProvider`. 6 задач, TDD,
-subagent-driven. **✅ code-complete** (коммиты `77d9d2c`…`e34443f`, `pnpm test` 635
-зелёных, `tsc -b` чисто, финальное ревью «Ship it»). Остаток: ручной mac/WKWebView-проход
-+ интеграция ветки в `main`. **Статус-баннер в план-файле — источник истины.**
-
-Прочие спланированные фичи **завершены** и перенесены в
+Все спланированные фичи **завершены** и перенесены в
 `docs/superpowers/{specs,plans}/archive/` (см. правило «Архивирование завершённых
-планов и спеков» ниже). Интеграционная ветка — `main`; фичи ведутся в отдельных
-worktree-ветках (`claude/*`) и вливаются в `main` fast-forward.
+планов и спеков» ниже). Новую работу начинай с брейншторма/спека → плана, и пока
+план активен — держи его описание здесь. Интеграционная ветка — `main`; фичи
+ведутся в отдельных worktree-ветках (`claude/*`) и вливаются в `main` fast-forward.
 
 ### Завершённые фичи (всё в `archive/`)
 
+- **Manual «Check for updates» button** (✅ DONE 2026-06-09, влито в `main` ff
+  `8f364a4`) — ручная проверка обновлений из тайтлбара (иконка `RefreshCw` + бейдж
+  доступности, переживающий «Later») и из Settings → About; результат всегда через
+  тост. Флаги `manual`/`hasUpdate` в `useUpdateCheck`, лёгкий `UpdaterProvider`.
+  Живо проверено в WebView2. Остаток: ручной mac-проход.
 - **Workflow-центричный редизайн UI (#1–#5 + #4b)** — база всего UI. Старый shell
   `src/App.tsx` и легаси `src/features/collections/*` удалены как мёртвый код.
 - **Рефакторинг коллекции сервисов (Postman-style библиотека)** — `plan-00-index` …

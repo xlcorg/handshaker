@@ -8,7 +8,7 @@
 
 **Tech Stack:** React 18, TypeScript, Vitest + React Testing Library, sonner, lucide-react, `@tauri-apps/plugin-updater`.
 
-**Status banner:** ✅ **code-complete** — все 6 задач выполнены, закоммичены (`77d9d2c`…`e34443f`), TDD. `pnpm test` 635 зелёных, `pnpm lint` (tsc -b) чисто. Финальное холистическое ревью — «Ship it» (ни критичных, ни важных замечаний; подтверждено отсутствие двойной проверки под StrictMode, корректный латч `hasUpdate`). **Остаток:** ручной mac/WKWebView-проход (бейдж-точка, спиннер) — для человека. · **Дата:** 2026-06-09 · **Ветка:** `claude/modest-joliot-8efb0b` · **Спек:** [docs/superpowers/specs/2026-06-09-check-for-updates-button-design.md](../specs/2026-06-09-check-for-updates-button-design.md)
+**Status banner:** ✅ **DONE** — все 6 задач выполнены, закоммичены (`77d9d2c`…`e34443f`), TDD. `pnpm test` 635 зелёных, `pnpm lint` (tsc -b) чисто. Финальное холистическое ревью — «Ship it» (ни критичных, ни важных замечаний; подтверждено отсутствие двойной проверки под StrictMode, корректный латч `hasUpdate`). **Влито в `main`** fast-forward → `8f364a4`. Живая проверка в WebView2: ⟳-клик → «Checking…» → «You're on the latest version.» **Остаток:** ручной mac/WKWebView-проход (бейдж-точка, спиннер) — для человека. · **Дата:** 2026-06-09 · **Ветка:** `claude/modest-joliot-8efb0b` · **Спек:** [docs/superpowers/specs/archive/2026-06-09-check-for-updates-button-design.md](../../specs/archive/2026-06-09-check-for-updates-button-design.md)
 
 ---
 
