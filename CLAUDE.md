@@ -12,7 +12,9 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 ручная проверка из тайтлбара (иконка `RefreshCw` + бейдж доступности, переживающий
 «Later») и из Settings → About (кнопка). Результат всегда через тост; флаги
 `manual`/`hasUpdate` в `useUpdateCheck` + лёгкий `UpdaterProvider`. 6 задач, TDD,
-subagent-driven. **Статус-баннер в план-файле — источник истины.**
+subagent-driven. **✅ code-complete** (коммиты `77d9d2c`…`e34443f`, `pnpm test` 635
+зелёных, `tsc -b` чисто, финальное ревью «Ship it»). Остаток: ручной mac/WKWebView-проход
++ интеграция ветки в `main`. **Статус-баннер в план-файле — источник истины.**
 
 Прочие спланированные фичи **завершены** и перенесены в
 `docs/superpowers/{specs,plans}/archive/` (см. правило «Архивирование завершённых
