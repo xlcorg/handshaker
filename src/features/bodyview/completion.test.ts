@@ -4,6 +4,7 @@ import {
   resolveCompletionContext,
   descendSchema,
   computeSuggestions,
+  insertionColumns,
 } from "./completion";
 
 // Schema fixture:
@@ -167,5 +168,27 @@ describe("map value suggestions", () => {
   it("descending past a scalar-valued map returns null", () => {
     // `counts` is map<string,int32>; you cannot descend into a scalar map value.
     expect(descendSchema(SCHEMA, ["counts", "anykey"])).toBeNull();
+  });
+});
+
+describe("insertionColumns (quote-aware range)", () => {
+  it("leaves the word range unchanged outside a string", () => {
+    // '"a": ' — caret at column 6 (after the space), empty word, no preceding quote.
+    expect(insertionColumns('"a": ', 6, 6)).toEqual({ startColumn: 6, endColumn: 6 });
+  });
+
+  it("expands over both quotes when the caret is between empty value quotes", () => {
+    // '"a": ""' — caret at column 7, between the value quotes at columns 6 and 7.
+    expect(insertionColumns('"a": ""', 7, 7)).toEqual({ startColumn: 6, endColumn: 8 });
+  });
+
+  it("expands over a partial token typed inside quotes", () => {
+    // '"a": "AC"' — word 'AC' at columns 7-9, opening quote col 6, closing quote col 9.
+    expect(insertionColumns('"a": "AC"', 7, 9)).toEqual({ startColumn: 6, endColumn: 10 });
+  });
+
+  it("expands left only when there is an opening but no closing quote", () => {
+    // '"a": "AC' — unterminated; opening quote col 6, word 'AC' cols 7-9, nothing after.
+    expect(insertionColumns('"a": "AC', 7, 9)).toEqual({ startColumn: 6, endColumn: 9 });
   });
 });

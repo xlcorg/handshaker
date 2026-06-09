@@ -294,6 +294,28 @@ function monacoKind(monaco: typeof Monaco, kind: Suggestion["kind"]): Monaco.lan
   }
 }
 
+/**
+ * Compute the replacement column range for a completion. When the caret sits inside a
+ * string literal (an opening `"` immediately precedes the word), expand the range to
+ * swallow the surrounding quote(s) so a QUOTED insertText replaces them instead of
+ * nesting (which would yield malformed `""VALUE""`). Columns are 1-based (Monaco);
+ * `lineContent` is the full line text; `wordStartColumn`/`wordEndColumn` come from
+ * `model.getWordUntilPosition`.
+ */
+export function insertionColumns(
+  lineContent: string,
+  wordStartColumn: number,
+  wordEndColumn: number,
+): { startColumn: number; endColumn: number } {
+  const before = lineContent[wordStartColumn - 2]; // char just before the word (1-based → -2)
+  if (before !== '"') return { startColumn: wordStartColumn, endColumn: wordEndColumn };
+  const after = lineContent[wordEndColumn - 1]; // char at the caret / word end
+  return {
+    startColumn: wordStartColumn - 1,
+    endColumn: after === '"' ? wordEndColumn + 1 : wordEndColumn,
+  };
+}
+
 /** Register the request-body completion provider exactly once (called from monaco.ts). */
 export function registerBodyCompletion(monaco: typeof Monaco): void {
   monaco.languages.registerCompletionItemProvider("json-with-vars", {
@@ -314,11 +336,13 @@ export function registerBodyCompletion(monaco: typeof Monaco): void {
       if (items.length === 0) return { suggestions: [] };
 
       const word = model.getWordUntilPosition(position);
+      const lineContent = model.getLineContent(position.lineNumber);
+      const cols = insertionColumns(lineContent, word.startColumn, word.endColumn);
       const range: Monaco.IRange = {
         startLineNumber: position.lineNumber,
         endLineNumber: position.lineNumber,
-        startColumn: word.startColumn,
-        endColumn: word.endColumn,
+        startColumn: cols.startColumn,
+        endColumn: cols.endColumn,
       };
       const keyOnly = ctx.where === "key" && colonAlreadyAhead(model, position);
 
