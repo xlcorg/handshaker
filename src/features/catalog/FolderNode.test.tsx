@@ -126,4 +126,29 @@ describe("FolderNode", () => {
     await user.click(screen.getByText("Delete"));
     expect(onRequestDeleteItem).toHaveBeenCalledWith("c1", "f1");
   });
+
+  it("renders a drop slot before the folder when dropHint zone is 'before'", () => {
+    renderWithSidebar(
+      <FolderNode collectionId="c1" folder={folder} cb={makeCb({ dropHint: { id: "f1", zone: "before" } })} />,
+    );
+    const slot = document.querySelector("[data-drop-slot]");
+    expect(slot).not.toBeNull();
+    expect(slot!.nextElementSibling?.querySelector("[data-node-id='f1']")).toBeTruthy();
+  });
+
+  it("fills the folder row with a tint when dropHint zone is 'inside'", () => {
+    renderWithSidebar(
+      <FolderNode collectionId="c1" folder={folder} cb={makeCb({ dropHint: { id: "f1", zone: "inside" } })} />,
+    );
+    const row = document.querySelector("[data-node-id='f1']") as HTMLElement;
+    expect(row.className).toContain("bg-primary/10");
+  });
+
+  it("does not fill the row when not the drop target", () => {
+    renderWithSidebar(
+      <FolderNode collectionId="c1" folder={folder} cb={makeCb({ dropHint: { id: "other", zone: "inside" } })} />,
+    );
+    const row = document.querySelector("[data-node-id='f1']") as HTMLElement;
+    expect(row.className).not.toContain("bg-primary/10");
+  });
 });
