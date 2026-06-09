@@ -49,6 +49,19 @@ async grpcBuildRequestSkeleton(target: GrpcTargetIpc, service: string, method: s
 }
 },
 /**
+ * Build the flat field-schema for a method's input message (drives autocomplete).
+ * Same cache discipline as `grpc_build_request_skeleton`: cache hit → build from the
+ * pool; miss → `activate` first.
+ */
+async grpcMessageSchema(target: GrpcTargetIpc, service: string, method: string) : Promise<Result<MessageSchemaIpc, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("grpc_message_schema", { target, service, method }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * One-shot unary invoke: activate (channel required) → invoke → drop.
  * 
  * Non-OK gRPC status arrives in `InvokeOutcomeIpc.status_code`, NOT as `Err`.
@@ -304,7 +317,10 @@ export type ContractUpdated = {
  * Stable key identifying the target whose contract just refreshed.
  */
 target_key: string }
+export type EnumNodeIpc = { full_name: string; values: string[] }
 export type EnvironmentIpc = { name: string; variables: Partial<{ [key in string]: string }>; color: string | null }
+export type FieldNodeIpc = { json_name: string; proto_name: string; type_label: string; value_kind: FieldValueKindIpc; repeated: boolean; message_type: string | null; enum_type: string | null; oneof_group: string | null }
+export type FieldValueKindIpc = "scalar" | "message" | "enum" | "map"
 export type FolderIpc = { id: string; name: string; items: ItemIpc[]; expanded: boolean }
 export type GrpcTargetIpc = { address: string; tls: boolean; skip_verify: boolean }
 export type InvokeOutcomeIpc = { status_code: number; status_message: string; response_json: string | null; trailing_metadata: Partial<{ [key in string]: string }>; 
@@ -320,6 +336,8 @@ export type ItemIpc = ({ type: "folder" } & FolderIpc) | ({ type: "request" } & 
  * Undo payload returned by `collection_delete_item`.
  */
 export type ItemSnapshotIpc = { item: ItemIpc; parent_id: string | null; position: number }
+export type MessageNodeIpc = { full_name: string; fields: FieldNodeIpc[] }
+export type MessageSchemaIpc = { root: string; messages: MessageNodeIpc[]; enums: EnumNodeIpc[] }
 export type MetadataRowIpc = { key: string; value: string; enabled: boolean }
 export type MethodEntryIpc = { name: string; path: string; input_message: string; output_message: string; client_streaming: boolean; server_streaming: boolean }
 export type ResolutionReportIpc = { resolved: string; unresolved_vars: string[]; cycle_chain: string[] | null }
