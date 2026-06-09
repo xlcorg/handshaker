@@ -12,6 +12,9 @@ export interface UnderlineTabsProps<T extends string> {
   onChange: (next: T) => void;
   items: ReadonlyArray<UnderlineTabItem<T>>;
   className?: string;
+  /** Hide the active-tab indicator (e.g. while an in-flight progress bar owns the
+   * underline). Avoids two competing marks on the same line. */
+  busy?: boolean;
 }
 
 export function UnderlineTabs<T extends string>({
@@ -19,6 +22,7 @@ export function UnderlineTabs<T extends string>({
   onChange,
   items,
   className,
+  busy = false,
 }: UnderlineTabsProps<T>) {
   const listRef = useRef<HTMLDivElement>(null);
   const [bar, setBar] = useState<{ left: number; width: number } | null>(null);
@@ -92,7 +96,7 @@ export function UnderlineTabs<T extends string>({
         style={{
           width: bar?.width ?? 0,
           transform: `translateX(${bar?.left ?? 0}px)`,
-          opacity: bar ? 1 : 0,
+          opacity: busy ? 0 : bar ? 1 : 0,
         }}
       />
     </div>

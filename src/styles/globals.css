@@ -216,27 +216,32 @@ body {
 /* sliding tab underline (B) — width/position transition, enabled after first measure */
 .hs-tab-indicator {
   transition: transform var(--motion-fast) var(--ease-standard),
-              width var(--motion-fast) var(--ease-standard);
+              width var(--motion-fast) var(--ease-standard),
+              opacity var(--motion-fast) var(--ease-standard);
 }
 
-/* DnD drop slot (E) — tinted placeholder fades in at the insertion point */
-.hs-slot-enter { animation: hs-slot-in var(--motion-fast) var(--ease-out); }
-@keyframes hs-slot-in { from { opacity: 0; } to { opacity: 1; } }
-
-/* in-flight progress: a segment that grows out of the active tab's underline
-   (anchored at --bar-start) and sweeps to the right edge, then repeats. */
+/* in-flight progress: a fixed-width "comet" segment that glides across the tab
+   strip's underline. transform-only (compositor) — no layout thrash. */
 .hs-tab-progress { overflow: hidden; }
 .hs-tab-progress::before {
   content: ""; position: absolute; top: 0; bottom: 0;
-  left: var(--bar-start, 0); width: 0;
+  left: 0; width: 34%;
   border-radius: 999px; background: hsl(var(--primary));
-  animation: hs-tab-progress 1.2s ease-in-out infinite;
+  will-change: transform; transform-origin: left center;
+  /* First pass grows out from under the active tab (--bar-start, px); then the
+     comet loops across the full width. transform-only on both. */
+  animation:
+    hs-tab-progress-intro 1.3s cubic-bezier(.4, 0, .2, 1) 1 forwards,
+    hs-tab-progress 1.3s cubic-bezier(.65, 0, .35, 1) 1.3s infinite;
+}
+@keyframes hs-tab-progress-intro {
+  0%   { transform: translateX(var(--bar-start, 0)) scaleX(.4); }
+  100% { transform: translateX(305%) scaleX(.7); }
 }
 @keyframes hs-tab-progress {
-  0%   { left: var(--bar-start, 0); width: 0; }
-  18%  { left: var(--bar-start, 0); width: 26px; }
-  70%  { left: var(--bar-start, 0); width: calc(100% - var(--bar-start, 0px)); }
-  100% { left: 100%; width: 0; }
+  0%   { transform: translateX(-115%) scaleX(.7); }
+  50%  { transform: translateX(105%) scaleX(1.25); }
+  100% { transform: translateX(305%) scaleX(.7); }
 }
 
 /* small-caps section labels */
@@ -270,6 +275,14 @@ body {
   }
   .spinner   { animation-duration: .8s  !important; animation-iteration-count: infinite !important; }
   .pulse-dot { animation-duration: 1.4s !important; animation-iteration-count: infinite !important; }
+  /* progress: no travel — a static full-width bar with a gentle opacity pulse */
+  .hs-tab-progress::before {
+    width: 100%;
+    transform: none !important;
+    animation-name: hs-pulse !important;
+    animation-duration: 1.4s !important;
+    animation-iteration-count: infinite !important;
+  }
 }
 
 ::selection { background: hsl(var(--foreground) / .15); }

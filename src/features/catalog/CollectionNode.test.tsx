@@ -108,4 +108,32 @@ describe("CollectionNode", () => {
     const row = document.querySelector("[data-node-id='c1']") as HTMLElement;
     expect(row.className).not.toContain("bg-primary/10");
   });
+
+  it("dropping anywhere in the open collection body targets the collection inside", () => {
+    const onDragOverRow = vi.fn();
+    const onDropRow = vi.fn();
+    renderWithSidebar(
+      <CollectionNode
+        col={col({ items: [] })}
+        cb={makeCb({ open: new Set(["c1"]), onDragOverRow, onDropRow })}
+      />,
+    );
+    const placeholder = screen.getByText("Empty collection");
+    fireEvent.dragOver(placeholder);
+    expect(onDragOverRow).toHaveBeenCalledWith({ collectionId: "c1", id: "c1", kind: "collection" }, "inside");
+    fireEvent.drop(placeholder);
+    expect(onDropRow).toHaveBeenCalledWith({ collectionId: "c1", id: "c1", kind: "collection" }, "inside");
+  });
+
+  it("dragging over a child row is not overridden by the collection body fallback", () => {
+    const onDragOverRow = vi.fn();
+    renderWithSidebar(<CollectionNode col={col()} cb={makeCb({ open: new Set(["c1"]), onDragOverRow })} />);
+    const childRow = document.querySelector("[data-node-id='r1']")!;
+    fireEvent.dragOver(childRow);
+    expect(onDragOverRow).not.toHaveBeenCalledWith(
+      { collectionId: "c1", id: "c1", kind: "collection" },
+      "inside",
+    );
+    expect(onDragOverRow).toHaveBeenCalled();
+  });
 });

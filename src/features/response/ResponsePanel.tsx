@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { Activity } from "lucide-react";
 import { ResponseBody } from "./ResponseBody";
 import { EmptyState } from "./EmptyState";
@@ -23,18 +23,33 @@ export function ResponsePanel({ state, outcome, error }: ResponsePanelProps) {
   const isError = state === "error";
   const sending = state === "sending";
 
-  // While sending, the progress bar grows out of the active tab's underline.
-  // Measure that tab's left offset so the sweep starts exactly under it.
+  // Delay the in-flight progress indicator: fast responses shouldn't flash it
+  // (a sub-threshold loader reads as a twitch). Gates both the comet and the
+  // tab-underline fade so they stay in lockstep.
+  const [showProgress, setShowProgress] = useState(false);
+  useEffect(() => {
+    if (!sending) {
+      setShowProgress(false);
+      return;
+    }
+    const t = setTimeout(() => setShowProgress(true), 250);
+    return () => clearTimeout(t);
+  }, [sending]);
+
+  // Anchor the progress comet's first pass under the active tab. Measure the tab's
+  // left relative to the header via bounding rects (NOT offsetLeft — the tab strip is
+  // `relative`, so it is the tabs' offsetParent and offsetLeft would be ~0 here).
   const headerRef = useRef<HTMLDivElement>(null);
   const [barStart, setBarStart] = useState(0);
   useLayoutEffect(() => {
     if (!sending) return;
-    const activeTab = headerRef.current?.querySelector<HTMLElement>(
-      '[role="tab"][aria-selected="true"]',
-    );
-    // +8px aligns the sweep with the underline, which is inset (left-2) inside the tab.
-    if (activeTab) setBarStart(activeTab.offsetLeft + 8);
+    const header = headerRef.current;
+    const activeTab = header?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
+    if (header && activeTab) {
+      setBarStart(activeTab.getBoundingClientRect().left - header.getBoundingClientRect().left);
+    }
   }, [sending, tab]);
+
   const trailers: KVRow[] = outcome
     ? Object.entries(outcome.trailing_metadata).map(([k, v]) => ({ k, v: v ?? "" }))
     : [];
@@ -50,6 +65,7 @@ export function ResponsePanel({ state, outcome, error }: ResponsePanelProps) {
         <UnderlineTabs
           value={tab}
           onChange={(v) => setTab(v as ResponseTab)}
+          busy={showProgress}
           items={[
             { value: "body", label: "Body" },
             { value: "trailers", label: "Trailers", hint: trailers.length || undefined },
@@ -59,7 +75,7 @@ export function ResponsePanel({ state, outcome, error }: ResponsePanelProps) {
         <div className="ml-auto flex items-center gap-2.5">
           <RespMeta state={state} outcome={outcome} />
         </div>
-        {sending && (
+        {showProgress && (
           <div
             aria-hidden
             data-testid="tab-progress"

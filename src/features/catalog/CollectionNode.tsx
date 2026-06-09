@@ -30,7 +30,22 @@ export function CollectionNode({ col, cb }: CollectionNodeProps) {
   ];
 
   return (
-    <SidebarMenuItem>
+    <SidebarMenuItem
+      // Forgiving drop target: dropping anywhere in the collection's body (empty
+      // space, the "Empty collection" placeholder, gaps between rows) lands at the
+      // collection root. A more specific row handler (header / child row) runs first
+      // and calls preventDefault, so this fallback only fires when nothing else did.
+      onDragOver={(e) => {
+        if (e.defaultPrevented) return;
+        e.preventDefault();
+        cb.onDragOverRow({ collectionId: col.id, id: col.id, kind: "collection" }, "inside");
+      }}
+      onDrop={(e) => {
+        if (e.defaultPrevented) return;
+        e.preventDefault();
+        cb.onDropRow({ collectionId: col.id, id: col.id, kind: "collection" }, "inside");
+      }}
+    >
       <RowMenu items={items}>
         <div
           data-node-id={col.id}

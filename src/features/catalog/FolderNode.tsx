@@ -5,7 +5,7 @@ import { SidebarMenuSub, SidebarMenuSubButton, SidebarMenuSubItem } from "@/comp
 import { RowMenu, type RowMenuItem } from "./RowMenu";
 import { RenameInput } from "./RenameInput";
 import { RequestRow } from "./RequestRow";
-import { DropSlot } from "./DropSlot";
+import { DropLine } from "./DropLine";
 import { bleedStyle } from "./bleed";
 import { zoneFromPointer } from "./dnd";
 import type { TreeCallbacks } from "./treeTypes";
@@ -35,42 +35,42 @@ export function FolderNode({ collectionId, folder, depth = 1, cb }: FolderNodePr
   ];
 
   return (
-    <>
-      {hint === "before" && <DropSlot depth={depth} />}
-      <SidebarMenuSubItem>
-        <RowMenu items={items} depth={depth}>
-          <div
-            data-node-id={folder.id}
-            data-drop={hint ?? undefined}
-            draggable={!editing}
-            onDragStart={(e) => {
-              if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
-              cb.onDragStartItem({ collectionId, itemId: folder.id, kind: "folder" });
-            }}
-            onDragOver={(e) => {
-              e.preventDefault();
-              const r = e.currentTarget.getBoundingClientRect();
-              cb.onDragOverRow({ collectionId, id: folder.id, kind: "folder" }, zoneFromPointer(r, e.clientY, "folder"));
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              const r = e.currentTarget.getBoundingClientRect();
-              cb.onDropRow({ collectionId, id: folder.id, kind: "folder" }, zoneFromPointer(r, e.clientY, "folder"));
-            }}
-            onDragEnd={cb.onDragEndItem}
-            // Full-bleed hover highlight, same mechanism as RequestRow (see bleed.ts). The
-            // ::before breaks out of the nested SidebarMenuSub inset to span the full width.
-            style={bleedStyle(depth)}
-            className={cn(
-              "group relative isolate flex items-center gap-1 pr-8 text-xs",
-              "before:pointer-events-none before:absolute before:inset-y-0 before:left-[var(--bl)] before:right-[var(--br)] before:-z-10 before:rounded-md before:content-['']",
-              "hover:before:bg-sidebar-accent/50",
-              focused && "ring-1 ring-inset ring-ring",
-              cb.dragId === folder.id && "opacity-50",
-              hint === "inside" && "bg-primary/10",
-            )}
-          >
-            <button
+    <SidebarMenuSubItem>
+      <RowMenu items={items} depth={depth}>
+        <div
+          data-node-id={folder.id}
+          data-drop={hint ?? undefined}
+          draggable={!editing}
+          onDragStart={(e) => {
+            if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
+            cb.onDragStartItem({ collectionId, itemId: folder.id, kind: "folder" });
+          }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            const r = e.currentTarget.getBoundingClientRect();
+            cb.onDragOverRow({ collectionId, id: folder.id, kind: "folder" }, zoneFromPointer(r, e.clientY, "folder"));
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            const r = e.currentTarget.getBoundingClientRect();
+            cb.onDropRow({ collectionId, id: folder.id, kind: "folder" }, zoneFromPointer(r, e.clientY, "folder"));
+          }}
+          onDragEnd={cb.onDragEndItem}
+          // Full-bleed hover highlight, same mechanism as RequestRow (see bleed.ts). The
+          // ::before breaks out of the nested SidebarMenuSub inset to span the full width.
+          style={bleedStyle(depth)}
+          className={cn(
+            "group relative isolate flex items-center gap-1 pr-8 text-xs",
+            "before:pointer-events-none before:absolute before:inset-y-0 before:left-[var(--bl)] before:right-[var(--br)] before:-z-10 before:rounded-md before:content-['']",
+            "hover:before:bg-sidebar-accent/50",
+            focused && "ring-1 ring-inset ring-ring",
+            cb.dragId === folder.id && "opacity-50",
+            hint === "inside" && "bg-primary/10",
+          )}
+        >
+          {hint === "before" && <DropLine zone="before" />}
+          {hint === "after" && <DropLine zone="after" />}
+          <button
               type="button"
               aria-label="toggle-folder"
               onClick={() => cb.onToggle(folder.id)}
@@ -125,8 +125,6 @@ export function FolderNode({ collectionId, folder, depth = 1, cb }: FolderNodePr
             )}
           </SidebarMenuSub>
         ) : null}
-      </SidebarMenuSubItem>
-      {hint === "after" && <DropSlot depth={depth} />}
-    </>
+    </SidebarMenuSubItem>
   );
 }

@@ -127,13 +127,11 @@ describe("FolderNode", () => {
     expect(onRequestDeleteItem).toHaveBeenCalledWith("c1", "f1");
   });
 
-  it("renders a drop slot before the folder when dropHint zone is 'before'", () => {
+  it("renders a drop line before the folder when dropHint zone is 'before'", () => {
     renderWithSidebar(
       <FolderNode collectionId="c1" folder={folder} cb={makeCb({ dropHint: { id: "f1", zone: "before" } })} />,
     );
-    const slot = document.querySelector("[data-drop-slot]");
-    expect(slot).not.toBeNull();
-    expect(slot!.nextElementSibling?.querySelector("[data-node-id='f1']")).toBeTruthy();
+    expect(document.querySelector("[data-drop-line='before']")).not.toBeNull();
   });
 
   it("fills the folder row with a tint when dropHint zone is 'inside'", () => {

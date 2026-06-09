@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, act } from "@testing-library/react";
 
 vi.mock("@/lib/monaco", () => ({
   MonacoEditor: ({ value, options }: { value: string; options?: { readOnly?: boolean } }) => (
@@ -30,11 +30,21 @@ describe("ResponsePanel", () => {
     expect(el.getAttribute("data-readonly")).toBe("true");
     expect(el.textContent).toContain("echo");
   });
-  it("shows the in-flight tab progress bar only while sending", () => {
-    const { rerender } = render(<ResponsePanel state="sending" outcome={null} />);
-    expect(screen.getByTestId("tab-progress")).toBeInTheDocument();
-    rerender(<ResponsePanel state="success" outcome={ok} />);
-    expect(screen.queryByTestId("tab-progress")).not.toBeInTheDocument();
+  it("shows the in-flight tab progress bar after a short delay, only while sending", () => {
+    vi.useFakeTimers();
+    try {
+      const { rerender } = render(<ResponsePanel state="sending" outcome={null} />);
+      // Delayed: not shown immediately, so fast responses don't flash it.
+      expect(screen.queryByTestId("tab-progress")).not.toBeInTheDocument();
+      act(() => {
+        vi.advanceTimersByTime(300);
+      });
+      expect(screen.getByTestId("tab-progress")).toBeInTheDocument();
+      rerender(<ResponsePanel state="success" outcome={ok} />);
+      expect(screen.queryByTestId("tab-progress")).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
   it("shows a client/transport error in the Body tab when there is no gRPC outcome", () => {
     render(<ResponsePanel state="error" outcome={null} error="connect `h:50023`: transport error" />);

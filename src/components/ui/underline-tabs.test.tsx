@@ -32,4 +32,9 @@ describe("UnderlineTabs", () => {
     expect(screen.getByRole("tab", { name: "Beta" }).getAttribute("aria-selected")).toBe("true");
     expect(screen.getAllByTestId("tab-indicator")).toHaveLength(1);
   });
+
+  it("hides the indicator while busy (progress bar owns the underline)", () => {
+    render(<UnderlineTabs value="a" onChange={() => {}} items={items} busy />);
+    expect(screen.getByTestId("tab-indicator").style.opacity).toBe("0");
+  });
 });

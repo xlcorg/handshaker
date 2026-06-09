@@ -181,7 +181,7 @@ describe("RequestRow", () => {
     expect(at().style.getPropertyValue("--br")).toBe("-29px");
   });
 
-  it("renders a drop slot before the row when dropHint zone is 'before'", () => {
+  it("renders a drop line before the row when dropHint zone is 'before'", () => {
     renderWithSidebar(
       <RequestRow
         collectionId="c1"
@@ -189,15 +189,10 @@ describe("RequestRow", () => {
         cb={makeCb({ dropHint: { id: "r1", zone: "before" } })}
       />,
     );
-    const slot = document.querySelector("[data-drop-slot]");
-    expect(slot).not.toBeNull();
-    // the slot's next sibling wraps the request row
-    expect(
-      slot!.nextElementSibling?.querySelector("[data-node-id='r1']"),
-    ).toBeTruthy();
+    expect(document.querySelector("[data-drop-line='before']")).not.toBeNull();
   });
 
-  it("renders a drop slot after the row when dropHint zone is 'after'", () => {
+  it("renders a drop line after the row when dropHint zone is 'after'", () => {
     renderWithSidebar(
       <RequestRow
         collectionId="c1"
@@ -205,22 +200,17 @@ describe("RequestRow", () => {
         cb={makeCb({ dropHint: { id: "r1", zone: "after" } })}
       />,
     );
-    const rowLi = document
-      .querySelector("[data-node-id='r1']")!
-      .closest("[data-slot='sidebar-menu-sub-item']");
-    expect(rowLi?.nextElementSibling?.hasAttribute("data-drop-slot")).toBe(
-      true,
-    );
+    expect(document.querySelector("[data-drop-line='after']")).not.toBeNull();
   });
 
-  it("renders no drop slot when dropHint is null", () => {
+  it("renders no drop line when dropHint is null", () => {
     renderWithSidebar(
       <RequestRow collectionId="c1" req={req("R")} cb={makeCb()} />,
     );
-    expect(document.querySelector("[data-drop-slot]")).toBeNull();
+    expect(document.querySelector("[data-drop-line]")).toBeNull();
   });
 
-  it("renders no drop slot when dropHint targets another row", () => {
+  it("renders no drop line when dropHint targets another row", () => {
     renderWithSidebar(
       <RequestRow
         collectionId="c1"
@@ -228,6 +218,6 @@ describe("RequestRow", () => {
         cb={makeCb({ dropHint: { id: "other", zone: "before" } })}
       />,
     );
-    expect(document.querySelector("[data-drop-slot]")).toBeNull();
+    expect(document.querySelector("[data-drop-line]")).toBeNull();
   });
 });
