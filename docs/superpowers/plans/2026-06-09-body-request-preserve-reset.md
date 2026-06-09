@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Status:** ✅ code-complete (2026-06-09) — branch `claude/musing-blackburn-edc9a0`, commits `0724907`…`36c5205` (4 feature commits). 647 tests / `tsc` / lint / build green; two-stage subagent review passed; manual WebView2 pass (Ctrl+Z reverts Reset; preserve/auto-fill on method change) done. **Group B (#3 view contract, #4 autocompletion) deferred to a separate spec/plan.**
+
 **Goal:** Stop the request body from being wiped when the method changes (preserve hand-edits; only auto-fill a *pristine* body), and add a manual "Reset to template" button.
 
 **Architecture:** Frontend-only. A pure `isPristineBody(body, skeleton)` decides whether a body is still the unedited skeleton. `applyMethodSelection` rebuilds the *pre-switch* method's skeleton, compares, and replaces the body only when pristine. A new `resetBodyToTemplate` action + a ghost icon-button in the Request tab strip regenerate the skeleton on demand. Both paths flow through `onPatch({ requestJson })` → the `BodyView` `value` prop → `@monaco-editor/react`'s `executeEdits`, so **Ctrl+Z** reverts a reset natively.
