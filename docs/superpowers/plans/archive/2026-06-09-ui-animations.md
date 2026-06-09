@@ -1,6 +1,8 @@
 # UI animations Implementation Plan
 
 > **Status: ✅ code-complete (2026-06-09).** All 6 implementation tasks done, committed, and reviewed (per-task spec+quality review + final holistic review). Verification: `pnpm test` 611/611, `pnpm lint` (tsc) clean, `pnpm build` clean — all on branch `claude/serene-feistel-e53ca1` (commits `4db8b83`…`2cf658e`). **Deferred to a human:** manual `pnpm tauri dev` visual pass (tab-indicator slide, drop slot, group fill), `prefers-reduced-motion` toggle check, and the macOS/WKWebView visual pass.
+>
+> **Post-review follow-up (commit `b7cd1ea`, supersedes parts of §3 below).** A live `pnpm tauri dev` review changed two things from the plan as written: (1) the reflowing `DropSlot` placeholder was replaced by a non-reflowing tinted insertion line (`DropLine`) — the row-pushing reflow oscillated under the cursor; `DropSlot` was removed. (2) Added a forgiving collection-body drop target, a transform-only "comet" rewrite of `hs-tab-progress` (was layout-animated `left`/`width`) that grows out of the active tab on its first pass, a `prefers-reduced-motion` fallback for it, a ~250ms show delay (fast responses no longer flash), and a `busy` fade of the tab underline while the comet runs. Tests now 614.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

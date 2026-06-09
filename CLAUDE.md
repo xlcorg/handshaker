@@ -30,15 +30,19 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
   «светофор» через Tauri `TitleBarStyle::Overlay` (`tauri.macos.conf.json`,
   RFC7396-мердж), `isMacOS`/`useIsFullscreen`-ветвление `Titlebar.tsx` (без
   wordmark/кнопок окна, левый инсет). Остаток: ручная визуальная проверка на Mac.
-- **UI-анимации (motion tokens + B + E)** (✅ code-complete, branch
-  `claude/serene-feistel-e53ca1`, commits `4db8b83`…`2cf658e`) — дизайн-токены
+- **UI-анимации (motion tokens + B + E + progress)** (✅ code-complete, branch
+  `claude/serene-feistel-e53ca1`, commits `4db8b83`…`b7cd1ea`) — дизайн-токены
   движения (`--motion-fast/base`, `--ease-standard/out/in`) + глобальный
   `prefers-reduced-motion` (спиннер/пульс остаются живыми) в `globals.css`;
-  скользящий индикатор таба в `underline-tabs.tsx` (одна замеряемая `transform`-полоса);
-  Claude-Desktop-style DnD-аффорданс — новый `DropSlot` (заливка-плейсхолдер
-  before/after) + fill-тинт области для `inside` в RequestRow/FolderNode/CollectionNode
-  (`dnd.ts`/`planDrop` не тронуты). 611 тестов/tsc/build зелёные. Остаток: ручная
-  визуалка `pnpm tauri dev` + reduced-motion + mac/WKWebView.
+  скользящий индикатор таба в `underline-tabs.tsx` (одна замеряемая `transform`-полоса,
+  гаснет при `busy`). DnD-аффорданс (после лайв-ревью): **`DropLine`** — тонкая
+  non-reflowing тинт-линия вставки before/after (без осцилляции; прежний раздвигающий
+  `DropSlot` удалён) + fill-тинт области для `inside`, и forgiving-дроп в тело
+  коллекции (`dnd.ts`/`planDrop` не тронуты). Прогресс-«комета» `hs-tab-progress` —
+  transform-only, первый проход вырастает из активного таба (`--bar-start` в
+  `ResponsePanel`), reduced-motion фолбэк (статичный пульс), показ через ~250ms-гейт
+  (быстрые ответы не мелькают). 614 тестов/tsc/build зелёные; визуалка проверена
+  лайв (vite HMR). Остаток: mac/WKWebView-проход.
 
 Источник истины по статусу любой фичи — статус-баннер её план-файла в `archive/`,
 не эта строка.
