@@ -4,6 +4,7 @@ import { authResolve } from "@/ipc/client";
 import { AddressBar } from "./AddressBar";
 import { DraftAddressBar } from "./DraftAddressBar";
 import { useDraftReflection } from "./useDraftReflection";
+import { useMessageSchema } from "./useMessageSchema";
 import { RequestTabs } from "./RequestTabs";
 import {
   resolveAuthHeader,
@@ -83,6 +84,13 @@ export function CallPanel({ step, onPatch, onExecuted, editable }: CallPanelProp
 
   const reflection = useDraftReflection(step.address, step.tls, !!editable);
 
+  // Autocomplete schema for the draft's method (history panels pass empty → no fetch).
+  const schema = useMessageSchema(
+    editable
+      ? { address: step.address, tls: step.tls, service: step.service, method: step.method }
+      : { address: "", tls: false, service: "", method: "" },
+  );
+
   const header = editable ? (
     <DraftAddressBar
       step={step}
@@ -128,6 +136,7 @@ export function CallPanel({ step, onPatch, onExecuted, editable }: CallPanelProp
             onMetadata={onMetadata}
             onSubmit={() => sendShortcutRef.current()}
             onResetTemplate={editable ? onResetBody : undefined}
+            schema={schema}
           />
         </ResizablePanel>
         <ResizableHandle withHandle />

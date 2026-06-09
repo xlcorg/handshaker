@@ -10,6 +10,8 @@ import type { DisposableLike } from "./editorLike";
 import { exceedsByteCeiling } from "./elide";
 import { attachBodyController } from "./controller";
 import { badgeDecorationOptions } from "./badgeDecoration";
+import type { MessageSchemaIpc } from "@/ipc/bindings";
+import { setModelSchema } from "./completion";
 
 type Mode = "request" | "response";
 
@@ -19,6 +21,8 @@ export interface BodyViewProps {
   onChange?: (next: string) => void;
   /** Ctrl/Cmd+Enter inside the editor (Monaco swallows it, so we bind a command). */
   onSubmit?: () => void;
+  /** Request mode only: flat field-schema attached to the model for autocomplete. */
+  schema?: MessageSchemaIpc | null;
 }
 
 interface Live {
@@ -32,12 +36,14 @@ interface Live {
   controller: DisposableLike | null;
 }
 
-export function BodyView({ mode, value, onChange, onSubmit }: BodyViewProps) {
+export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewProps) {
   const [prefs] = usePrefs();
   const live = useRef<Live | null>(null);
   // Ref so the Monaco command (bound once in onMount) always calls the freshest handler.
   const onSubmitRef = useRef(onSubmit);
   onSubmitRef.current = onSubmit;
+  const schemaRef = useRef(schema);
+  schemaRef.current = schema;
 
   // --- response rendering ------------------------------------------------
   const renderResponse = (text: string) => {
@@ -114,6 +120,9 @@ export function BodyView({ mode, value, onChange, onSubmit }: BodyViewProps) {
         editor, monaco, tree: null, spans: [], badges: [],
         decorations: null, expanded: new Set(), controller: null,
       };
+      if (mode === "request") {
+        setModelSchema(editor.getModel(), schemaRef.current ?? null);
+      }
       if (mode === "response") {
         renderResponse(editor.getValue());
       } else {
@@ -147,6 +156,22 @@ export function BodyView({ mode, value, onChange, onSubmit }: BodyViewProps) {
 
   // Dispose the controller subscription when BodyView itself unmounts.
   useEffect(() => () => { live.current?.controller?.dispose(); }, []);
+
+  // Keep the model's attached schema current as the selected method changes.
+  useEffect(() => {
+    if (mode !== "request") return;
+    const model = live.current?.editor.getModel();
+    setModelSchema(model ?? null, schema ?? null);
+  }, [schema, mode]);
+
+  // Clear the model's schema entry when BodyView unmounts.
+  useEffect(
+    () => () => {
+      const model = live.current?.editor.getModel();
+      setModelSchema(model ?? null, null);
+    },
+    [],
+  );
 
   // Request: refresh tree/spans from the user's text on each edit.
   const handleChange = useCallback(

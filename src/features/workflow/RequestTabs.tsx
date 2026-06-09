@@ -4,7 +4,7 @@ import { BodyEditor } from "@/features/invoke/BodyEditor";
 import { UnderlineTabs } from "@/components/ui/underline-tabs";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
-import type { SavedAuthConfigIpc } from "@/ipc/bindings";
+import type { SavedAuthConfigIpc, MessageSchemaIpc } from "@/ipc/bindings";
 import { MetadataEditor } from "./MetadataEditor";
 import type { MetadataRow, Step } from "./model";
 
@@ -19,9 +19,11 @@ export interface RequestTabsProps {
   onSubmit?: () => void;
   /** Reset the body to the current method's skeleton (draft only). Omit to hide the button. */
   onResetTemplate?: () => void;
+  /** Flat field-schema for the current method; drives body autocomplete. */
+  schema?: MessageSchemaIpc | null;
 }
 
-export function RequestTabs({ step, serviceAuth, onBody, onMetadata, onSubmit, onResetTemplate }: RequestTabsProps) {
+export function RequestTabs({ step, serviceAuth, onBody, onMetadata, onSubmit, onResetTemplate, schema }: RequestTabsProps) {
   const [tab, setTab] = useState<Tab>("request");
   return (
     <div className="flex h-full flex-col">
@@ -52,7 +54,7 @@ export function RequestTabs({ step, serviceAuth, onBody, onMetadata, onSubmit, o
       </div>
       <div className="min-h-0 flex-1 overflow-hidden">
         {tab === "request" ? (
-          <BodyEditor value={step.requestJson} onChange={onBody} onSubmit={onSubmit} />
+          <BodyEditor value={step.requestJson} onChange={onBody} onSubmit={onSubmit} schema={schema} />
         ) : null}
         {tab === "metadata" ? (
           <div className="h-full overflow-auto">

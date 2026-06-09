@@ -1,4 +1,5 @@
 import type { MessageSchemaIpc, MessageNodeIpc, FieldNodeIpc } from "@/ipc/bindings";
+import type * as Monaco from "monaco-editor";
 
 // ---------------------------------------------------------------------------
 // Cursor context — a schema-blind scanner over the text before the cursor.
@@ -247,4 +248,100 @@ export function computeSuggestions(schema: MessageSchemaIpc, textBefore: string)
   return ctx.where === "key"
     ? buildKeySuggestions(schema, ctx)
     : buildValueSuggestions(schema, ctx);
+}
+
+// ---------------------------------------------------------------------------
+// Monaco glue — a single provider on `json-with-vars`, schema scoped per model.
+// ---------------------------------------------------------------------------
+
+const schemaByModel = new WeakMap<Monaco.editor.ITextModel, MessageSchemaIpc>();
+
+/** Attach (or clear) the schema for a given editor model. */
+export function setModelSchema(
+  model: Monaco.editor.ITextModel | null,
+  schema: MessageSchemaIpc | null,
+): void {
+  if (!model) return;
+  if (schema) schemaByModel.set(model, schema);
+  else schemaByModel.delete(model);
+}
+
+/** When a key is completed but a value already follows, insert only the quoted key. */
+function colonAlreadyAhead(model: Monaco.editor.ITextModel, position: Monaco.Position): boolean {
+  const lineEnd = model.getLineMaxColumn(position.lineNumber);
+  const after = model.getValueInRange({
+    startLineNumber: position.lineNumber,
+    startColumn: position.column,
+    endLineNumber: position.lineNumber,
+    endColumn: lineEnd,
+  });
+  return /^\s*:/.test(after);
+}
+
+function monacoKind(monaco: typeof Monaco, kind: Suggestion["kind"]): Monaco.languages.CompletionItemKind {
+  const K = monaco.languages.CompletionItemKind;
+  switch (kind) {
+    case "message":
+      return K.Struct;
+    case "enum":
+      return K.Enum;
+    case "value":
+      return K.EnumMember;
+    case "scalar":
+      return K.Value;
+    default:
+      return K.Field;
+  }
+}
+
+/** Register the request-body completion provider exactly once (called from monaco.ts). */
+export function registerBodyCompletion(monaco: typeof Monaco): void {
+  monaco.languages.registerCompletionItemProvider("json-with-vars", {
+    triggerCharacters: ['"', ":", " "],
+    provideCompletionItems(model, position) {
+      const schema = schemaByModel.get(model);
+      if (!schema) return { suggestions: [] };
+
+      const textBefore = model.getValueInRange({
+        startLineNumber: 1,
+        startColumn: 1,
+        endLineNumber: position.lineNumber,
+        endColumn: position.column,
+      });
+      const ctx = resolveCompletionContext(textBefore);
+      const items =
+        ctx.where === "key" ? buildKeySuggestions(schema, ctx) : buildValueSuggestions(schema, ctx);
+      if (items.length === 0) return { suggestions: [] };
+
+      const word = model.getWordUntilPosition(position);
+      const range: Monaco.IRange = {
+        startLineNumber: position.lineNumber,
+        endLineNumber: position.lineNumber,
+        startColumn: word.startColumn,
+        endColumn: word.endColumn,
+      };
+      const keyOnly = ctx.where === "key" && colonAlreadyAhead(model, position);
+
+      const suggestions: Monaco.languages.CompletionItem[] = items.map((s) => {
+        const asKeyOnly = keyOnly && s.kind !== "value";
+        const insertText = asKeyOnly ? `"${s.label}"` : s.insertText;
+        return {
+          label: s.label,
+          detail: s.detail,
+          kind: monacoKind(monaco, s.kind),
+          insertText,
+          insertTextRules:
+            s.isSnippet && !asKeyOnly
+              ? monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet
+              : undefined,
+          range,
+          command:
+            s.triggerNext && !asKeyOnly
+              ? { id: "editor.action.triggerSuggest", title: "" }
+              : undefined,
+        };
+      });
+      return { suggestions };
+    },
+  });
 }
