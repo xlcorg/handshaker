@@ -13,6 +13,7 @@ import {
   buildExecutedStep,
   cancelStep,
   applyMethodSelection,
+  resetBodyToTemplate,
 } from "./actions";
 import { newId } from "@/lib/ids";
 import { useEffect, useRef } from "react";
@@ -39,6 +40,8 @@ export function CallPanel({ step, onPatch, onExecuted, editable }: CallPanelProp
 
   const onBody = (value: string) => onPatch({ requestJson: value });
   const onMetadata = (rows: MetadataRow[]) => onPatch({ metadata: rows });
+  const onResetBody = () =>
+    void resetBodyToTemplate(onPatch, { address: step.address, tls: step.tls }, step.service, step.method);
 
   const onSend = async () => {
     const requestId = newId();
@@ -124,6 +127,7 @@ export function CallPanel({ step, onPatch, onExecuted, editable }: CallPanelProp
             onBody={onBody}
             onMetadata={onMetadata}
             onSubmit={() => sendShortcutRef.current()}
+            onResetTemplate={editable ? onResetBody : undefined}
           />
         </ResizablePanel>
         <ResizableHandle withHandle />

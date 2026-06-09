@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 vi.mock("@/features/invoke/BodyEditor", () => ({
   BodyEditor: ({ value }: { value: string }) => <div data-testid="body-editor">{value}</div>,
@@ -74,5 +75,48 @@ describe("RequestTabs", () => {
     await user.click(screen.getByRole("tab", { name: /metadata/i }));
     expect(screen.getByRole("tab", { name: /metadata/i })).toHaveAttribute("aria-selected", "true");
     expect(requestTab).toHaveAttribute("aria-selected", "false");
+  });
+
+  it("shows a Reset-to-template button on the Request tab and calls onResetTemplate", async () => {
+    const user = userEvent.setup();
+    const onResetTemplate = vi.fn();
+    const p = { ...setup(), onResetTemplate };
+    render(
+      <TooltipProvider>
+        <RequestTabs {...p} />
+      </TooltipProvider>,
+    );
+    const btn = screen.getByRole("button", { name: /reset body to template/i });
+    await user.click(btn);
+    expect(onResetTemplate).toHaveBeenCalledTimes(1);
+  });
+
+  it("hides the Reset button when not on the Request tab", async () => {
+    const user = userEvent.setup();
+    const p = { ...setup(), onResetTemplate: vi.fn() };
+    render(
+      <TooltipProvider>
+        <RequestTabs {...p} />
+      </TooltipProvider>,
+    );
+    await user.click(screen.getByRole("tab", { name: /metadata/i }));
+    expect(screen.queryByRole("button", { name: /reset body to template/i })).toBeNull();
+  });
+
+  it("disables Reset when no method is selected", () => {
+    const baseStep = newStep({ address: "h", tls: false, service: "S", method: "", requestJson: "{}" });
+    const p = {
+      step: baseStep,
+      serviceAuth: { kind: "none" as const },
+      onBody: vi.fn(),
+      onMetadata: vi.fn(),
+      onResetTemplate: vi.fn(),
+    };
+    render(
+      <TooltipProvider>
+        <RequestTabs {...p} />
+      </TooltipProvider>,
+    );
+    expect(screen.getByRole("button", { name: /reset body to template/i })).toBeDisabled();
   });
 });

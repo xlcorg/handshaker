@@ -1,6 +1,9 @@
 import { useState } from "react";
+import { RotateCcw } from "lucide-react";
 import { BodyEditor } from "@/features/invoke/BodyEditor";
 import { UnderlineTabs } from "@/components/ui/underline-tabs";
+import { Button } from "@/components/ui/button";
+import { Tooltip } from "@/components/ui/tooltip";
 import type { SavedAuthConfigIpc } from "@/ipc/bindings";
 import { MetadataEditor } from "./MetadataEditor";
 import type { MetadataRow, Step } from "./model";
@@ -14,9 +17,11 @@ export interface RequestTabsProps {
   onMetadata: (rows: MetadataRow[]) => void;
   /** Ctrl/Cmd+Enter inside the body editor → send. */
   onSubmit?: () => void;
+  /** Reset the body to the current method's skeleton (draft only). Omit to hide the button. */
+  onResetTemplate?: () => void;
 }
 
-export function RequestTabs({ step, serviceAuth, onBody, onMetadata, onSubmit }: RequestTabsProps) {
+export function RequestTabs({ step, serviceAuth, onBody, onMetadata, onSubmit, onResetTemplate }: RequestTabsProps) {
   const [tab, setTab] = useState<Tab>("request");
   return (
     <div className="flex h-full flex-col">
@@ -30,6 +35,20 @@ export function RequestTabs({ step, serviceAuth, onBody, onMetadata, onSubmit }:
             { value: "auth", label: "Auth" },
           ]}
         />
+        {tab === "request" && onResetTemplate ? (
+          <Tooltip content="Reset body to template">
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={onResetTemplate}
+              disabled={step.method.trim().length === 0}
+              aria-label="Reset body to template"
+              className="ml-auto text-muted-foreground hover:text-foreground"
+            >
+              <RotateCcw />
+            </Button>
+          </Tooltip>
+        ) : null}
       </div>
       <div className="min-h-0 flex-1 overflow-hidden">
         {tab === "request" ? (
