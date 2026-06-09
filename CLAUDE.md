@@ -4,13 +4,20 @@ Handshaker — десктопный gRPC-клиент (Tauri 2 + React 18 + Rust
 Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src-tauri` (IPC) ·
 `src` (React-фронтенд).
 
-## Active work — нет активного плана
+## Active work — manual «Check for updates» button
 
-Все спланированные фичи **завершены** и перенесены в
+Активный план: [`docs/superpowers/plans/2026-06-09-check-for-updates-button.md`](docs/superpowers/plans/2026-06-09-check-for-updates-button.md)
+(спек: [`…/specs/2026-06-09-check-for-updates-button-design.md`](docs/superpowers/specs/2026-06-09-check-for-updates-button-design.md)).
+Ветка `claude/modest-joliot-8efb0b`. Deferred follow-up основной фичи авто-обновления:
+ручная проверка из тайтлбара (иконка `RefreshCw` + бейдж доступности, переживающий
+«Later») и из Settings → About (кнопка). Результат всегда через тост; флаги
+`manual`/`hasUpdate` в `useUpdateCheck` + лёгкий `UpdaterProvider`. 6 задач, TDD,
+subagent-driven. **Статус-баннер в план-файле — источник истины.**
+
+Прочие спланированные фичи **завершены** и перенесены в
 `docs/superpowers/{specs,plans}/archive/` (см. правило «Архивирование завершённых
-планов и спеков» ниже). Новую работу начинай с брейншторма/спека → плана, и пока
-план активен — держи его описание здесь. Интеграционная ветка — `main`; фичи
-ведутся в отдельных worktree-ветках (`claude/*`) и вливаются в `main` fast-forward.
+планов и спеков» ниже). Интеграционная ветка — `main`; фичи ведутся в отдельных
+worktree-ветках (`claude/*`) и вливаются в `main` fast-forward.
 
 ### Завершённые фичи (всё в `archive/`)
 
