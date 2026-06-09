@@ -15,7 +15,7 @@ use commands::env::{env_active_get, env_active_set, env_delete, env_list, env_up
 use commands::events::ContractUpdated;
 use commands::grpc::{
     grpc_build_request_skeleton, grpc_cancel, grpc_describe, grpc_invoke_oneshot,
-    grpc_refresh_contract,
+    grpc_message_schema, grpc_refresh_contract,
 };
 use commands::meta::app_version;
 use commands::ui_state::{app_settings_get, app_settings_set};
@@ -34,6 +34,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             grpc_describe,
             grpc_refresh_contract,
             grpc_build_request_skeleton,
+            grpc_message_schema,
             grpc_invoke_oneshot,
             grpc_cancel,
             env_list,

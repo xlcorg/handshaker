@@ -14,6 +14,7 @@ import type {
   SavedAuthConfigIpc,
   AuthCredentialsIpc,
   UiStateIpc,
+  MessageSchemaIpc,
 } from "./bindings";
 
 /**
@@ -44,6 +45,16 @@ export async function grpcBuildRequestSkeleton(
   method: string,
 ): Promise<string> {
   const r = await commands.grpcBuildRequestSkeleton(target, service, method);
+  if (r.status === "error") throw r.error;
+  return r.data;
+}
+
+export async function grpcMessageSchema(
+  target: GrpcTargetIpc,
+  service: string,
+  method: string,
+): Promise<MessageSchemaIpc> {
+  const r = await commands.grpcMessageSchema(target, service, method);
   if (r.status === "error") throw r.error;
   return r.data;
 }
@@ -215,6 +226,7 @@ export const ipc = {
   grpcInvokeOneshot,
   grpcCancel,
   grpcBuildRequestSkeleton,
+  grpcMessageSchema,
   envList,
   envActiveGet,
   envActiveSet,

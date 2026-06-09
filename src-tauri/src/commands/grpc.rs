@@ -10,14 +10,16 @@ use std::time::Duration;
 use tokio::sync::Notify;
 
 use handshaker_core::grpc::{
-    activate, build_request_skeleton_from_pool, invoke_unary, ContractKey, GrpcTarget,
-    TonicTransport,
+    activate, build_message_schema_from_pool, build_request_skeleton_from_pool, invoke_unary,
+    ContractKey, GrpcTarget, TonicTransport,
 };
 use tauri::{AppHandle, State};
 use tauri_specta::Event;
 
 use crate::commands::events::ContractUpdated;
-use crate::ipc::{GrpcTargetIpc, InvokeOutcomeIpc, InvokeRequest, IpcError, ServiceCatalogIpc};
+use crate::ipc::{
+    GrpcTargetIpc, InvokeOutcomeIpc, InvokeRequest, IpcError, MessageSchemaIpc, ServiceCatalogIpc,
+};
 use crate::state::{AppState, InFlight};
 
 /// Stable string key for the `ContractUpdated` event. Mirrors `ContractKey`'s
@@ -93,6 +95,28 @@ pub async fn grpc_build_request_skeleton(
     let transport = Arc::new(TonicTransport::new());
     let conn = activate(target, transport, state.contract_cache.as_ref()).await?;
     Ok(build_request_skeleton_from_pool(&conn.pool, &service, &method)?)
+}
+
+/// Build the flat field-schema for a method's input message (drives autocomplete).
+/// Same cache discipline as `grpc_build_request_skeleton`: cache hit → build from the
+/// pool; miss → `activate` first.
+#[tauri::command]
+#[specta::specta]
+pub async fn grpc_message_schema(
+    state: State<'_, AppState>,
+    target: GrpcTargetIpc,
+    service: String,
+    method: String,
+) -> Result<MessageSchemaIpc, IpcError> {
+    let target = target.into_core()?;
+    let key = ContractKey::from_target(&target);
+
+    if let Some(cached) = state.contract_cache.get(&key) {
+        return Ok(build_message_schema_from_pool(&cached.pool, &service, &method)?.into());
+    }
+    let transport = Arc::new(TonicTransport::new());
+    let conn = activate(target, transport, state.contract_cache.as_ref()).await?;
+    Ok(build_message_schema_from_pool(&conn.pool, &service, &method)?.into())
 }
 
 /// Sentinel transport messages classified on the frontend (Transport(msg) reuse — see the
