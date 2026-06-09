@@ -90,7 +90,12 @@ export function CallPanel({ step, onPatch, onExecuted, editable }: CallPanelProp
       onTls={(tls) => onPatch({ tls })}
       onRefresh={reflection.refresh}
       onSelectMethod={(m) =>
-        void applyMethodSelection(onPatch, { address: step.address, tls: step.tls }, m)
+        void applyMethodSelection(
+          onPatch,
+          { address: step.address, tls: step.tls },
+          { requestJson: step.requestJson, service: step.service, method: step.method },
+          m,
+        )
       }
       onSend={onSend}
       onCancel={onCancel}

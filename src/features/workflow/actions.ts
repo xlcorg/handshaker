@@ -61,15 +61,23 @@ export async function buildRequestSkeletonSafe(
   }
 }
 
-/** MethodPicker handler for an editable draft: patch service/method, then the new skeleton. */
+/** MethodPicker handler for an editable draft. Patches service/method, then replaces the
+ *  body with the new method's skeleton ONLY when the current body is still pristine
+ *  (empty / `{}` / structurally equal to the pre-switch method's skeleton). An edited body
+ *  is preserved verbatim — use Reset-to-template (`resetBodyToTemplate`) to regenerate. */
 export async function applyMethodSelection(
   patch: (p: Partial<Step>) => void,
   target: CallTargetInit,
+  current: { requestJson: string; service: string; method: string },
   m: { service: string; method: string },
 ): Promise<void> {
+  const oldSkeleton = await buildRequestSkeletonSafe(target, current.service, current.method);
+  const pristine = isPristineBody(current.requestJson, oldSkeleton);
   patch({ service: m.service, method: m.method });
-  const requestJson = await buildRequestSkeletonSafe(target, m.service, m.method);
-  patch({ requestJson });
+  if (pristine) {
+    const requestJson = await buildRequestSkeletonSafe(target, m.service, m.method);
+    patch({ requestJson });
+  }
 }
 
 export async function createStepFromMethod(

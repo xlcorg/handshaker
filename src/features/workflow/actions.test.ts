@@ -413,12 +413,46 @@ describe("buildRequestSkeletonSafe", () => {
 });
 
 describe("applyMethodSelection", () => {
-  it("patches service/method first, then the fetched skeleton", async () => {
-    vi.mocked(ipc.grpcBuildRequestSkeleton).mockResolvedValue('{"a":""}');
+  it("replaces a pristine body with the new method's skeleton", async () => {
+    vi.mocked(ipc.grpcBuildRequestSkeleton)
+      .mockResolvedValueOnce('{"a":""}')  // old method skeleton (for pristine check)
+      .mockResolvedValueOnce('{"b":""}'); // new method skeleton
     const patch = vi.fn();
-    await applyMethodSelection(patch, { address: "h:443", tls: true }, { service: "p.S", method: "M" });
-    expect(patch).toHaveBeenNthCalledWith(1, { service: "p.S", method: "M" });
-    expect(patch).toHaveBeenNthCalledWith(2, { requestJson: '{"a":""}' });
+    await applyMethodSelection(
+      patch,
+      { address: "h:443", tls: true },
+      { requestJson: "{}", service: "p.S", method: "Old" }, // pristine
+      { service: "p.S", method: "New" },
+    );
+    expect(patch).toHaveBeenNthCalledWith(1, { service: "p.S", method: "New" });
+    expect(patch).toHaveBeenNthCalledWith(2, { requestJson: '{"b":""}' });
+  });
+
+  it("replaces when the body equals the skeleton modulo whitespace", async () => {
+    vi.mocked(ipc.grpcBuildRequestSkeleton)
+      .mockResolvedValueOnce('{"a":""}')
+      .mockResolvedValueOnce('{"b":""}');
+    const patch = vi.fn();
+    await applyMethodSelection(
+      patch,
+      { address: "h:443", tls: true },
+      { requestJson: '{\n  "a": ""\n}', service: "p.S", method: "Old" }, // == old skeleton
+      { service: "p.S", method: "New" },
+    );
+    expect(patch).toHaveBeenNthCalledWith(2, { requestJson: '{"b":""}' });
+  });
+
+  it("preserves an edited body (patches service/method only)", async () => {
+    vi.mocked(ipc.grpcBuildRequestSkeleton).mockResolvedValueOnce('{"a":""}'); // old skeleton
+    const patch = vi.fn();
+    await applyMethodSelection(
+      patch,
+      { address: "h:443", tls: true },
+      { requestJson: '{"a":"edited"}', service: "p.S", method: "Old" }, // edited
+      { service: "p.S", method: "New" },
+    );
+    expect(patch).toHaveBeenCalledTimes(1);
+    expect(patch).toHaveBeenCalledWith({ service: "p.S", method: "New" });
   });
 });
 
