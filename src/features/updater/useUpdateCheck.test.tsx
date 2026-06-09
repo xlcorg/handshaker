@@ -84,4 +84,52 @@ describe("useUpdateCheck", () => {
     act(() => result.current.dismiss());
     expect(result.current.phase).toBe("idle");
   });
+
+  it("recheck() re-runs the check and flags it manual + latches hasUpdate", async () => {
+    check.mockResolvedValue(null); // mount → upToDate
+    const { result } = renderHook(() => useUpdateCheck());
+    await waitFor(() => expect(result.current.phase).toBe("upToDate"));
+    expect(result.current.manual).toBe(false);
+    expect(result.current.hasUpdate).toBe(false);
+
+    check.mockResolvedValue(fakeUpdate()); // next check → available
+    act(() => {
+      result.current.recheck();
+    });
+    await waitFor(() => expect(result.current.phase).toBe("available"));
+    expect(result.current.manual).toBe(true);
+    expect(result.current.hasUpdate).toBe(true);
+  });
+
+  it("dismiss() hides the toast but keeps hasUpdate + version for the titlebar badge", async () => {
+    check.mockResolvedValue(fakeUpdate());
+    const { result } = renderHook(() => useUpdateCheck());
+    await waitFor(() => expect(result.current.phase).toBe("available"));
+    act(() => result.current.dismiss());
+    expect(result.current.phase).toBe("idle");
+    expect(result.current.hasUpdate).toBe(true);
+    expect(result.current.version).toBe("0.2.0");
+  });
+
+  it("recheck() is a no-op while a download is in flight", async () => {
+    let resolveDl: () => void = () => {};
+    const downloadAndInstall = vi.fn(
+      () => new Promise<void>((res) => { resolveDl = res; }),
+    );
+    check.mockResolvedValue(fakeUpdate({ downloadAndInstall }));
+    const { result } = renderHook(() => useUpdateCheck());
+    await waitFor(() => expect(result.current.phase).toBe("available"));
+
+    act(() => {
+      void result.current.install();
+    });
+    await waitFor(() => expect(result.current.phase).toBe("downloading"));
+
+    check.mockClear();
+    act(() => {
+      result.current.recheck();
+    });
+    expect(check).not.toHaveBeenCalled();
+    resolveDl();
+  });
 });
