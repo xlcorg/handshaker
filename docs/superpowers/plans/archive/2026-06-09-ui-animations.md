@@ -1,5 +1,7 @@
 # UI animations Implementation Plan
 
+> **Status: ✅ code-complete (2026-06-09).** All 6 implementation tasks done, committed, and reviewed (per-task spec+quality review + final holistic review). Verification: `pnpm test` 611/611, `pnpm lint` (tsc) clean, `pnpm build` clean — all on branch `claude/serene-feistel-e53ca1` (commits `4db8b83`…`2cf658e`). **Deferred to a human:** manual `pnpm tauri dev` visual pass (tab-indicator slide, drop slot, group fill), `prefers-reduced-motion` toggle check, and the macOS/WKWebView visual pass.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add a shared motion-tokens + `prefers-reduced-motion` baseline, a sliding underline indicator for tabs (B), and a Claude-Desktop-style tinted drop affordance for the sidebar drag-and-drop (E).

@@ -1,7 +1,7 @@
 # UI animations: motion tokens + sliding tab indicator + DnD drop affordance — design
 
 **Date:** 2026-06-09
-**Status:** draft (awaiting spec review)
+**Status:** ✅ implemented — code-complete on `claude/serene-feistel-e53ca1` (611 tests / tsc / build green; manual `pnpm tauri dev` visual + `prefers-reduced-motion` + macOS/WKWebView checks deferred to a human). Plan: [../../plans/archive/2026-06-09-ui-animations.md](../../plans/archive/2026-06-09-ui-animations.md).
 **Branch:** `claude/serene-feistel-e53ca1`
 
 ## Problem

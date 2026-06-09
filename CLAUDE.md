@@ -30,6 +30,15 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
   «светофор» через Tauri `TitleBarStyle::Overlay` (`tauri.macos.conf.json`,
   RFC7396-мердж), `isMacOS`/`useIsFullscreen`-ветвление `Titlebar.tsx` (без
   wordmark/кнопок окна, левый инсет). Остаток: ручная визуальная проверка на Mac.
+- **UI-анимации (motion tokens + B + E)** (✅ code-complete, branch
+  `claude/serene-feistel-e53ca1`, commits `4db8b83`…`2cf658e`) — дизайн-токены
+  движения (`--motion-fast/base`, `--ease-standard/out/in`) + глобальный
+  `prefers-reduced-motion` (спиннер/пульс остаются живыми) в `globals.css`;
+  скользящий индикатор таба в `underline-tabs.tsx` (одна замеряемая `transform`-полоса);
+  Claude-Desktop-style DnD-аффорданс — новый `DropSlot` (заливка-плейсхолдер
+  before/after) + fill-тинт области для `inside` в RequestRow/FolderNode/CollectionNode
+  (`dnd.ts`/`planDrop` не тронуты). 611 тестов/tsc/build зелёные. Остаток: ручная
+  визуалка `pnpm tauri dev` + reduced-motion + mac/WKWebView.
 
 Источник истины по статусу любой фичи — статус-баннер её план-файла в `archive/`,
 не эта строка.
