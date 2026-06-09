@@ -80,6 +80,19 @@ export async function applyMethodSelection(
   }
 }
 
+/** Force-regenerate the request body from the current method's skeleton (Reset-to-template).
+ *  Never throws — `buildRequestSkeletonSafe` falls back to `"{}"`. The overwrite flows through
+ *  the editor's controlled `value`, so Ctrl+Z reverts it. */
+export async function resetBodyToTemplate(
+  patch: (p: Partial<Step>) => void,
+  target: CallTargetInit,
+  service: string,
+  method: string,
+): Promise<void> {
+  const requestJson = await buildRequestSkeletonSafe(target, service, method);
+  patch({ requestJson });
+}
+
 export async function createStepFromMethod(
   target: CallTargetInit,
   service: string,

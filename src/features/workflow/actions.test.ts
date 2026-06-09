@@ -10,7 +10,7 @@ vi.mock("@/ipc/client", () => ({
 
 import * as ipc from "@/ipc/client";
 import { createStepFromMethod, sendStep, stepPatchFromSendResult, resolveAuthHeader, shouldRecordExecuted, buildExecutedStep, cancelStep } from "./actions";
-import { buildRequestSkeletonSafe, applyMethodSelection, isPristineBody } from "./actions";
+import { buildRequestSkeletonSafe, applyMethodSelection, isPristineBody, resetBodyToTemplate } from "./actions";
 import { newStep } from "./model";
 
 beforeEach(() => {
@@ -481,5 +481,26 @@ describe("isPristineBody", () => {
   it("falls back to a trimmed string compare when the skeleton is unparseable", () => {
     expect(isPristineBody("not json", "not json")).toBe(true);
     expect(isPristineBody("not json", "other")).toBe(false);
+  });
+});
+
+describe("resetBodyToTemplate", () => {
+  it("patches requestJson with a fresh skeleton for the current method", async () => {
+    vi.mocked(ipc.grpcBuildRequestSkeleton).mockResolvedValue('{"a":""}');
+    const patch = vi.fn();
+    await resetBodyToTemplate(patch, { address: "h:443", tls: true }, "p.S", "M");
+    expect(ipc.grpcBuildRequestSkeleton).toHaveBeenCalledWith(
+      { address: "h:443", tls: true, skip_verify: false },
+      "p.S",
+      "M",
+    );
+    expect(patch).toHaveBeenCalledWith({ requestJson: '{"a":""}' });
+  });
+
+  it("falls back to {} when the skeleton build fails", async () => {
+    vi.mocked(ipc.grpcBuildRequestSkeleton).mockRejectedValue(new Error("boom"));
+    const patch = vi.fn();
+    await resetBodyToTemplate(patch, { address: "h", tls: false }, "S", "M");
+    expect(patch).toHaveBeenCalledWith({ requestJson: "{}" });
   });
 });
