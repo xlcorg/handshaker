@@ -66,6 +66,13 @@
   --ring: 0 0% 3.9%;
   --radius: 0.5rem;
 
+  /* motion tokens — desktop-snappy durations + Material-derived easing */
+  --motion-fast: 120ms;
+  --motion-base: 180ms;
+  --ease-standard: cubic-bezier(.2, 0, 0, 1); /* movement between states */
+  --ease-out: cubic-bezier(0, 0, .2, 1);      /* enter (decelerate) */
+  --ease-in: cubic-bezier(.4, 0, 1, 1);       /* exit (accelerate) */
+
   /* sidebar (≈ base palette; --sidebar a hair off --background for separation) */
   --sidebar: 0 0% 98%;
   --sidebar-foreground: 0 0% 3.9%;
@@ -206,6 +213,16 @@ body {
 .pulse-dot { animation: hs-pulse 1.4s ease-in-out infinite; }
 @keyframes hs-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
 
+/* sliding tab underline (B) — width/position transition, enabled after first measure */
+.hs-tab-indicator {
+  transition: transform var(--motion-fast) var(--ease-standard),
+              width var(--motion-fast) var(--ease-standard);
+}
+
+/* DnD drop slot (E) — tinted placeholder fades in at the insertion point */
+.hs-slot-enter { animation: hs-slot-in var(--motion-fast) var(--ease-out); }
+@keyframes hs-slot-in { from { opacity: 0; } to { opacity: 1; } }
+
 /* in-flight progress: a segment that grows out of the active tab's underline
    (anchored at --bar-start) and sweeps to the right edge, then repeats. */
 .hs-tab-progress { overflow: hidden; }
@@ -240,6 +257,19 @@ body {
   margin-left: 4px;
   font-size: 11px;
   cursor: pointer;
+}
+
+/* Accessibility: honour the OS "reduce motion" setting (WCAG 2.3.3). Neutralise
+   all transitions/animations, but keep essential status feedback (loading spinner,
+   streaming pulse) animated — they convey state, not decoration. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+  .spinner   { animation-duration: .8s  !important; animation-iteration-count: infinite !important; }
+  .pulse-dot { animation-duration: 1.4s !important; animation-iteration-count: infinite !important; }
 }
 
 ::selection { background: hsl(var(--foreground) / .15); }
