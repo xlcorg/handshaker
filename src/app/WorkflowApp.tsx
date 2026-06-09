@@ -29,6 +29,7 @@ import { usePrefs, readPrefs } from "@/lib/use-prefs";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import { useUpdateCheck } from "@/features/updater/useUpdateCheck";
 import { UpdateToast } from "@/features/updater/UpdateToast";
+import { UpdaterProvider } from "@/features/updater/updaterContext";
 
 function renderView(view: ViewMode, onRequestSave: () => void) {
   switch (view) {
@@ -178,8 +179,14 @@ export function WorkflowApp() {
     });
 
   return (
-    <div className="flex h-screen flex-col bg-background text-foreground">
-      <Titlebar onOpenSettings={() => setSettingsOpen(true)} />
+    <UpdaterProvider value={update}>
+      <div className="flex h-screen flex-col bg-background text-foreground">
+      <Titlebar
+        onOpenSettings={() => setSettingsOpen(true)}
+        onCheckForUpdates={update.recheck}
+        updatePhase={update.phase}
+        updateAvailable={update.hasUpdate}
+      />
 
       <SidebarProvider className="min-h-0 flex-1">
         <ResizablePanelGroup
@@ -272,11 +279,13 @@ export function WorkflowApp() {
         phase={update.phase}
         version={update.version}
         progress={update.progress}
+        manual={update.manual}
         onUpdate={update.install}
         onDismiss={update.dismiss}
       />
       <AppVersionBadge />
       <Toaster />
     </div>
+    </UpdaterProvider>
   );
 }
