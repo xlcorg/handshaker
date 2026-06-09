@@ -2,13 +2,14 @@ import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 import { render } from "@testing-library/react";
 import { UpdateToast } from "./UpdateToast";
 
-type ToastMock = Mock & { loading: Mock; error: Mock; dismiss: Mock };
+type ToastMock = Mock & { loading: Mock; error: Mock; success: Mock; dismiss: Mock };
 
-// One shared mock for the sonner `toast` callable + its .loading/.error/.dismiss.
+// One shared mock for the sonner `toast` callable + its .loading/.error/.success/.dismiss.
 const { toastMock } = vi.hoisted(() => {
   const t = vi.fn(() => "toast-1") as ToastMock;
   t.loading = vi.fn(() => "toast-1");
   t.error = vi.fn(() => "toast-1");
+  t.success = vi.fn(() => "toast-1");
   t.dismiss = vi.fn();
   return { toastMock: t };
 });
@@ -153,5 +154,36 @@ describe("UpdateToast", () => {
     const { rerender } = render(<UpdateToast {...props} />);
     rerender(<UpdateToast {...props} phase="idle" />);
     expect(toastMock.dismiss).toHaveBeenCalledWith("toast-1");
+  });
+
+  it("shows a success toast on a MANUAL up-to-date result", () => {
+    render(<UpdateToast phase="upToDate" version="" progress={0} manual onUpdate={() => {}} onDismiss={() => {}} />);
+    expect(toastMock.success).toHaveBeenCalledTimes(1);
+    expect(toastMock.success.mock.calls[0][0]).toMatch(/latest version/i);
+    const opts = toastMock.success.mock.calls[0][1] as { duration: number; position: string };
+    expect(opts.duration).toBeGreaterThan(0);
+    expect(opts.duration).not.toBe(Infinity);
+    expect(opts.position).toBe("bottom-right");
+  });
+
+  it("shows an error toast on a MANUAL check failure", () => {
+    render(<UpdateToast phase="error" version="" progress={0} manual onUpdate={() => {}} onDismiss={() => {}} />);
+    expect(toastMock.error).toHaveBeenCalledTimes(1);
+    expect(toastMock.error.mock.calls[0][0]).toMatch(/couldn't check/i);
+  });
+
+  it("shows a loading toast while a MANUAL check is running", () => {
+    render(<UpdateToast phase="checking" version="" progress={0} manual onUpdate={() => {}} onDismiss={() => {}} />);
+    expect(toastMock.loading).toHaveBeenCalledTimes(1);
+    expect(toastMock.loading.mock.calls[0][0]).toMatch(/checking for updates/i);
+  });
+
+  it("stays silent for the same phases when the check is NOT manual (startup)", () => {
+    render(<UpdateToast phase="upToDate" version="" progress={0} onUpdate={() => {}} onDismiss={() => {}} />);
+    render(<UpdateToast phase="error" version="" progress={0} onUpdate={() => {}} onDismiss={() => {}} />);
+    render(<UpdateToast phase="checking" version="" progress={0} onUpdate={() => {}} onDismiss={() => {}} />);
+    expect(toastMock.success).not.toHaveBeenCalled();
+    expect(toastMock.error).not.toHaveBeenCalled();
+    expect(toastMock.loading).not.toHaveBeenCalled();
   });
 });
