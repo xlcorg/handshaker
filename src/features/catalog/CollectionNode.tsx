@@ -50,7 +50,7 @@ export function CollectionNode({ col, cb }: CollectionNodeProps) {
             "before:pointer-events-none before:absolute before:inset-y-0 before:left-[var(--bl)] before:right-[var(--br)] before:-z-10 before:rounded-md before:content-['']",
             "hover:before:bg-sidebar-accent/50",
             focused && "ring-1 ring-inset ring-ring",
-            hint === "inside" && "ring-1 ring-inset ring-primary bg-primary/5",
+            hint === "inside" && "bg-primary/10",
           )}
         >
           <button
@@ -94,7 +94,12 @@ export function CollectionNode({ col, cb }: CollectionNodeProps) {
       </RowMenu>
 
       {open ? (
-        <SidebarMenuSub className="mx-2 gap-0.5 px-2 py-0 border-transparent hover:border-sidebar-border">
+        <SidebarMenuSub
+          className={cn(
+            "mx-2 gap-0.5 px-2 py-0 border-transparent hover:border-sidebar-border",
+            hint === "inside" && "rounded-md bg-primary/5",
+          )}
+        >
           {col.items.map((it) =>
             it.type === "folder" ? (
               <FolderNode key={it.id} collectionId={col.id} folder={it} depth={1} cb={cb} />

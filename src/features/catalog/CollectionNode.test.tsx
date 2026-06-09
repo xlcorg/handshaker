@@ -96,4 +96,16 @@ describe("CollectionNode", () => {
     renderWithSidebar(<CollectionNode col={col({ items: [] })} cb={makeCb({ open: new Set(["c1"]) })} />);
     expect(screen.getByText("Empty collection")).toBeTruthy();
   });
+
+  it("fills the collection row with a tint when dropHint zone is 'inside'", () => {
+    renderWithSidebar(<CollectionNode col={col()} cb={makeCb({ dropHint: { id: "c1", zone: "inside" } })} />);
+    const row = document.querySelector("[data-node-id='c1']") as HTMLElement;
+    expect(row.className).toContain("bg-primary/10");
+  });
+
+  it("does not fill the row when not the drop target", () => {
+    renderWithSidebar(<CollectionNode col={col()} cb={makeCb({ dropHint: { id: "other", zone: "inside" } })} />);
+    const row = document.querySelector("[data-node-id='c1']") as HTMLElement;
+    expect(row.className).not.toContain("bg-primary/10");
+  });
 });
