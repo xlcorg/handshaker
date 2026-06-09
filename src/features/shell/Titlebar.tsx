@@ -1,4 +1,4 @@
-import { Minus, Moon, PanelLeft, Settings, Square, Sun, X } from "lucide-react";
+import { Minus, Moon, PanelLeft, RefreshCw, Settings, Square, Sun, X } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Tooltip } from "@/components/ui/tooltip";
 import { usePrefs } from "@/lib/use-prefs";
@@ -6,6 +6,7 @@ import { isMacOS } from "@/lib/platform";
 import { useIsFullscreen } from "@/lib/use-fullscreen";
 import { WorkflowSelector } from "@/features/workflow/WorkflowSelector";
 import { WorkflowEnvControl } from "@/features/workflow/WorkflowEnvControl";
+import type { UpdatePhase } from "@/features/updater/useUpdateCheck";
 import { ViewSwitcher } from "@/features/workflow/ViewSwitcher";
 
 const btn =
@@ -22,7 +23,18 @@ const btn =
  *   левый инсет под него (схлопывается в fullscreen), убираем wordmark и кнопки
  *   окна.
  */
-export function Titlebar({ onOpenSettings }: { onOpenSettings: () => void }) {
+export function Titlebar({
+  onOpenSettings,
+  onCheckForUpdates,
+  updatePhase,
+  updateAvailable,
+}: {
+  onOpenSettings: () => void;
+  onCheckForUpdates?: () => void;
+  updatePhase?: UpdatePhase;
+  updateAvailable?: boolean;
+}) {
+  const updateBusy = updatePhase === "checking" || updatePhase === "downloading";
   const [prefs, setPref] = usePrefs();
   const fullscreen = useIsFullscreen();
   const showTrafficInset = isMacOS && !fullscreen;
@@ -65,6 +77,29 @@ export function Titlebar({ onOpenSettings }: { onOpenSettings: () => void }) {
             {prefs.theme === "dark" ? <Sun size={13} /> : <Moon size={13} />}
           </button>
         </Tooltip>
+        {onCheckForUpdates && (
+          <Tooltip
+            content={updateBusy ? "Checking for updates…" : updateAvailable ? "Update available" : "Check for updates"}
+            side="bottom"
+          >
+            <button
+              type="button"
+              onClick={onCheckForUpdates}
+              disabled={updateBusy}
+              className={`${btn} relative disabled:opacity-50`}
+              aria-label="Check for updates"
+            >
+              <RefreshCw size={13} className={updateBusy ? "animate-spin" : undefined} />
+              {updateAvailable && (
+                <span
+                  aria-hidden
+                  data-testid="update-available-dot"
+                  className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-primary ring-1 ring-card"
+                />
+              )}
+            </button>
+          </Tooltip>
+        )}
         <Tooltip content="Settings" side="bottom">
           <button type="button" onClick={onOpenSettings} className={btn} aria-label="Settings">
             <Settings size={13} />

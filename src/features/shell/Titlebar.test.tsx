@@ -72,6 +72,26 @@ describe("Titlebar (both platforms)", () => {
     await user.click(screen.getByRole("button", { name: "Settings" }));
     expect(onOpenSettings).toHaveBeenCalledTimes(1);
   });
+
+  it("renders a check-for-updates button that calls onCheckForUpdates", async () => {
+    const onCheckForUpdates = vi.fn();
+    const user = userEvent.setup();
+    render(<Titlebar onOpenSettings={() => {}} onCheckForUpdates={onCheckForUpdates} updatePhase="idle" />);
+    await user.click(screen.getByRole("button", { name: "Check for updates" }));
+    expect(onCheckForUpdates).toHaveBeenCalledTimes(1);
+  });
+
+  it("omits the check button without a handler and disables it while checking", () => {
+    const { rerender } = render(<Titlebar onOpenSettings={() => {}} />);
+    expect(screen.queryByRole("button", { name: "Check for updates" })).toBeNull();
+    rerender(<TooltipProvider><Titlebar onOpenSettings={() => {}} onCheckForUpdates={() => {}} updatePhase="checking" /></TooltipProvider>);
+    expect(screen.getByRole("button", { name: "Check for updates" })).toBeDisabled();
+  });
+
+  it("shows the update-available badge when an update is pending (even when idle)", () => {
+    render(<Titlebar onOpenSettings={() => {}} onCheckForUpdates={() => {}} updatePhase="idle" updateAvailable />);
+    expect(screen.getByTestId("update-available-dot")).toBeInTheDocument();
+  });
 });
 
 describe("Titlebar on Windows/Linux", () => {
