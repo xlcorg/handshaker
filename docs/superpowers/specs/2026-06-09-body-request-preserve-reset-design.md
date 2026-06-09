@@ -1,7 +1,7 @@
 # Request body — preserve edits + Reset-to-template (Group A) — design
 
 **Date:** 2026-06-09
-**Status:** draft (awaiting spec review)
+**Status:** approved — plan written (`docs/superpowers/plans/2026-06-09-body-request-preserve-reset.md`)
 **Branch:** `claude/musing-blackburn-edc9a0`
 
 ## Scope
