@@ -1,3 +1,4 @@
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 
 export interface UnderlineTabItem<T extends string = string> {
@@ -19,8 +20,41 @@ export function UnderlineTabs<T extends string>({
   items,
   className,
 }: UnderlineTabsProps<T>) {
+  const listRef = useRef<HTMLDivElement>(null);
+  const [bar, setBar] = useState<{ left: number; width: number } | null>(null);
+  // Transition is enabled only after the first measurement, so the bar doesn't
+  // "fly in" from 0 on mount.
+  const [animate, setAnimate] = useState(false);
+
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    const measure = () => {
+      const active = list.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
+      if (!active) return;
+      // The underline is inset 8px on each side of the tab (matches the old left-2/right-2,
+      // and the response progress-bar's +8 offset in ResponsePanel).
+      setBar({ left: active.offsetLeft + 8, width: Math.max(0, active.offsetWidth - 16) });
+    };
+    measure();
+    let ro: ResizeObserver | undefined;
+    if (typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(measure);
+      ro.observe(list);
+    }
+    return () => ro?.disconnect();
+  }, [value, items]);
+
+  useEffect(() => {
+    setAnimate(true);
+  }, []);
+
   return (
-    <div role="tablist" className={cn("self-stretch flex items-stretch gap-0.5", className)}>
+    <div
+      ref={listRef}
+      role="tablist"
+      className={cn("relative self-stretch flex items-stretch gap-0.5", className)}
+    >
       {items.map((it) => {
         const active = it.value === value;
         return (
@@ -45,16 +79,22 @@ export function UnderlineTabs<T extends string>({
                 {it.hint}
               </span>
             )}
-            <span
-              aria-hidden
-              className={cn(
-                "absolute left-2 right-2 -bottom-px h-[1.5px] rounded-full bg-foreground transition-opacity",
-                active ? "opacity-100" : "opacity-0",
-              )}
-            />
           </button>
         );
       })}
+      <span
+        aria-hidden
+        data-testid="tab-indicator"
+        className={cn(
+          "pointer-events-none absolute left-0 -bottom-px h-[1.5px] rounded-full bg-foreground",
+          animate && "hs-tab-indicator",
+        )}
+        style={{
+          width: bar?.width ?? 0,
+          transform: `translateX(${bar?.left ?? 0}px)`,
+          opacity: bar ? 1 : 0,
+        }}
+      />
     </div>
   );
 }
