@@ -11,6 +11,11 @@ use crate::grpc::connection::GrpcConnection;
 use crate::grpc::transport::DynamicCodec;
 
 pub(crate) mod skeleton;
+pub mod schema;
+pub use schema::{
+    build_message_schema_from_pool, EnumNode, FieldNode, FieldValueKind, MessageNode,
+    MessageSchema,
+};
 
 /// Outcome of one unary call. `status_code == 0` means success (`response_json` is `Some`).
 /// Any other code is a normal non-OK gRPC status (`response_json` is `None`); in that case
