@@ -12,13 +12,28 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 план активен — держи его описание здесь. Интеграционная ветка — `main`; фичи
 ведутся в отдельных worktree-ветках (`claude/*`) и вливаются в `main` fast-forward.
 
-**Следующая запланированная работа — Group B редактора тела запроса** (#3 просмотр
-контракта метода, #4 автокомплит тела). Обе требуют нового бэкенд-эндпоинта,
-отдающего схему полей proto-сообщения (`prost-reflect` `DescriptorPool` уже знает
-структуру). Спек ещё не написан — начинай с брейншторма.
+**Следующая запланированная работа — Group B #3: просмотр контракта метода.**
+Бэкенд-эндпоинт схемы полей уже есть (`grpc_message_schema` → плоская `MessageSchema`,
+отгружена в Group B #4): он несёт `proto_name`/`oneof_group`/типы, которые контракт-вью
+переиспользует напрямую — отдельный эндпоинт не нужен. Спек ещё не написан — начинай
+с брейншторма.
 
 ### Завершённые фичи (всё в `archive/`)
 
+- **Request body autocomplete + message-schema endpoint (Group B #4)** (🎉 DONE
+  2026-06-10, влито в `main` ff, commits `2328d93`…`afa5aa9`) — новый бэкенд
+  `grpc_message_schema` строит плоскую `MessageSchema` (root + map сообщений/enum'ов,
+  ссылки по full-name → рекурсие-безопасно, без depth-cap) из закешированного
+  `prost-reflect` пула (та же кеш-дисциплина, что у скелета). Фронт: best-effort фетч +
+  `useMessageSchema`, схема кладётся на Monaco-модель через `WeakMap`, один
+  `CompletionItemProvider` на `json-with-vars` — контекстный комплит (ключи + enum +
+  скелеты вставки). Ядро — чистые `resolveCompletionContext`/`descendSchema`/
+  `build*Suggestions` (`src/features/bodyview/completion.ts`). UX по-Postman'овски: `"`
+  форс-открывает виджет (`onKeyUp`→`triggerSuggest`, только если есть что предложить),
+  quote-aware `filterText` (иначе расширённый на кавычки range отфильтровывал всё),
+  `wordBasedSuggestions:off` (ключи не текли в value), компактный suggest-шрифт
+  (опция + `globals.css`). 681 FE-тестов + core + lint + build зелёные, живо проверено
+  в WebView2. #3 контракт-вью — следующий спек (переиспользует ту же схему).
 - **Request body — preserve edits + Reset-to-template (Group A)** (✅ DONE 2026-06-09,
   влито в `main` ff, commits `0724907`…`36c5205`) — смена метода больше не затирает
   отредактированное тело: чистая `isPristineBody` (пусто/`{}`/структурно == скелету)

@@ -2,9 +2,14 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-> **Status:** ready to execute. Branch `claude/musing-blackburn-edc9a0` (worktree). Spec:
-> [docs/superpowers/specs/2026-06-10-body-autocomplete-schema-design.md](../specs/2026-06-10-body-autocomplete-schema-design.md).
-> Group B, part 1 of 2 (#4 autocomplete; #3 contract view is a later spec).
+> **Status:** 🎉 DONE 2026-06-10 — feature-complete, merged to `main` ff (rebased onto
+> the v0.1.11 + elision-fix tip). Commits `2328d93`…`afa5aa9` (six TDD tasks + bindings
+> `61fb974` + live-test UX polish `afa5aa9`). Core tests + 681 FE tests + lint + build
+> green; two-stage reviewed per task + a final whole-feature review (READY TO MERGE);
+> live-verified in WebView2. Spec (archived):
+> [2026-06-10-body-autocomplete-schema-design.md](../../specs/archive/2026-06-10-body-autocomplete-schema-design.md).
+> Group B, part 1 of 2 (#4 autocomplete DONE; #3 contract view is the next spec — reuses
+> this schema, incl. the already-shipped `proto_name`/`oneof_group` fields).
 
 **Goal:** Context-aware Tier-2 autocomplete in the request-body editor (field keys,
 enum values, value scaffolds), driven by a new backend endpoint that exposes a flat

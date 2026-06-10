@@ -1,6 +1,6 @@
 # Body autocomplete + message-schema endpoint — design
 
-> **Status:** approved design, ready for plan. Group B, part 1 of 2.
+> **Status:** 🎉 DONE 2026-06-10 — implemented & merged to `main` ff (see the plan).
 > Scope: backend message-schema endpoint + **#4 request-body autocomplete (Tier 2)**.
 > **#3 contract view is a separate, later spec** that will reuse the same schema.
 
