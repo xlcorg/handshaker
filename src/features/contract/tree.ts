@@ -18,7 +18,9 @@ export type ContractRow =
   | { kind: "oneof"; path: string; depth: number; label: string };
 
 /** Flatten the schema into display rows honoring the `expanded` path set.
- *  A visited-set along each expansion path stops recursive types. */
+ *  A visited-set along each expansion path stops recursive types.
+ *  @param expanded Set of {@link ContractRow.path} values (leading-slash, `/`-joined
+ *    json_name paths, e.g. `/filters`) whose message fields are rendered open. */
 export function deriveRows(
   schema: MessageSchemaIpc,
   expanded: ReadonlySet<string>,
@@ -33,9 +35,10 @@ export function deriveRows(
     prefix: string,
     ancestors: ReadonlySet<string>,
   ) => {
-    let lastOneof: string | null = null;
+    const seenOneofs = new Set<string>();
     for (const field of node.fields) {
-      if (field.oneof_group && field.oneof_group !== lastOneof) {
+      if (field.oneof_group && !seenOneofs.has(field.oneof_group)) {
+        seenOneofs.add(field.oneof_group);
         out.push({
           kind: "oneof",
           path: `${prefix}/oneof:${field.oneof_group}`,
@@ -43,7 +46,6 @@ export function deriveRows(
           label: field.oneof_group,
         });
       }
-      lastOneof = field.oneof_group;
 
       const path = `${prefix}/${field.json_name}`;
       const recursive = field.message_type !== null && ancestors.has(field.message_type);

@@ -72,4 +72,26 @@ describe("deriveRows", () => {
   it("returns [] for a schema whose root is missing", () => {
     expect(deriveRows({ root: "t.Nope", messages: [], enums: [] }, new Set())).toEqual([]);
   });
+
+  it("emits a single oneof header even when group members are non-contiguous", () => {
+    const split: MessageSchemaIpc = {
+      root: "t.M",
+      messages: [
+        {
+          full_name: "t.M",
+          fields: [
+            f("a", "string", "scalar", { oneof_group: "sel" }),
+            f("x", "int32", "scalar"), // interrupts the group
+            f("b", "string", "scalar", { oneof_group: "sel" }),
+          ],
+        },
+      ],
+      enums: [],
+    };
+    const rows = deriveRows(split, new Set());
+    expect(rows.filter((r) => r.kind === "oneof")).toHaveLength(1);
+    expect(rows.find((r) => r.kind === "oneof")).toMatchObject({ label: "sel" });
+    // both members still present as field rows
+    expect(rows.filter((r) => r.kind === "field" && r.field.oneof_group === "sel")).toHaveLength(2);
+  });
 });
