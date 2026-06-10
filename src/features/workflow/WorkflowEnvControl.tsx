@@ -13,10 +13,10 @@ import { useActiveWorkflow, workflowStore } from "./store";
 /**
  * Titlebar env switcher bound to the ACTIVE WORKFLOW.
  *
- * Mirrors {@link EnvPill}, except env selection routes through
- * {@link workflowStore.setWorkflowEnv} (which updates the active workflow's
- * `envName` and syncs the backend via `envActiveSet`). This component never
- * calls `ipc.envActiveSet` directly — the store owns that.
+ * Env selection routes through {@link workflowStore.setWorkflowEnv} (which
+ * updates the active workflow's `envName` and syncs the backend via
+ * `envActiveSet`). This component never calls `ipc.envActiveSet` directly —
+ * the store owns that.
  */
 export function WorkflowEnvControl() {
   const wf = useActiveWorkflow();
