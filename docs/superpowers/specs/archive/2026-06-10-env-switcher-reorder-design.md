@@ -1,7 +1,7 @@
 # Env switcher — menu polish + manual environment ordering — design
 
 **Date:** 2026-06-10
-**Status:** ✅ implemented (code-complete; awaiting the required live WebView2 pass). Plan: `docs/superpowers/plans/2026-06-10-env-switcher-reorder.md`
+**Status:** 🎉 done — реализовано, живо проверено в WebView2, влито в `main` fast-forward. Итоговый шрифт No-environment — Inter 200 / `font-extralight` (не `font-thin`; см. план-баннер). Plan: `docs/superpowers/plans/archive/2026-06-10-env-switcher-reorder.md`
 **Branch:** `claude/blissful-wing-ddce4f`
 
 ## Scope

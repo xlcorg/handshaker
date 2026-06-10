@@ -2,8 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Status:** ✅ code-complete — все 9 задач выполнены, subagent-driven, каждая прошла spec+quality ревью + финальное ревью всей ветки. Коммиты: core `6f93b2d`+`6a30cc7` · IPC `bd8437e` · EnvPill удалён `b85bd97` · меню `ac79d30` · computeReorder `b19c8f2` · DnD `d119742` · тест-фиксы `63f902e` · rename-позиция `f52058f`+`0e62679` · полиш `d45aa56`. Автоматика зелёная: core все тесты · tauri 44 · vitest 699/699 · lint · build. **Остаток: ручной WebView2-прогон (Step 2 ниже) — до него фичу не считать done.**
-**Spec:** `docs/superpowers/specs/2026-06-10-env-switcher-reorder-design.md`
+**Status:** 🎉 feature-complete — все 9 задач выполнены, subagent-driven, каждая прошла spec+quality ревью + финальное ревью всей ветки. Коммиты: core `6f93b2d`+`6a30cc7` · IPC `bd8437e` · EnvPill удалён `b85bd97` · меню `ac79d30` · computeReorder `b19c8f2` · DnD `d119742` · тест-фиксы `63f902e` · rename-позиция `f52058f`+`0e62679` · полиш `d45aa56` · шрифт No-environment `0cab8b9`→`6751e43`. Итоговый шрифт No-environment — **Inter 200 / `font-extralight`** (300 оказался визуально неотличим от 400 на 14px серого; вес выбран по харнессу с измерением computed font-weight). Автоматика зелёная: core все тесты · tauri 44 · vitest 699/699 · lint · build. Живо проверено в WebView2 (шрифт + меню/реордеринг). **Влито в `main` fast-forward; план+спек заархивированы.**
+**Spec:** `docs/superpowers/specs/archive/2026-06-10-env-switcher-reorder-design.md`
 **Branch:** `claude/blissful-wing-ddce4f` (worktree `.claude/worktrees/blissful-wing-ddce4f`)
 
 **Goal:** Fix the oversized "No environment" row, restructure the env dropdown (header `+` instead of a bottom "New env…" item), and add drag-and-drop reordering of environments with the order persisted by the backend.
