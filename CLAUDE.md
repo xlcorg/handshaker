@@ -16,6 +16,18 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 
 ### Завершённые фичи (всё в `archive/`)
 
+- **Edit Environment — масштаб окна + длинные значения + L1-вёрстка** (🎉 DONE
+  2026-06-11, влито в `main` ff, commits `2b4d2da`…`d9ea0da`) — `EnvEditorDialog`
+  перестал быть фикс-коробкой 672px без кап-высоты: `DialogContent` стал flex-колонкой
+  `w-[min(90vw,960px)]` · `max-h-[85vh]` · `min-h-[70vh]` с внутренним скроллом списка
+  переменных (`min-h-0 flex-1 overflow-auto`) — имя+цвет и Save/Cancel запинены. Имя и
+  цвет собраны в один identity-ряд: цвет — точка → новый shadcn-`ui/popover` (на
+  унифиц. `radix-ui`) с палитрой 10 свотчей; описание `sr-only`; колонка Key стала 1/2.
+  Значение переменной — авто-`<textarea>` (`ValueCell`): в покое одна обрезанная строка,
+  по фокусу перенос+рост до капа `168px` → внутренний скролл (key-ячейка осталась
+  `Input`; `scrollHeight===0` в jsdom → рост/скролл проверены живьём). Бэкенд/модель не
+  тронуты (`Record<string,string>`). Subagent-driven, spec+quality ревью на каждой
+  задаче + финальное ревью ветки; 705 vitest/tsc/build зелёные, живо подкручено в WebView2.
 - **Env switcher — полиш меню + ручной порядок окружений** (🎉 DONE 2026-06-11,
   влито в `main` ff, commits `41d1be5`…`6751e43`) — порядок стал свойством списка:
   оба `EnvironmentStore`-импла перешли с `HashMap` на `Vec<Environment>` (порядок
