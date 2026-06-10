@@ -17,8 +17,10 @@ import {
   resetBodyToTemplate,
 } from "./actions";
 import { newId } from "@/lib/ids";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { MetadataRow, Step } from "./model";
+import type { MessageSchemaIpc } from "@/ipc/bindings";
+import { ContractPanel } from "@/features/contract/ContractPanel";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { usePrefs } from "@/lib/use-prefs";
 
@@ -84,12 +86,15 @@ export function CallPanel({ step, onPatch, onExecuted, editable }: CallPanelProp
 
   const reflection = useDraftReflection(step.address, step.tls, !!editable);
 
-  // Autocomplete schema for the draft's method (history panels pass empty → no fetch).
-  const schema = useMessageSchema(
-    editable
-      ? { address: step.address, tls: step.tls, service: step.service, method: step.method }
-      : { address: "", tls: false, service: "", method: "" },
-  );
+  const [contractOpen, setContractOpen] = useState(false);
+  // Schema for the draft's method — input side for request autocomplete + hints,
+  // output side for the contract overlay and response-side inlay hints.
+  // History panels pass an empty target so no fetch fires.
+  const schemaTarget = editable
+    ? { address: step.address, tls: step.tls, service: step.service, method: step.method }
+    : { address: "", tls: false, service: "", method: "" };
+  const schema = useMessageSchema(schemaTarget, "input");
+  const outputSchema = useMessageSchema(schemaTarget, "output");
 
   const header = editable ? (
     <DraftAddressBar
@@ -129,20 +134,33 @@ export function CallPanel({ step, onPatch, onExecuted, editable }: CallPanelProp
         }}
       >
         <ResizablePanel id="request" minSize="20%">
-          <RequestTabs
-            step={step}
-            serviceAuth={step.auth}
-            onBody={onBody}
-            onMetadata={onMetadata}
-            onSubmit={() => sendShortcutRef.current()}
-            onResetTemplate={editable ? onResetBody : undefined}
-            schema={schema}
-          />
+          <div className="relative h-full">
+            <RequestTabs
+              step={step}
+              serviceAuth={step.auth}
+              onBody={onBody}
+              onMetadata={onMetadata}
+              onSubmit={() => sendShortcutRef.current()}
+              onResetTemplate={editable ? onResetBody : undefined}
+              schema={schema}
+              contractOpen={editable ? contractOpen : undefined}
+              onToggleContract={editable ? () => setContractOpen((o) => !o) : undefined}
+            />
+            {editable ? (
+              <ContractPanel
+                open={contractOpen}
+                onClose={() => setContractOpen(false)}
+                method={step.method}
+                inputSchema={schema}
+                outputSchema={outputSchema}
+              />
+            ) : null}
+          </div>
         </ResizablePanel>
         <ResizableHandle withHandle />
         <ResizablePanel id="response" minSize="20%">
           <div className="flex h-full min-h-0 flex-col">
-            <ResponseSlot step={step} />
+            <ResponseSlot step={step} schema={outputSchema} />
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>
@@ -150,7 +168,7 @@ export function CallPanel({ step, onPatch, onExecuted, editable }: CallPanelProp
   );
 }
 
-function ResponseSlot({ step }: { step: Step }) {
+function ResponseSlot({ step, schema }: { step: Step; schema: MessageSchemaIpc | null }) {
   const respState: RespState =
     step.status === "sending"
       ? "sending"
@@ -162,5 +180,5 @@ function ResponseSlot({ step }: { step: Step }) {
             : "error"
           : "idle";
 
-  return <ResponsePanel state={respState} outcome={step.outcome} error={step.error} />;
+  return <ResponsePanel state={respState} outcome={step.outcome} error={step.error} schema={schema} />;
 }

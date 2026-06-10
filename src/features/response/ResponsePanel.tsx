@@ -7,18 +7,20 @@ import { ClientErrorView } from "./ClientErrorView";
 import { KVTable, type KVRow } from "./KVTable";
 import { RespMeta, type RespState } from "./RespMeta";
 import { UnderlineTabs } from "@/components/ui/underline-tabs";
-import type { InvokeOutcomeIpc } from "@/ipc/bindings";
+import type { InvokeOutcomeIpc, MessageSchemaIpc } from "@/ipc/bindings";
 
 export interface ResponsePanelProps {
   state: RespState;
   outcome: InvokeOutcomeIpc | null;
   /** Client/transport error message (no gRPC outcome), shown in the Body tab. */
   error?: string | null;
+  /** Output-message schema → inlay type hints on the rendered response body. */
+  schema?: MessageSchemaIpc | null;
 }
 
 type ResponseTab = "body" | "trailers" | "headers";
 
-export function ResponsePanel({ state, outcome, error }: ResponsePanelProps) {
+export function ResponsePanel({ state, outcome, error, schema }: ResponsePanelProps) {
   const [tab, setTab] = useState<ResponseTab>("body");
   const isError = state === "error";
   const sending = state === "sending";
@@ -92,7 +94,7 @@ export function ResponsePanel({ state, outcome, error }: ResponsePanelProps) {
         />
       )}
       {state === "success" && outcome && tab === "body" && outcome.response_json !== null && (
-        <ResponseBody json={outcome.response_json} />
+        <ResponseBody json={outcome.response_json} schema={schema} />
       )}
       {state === "success" && outcome && tab === "trailers" && <KVTable rows={trailers} />}
       {state === "success" && outcome && tab === "headers" && <KVTable rows={headers} />}

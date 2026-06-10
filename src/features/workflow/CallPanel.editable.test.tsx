@@ -77,3 +77,29 @@ describe("CallPanel editable", () => {
     expect(onPatch).not.toHaveBeenCalled();
   });
 });
+
+describe("CallPanel contract overlay", () => {
+  it("opens and closes the overlay from the tab-strip toggle", () => {
+    render(
+      <TooltipProvider>
+        <CallPanel step={draft} onPatch={() => {}} editable />
+      </TooltipProvider>,
+    );
+    expect(screen.queryByRole("dialog", { name: /method contract/i })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /toggle method contract/i }));
+    expect(screen.getByRole("dialog", { name: /method contract/i })).toBeInTheDocument();
+    // schema fetch is mocked away → both sides null → placeholder text
+    expect(screen.getByText(/Контракт недоступен/)).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: /method contract/i })).toBeNull();
+  });
+
+  it("offers no contract toggle on non-editable panels", () => {
+    render(
+      <TooltipProvider>
+        <CallPanel step={draft} onPatch={() => {}} />
+      </TooltipProvider>,
+    );
+    expect(screen.queryByRole("button", { name: /toggle method contract/i })).toBeNull();
+  });
+});

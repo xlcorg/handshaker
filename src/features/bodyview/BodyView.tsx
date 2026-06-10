@@ -23,7 +23,8 @@ export interface BodyViewProps {
   onChange?: (next: string) => void;
   /** Ctrl/Cmd+Enter inside the editor (Monaco swallows it, so we bind a command). */
   onSubmit?: () => void;
-  /** Request mode only: flat field-schema attached to the model for autocomplete. */
+  /** Flat field-schema attached to the model: request → autocomplete + inlay hints;
+   *  response → inlay hints (completions remain suppressed by readOnly). */
   schema?: MessageSchemaIpc | null;
 }
 
@@ -147,8 +148,10 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
         decorations: null, expanded: new Set(), controller: null, typeSub: null,
         ghost: null, ghostTimer: null,
       };
+      // Attach schema to the model for both request (autocomplete + hints) and
+      // response (inlay hints; completions remain suppressed by readOnly).
+      setModelSchema(editor.getModel(), schemaRef.current ?? null);
       if (mode === "request") {
-        setModelSchema(editor.getModel(), schemaRef.current ?? null);
         // Postman-style: opening a quote (a key or a value string) force-opens the
         // suggest widget. Monaco does NOT auto-trigger completion inside strings
         // (quickSuggestions / trigger-char gating differs by token context), so we
@@ -215,8 +218,10 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
   }, []);
 
   // Keep the model's attached schema current as the selected method changes.
+  // Runs for both request and response: request uses it for autocomplete + hints,
+  // response for inlay hints (ghost scheduler self-gates on l.ghost, which response
+  // mode never creates, so scheduleGhost(0) is safe to call here unconditionally).
   useEffect(() => {
-    if (mode !== "request") return;
     const model = live.current?.editor.getModel();
     setModelSchema(model ?? null, schema ?? null);
     refreshBodyHints();
