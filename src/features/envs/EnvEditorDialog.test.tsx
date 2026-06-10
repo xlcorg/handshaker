@@ -119,6 +119,58 @@ describe("EnvEditorDialog name validation", () => {
       expect.objectContaining({ name: "prod", color: "red" }),
     );
   });
+
+  it("saves the color picked from the popover", async () => {
+    const user = userEvent.setup();
+    render(
+      <EnvEditorDialog
+        open
+        originalName={null}
+        activeEnv={null}
+        envs={[]}
+        onOpenChange={() => {}}
+        onSaved={() => {}}
+      />,
+    );
+    await user.type(screen.getByLabelText("Name"), "prod"); // name default = red
+    await user.click(screen.getByRole("button", { name: "Environment color" }));
+    await user.click(await screen.findByRole("button", { name: "Blue" }));
+    await user.click(screen.getByRole("button", { name: /create/i }));
+    expect(ipc.envUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "prod", color: "blue" }),
+    );
+  });
+
+  it("dialog content is height-capped and column-flex (scales + internal scroll)", () => {
+    render(
+      <EnvEditorDialog
+        open
+        originalName={null}
+        activeEnv={null}
+        envs={[]}
+        onOpenChange={() => {}}
+        onSaved={() => {}}
+      />,
+    );
+    const content = document.querySelector('[data-slot="dialog-content"]')!;
+    expect(content.className).toContain("max-h-[85vh]");
+    expect(content.className).toContain("flex-col");
+  });
+
+  it("the variables region scrolls internally", () => {
+    render(
+      <EnvEditorDialog
+        open
+        originalName={null}
+        activeEnv={null}
+        envs={[]}
+        onOpenChange={() => {}}
+        onSaved={() => {}}
+      />,
+    );
+    const region = screen.getByText("Variables").closest("div")!;
+    expect(region.className).toContain("overflow-auto");
+  });
 });
 
 describe("EnvEditorDialog rename order preservation", () => {

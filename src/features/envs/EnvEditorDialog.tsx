@@ -11,11 +11,16 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { cn } from "@/lib/cn";
 import { ipc } from "@/ipc/client";
 import type { EnvironmentIpc } from "@/ipc/bindings";
 
-import { ENV_COLORS, defaultColorKeyForName } from "./colors";
+import { ENV_COLORS, colorHex, defaultColorKeyForName } from "./colors";
 import { VariablesTable } from "./VariablesTable";
 
 /** Read the target env's variables from the env list. `null` (create mode) ⇒ empty. */
@@ -73,6 +78,7 @@ export function EnvEditorDialog({
   const [pickedColor, setPickedColor] = useState<string | null>(() => loadColor(originalName, envs));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [colorOpen, setColorOpen] = useState(false);
 
   const trimmedName = name.trim();
   const nameEmpty = trimmedName.length === 0;
@@ -130,20 +136,22 @@ export function EnvEditorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="flex max-h-[85vh] w-full max-w-[min(90vw,960px)] flex-col sm:max-w-[min(90vw,960px)]">
         <DialogHeader>
           <DialogTitle>{isCreate ? "New environment" : "Edit environment"}</DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="sr-only">
             {isCreate
               ? "Create a new environment and define its variables."
               : "Rename or update variables."}
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 py-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="env-name">Name</Label>
+
+        {/* Identity row: name + color (pinned) */}
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2">
             <Input
               id="env-name"
+              aria-label="Name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               className={cn("font-mono text-sm", nameIsDuplicate && "border-destructive")}
@@ -151,44 +159,65 @@ export function EnvEditorDialog({
               autoFocus
               placeholder="e.g. prod"
             />
-            {nameIsDuplicate && (
-              <p className="text-xs text-destructive mt-1">name already exists</p>
-            )}
-          </div>
-          <div className="space-y-1.5">
-            <Label>Variables</Label>
-            <VariablesTable value={vars} onChange={setVars} />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Color</Label>
-            <div className="flex flex-wrap gap-1.5">
-              {ENV_COLORS.map((c) => {
-                const selected = effectiveColor === c.key;
-                return (
-                  <button
-                    key={c.key}
-                    type="button"
-                    aria-label={c.label}
-                    aria-pressed={selected}
-                    onClick={() => setPickedColor(c.key)}
-                    className={cn(
-                      "size-6 rounded-full transition focus:outline-none",
-                      selected
-                        ? "ring-2 ring-foreground ring-offset-2 ring-offset-background"
-                        : "hover:ring-2 hover:ring-muted-foreground hover:ring-offset-2 hover:ring-offset-background",
-                    )}
-                    style={{ backgroundColor: c.hex }}
+            <Popover open={colorOpen} onOpenChange={setColorOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="Environment color"
+                  className="flex size-9 shrink-0 items-center justify-center rounded-md border border-input"
+                >
+                  <span
+                    aria-hidden
+                    className="size-5 rounded-full"
+                    style={{ backgroundColor: colorHex(effectiveColor) }}
                   />
-                );
-              })}
-            </div>
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-auto p-2">
+                <div className="flex max-w-[136px] flex-wrap gap-1.5">
+                  {ENV_COLORS.map((c) => {
+                    const selected = effectiveColor === c.key;
+                    return (
+                      <button
+                        key={c.key}
+                        type="button"
+                        aria-label={c.label}
+                        aria-pressed={selected}
+                        onClick={() => {
+                          setPickedColor(c.key);
+                          setColorOpen(false);
+                        }}
+                        className={cn(
+                          "size-6 rounded-full transition focus:outline-none",
+                          selected
+                            ? "ring-2 ring-foreground ring-offset-2 ring-offset-background"
+                            : "hover:ring-2 hover:ring-muted-foreground hover:ring-offset-2 hover:ring-offset-background",
+                        )}
+                        style={{ backgroundColor: c.hex }}
+                      />
+                    );
+                  })}
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
+          {nameIsDuplicate && (
+            <p className="text-xs text-destructive mt-1">name already exists</p>
+          )}
         </div>
+
+        {/* Variables (scrolls internally) */}
+        <div className="min-h-0 flex-1 space-y-1.5 overflow-auto">
+          <Label>Variables</Label>
+          <VariablesTable value={vars} onChange={setVars} />
+        </div>
+
         {error && (
           <div className="border-l-2 border-destructive bg-destructive/5 px-3 py-1.5 text-xs text-destructive">
             {error}
           </div>
         )}
+
         <DialogFooter>
           {!isCreate && onRequestDelete && (
             <Button
