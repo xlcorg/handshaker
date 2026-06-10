@@ -71,14 +71,15 @@ describe("EnvSwitcherMenu", () => {
     expect(prod.compareDocumentPosition(local) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it("'No environment' is a regular-size light row (font-light, not the unloaded font-thin)", async () => {
+  it("'No environment' is an extralight row (font-extralight, whose Inter 200 face is bundled)", async () => {
     const user = userEvent.setup();
     setup();
     await user.click(screen.getByText("env-trigger"));
     const item = await screen.findByText("No environment");
     const className = item.closest("[data-slot='dropdown-menu-item']")!.className;
+    // font-thin (100) is never bundled and renders too faint; font-extralight (200) is.
     expect(className).not.toContain("font-thin");
-    expect(className).toContain("font-light");
+    expect(className).toContain("font-extralight");
   });
 
   it("header has a + button that calls onNewEnv; no bottom 'New env…' item", async () => {

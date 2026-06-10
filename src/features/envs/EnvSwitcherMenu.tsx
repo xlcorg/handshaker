@@ -70,9 +70,10 @@ export const EnvSwitcherMenu = forwardRef<HTMLButtonElement, EnvSwitcherMenuProp
               <Plus />
             </DropdownMenuItem>
           </div>
-          {/* font-light = Inter 300, loaded in main.tsx (lighter weights would
-              silently fall back to 400 — only 300-700 are bundled). */}
-          <DropdownMenuItem onSelect={() => onActiveSet(null)} className="font-light text-muted-foreground">
+          {/* font-extralight = Inter 200, loaded in main.tsx. The weight's .css
+              must be imported or the face falls back (300→400); 200 reads as
+              clearly thinner than 400 at 14px muted gray, where 300 did not. */}
+          <DropdownMenuItem onSelect={() => onActiveSet(null)} className="font-extralight text-muted-foreground">
             No environment
           </DropdownMenuItem>
           {envs.map((env) => (
