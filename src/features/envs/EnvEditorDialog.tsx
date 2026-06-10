@@ -103,9 +103,11 @@ export function EnvEditorDialog({
         becameActive = true;
       }
 
-      // 3. Renaming: drop the old name.
+      // 3. Renaming: drop the old name, then restore the env's position —
+      //    the upsert above appended the new name at the end of the order.
       if (renamed && originalName !== null) {
         await ipc.envDelete(originalName);
+        await ipc.envReorder(envs.map((e) => (e.name === originalName ? trimmedName : e.name)));
       }
 
       // 4. Create mode: auto-activate the new env.
