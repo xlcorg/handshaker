@@ -14,7 +14,7 @@ pub(crate) mod skeleton;
 pub mod schema;
 pub use schema::{
     build_message_schema_from_pool, EnumNode, FieldNode, FieldValueKind, MessageNode,
-    MessageSchema,
+    MessageSchema, MessageSide,
 };
 
 /// Outcome of one unary call. `status_code == 0` means success (`response_json` is `Some`).

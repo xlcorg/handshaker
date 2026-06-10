@@ -24,6 +24,7 @@ pub use file_contract_cache::FileContractCache;
 pub use descriptor::build_pool;
 pub use invoke::{
     build_message_schema_from_pool, build_request_skeleton, build_request_skeleton_from_pool,
-    invoke_unary, EnumNode, FieldNode, FieldValueKind, MessageNode, MessageSchema, UnaryOutcome,
+    invoke_unary, EnumNode, FieldNode, FieldValueKind, MessageNode, MessageSchema, MessageSide,
+    UnaryOutcome,
 };
 pub use transport::{GrpcTransport, TonicChannel, TonicTransport};

@@ -1,4 +1,4 @@
-//! Flat field-schema for a method's input message — drives request-body autocomplete.
+//! Flat field-schema for a method's input or output message — drives request-body autocomplete.
 //!
 //! Unlike `skeleton` (which inlines default values with a depth cap), this references
 //! message/enum types by full-name in flat maps, so recursive/self-referential types
@@ -9,7 +9,7 @@ use crate::error::CoreError;
 use prost_reflect::{DescriptorPool, EnumDescriptor, FieldDescriptor, Kind, MessageDescriptor};
 use std::collections::{HashSet, VecDeque};
 
-/// Flat schema for one method's input message. Types are referenced by full-name
+/// Flat schema for one method's input or output message. Types are referenced by full-name
 /// (see `messages`/`enums`), NOT inlined — recursion-safe.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MessageSchema {
@@ -57,11 +57,20 @@ pub enum FieldValueKind {
     Map,
 }
 
-/// Build a flat schema for the given method's input message from a descriptor pool.
+/// Which side of a method the schema is built from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MessageSide {
+    Input,
+    Output,
+}
+
+/// Build a flat schema for the given method's input or output message from a
+/// descriptor pool.
 pub fn build_message_schema_from_pool(
     pool: &DescriptorPool,
     service: &str,
     method: &str,
+    side: MessageSide,
 ) -> Result<MessageSchema, CoreError> {
     let svc = pool
         .get_service_by_name(service)
@@ -75,7 +84,10 @@ pub fn build_message_schema_from_pool(
             service: service.to_string(),
             method: method.to_string(),
         })?;
-    Ok(build_schema(&m.input()))
+    Ok(build_schema(&match side {
+        MessageSide::Input => m.input(),
+        MessageSide::Output => m.output(),
+    }))
 }
 
 /// BFS over the message graph from `root`, emitting one `MessageNode` per reachable
@@ -531,16 +543,49 @@ mod tests {
         f.service = vec![svc];
         let pool = pool_with(f);
 
-        let ok = build_message_schema_from_pool(&pool, "t.Svc", "Call").unwrap();
+        let ok = build_message_schema_from_pool(&pool, "t.Svc", "Call", MessageSide::Input).unwrap();
         assert_eq!(ok.root, "t.M");
 
         assert!(matches!(
-            build_message_schema_from_pool(&pool, "t.Nope", "Call"),
+            build_message_schema_from_pool(&pool, "t.Nope", "Call", MessageSide::Input),
             Err(CoreError::ServiceNotFound { .. })
         ));
         assert!(matches!(
-            build_message_schema_from_pool(&pool, "t.Svc", "Nope"),
+            build_message_schema_from_pool(&pool, "t.Svc", "Nope", MessageSide::Input),
             Err(CoreError::MethodNotFound { .. })
         ));
+    }
+
+    #[test]
+    fn side_selects_input_or_output_root() {
+        let m_in = DescriptorProto {
+            name: Some("In".into()),
+            field: vec![field("a", 1, Ty::String)],
+            ..Default::default()
+        };
+        let m_out = DescriptorProto {
+            name: Some("Out".into()),
+            field: vec![field("b", 1, Ty::Int32)],
+            ..Default::default()
+        };
+        let svc = ServiceDescriptorProto {
+            name: Some("Svc".into()),
+            method: vec![MethodDescriptorProto {
+                name: Some("Call".into()),
+                input_type: Some(".t.In".into()),
+                output_type: Some(".t.Out".into()),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let mut f = file("t", vec![m_in, m_out]);
+        f.service = vec![svc];
+        let pool = pool_with(f);
+
+        let input = build_message_schema_from_pool(&pool, "t.Svc", "Call", MessageSide::Input).unwrap();
+        assert_eq!(input.root, "t.In");
+        let output = build_message_schema_from_pool(&pool, "t.Svc", "Call", MessageSide::Output).unwrap();
+        assert_eq!(output.root, "t.Out");
+        assert!(output.messages.iter().any(|m| m.full_name == "t.Out"));
     }
 }
