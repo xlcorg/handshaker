@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen, act, fireEvent } from "@testing-library/react";
+import { render, screen, act, fireEvent, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 vi.mock("@/ipc/client", () => ({
@@ -14,7 +14,7 @@ vi.mock("@/ipc/client", () => ({
 
 import { WorkflowEnvControl } from "./WorkflowEnvControl";
 import { workflowStore } from "./store";
-import { envReorder } from "@/ipc/client";
+import { envList, envReorder } from "@/ipc/client";
 
 beforeEach(() => {
   workflowStore.reset();
@@ -66,5 +66,29 @@ describe("WorkflowEnvControl", () => {
       r.getAttribute("data-env-row"),
     );
     expect(rows).toEqual(["prod", "staging"]);
+  });
+
+  it("snaps back to the backend order when envReorder fails", async () => {
+    const user = userEvent.setup();
+    vi.mocked(envReorder).mockRejectedValueOnce(new Error("boom"));
+    // Clear call history so we can assert mount + snap-back refetch count cleanly.
+    vi.mocked(envList).mockClear();
+    render(<WorkflowEnvControl />);
+    await user.click(await screen.findByText("No environment"));
+    const stagingRow = (await screen.findByText("staging")).closest("[data-env-row]")!;
+    const prodRow = screen.getByText("prod").closest("[data-env-row]")!;
+    fireEvent.dragStart(stagingRow);
+    fireEvent.dragOver(prodRow, { clientY: 5 }); // zero-size jsdom rect ⇒ "after"
+    fireEvent.drop(prodRow, { clientY: 5 });
+    await waitFor(() => {
+      const rows = Array.from(document.querySelectorAll("[data-env-row]")).map((r) =>
+        r.getAttribute("data-env-row"),
+      );
+      // Backend returned ["staging", "prod"] (unchanged mock), so after snap-back
+      // the rows must restore to that order.
+      expect(rows).toEqual(["staging", "prod"]);
+    });
+    // mount call + snap-back refetch = at least 2 envList calls
+    expect(vi.mocked(envList).mock.calls.length).toBeGreaterThanOrEqual(2);
   });
 });

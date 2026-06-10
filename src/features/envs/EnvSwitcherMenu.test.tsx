@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, createEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { EnvSwitcherMenu } from "./EnvSwitcherMenu";
 
@@ -97,7 +97,7 @@ describe("EnvSwitcherMenu", () => {
     const prodRow = (await screen.findByText("prod")).closest("[data-env-row]")!;
     const localRow = screen.getByText("local").closest("[data-env-row]")!;
     fireEvent.dragStart(prodRow);
-    // jsdom rects are zero-size: clientY 5 ⇒ zone "after", clientY -5 ⇒ "before".
+    // jsdom DragEvents drop clientY entirely, so every dragOver resolves to zone "after".
     fireEvent.dragOver(localRow, { clientY: 5 });
     fireEvent.drop(localRow, { clientY: 5 });
     expect(onReorder).toHaveBeenCalledWith(["local", "prod"]);
@@ -124,5 +124,31 @@ describe("EnvSwitcherMenu", () => {
     const none = await screen.findByText("No environment");
     expect(none.closest("[data-env-row]")).toBeNull();
     expect((none.closest("[data-slot='dropdown-menu-item']") as HTMLElement).draggable).toBe(false);
+  });
+
+  // jsdom's DragEvent ignores clientY from the init dict — use createEvent +
+  // Object.defineProperty so zoneFromPointer sees a real number.
+  function dragEventAt(node: Element, type: "dragOver" | "drop", clientY: number) {
+    const e = createEvent[type](node as HTMLElement) as DragEvent;
+    Object.defineProperty(e, "clientY", { value: clientY });
+    fireEvent(node, e);
+  }
+
+  it("dropping above a row's midpoint inserts before it", async () => {
+    const user = userEvent.setup();
+    // envs = [prod, local] so dragging local BEFORE prod → ["local", "prod"]
+    const { onReorder } = setup();
+    await user.click(screen.getByText("env-trigger"));
+    const prodRow = (await screen.findByText("prod")).closest("[data-env-row]") as HTMLElement;
+    const localRow = screen.getByText("local").closest("[data-env-row]") as HTMLElement;
+    // Give prodRow a real rect so zoneFromPointer sees top:0, height:20 ⇒ midpoint=10.
+    vi.spyOn(prodRow, "getBoundingClientRect").mockReturnValue({
+      top: 0, height: 20, bottom: 20, left: 0, right: 0, width: 0, x: 0, y: 0,
+      toJSON: () => ({}),
+    } as DOMRect);
+    fireEvent.dragStart(localRow);
+    dragEventAt(prodRow, "dragOver", 5); // 5 < midpoint 10 ⇒ "before"
+    dragEventAt(prodRow, "drop", 5);
+    expect(onReorder).toHaveBeenCalledWith(["local", "prod"]);
   });
 });
