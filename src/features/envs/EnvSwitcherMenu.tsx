@@ -70,7 +70,9 @@ export const EnvSwitcherMenu = forwardRef<HTMLButtonElement, EnvSwitcherMenuProp
               <Plus />
             </DropdownMenuItem>
           </div>
-          <DropdownMenuItem onSelect={() => onActiveSet(null)} className="text-muted-foreground">
+          {/* font-light = Inter 300, loaded in main.tsx (lighter weights would
+              silently fall back to 400 — only 300-700 are bundled). */}
+          <DropdownMenuItem onSelect={() => onActiveSet(null)} className="font-light text-muted-foreground">
             No environment
           </DropdownMenuItem>
           {envs.map((env) => (

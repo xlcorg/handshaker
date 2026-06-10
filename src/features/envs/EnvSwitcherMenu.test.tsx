@@ -71,12 +71,14 @@ describe("EnvSwitcherMenu", () => {
     expect(prod.compareDocumentPosition(local) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it("'No environment' is a regular-size row (no font-thin)", async () => {
+  it("'No environment' is a regular-size light row (font-light, not the unloaded font-thin)", async () => {
     const user = userEvent.setup();
     setup();
     await user.click(screen.getByText("env-trigger"));
     const item = await screen.findByText("No environment");
-    expect(item.closest("[data-slot='dropdown-menu-item']")!.className).not.toContain("font-thin");
+    const className = item.closest("[data-slot='dropdown-menu-item']")!.className;
+    expect(className).not.toContain("font-thin");
+    expect(className).toContain("font-light");
   });
 
   it("header has a + button that calls onNewEnv; no bottom 'New env…' item", async () => {
