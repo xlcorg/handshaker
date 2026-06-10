@@ -35,6 +35,12 @@ describe("computeGhostLines", () => {
     });
   });
 
+  it("anchors after the closing brace of a multi-line last entry", () => {
+    const block = computeGhostLines('{\n  "deadline": {\n  }\n}', SCHEMA);
+    // deadline spans lines 2-3; the ghost block opens after its closing line
+    expect(block).toEqual({ afterLine: 3, lines: ['  "query": string'] });
+  });
+
   it("returns null for invalid JSON, a non-object root, and an unknown schema root", () => {
     expect(computeGhostLines('{ "query": ', SCHEMA)).toBeNull();
     expect(computeGhostLines("[1]", SCHEMA)).toBeNull();

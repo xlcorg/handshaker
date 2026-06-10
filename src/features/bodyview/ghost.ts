@@ -8,6 +8,7 @@ export interface GhostBlock {
   lines: string[];
 }
 
+/** Returns the 1-based line number of the given 0-based char offset. */
 function lineOfOffset(text: string, offset: number): number {
   let line = 1;
   for (let i = 0; i < offset && i < text.length; i++) if (text[i] === "\n") line++;
@@ -30,6 +31,8 @@ export function computeGhostLines(text: string, schema: MessageSchemaIpc): Ghost
 
   const spanByNode = new Map(parsed.spans.map((s) => [s.nodeId, s]));
   const lastChildId = root.childIds[root.childIds.length - 1];
+  // parseWithSpans guarantees a span for every node id, so the ?? branches are
+  // unreachable; optional chaining just satisfies the type checker without `!`.
   const anchorOffset = lastChildId !== undefined
     ? (spanByNode.get(lastChildId)?.end ?? spanByNode.get(root.id)!.start + 1)
     : (spanByNode.get(root.id)?.start ?? 0) + 1;
