@@ -105,6 +105,8 @@ export function EnvEditorDialog({
 
       // 3. Renaming: drop the old name, then restore the env's position —
       //    the upsert above appended the new name at the end of the order.
+      //    If envReorder fails, the catch below shows the dialog error; retry
+      //    is safe — envUpsert/envDelete are both idempotent at this point.
       if (renamed && originalName !== null) {
         await ipc.envDelete(originalName);
         await ipc.envReorder(envs.map((e) => (e.name === originalName ? trimmedName : e.name)));
