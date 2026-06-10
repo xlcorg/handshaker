@@ -30,6 +30,8 @@ export interface Prefs {
   grpcIcon: GrpcIconStyle;
   /** Service-group header style in the MethodPicker dropdown. */
   methodGroupStyle: MethodGroupStyle;
+  /** Inline contract hints in body editors: inlay type labels + the ghost skeleton. */
+  bodyHints: boolean;
 }
 
 export const PREFS_DEFAULTS: Prefs = {
@@ -46,6 +48,7 @@ export const PREFS_DEFAULTS: Prefs = {
   requestTimeoutMs: 30000,
   grpcIcon: "solid",
   methodGroupStyle: "zebra",
+  bodyHints: true,
 };
 
 export const ZOOM_MIN = 0.5;

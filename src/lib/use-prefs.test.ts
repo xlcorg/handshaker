@@ -84,3 +84,9 @@ describe("prefs split default", () => {
     expect(PREFS_DEFAULTS.split).toBe("vertical");
   });
 });
+
+describe("bodyHints pref", () => {
+  it("defaults bodyHints to true", () => {
+    expect(PREFS_DEFAULTS.bodyHints).toBe(true);
+  });
+});
