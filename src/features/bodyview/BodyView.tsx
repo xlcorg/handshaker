@@ -116,6 +116,8 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
   };
 
   // Recompute the ghost skeleton; debounced so per-keystroke edits don't churn zones.
+  // Deps intentionally empty: reads live/schemaRef (stable refs) and readPrefs()
+  // (module-level read) — nothing closes over React state.
   const scheduleGhost = useCallback((delay: number) => {
     const l = live.current;
     if (!l || !l.ghost) return;
@@ -125,6 +127,8 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
       const sc = schemaRef.current;
       const block =
         readPrefs().bodyHints && sc ? computeGhostLines(l.editor.getValue(), sc) : null;
+      // contentLeft sampled at apply-time; gutter-width changes (rare, usually
+      // edit-driven) re-sample on the next recompute.
       l.ghost?.apply(block, l.editor.getLayoutInfo().contentLeft);
     }, delay);
   }, []);
@@ -134,6 +138,8 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
     (editor: Monaco.editor.IStandaloneCodeEditor, monaco: typeof Monaco) => {
       // Keyed remount fires onMount fresh per response value; tear down the
       // prior mount's subscriptions before attaching new ones.
+      if (live.current?.ghostTimer != null) window.clearTimeout(live.current.ghostTimer);
+      live.current?.ghost?.dispose();
       live.current?.controller?.dispose();
       live.current?.typeSub?.dispose();
       live.current = {
@@ -218,6 +224,7 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
   }, [schema, mode, scheduleGhost]);
 
   // Re-apply (or clear) the ghost zone when the bodyHints toggle changes.
+  // No mode guard needed: scheduleGhost no-ops when ghost is null (response mode).
   useEffect(() => { scheduleGhost(0); }, [prefs.bodyHints, scheduleGhost]);
 
   // Clear the model's schema entry when BodyView unmounts.
