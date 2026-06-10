@@ -1,7 +1,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef } from "react";
 import type * as Monaco from "monaco-editor";
 import { MonacoEditor, monacoThemeFor, BODY_EDIT_OPTIONS, BODY_READONLY_OPTIONS } from "@/lib/monaco";
-import { usePrefs } from "@/lib/use-prefs";
+import { usePrefs, readPrefs } from "@/lib/use-prefs";
 import { parseWithSpans } from "./parse";
 import { renderJsonTree, type Badge } from "./render";
 import type { JsonTree } from "./jsonTree";
@@ -13,6 +13,7 @@ import { badgeDecorationOptions } from "./badgeDecoration";
 import type { MessageSchemaIpc } from "@/ipc/bindings";
 import { setModelSchema, computeSuggestions } from "./completion";
 import { refreshBodyHints } from "./hints";
+import { GhostZone, computeGhostLines } from "./ghost";
 
 type Mode = "request" | "response";
 
@@ -36,6 +37,8 @@ interface Live {
   expanded: Set<string>;
   controller: DisposableLike | null;
   typeSub: DisposableLike | null;
+  ghost: GhostZone | null;
+  ghostTimer: number | null;
 }
 
 export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewProps) {
@@ -112,6 +115,20 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
     paintBadges();
   };
 
+  // Recompute the ghost skeleton; debounced so per-keystroke edits don't churn zones.
+  const scheduleGhost = useCallback((delay: number) => {
+    const l = live.current;
+    if (!l || !l.ghost) return;
+    if (l.ghostTimer !== null) window.clearTimeout(l.ghostTimer);
+    l.ghostTimer = window.setTimeout(() => {
+      l.ghostTimer = null;
+      const sc = schemaRef.current;
+      const block =
+        readPrefs().bodyHints && sc ? computeGhostLines(l.editor.getValue(), sc) : null;
+      l.ghost?.apply(block, l.editor.getLayoutInfo().contentLeft);
+    }, delay);
+  }, []);
+
   // --- mount -------------------------------------------------------------
   const onMount = useCallback(
     (editor: Monaco.editor.IStandaloneCodeEditor, monaco: typeof Monaco) => {
@@ -122,6 +139,7 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
       live.current = {
         editor, monaco, tree: null, spans: [], badges: [],
         decorations: null, expanded: new Set(), controller: null, typeSub: null,
+        ghost: null, ghostTimer: null,
       };
       if (mode === "request") {
         setModelSchema(editor.getModel(), schemaRef.current ?? null);
@@ -148,6 +166,8 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
             editor.trigger("autocomplete", "editor.action.triggerSuggest", {});
           }
         });
+        live.current.ghost = new GhostZone(editor);
+        scheduleGhost(0);
       }
       if (mode === "response") {
         renderResponse(editor.getValue());
@@ -177,13 +197,15 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
         onBadgeExpand: mode === "response" ? expandNode : undefined,
       });
     },
-    [mode],
+    [mode, scheduleGhost],
   );
 
   // Dispose the controller + type subscriptions when BodyView itself unmounts.
   useEffect(() => () => {
     live.current?.controller?.dispose();
     live.current?.typeSub?.dispose();
+    if (live.current?.ghostTimer != null) window.clearTimeout(live.current.ghostTimer);
+    live.current?.ghost?.dispose();
   }, []);
 
   // Keep the model's attached schema current as the selected method changes.
@@ -192,7 +214,11 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
     const model = live.current?.editor.getModel();
     setModelSchema(model ?? null, schema ?? null);
     refreshBodyHints();
-  }, [schema, mode]);
+    scheduleGhost(0);
+  }, [schema, mode, scheduleGhost]);
+
+  // Re-apply (or clear) the ghost zone when the bodyHints toggle changes.
+  useEffect(() => { scheduleGhost(0); }, [prefs.bodyHints, scheduleGhost]);
 
   // Clear the model's schema entry when BodyView unmounts.
   useEffect(
@@ -211,10 +237,11 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
         const parsed = parseWithSpans(v);
         live.current.tree = parsed?.tree ?? null;
         live.current.spans = parsed?.spans ?? [];
+        scheduleGhost(150);
       }
       onChange?.(v);
     },
-    [mode, onChange],
+    [mode, onChange, scheduleGhost],
   );
 
   const options = useMemo(

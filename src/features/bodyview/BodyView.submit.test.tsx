@@ -24,8 +24,12 @@ vi.mock("@/lib/monaco", () => ({
         captured.handler = handler;
       },
       getModel: () => null,
+      getLayoutInfo: () => ({ contentLeft: 0 }),
       // Request mode subscribes to keyup to force-open the suggest widget on `"`.
       onKeyUp: () => ({ dispose: () => {} }),
+      changeViewZones: (cb: (acc: { addZone: () => string; removeZone: () => void }) => void) => {
+        cb({ addZone: () => "z1", removeZone: () => {} });
+      },
       createDecorationsCollection: () => ({ set: () => {}, clear: () => {} }),
     };
     onMount?.(editor, monaco);
@@ -35,7 +39,10 @@ vi.mock("@/lib/monaco", () => ({
   BODY_EDIT_OPTIONS: { readOnly: false },
   BODY_READONLY_OPTIONS: { readOnly: true },
 }));
-vi.mock("@/lib/use-prefs", () => ({ usePrefs: () => [{ theme: "dark" }] }));
+vi.mock("@/lib/use-prefs", () => ({
+  usePrefs: () => [{ theme: "dark", bodyHints: false }],
+  readPrefs: () => ({ theme: "dark", bodyHints: false }),
+}));
 vi.mock("./controller", () => ({
   attachBodyController: () => ({ dispose: () => {} }),
   BADGE_CLASS: "badge",

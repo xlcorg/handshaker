@@ -10,7 +10,10 @@ vi.mock("@/lib/monaco", () => ({
   BODY_EDIT_OPTIONS: { readOnly: false },
   BODY_READONLY_OPTIONS: { readOnly: true },
 }));
-vi.mock("@/lib/use-prefs", () => ({ usePrefs: () => [{ theme: "dark" }] }));
+vi.mock("@/lib/use-prefs", () => ({
+  usePrefs: () => [{ theme: "dark", bodyHints: false }],
+  readPrefs: () => ({ theme: "dark", bodyHints: false }),
+}));
 
 import { BodyView } from "./BodyView";
 

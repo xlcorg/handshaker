@@ -404,3 +404,11 @@ body, .font-sans {
 .font-mono, code, kbd {
   font-family: var(--font-mono-override, "JetBrains Mono", ui-monospace, monospace);
 }
+
+/* Ghost skeleton of missing top-level request fields (BodyView view zone). */
+.hs-ghost-skeleton {
+  font-style: italic;
+  opacity: 0.45;
+  white-space: pre;
+  pointer-events: none;
+}
