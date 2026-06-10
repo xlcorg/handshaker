@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Status:** 🚧 in progress — task 0/9
+**Status:** 🚧 in progress — tasks 1–3 done (core stores `6f93b2d`+`6a30cc7`, IPC `bd8437e`), next: task 4
 **Spec:** `docs/superpowers/specs/2026-06-10-env-switcher-reorder-design.md`
 **Branch:** `claude/blissful-wing-ddce4f` (worktree `.claude/worktrees/blissful-wing-ddce4f`)
 
