@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render } from "@testing-library/react";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 vi.mock("@/features/invoke/BodyEditor", () => ({
   BodyEditor: ({ value }: { value: string }) => <div data-testid="body-editor">{value}</div>,
@@ -27,6 +28,10 @@ import { newStep } from "./model";
 
 const draft = newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "GetX" });
 
+function renderCallPanel(ui: React.ReactElement) {
+  return render(<TooltipProvider>{ui}</TooltipProvider>);
+}
+
 beforeEach(() => {
   h.split = "vertical";
   vi.clearAllMocks();
@@ -34,7 +39,7 @@ beforeEach(() => {
 
 describe("CallPanel body layout", () => {
   it("renders a resizable group with request + response panels and a handle", () => {
-    const { container } = render(<CallPanel step={draft} onPatch={() => {}} />);
+    const { container } = renderCallPanel(<CallPanel step={draft} onPatch={() => {}} />);
     expect(container.querySelector('[data-slot="resizable-panel-group"]')).not.toBeNull();
     expect(container.querySelectorAll('[data-slot="resizable-panel"]').length).toBe(2);
     expect(container.querySelector('[data-slot="resizable-handle"]')).not.toBeNull();
@@ -44,14 +49,14 @@ describe("CallPanel body layout", () => {
   // inline `flex-direction` style ("row" = horizontal, "column" = vertical) —
   // NOT via aria-orientation/data-orientation (verified against the installed fork).
   it("maps split='vertical' (Left/Right) to a row-direction (horizontal) group", () => {
-    const { container } = render(<CallPanel step={draft} onPatch={() => {}} />);
+    const { container } = renderCallPanel(<CallPanel step={draft} onPatch={() => {}} />);
     const group = container.querySelector('[data-slot="resizable-panel-group"]') as HTMLElement;
     expect(group.style.flexDirection).toBe("row");
   });
 
   it("maps split='horizontal' (Top/Bottom) to a column-direction (vertical) group", () => {
     h.split = "horizontal";
-    const { container } = render(<CallPanel step={draft} onPatch={() => {}} />);
+    const { container } = renderCallPanel(<CallPanel step={draft} onPatch={() => {}} />);
     const group = container.querySelector('[data-slot="resizable-panel-group"]') as HTMLElement;
     expect(group.style.flexDirection).toBe("column");
   });

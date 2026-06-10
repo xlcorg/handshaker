@@ -33,7 +33,11 @@ describe("CallPanel editable", () => {
   });
 
   it("renders the read-only AddressBar when not editable", () => {
-    render(<CallPanel step={draft} onPatch={() => {}} />);
+    render(
+      <TooltipProvider>
+        <CallPanel step={draft} onPatch={() => {}} />
+      </TooltipProvider>
+    );
     expect(screen.queryByLabelText("draft-address")).toBeNull();
     expect(screen.getByText("GetX")).toBeTruthy(); // AddressBar shows the method name
   });
@@ -64,7 +68,11 @@ describe("CallPanel editable", () => {
 
   it("does not bind the send shortcut when not editable", () => {
     const onPatch = vi.fn();
-    render(<CallPanel step={draft} onPatch={onPatch} />);
+    render(
+      <TooltipProvider>
+        <CallPanel step={draft} onPatch={onPatch} />
+      </TooltipProvider>
+    );
     fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
     expect(onPatch).not.toHaveBeenCalled();
   });
