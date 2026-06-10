@@ -266,6 +266,13 @@ export function setModelSchema(
   else schemaByModel.delete(model);
 }
 
+/** Read access for sibling providers (inlay hints) sharing the same model↔schema map. */
+export function getModelSchema(
+  model: Monaco.editor.ITextModel,
+): MessageSchemaIpc | undefined {
+  return schemaByModel.get(model);
+}
+
 /** When a key is completed but a value already follows, insert only the quoted key. */
 function colonAlreadyAhead(model: Monaco.editor.ITextModel, position: Monaco.Position): boolean {
   const lineEnd = model.getLineMaxColumn(position.lineNumber);
