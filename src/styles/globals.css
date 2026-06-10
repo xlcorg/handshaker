@@ -264,6 +264,16 @@ body {
   cursor: pointer;
 }
 
+/* Compact Monaco suggest widget (request-body autocomplete). The `suggestFontSize`
+   editor option sizes only the list rows — NOT the "No suggestions" message or the
+   details panel — so pin the font for the whole widget here. */
+.monaco-editor .suggest-widget,
+.monaco-editor .suggest-widget .monaco-list .monaco-list-row,
+.monaco-editor .suggest-widget .message,
+.monaco-editor .suggest-widget .details {
+  font-size: 12.5px;
+}
+
 /* ─────────────────────────────────────────────────────────────────────────
    MethodPicker service-group styles (pref `methodGroupStyle`). The dropdown
    list carries data-mp-style; hooks .mp-grp/.mp-ghead/.mp-sname/.mp-spath/

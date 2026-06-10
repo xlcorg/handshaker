@@ -187,6 +187,20 @@ export const READ_ONLY_OPTIONS = {
 export const BODY_EDIT_OPTIONS = {
   ...EDITOR_OPTIONS,
   folding: true,
+  // Postman-style autocomplete: surface completions as you type INSIDE strings.
+  // JSON keys and enum values both live in `"..."`, and Monaco suppresses quick
+  // suggestions in strings by default — which is why only Ctrl+Space worked. Enabling
+  // `strings` also lets the `"` trigger-character fire the widget on quote-open.
+  quickSuggestions: { other: true, comments: false, strings: true },
+  // Our schema-driven provider is the ONLY intended completion source. Disable Monaco's
+  // word-based fallback — otherwise, at a value position where we offer nothing (e.g. a
+  // free-form string field), it surfaces existing field KEYS from the document as value
+  // suggestions.
+  wordBasedSuggestions: "off",
+  // Suggest widget matches the editor font (row font here; the `.message`/`.details`
+  // elements are pinned in globals.css since this option doesn't reach them).
+  suggestFontSize: 12.5,
+  suggestLineHeight: 18,
 } as const;
 
 export const BODY_READONLY_OPTIONS = {

@@ -345,6 +345,12 @@ export function registerBodyCompletion(monaco: typeof Monaco): void {
         endColumn: cols.endColumn,
       };
       const keyOnly = ctx.where === "key" && colonAlreadyAhead(model, position);
+      // When the caret is inside a string, `insertionColumns` extended the range left
+      // over the opening `"`. Monaco then filters suggestions against the leading text
+      // INCLUDING that quote (e.g. `"ti`), so a bare label like `title` matches nothing
+      // and the widget shows "No suggestions". Give those items a quoted `filterText`
+      // so the leading quote matches. (Outside a string we keep the default label.)
+      const insideString = cols.startColumn < word.startColumn;
 
       const suggestions: Monaco.languages.CompletionItem[] = items.map((s) => {
         const asKeyOnly = keyOnly && s.kind !== "value";
@@ -354,6 +360,7 @@ export function registerBodyCompletion(monaco: typeof Monaco): void {
           detail: s.detail,
           kind: monacoKind(monaco, s.kind),
           insertText,
+          filterText: insideString ? `"${s.label}"` : undefined,
           insertTextRules:
             s.isSnippet && !asKeyOnly
               ? monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet

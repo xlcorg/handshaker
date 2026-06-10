@@ -24,6 +24,8 @@ vi.mock("@/lib/monaco", () => ({
         captured.handler = handler;
       },
       getModel: () => null,
+      // Request mode subscribes to keyup to force-open the suggest widget on `"`.
+      onKeyUp: () => ({ dispose: () => {} }),
       createDecorationsCollection: () => ({ set: () => {}, clear: () => {} }),
     };
     onMount?.(editor, monaco);

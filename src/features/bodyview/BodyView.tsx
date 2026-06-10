@@ -11,7 +11,7 @@ import { exceedsByteCeiling } from "./elide";
 import { attachBodyController } from "./controller";
 import { badgeDecorationOptions } from "./badgeDecoration";
 import type { MessageSchemaIpc } from "@/ipc/bindings";
-import { setModelSchema } from "./completion";
+import { setModelSchema, computeSuggestions } from "./completion";
 
 type Mode = "request" | "response";
 
@@ -34,6 +34,7 @@ interface Live {
   decorations: Monaco.editor.IEditorDecorationsCollection | null;
   expanded: Set<string>;
   controller: DisposableLike | null;
+  typeSub: DisposableLike | null;
 }
 
 export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewProps) {
@@ -114,14 +115,38 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
   const onMount = useCallback(
     (editor: Monaco.editor.IStandaloneCodeEditor, monaco: typeof Monaco) => {
       // Keyed remount fires onMount fresh per response value; tear down the
-      // prior mount's subscription before attaching a new one.
+      // prior mount's subscriptions before attaching new ones.
       live.current?.controller?.dispose();
+      live.current?.typeSub?.dispose();
       live.current = {
         editor, monaco, tree: null, spans: [], badges: [],
-        decorations: null, expanded: new Set(), controller: null,
+        decorations: null, expanded: new Set(), controller: null, typeSub: null,
       };
       if (mode === "request") {
         setModelSchema(editor.getModel(), schemaRef.current ?? null);
+        // Postman-style: opening a quote (a key or a value string) force-opens the
+        // suggest widget. Monaco does NOT auto-trigger completion inside strings
+        // (quickSuggestions / trigger-char gating differs by token context), so we
+        // trigger it explicitly. `browserEvent.key` is the produced character, so this
+        // is layout-independent. We only trigger when there's actually something to
+        // suggest at the caret — otherwise Monaco shows a noisy "No suggestions" popup
+        // on every value quote of a free-form string field.
+        live.current.typeSub = editor.onKeyUp((e) => {
+          if (e.browserEvent.key !== '"') return;
+          const sc = schemaRef.current;
+          const model = editor.getModel();
+          const pos = editor.getPosition();
+          if (!sc || !model || !pos) return;
+          const textBefore = model.getValueInRange({
+            startLineNumber: 1,
+            startColumn: 1,
+            endLineNumber: pos.lineNumber,
+            endColumn: pos.column,
+          });
+          if (computeSuggestions(sc, textBefore).length > 0) {
+            editor.trigger("autocomplete", "editor.action.triggerSuggest", {});
+          }
+        });
       }
       if (mode === "response") {
         renderResponse(editor.getValue());
@@ -154,8 +179,11 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
     [mode],
   );
 
-  // Dispose the controller subscription when BodyView itself unmounts.
-  useEffect(() => () => { live.current?.controller?.dispose(); }, []);
+  // Dispose the controller + type subscriptions when BodyView itself unmounts.
+  useEffect(() => () => {
+    live.current?.controller?.dispose();
+    live.current?.typeSub?.dispose();
+  }, []);
 
   // Keep the model's attached schema current as the selected method changes.
   useEffect(() => {
