@@ -6,11 +6,12 @@ vi.mock("@/ipc/client", () => ({
   grpcCancel: vi.fn(),
   varsResolve: vi.fn(),
   authResolve: vi.fn(),
+  grpcMessageSchema: vi.fn(),
 }));
 
 import * as ipc from "@/ipc/client";
 import { createStepFromMethod, sendStep, stepPatchFromSendResult, resolveAuthHeader, shouldRecordExecuted, buildExecutedStep, cancelStep } from "./actions";
-import { buildRequestSkeletonSafe, applyMethodSelection, isPristineBody, resetBodyToTemplate } from "./actions";
+import { buildRequestSkeletonSafe, applyMethodSelection, isPristineBody, resetBodyToTemplate, fetchMessageSchemaSafe } from "./actions";
 import { newStep } from "./model";
 
 beforeEach(() => {
@@ -502,5 +503,40 @@ describe("resetBodyToTemplate", () => {
     const patch = vi.fn();
     await resetBodyToTemplate(patch, { address: "h", tls: false }, "S", "M");
     expect(patch).toHaveBeenCalledWith({ requestJson: "{}" });
+  });
+});
+
+describe("fetchMessageSchemaSafe", () => {
+  const mockSchema = { root: "t.M", messages: [], enums: [] };
+
+  beforeEach(() => {
+    vi.mocked(ipc.grpcMessageSchema).mockResolvedValue(mockSchema);
+  });
+
+  it("returns schema on success (defaults to input side)", async () => {
+    const result = await fetchMessageSchemaSafe({ address: "h:443", tls: true }, "S", "M");
+    expect(result).toEqual(mockSchema);
+    expect(ipc.grpcMessageSchema).toHaveBeenCalledWith(
+      { address: "h:443", tls: true, skip_verify: false },
+      "S",
+      "M",
+      "input",
+    );
+  });
+
+  it("forwards the requested side to the IPC call", async () => {
+    await fetchMessageSchemaSafe({ address: "h", tls: false }, "S", "M", "output");
+    expect(ipc.grpcMessageSchema).toHaveBeenCalledWith(
+      expect.objectContaining({ tls: false }),
+      "S",
+      "M",
+      "output",
+    );
+  });
+
+  it("returns null on IPC failure (best-effort)", async () => {
+    vi.mocked(ipc.grpcMessageSchema).mockRejectedValue(new Error("reflection unavailable"));
+    const result = await fetchMessageSchemaSafe({ address: "h", tls: false }, "S", "M");
+    expect(result).toBeNull();
   });
 });

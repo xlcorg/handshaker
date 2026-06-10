@@ -2,7 +2,7 @@
 //!
 //! Keeps handshaker-core specta-free. Conversion is cheap (Vec/String moves, no I/O).
 
-use handshaker_core::grpc::{EnumNode, FieldNode, FieldValueKind, MessageNode, MessageSchema};
+use handshaker_core::grpc::{EnumNode, FieldNode, FieldValueKind, MessageNode, MessageSchema, MessageSide};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
@@ -100,9 +100,32 @@ impl From<FieldValueKind> for FieldValueKindIpc {
     }
 }
 
+/// Which side of the method the schema is built from.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum MessageSideIpc {
+    Input,
+    Output,
+}
+
+impl From<MessageSideIpc> for MessageSide {
+    fn from(s: MessageSideIpc) -> Self {
+        match s {
+            MessageSideIpc::Input => MessageSide::Input,
+            MessageSideIpc::Output => MessageSide::Output,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn side_converts_to_core() {
+        assert!(matches!(MessageSide::from(MessageSideIpc::Input), MessageSide::Input));
+        assert!(matches!(MessageSide::from(MessageSideIpc::Output), MessageSide::Output));
+    }
 
     #[test]
     fn from_core_maps_fields() {

@@ -15,6 +15,7 @@ import type {
   AuthCredentialsIpc,
   UiStateIpc,
   MessageSchemaIpc,
+  MessageSideIpc,
 } from "./bindings";
 
 /**
@@ -53,8 +54,9 @@ export async function grpcMessageSchema(
   target: GrpcTargetIpc,
   service: string,
   method: string,
+  side: MessageSideIpc,
 ): Promise<MessageSchemaIpc> {
-  const r = await commands.grpcMessageSchema(target, service, method);
+  const r = await commands.grpcMessageSchema(target, service, method, side);
   if (r.status === "error") throw r.error;
   return r.data;
 }

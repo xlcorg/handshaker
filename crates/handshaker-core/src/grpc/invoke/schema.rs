@@ -1,4 +1,4 @@
-//! Flat field-schema for a method's input or output message — drives request-body autocomplete.
+//! Flat field-schema for a method's input or output message — drives request-body autocomplete and the contract view.
 //!
 //! Unlike `skeleton` (which inlines default values with a depth cap), this references
 //! message/enum types by full-name in flat maps, so recursive/self-referential types

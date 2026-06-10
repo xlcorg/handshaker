@@ -49,13 +49,13 @@ async grpcBuildRequestSkeleton(target: GrpcTargetIpc, service: string, method: s
 }
 },
 /**
- * Build the flat field-schema for a method's input message (drives autocomplete).
- * Same cache discipline as `grpc_build_request_skeleton`: cache hit → build from the
- * pool; miss → `activate` first.
+ * Build the flat field-schema for a method's input or output message — drives autocomplete
+ * and the contract view. Same cache discipline as `grpc_build_request_skeleton`: cache
+ * hit → build from the pool; miss → `activate` first.
  */
-async grpcMessageSchema(target: GrpcTargetIpc, service: string, method: string) : Promise<Result<MessageSchemaIpc, IpcError>> {
+async grpcMessageSchema(target: GrpcTargetIpc, service: string, method: string, side: MessageSideIpc) : Promise<Result<MessageSchemaIpc, IpcError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("grpc_message_schema", { target, service, method }) };
+    return { status: "ok", data: await TAURI_INVOKE("grpc_message_schema", { target, service, method, side }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -338,6 +338,10 @@ export type ItemIpc = ({ type: "folder" } & FolderIpc) | ({ type: "request" } & 
 export type ItemSnapshotIpc = { item: ItemIpc; parent_id: string | null; position: number }
 export type MessageNodeIpc = { full_name: string; fields: FieldNodeIpc[] }
 export type MessageSchemaIpc = { root: string; messages: MessageNodeIpc[]; enums: EnumNodeIpc[] }
+/**
+ * Which side of the method the schema is built from.
+ */
+export type MessageSideIpc = "input" | "output"
 export type MetadataRowIpc = { key: string; value: string; enabled: boolean }
 export type MethodEntryIpc = { name: string; path: string; input_message: string; output_message: string; client_streaming: boolean; server_streaming: boolean }
 export type ResolutionReportIpc = { resolved: string; unresolved_vars: string[]; cycle_chain: string[] | null }

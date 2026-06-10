@@ -1,5 +1,5 @@
 import * as ipc from "@/ipc/client";
-import type { InvokeOutcomeIpc, SavedAuthConfigIpc, AuthCredentialsIpc, MessageSchemaIpc } from "@/ipc/bindings";
+import type { InvokeOutcomeIpc, SavedAuthConfigIpc, AuthCredentialsIpc, MessageSchemaIpc, MessageSideIpc } from "@/ipc/bindings";
 import { newStep, type MetadataRow, type Step } from "./model";
 import { resolveStepTemplates } from "./resolve";
 import { newId } from "@/lib/ids";
@@ -61,17 +61,18 @@ export async function buildRequestSkeletonSafe(
   }
 }
 
-/** Fetch the flat field-schema for a method's input message; never throws — returns
+/** Fetch the flat field-schema for a method's input or output message; never throws — returns
  *  null on any failure (no reflection / server down / unknown method). A null schema
  *  simply disables autocomplete; the editor is unaffected. */
 export async function fetchMessageSchemaSafe(
   target: CallTargetInit,
   service: string,
   method: string,
+  side: MessageSideIpc = "input",
 ): Promise<MessageSchemaIpc | null> {
   try {
     const address = await resolveAddressSafe(target.address);
-    return await ipc.grpcMessageSchema({ address, tls: target.tls, skip_verify: false }, service, method);
+    return await ipc.grpcMessageSchema({ address, tls: target.tls, skip_verify: false }, service, method, side);
   } catch {
     return null;
   }

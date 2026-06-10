@@ -18,7 +18,8 @@ use tauri_specta::Event;
 
 use crate::commands::events::ContractUpdated;
 use crate::ipc::{
-    GrpcTargetIpc, InvokeOutcomeIpc, InvokeRequest, IpcError, MessageSchemaIpc, ServiceCatalogIpc,
+    GrpcTargetIpc, InvokeOutcomeIpc, InvokeRequest, IpcError, MessageSchemaIpc, MessageSideIpc,
+    ServiceCatalogIpc,
 };
 use crate::state::{AppState, InFlight};
 
@@ -97,9 +98,9 @@ pub async fn grpc_build_request_skeleton(
     Ok(build_request_skeleton_from_pool(&conn.pool, &service, &method)?)
 }
 
-/// Build the flat field-schema for a method's input message (drives autocomplete).
-/// Same cache discipline as `grpc_build_request_skeleton`: cache hit → build from the
-/// pool; miss → `activate` first.
+/// Build the flat field-schema for a method's input or output message — drives autocomplete
+/// and the contract view. Same cache discipline as `grpc_build_request_skeleton`: cache
+/// hit → build from the pool; miss → `activate` first.
 #[tauri::command]
 #[specta::specta]
 pub async fn grpc_message_schema(
@@ -107,16 +108,17 @@ pub async fn grpc_message_schema(
     target: GrpcTargetIpc,
     service: String,
     method: String,
+    side: MessageSideIpc,
 ) -> Result<MessageSchemaIpc, IpcError> {
     let target = target.into_core()?;
     let key = ContractKey::from_target(&target);
 
     if let Some(cached) = state.contract_cache.get(&key) {
-        return Ok(build_message_schema_from_pool(&cached.pool, &service, &method)?.into());
+        return Ok(build_message_schema_from_pool(&cached.pool, &service, &method, side.into())?.into());
     }
     let transport = Arc::new(TonicTransport::new());
     let conn = activate(target, transport, state.contract_cache.as_ref()).await?;
-    Ok(build_message_schema_from_pool(&conn.pool, &service, &method)?.into())
+    Ok(build_message_schema_from_pool(&conn.pool, &service, &method, side.into())?.into())
 }
 
 /// Sentinel transport messages classified on the frontend (Transport(msg) reuse — see the
