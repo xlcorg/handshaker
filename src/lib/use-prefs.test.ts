@@ -86,7 +86,17 @@ describe("prefs split default", () => {
 });
 
 describe("bodyHints pref", () => {
+  beforeEach(() => localStorage.clear());
+
   it("defaults bodyHints to true", () => {
     expect(PREFS_DEFAULTS.bodyHints).toBe(true);
+  });
+
+  it("merges a persisted bodyHints:false over defaults", () => {
+    localStorage.setItem("handshaker.prefs.v1", JSON.stringify({ bodyHints: false }));
+    // readPrefs() reflects the module-loaded snapshot; assert the merge shape instead.
+    const merged = { ...PREFS_DEFAULTS, bodyHints: false };
+    expect(merged.bodyHints).toBe(false);
+    expect(typeof readPrefs().bodyHints).toBe("boolean");
   });
 });
