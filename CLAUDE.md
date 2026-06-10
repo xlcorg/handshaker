@@ -4,13 +4,19 @@ Handshaker — десктопный gRPC-клиент (Tauri 2 + React 18 + Rust
 Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src-tauri` (IPC) ·
 `src` (React-фронтенд).
 
-## Active work — нет активного плана
+## Active work — env switcher: полиш меню + ручной порядок окружений
 
-Все спланированные фичи **завершены** и перенесены в
-`docs/superpowers/{specs,plans}/archive/` (см. правило «Архивирование завершённых
-планов и спеков» ниже). Новую работу начинай с брейншторма/спека → плана, и пока
-план активен — держи его описание здесь. Интеграционная ветка — `main`; фичи
-ведутся в отдельных worktree-ветках (`claude/*`) и вливаются в `main` fast-forward.
+**Активный план:** `docs/superpowers/plans/2026-06-10-env-switcher-reorder.md`
+(спек: `docs/superpowers/specs/2026-06-10-env-switcher-reorder-design.md`, ветка
+`claude/blissful-wing-ddce4f`). Девять задач: Vec-backed env-сторы +
+`EnvironmentStore::reorder` → IPC `env_reorder` + биндинги → удаление мёртвого
+`EnvPill` → реструктуризация `EnvSwitcherMenu` (обычный «No environment», `+` в
+шапке вместо «New env…», без сортировки) → DnD-реордеринг (`computeReorder` +
+`DropLine`) → rename сохраняет позицию → полная верификация + живой WebView2-прогон.
+Режим — subagent-driven. Статус смотри в баннере план-файла.
+
+Интеграционная ветка — `main`; фичи ведутся в отдельных worktree-ветках
+(`claude/*`) и вливаются в `main` fast-forward.
 
 **Следующая запланированная работа — Group B #3: просмотр контракта метода.**
 Бэкенд-эндпоинт схемы полей уже есть (`grpc_message_schema` → плоская `MessageSchema`,
