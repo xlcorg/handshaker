@@ -151,7 +151,7 @@ export function VariablesTable({ value, onChange }: VariablesTableProps) {
       <Table>
         <TableHeader>
           <TableRow className="hover:bg-transparent bg-muted/40">
-            <TableHead className="w-1/3 h-8 text-[11px] uppercase tracking-wide font-medium text-muted-foreground">
+            <TableHead className="w-1/2 h-8 text-[11px] uppercase tracking-wide font-medium text-muted-foreground">
               Key
             </TableHead>
             <TableHead className="h-8 text-[11px] uppercase tracking-wide font-medium text-muted-foreground border-l">

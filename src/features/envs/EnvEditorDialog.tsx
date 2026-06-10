@@ -136,7 +136,7 @@ export function EnvEditorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[85vh] w-full max-w-[min(90vw,960px)] flex-col sm:max-w-[min(90vw,960px)]">
+      <DialogContent className="flex max-h-[85vh] min-h-[70vh] w-full max-w-[min(90vw,960px)] flex-col sm:max-w-[min(90vw,960px)]">
         <DialogHeader>
           <DialogTitle>{isCreate ? "New environment" : "Edit environment"}</DialogTitle>
           <DialogDescription className="sr-only">
