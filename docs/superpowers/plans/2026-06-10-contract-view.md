@@ -2,8 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-> **Status:** 🚧 in progress — Phase A done 2026-06-10 (Tasks 1–3: `124bda3`, `8994acc`, `cea3c57`;
-> spec+quality review пройдены на каждой задаче). Next: Task 4 (Phase B, `bodyHints` pref).
+> **Status:** 🚧 in progress — Phases A+B done 2026-06-10 (Tasks 1–3: `124bda3`, `8994acc`, `cea3c57`;
+> Tasks 4–8: `3420a9f`…`715bdeb`; spec+quality review пройдены на каждой задаче; 703 FE-тестов
+> + lint зелёные). Next: Task 9 (Phase C, contract overlay UI).
 > Branch: `claude/nostalgic-jang-778d08` (harness worktree — do NOT `git worktree remove`).
 > Spec: `docs/superpowers/specs/2026-06-10-contract-view-design.md` (approved 2026-06-10).
 
@@ -334,7 +335,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - Modify: `src/lib/use-prefs.ts`
 - Test: `src/lib/use-prefs.test.ts`
 
-- [ ] **Step 1: Failing test** (append to the existing suite, mirroring how other defaults are asserted there):
+- [x] **Step 1: Failing test** (append to the existing suite, mirroring how other defaults are asserted there):
 
 ```ts
 it("defaults bodyHints to true", () => {
@@ -342,9 +343,9 @@ it("defaults bodyHints to true", () => {
 });
 ```
 
-- [ ] **Step 2: Run** — `pnpm test src/lib/use-prefs.test.ts` — expected FAIL (property missing).
+- [x] **Step 2: Run** — `pnpm test src/lib/use-prefs.test.ts` — expected FAIL (property missing).
 
-- [ ] **Step 3: Implement** — in `Prefs` add:
+- [x] **Step 3: Implement** — in `Prefs` add:
 
 ```ts
   /** Inline contract hints in body editors: inlay type labels + the ghost skeleton. */
@@ -353,9 +354,10 @@ it("defaults bodyHints to true", () => {
 
 and `bodyHints: true,` in `PREFS_DEFAULTS`.
 
-- [ ] **Step 4: Run** — `pnpm test src/lib/use-prefs.test.ts && pnpm lint` — green.
+- [x] **Step 4: Run** — `pnpm test src/lib/use-prefs.test.ts && pnpm lint` — green. ✅ 14/14 + lint,
+commits `3420a9f` + `098c171` (merge-тест `bodyHints:false` добавлен по ревью).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/lib/use-prefs.ts src/lib/use-prefs.test.ts
@@ -371,7 +373,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - Modify: `src/features/bodyview/completion.ts` (one new export)
 - Test: `src/features/bodyview/hints.test.ts`
 
-- [ ] **Step 1: Failing tests** — `src/features/bodyview/hints.test.ts`:
+- [x] **Step 1: Failing tests** — `src/features/bodyview/hints.test.ts`:
 
 ```ts
 import { describe, it, expect } from "vitest";
@@ -456,9 +458,9 @@ describe("computeInlayHints", () => {
 });
 ```
 
-- [ ] **Step 2: Run** — `pnpm test src/features/bodyview/hints.test.ts` — FAIL (module missing).
+- [x] **Step 2: Run** — `pnpm test src/features/bodyview/hints.test.ts` — FAIL (module missing).
 
-- [ ] **Step 3: Implement** — `src/features/bodyview/hints.ts` (pure part only; the provider comes in Task 6):
+- [x] **Step 3: Implement** — `src/features/bodyview/hints.ts` (pure part only; the provider comes in Task 6):
 
 ```ts
 import type { MessageSchemaIpc, FieldNodeIpc } from "@/ipc/bindings";
@@ -535,9 +537,10 @@ export function getModelSchema(
 }
 ```
 
-- [ ] **Step 4: Run** — `pnpm test src/features/bodyview/hints.test.ts && pnpm lint` — green.
+- [x] **Step 4: Run** — `pnpm test src/features/bodyview/hints.test.ts && pnpm lint` — green.
+✅ 8 тестов (7 плановых + repeated-enum по ревью) + lint, commits `f74ca80` + `2f4affd`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/features/bodyview/hints.ts src/features/bodyview/hints.test.ts src/features/bodyview/completion.ts
@@ -554,7 +557,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - Modify: `src/features/bodyview/BodyView.tsx` (options memo from pref; refresh on schema change)
 - Test: `src/features/bodyview/hints.test.ts` (provider describe)
 
-- [ ] **Step 1: Failing provider test** — append to `hints.test.ts`:
+- [x] **Step 1: Failing provider test** — append to `hints.test.ts`:
 
 ```ts
 import { registerBodyInlayHints } from "./hints";
@@ -603,9 +606,9 @@ describe("registerBodyInlayHints", () => {
 });
 ```
 
-- [ ] **Step 2: Run** — `pnpm test src/features/bodyview/hints.test.ts` — FAIL (no `registerBodyInlayHints`).
+- [x] **Step 2: Run** — `pnpm test src/features/bodyview/hints.test.ts` — FAIL (no `registerBodyInlayHints`).
 
-- [ ] **Step 3: Implement the provider** — append to `hints.ts`:
+- [x] **Step 3: Implement the provider** — append to `hints.ts`:
 
 ```ts
 import type * as Monaco from "monaco-editor";
@@ -643,14 +646,14 @@ export function registerBodyInlayHints(monaco: typeof Monaco): void {
 
 (Adjust the top-of-file imports: `hints.ts` now needs both the type-only `Monaco` import and `getModelSchema` — merge with the existing import lines.)
 
-- [ ] **Step 4: Register + theme colors.** In `src/lib/monaco.ts`:
+- [x] **Step 4: Register + theme colors.** In `src/lib/monaco.ts`:
   - `import { registerBodyInlayHints } from "@/features/bodyview/hints";`
   - after `registerBodyCompletion(monaco);` add `registerBodyInlayHints(monaco);`
   - in the `handshaker-dark` theme `colors` add:
     `"editorInlayHint.foreground": "#8C8C8C", "editorInlayHint.background": "#1A1A1A",`
   - in `handshaker-light`: `"editorInlayHint.foreground": "#8C8C8C", "editorInlayHint.background": "#F2F2F2",`
 
-- [ ] **Step 5: Wire the pref + schema refresh in `BodyView.tsx`:**
+- [x] **Step 5: Wire the pref + schema refresh in `BodyView.tsx`:**
   - replace `const options = mode === "response" ? BODY_READONLY_OPTIONS : BODY_EDIT_OPTIONS;` with:
 
 ```ts
@@ -665,10 +668,11 @@ const options = useMemo(
 
   - in the schema-sync effect (`useEffect(..., [schema, mode])`), after `setModelSchema(model ?? null, schema ?? null);` add `refreshBodyHints();` (import from `./hints`).
 
-- [ ] **Step 6: Run** — `pnpm test src/features/bodyview && pnpm lint`
+- [x] **Step 6: Run** — `pnpm test src/features/bodyview && pnpm lint`
 Expected: all bodyview suites green (existing BodyView tests unaffected — options shape only gained a key).
+✅ 74/74 bodyview + 696 full + lint, commits `5d47b51` + `2b0a2ba` (HMR-guard перерегистрации по ревью).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/features/bodyview/hints.ts src/features/bodyview/hints.test.ts src/lib/monaco.ts src/features/bodyview/BodyView.tsx
@@ -683,7 +687,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - Create: `src/features/bodyview/ghost.ts`
 - Test: `src/features/bodyview/ghost.test.ts`
 
-- [ ] **Step 1: Failing tests** — `src/features/bodyview/ghost.test.ts` (reuse the `f(...)`/SCHEMA fixture shape from `hints.test.ts` — copy the factory locally; fixtures stay file-local by convention here):
+- [x] **Step 1: Failing tests** — `src/features/bodyview/ghost.test.ts` (reuse the `f(...)`/SCHEMA fixture shape from `hints.test.ts` — copy the factory locally; fixtures stay file-local by convention here):
 
 ```ts
 import { describe, it, expect } from "vitest";
@@ -775,9 +779,9 @@ describe("GhostZone", () => {
 });
 ```
 
-- [ ] **Step 2: Run** — `pnpm test src/features/bodyview/ghost.test.ts` — FAIL (module missing).
+- [x] **Step 2: Run** — `pnpm test src/features/bodyview/ghost.test.ts` — FAIL (module missing).
 
-- [ ] **Step 3: Implement** — `src/features/bodyview/ghost.ts`:
+- [x] **Step 3: Implement** — `src/features/bodyview/ghost.ts`:
 
 ```ts
 import type { MessageSchemaIpc } from "@/ipc/bindings";
@@ -877,9 +881,10 @@ export class GhostZone {
 }
 ```
 
-- [ ] **Step 4: Run** — `pnpm test src/features/bodyview/ghost.test.ts && pnpm lint` — green.
+- [x] **Step 4: Run** — `pnpm test src/features/bodyview/ghost.test.ts && pnpm lint` — green.
+✅ 7 тестов (+multi-line-anchor по ревью), commits `7328ad7` + `7eb4bdc`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/features/bodyview/ghost.ts src/features/bodyview/ghost.test.ts
@@ -896,7 +901,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 
 No new unit test: the pure core and zone manager are covered by Task 7; this task is thin imperative glue verified by the existing BodyView suites staying green + the live pass (Task 14).
 
-- [ ] **Step 1: Extend the `Live` struct** in `BodyView.tsx`:
+- [x] **Step 1: Extend the `Live` struct** in `BodyView.tsx`:
 
 ```ts
 import { GhostZone, computeGhostLines } from "./ghost";
@@ -911,7 +916,7 @@ interface Live {
 
 (Initialize `ghost: null, ghostTimer: null` in the `live.current = {...}` literal in `onMount`.)
 
-- [ ] **Step 2: Add the scheduler** (inside the component, above `onMount`):
+- [x] **Step 2: Add the scheduler** (inside the component, above `onMount`):
 
 ```ts
 // Recompute the ghost skeleton; debounced so per-keystroke edits don't churn zones.
@@ -929,7 +934,7 @@ const scheduleGhost = useCallback((delay: number) => {
 }, []);
 ```
 
-- [ ] **Step 3: Hook it up:**
+- [x] **Step 3: Hook it up:**
   - in `onMount`, inside the `if (mode === "request")` branch: `live.current.ghost = new GhostZone(editor); scheduleGhost(0);`
   - in `handleChange`, inside the `if (mode === "request" && live.current)` branch: `scheduleGhost(150);`
   - in the schema-sync effect, after `refreshBodyHints();`: `scheduleGhost(0);`
@@ -941,7 +946,7 @@ if (live.current?.ghostTimer != null) window.clearTimeout(live.current.ghostTime
 live.current?.ghost?.dispose();
 ```
 
-- [ ] **Step 4: Style** — append to the global stylesheet:
+- [x] **Step 4: Style** — append to the global stylesheet:
 
 ```css
 /* Ghost skeleton of missing top-level request fields (BodyView view zone). */
@@ -953,10 +958,12 @@ live.current?.ghost?.dispose();
 }
 ```
 
-- [ ] **Step 5: Run** — `pnpm test src/features/bodyview && pnpm lint && pnpm test`
+- [x] **Step 5: Run** — `pnpm test src/features/bodyview && pnpm lint && pnpm test`
 Expected: full suite green (no behavior change for response mode; request mode adds zones only when a schema is attached).
+✅ 703/703 + lint, commits `6561918` + `715bdeb` (ghost-teardown в onMount по ревью; 2 BodyView-тест-мока
+дополнены `changeViewZones`/`getLayoutInfo`/`readPrefs` — только mock-completeness, без изменения assertion'ов).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/features/bodyview/BodyView.tsx src/styles/globals.css

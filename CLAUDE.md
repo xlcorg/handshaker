@@ -6,8 +6,8 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 
 ## Active work — Group B #3: просмотр контракта метода (contract view)
 
-**План:** `docs/superpowers/plans/2026-06-10-contract-view.md` (🚧 Phase A done,
-next Task 4 / Phase B; ветка `claude/nostalgic-jang-778d08`) · **Спек:**
+**План:** `docs/superpowers/plans/2026-06-10-contract-view.md` (🚧 Phases A+B done,
+next Task 9 / Phase C; ветка `claude/nostalgic-jang-778d08`) · **Спек:**
 `docs/superpowers/specs/2026-06-10-contract-view-design.md` (одобрен 2026-06-10).
 Фича: inline inlay-хинты типов + top-level ghost-скелет в теле запроса (и хинты на
 ответе) + плавающая overlay-панель полного контракта Request/Response; два
