@@ -2,11 +2,14 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-> **Status:** 🚧 in progress — Phases A+B+C done (A+B 2026-06-10; C 2026-06-11). Tasks 1–3:
-> `124bda3`,`8994acc`,`cea3c57`; Tasks 4–8: `3420a9f`…`715bdeb`; Task 9: `4109ce1`; Task 10:
-> `bdcb442`+`0a5f0ab`; Task 11: `ce2fcdf`+`00d2c61` (+ Task-9-регрессия чинена `fe744cb`);
-> Task 12: `090daa8`+`ac79c6e`. Spec+quality review пройдены на каждой задаче; 718 FE-тестов +
-> lint зелёные. Next: Task 13 (Phase D — CallPanel integration + response-side hints).
+> **Status:** 🚧 code-complete — all Phases A–D done (A+B 2026-06-10; C 2026-06-11; D 2026-06-11).
+> Tasks 1–3: `124bda3`,`8994acc`,`cea3c57`; Tasks 4–8: `3420a9f`…`715bdeb`; Task 9: `4109ce1`;
+> Task 10: `bdcb442`+`0a5f0ab`; Task 11: `ce2fcdf`+`00d2c61` (+ Task-9-регрессия чинена `fe744cb`);
+> Task 12: `090daa8`+`ac79c6e`; Task 13: `43680b4`+`35154c5`. Spec+quality review пройдены на
+> каждой задаче. **Полный гейт зелёный (Task 14 Step 1):** `pnpm lint` clean · 725 FE-тестов ·
+> `pnpm build` ok · `cargo test -p handshaker-core` ok · `cargo test -p handshaker` 43/43.
+> **Остаток:** Task 14 Step 2 — live WebView2 pass (human-assisted, `pnpm tauri dev` против
+> reflection-сервера; чеклист в Task 14) → затем баннер → `🎉 feature-complete` + ff-merge в `main`.
 > Branch: `claude/nostalgic-jang-778d08` (harness worktree — do NOT `git worktree remove`).
 > Spec: `docs/superpowers/specs/2026-06-10-contract-view-design.md` (approved 2026-06-10).
 
@@ -1630,7 +1633,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 > `src/features/workflow/actions.ts` (~line 64) — null-схема теперь деградирует не
 > только autocomplete, но и contract view / response hints.
 
-- [ ] **Step 1: Failing tests** — append to `CallPanel.editable.test.tsx`:
+- [x] **Step 1: Failing tests** — append to `CallPanel.editable.test.tsx`:
 
 ```tsx
 describe("CallPanel contract overlay", () => {
@@ -1656,9 +1659,9 @@ describe("CallPanel contract overlay", () => {
 });
 ```
 
-- [ ] **Step 2: Run** — `pnpm test src/features/workflow/CallPanel.editable.test.tsx` — FAIL (no toggle button rendered: CallPanel doesn't pass `onToggleContract`).
+- [x] **Step 2: Run** — `pnpm test src/features/workflow/CallPanel.editable.test.tsx` — FAIL (no toggle button rendered: CallPanel doesn't pass `onToggleContract`).
 
-- [ ] **Step 3: Implement CallPanel.** In `CallPanel.tsx`:
+- [x] **Step 3: Implement CallPanel.** In `CallPanel.tsx`:
   - imports: `useState` (extend the react import), `import { ContractPanel } from "@/features/contract/ContractPanel";`
   - inside the component:
 
@@ -1712,7 +1715,7 @@ function ResponseSlot({ step, schema }: { step: Step; schema: MessageSchemaIpc |
 
   (Import `MessageSchemaIpc` type from `@/ipc/bindings`.)
 
-- [ ] **Step 4: Thread to the response editor.**
+- [x] **Step 4: Thread to the response editor.**
   - `ResponsePanel.tsx`: add `schema?: MessageSchemaIpc | null;` to the props, destructure it, and pass it on: `<ResponseBody json={outcome.response_json} schema={schema} />`.
   - `ResponseBody.tsx`:
 
@@ -1737,10 +1740,13 @@ export function ResponseBody({ json, schema }: ResponseBodyProps) {
     - in the schema-sync effect, drop the `if (mode !== "request") return;` guard (the effect body already handles null models; keep `refreshBodyHints()` + `scheduleGhost(0)` — the ghost scheduler self-gates on `l.ghost`, which response mode never creates).
     - update the `schema` prop doc comment: it now serves request autocomplete+hints AND response hints.
 
-- [ ] **Step 5: Run** — `pnpm test src/features/workflow src/features/response src/features/bodyview && pnpm lint`
-Expected: green (response component tests pass the new optional prop untouched).
+- [x] **Step 5: Run** — `pnpm test src/features/workflow src/features/response src/features/bodyview && pnpm lint`
+Expected: green (response component tests pass the new optional prop untouched). ✅ 291/291 affected
++ lint clean; full suite 725/725.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit** ✅ `43680b4` (impl) + `35154c5` (review-fix: explicit `grpcMessageSchema`
+mock in the overlay test — was passing via a caught undefined-call). Spec review ✅, code-quality
+review APPROVED (3 Minor nits: 2 skipped as plan-intentional / anti-pattern, 1 applied = the mock fix).
 
 ```bash
 git add src/features/workflow/CallPanel.tsx src/features/workflow/CallPanel.editable.test.tsx src/features/response src/features/bodyview/BodyView.tsx
@@ -1754,7 +1760,8 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 **Files:**
 - Modify: `docs/superpowers/plans/2026-06-10-contract-view.md` (status banner)
 
-- [ ] **Step 1: Full suites** —
+- [x] **Step 1: Full suites** — ✅ 2026-06-11: `pnpm lint` clean · `pnpm test` 725/725 (110 files) ·
+`pnpm build` ok · `cargo test -p handshaker-core` ok · `cargo test -p handshaker` 43/43.
 
 ```bash
 pnpm lint && pnpm test && pnpm build
