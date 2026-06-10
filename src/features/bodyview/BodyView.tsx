@@ -220,6 +220,7 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
   const options = useMemo(
     () => ({
       ...(mode === "response" ? BODY_READONLY_OPTIONS : BODY_EDIT_OPTIONS),
+      // Response editors get no hints until a schema is attached (output side wired later).
       inlayHints: { enabled: prefs.bodyHints ? ("on" as const) : ("off" as const) },
     }),
     [mode, prefs.bodyHints],

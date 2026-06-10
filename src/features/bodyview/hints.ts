@@ -67,6 +67,7 @@ export function computeInlayHints(text: string, schema: MessageSchemaIpc): Inlay
 // ---------------------------------------------------------------------------
 
 let fireHintsChanged: (() => void) | null = null;
+let hintsRegistered = false;
 
 /** Nudge Monaco to re-query inlay hints (schema attached/changed on some model).
  *  Plain content edits already refresh hints natively; this covers schema swaps
@@ -77,13 +78,15 @@ export function refreshBodyHints(): void {
 
 /** Register the inlay-hints provider exactly once (called from monaco.ts setup). */
 export function registerBodyInlayHints(monaco: typeof Monaco): void {
+  if (hintsRegistered) return; // HMR re-setup: keep the original emitter+provider pair
+  hintsRegistered = true;
   const emitter = new monaco.Emitter<void>();
   fireHintsChanged = () => emitter.fire();
   monaco.languages.registerInlayHintsProvider("json-with-vars", {
     onDidChangeInlayHints: emitter.event,
     provideInlayHints(model) {
       const schema = getModelSchema(model);
-      if (!schema) return { hints: [], dispose: () => {} };
+      if (!schema) return { hints: [], dispose: () => {} }; // nothing to cancel — hints are computed fresh per call
       const hints = computeInlayHints(model.getValue(), schema).map((h) => ({
         position: model.getPositionAt(h.offset),
         label: h.label,
