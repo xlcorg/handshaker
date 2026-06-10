@@ -1,5 +1,6 @@
-import { Fragment, useState } from "react";
+import { Fragment, useLayoutEffect, useRef, useState } from "react";
 
+import { cn } from "@/lib/cn";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -53,6 +54,62 @@ function fromRows(rows: Row[]): Record<string, string> {
 // so column header text aligns visually with the input content below.
 const CELL_INPUT_CLASS =
   "h-9 w-full border-0 bg-transparent px-2 shadow-none rounded-none focus-visible:bg-accent/30 focus-visible:ring-0 font-mono text-sm";
+
+// Cap an expanded value at ~7 lines before it scrolls internally — a long JWT
+// must not be able to blow up the dialog height.
+const VALUE_MAX_PX = 168;
+
+/** Value editor cell. Blurred: one clipped line (reads like the old single-line
+ *  input). Focused: wraps and auto-grows to fit content, capped at VALUE_MAX_PX,
+ *  then scrolls. `scrollHeight` is 0 under jsdom, so the grow is a live-only
+ *  behaviour — tests assert this is a <textarea>, not its height. */
+function ValueCell({
+  value,
+  onChange,
+  disabled,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  disabled?: boolean;
+  placeholder?: string;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const [focused, setFocused] = useState(false);
+
+  // Grow to fit (capped) while focused; collapse back to the one-row CSS height
+  // when blurred. Re-runs on value changes so typing keeps the height in sync.
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (focused) {
+      el.style.height = "auto";
+      el.style.height = `${Math.min(el.scrollHeight, VALUE_MAX_PX)}px`;
+    } else {
+      el.style.height = "";
+    }
+  }, [focused, value]);
+
+  return (
+    <textarea
+      ref={ref}
+      rows={1}
+      value={value}
+      disabled={disabled}
+      placeholder={placeholder}
+      onChange={(e) => onChange(e.target.value)}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+      className={cn(
+        CELL_INPUT_CLASS,
+        "resize-none py-2 align-top",
+        focused
+          ? "overflow-y-auto whitespace-pre-wrap break-all"
+          : "overflow-hidden whitespace-nowrap",
+      )}
+    />
+  );
+}
 
 export function VariablesTable({ value, onChange }: VariablesTableProps) {
   const [rows, setRows] = useState<Row[]>(() => initialRows(value));
@@ -108,7 +165,7 @@ export function VariablesTable({ value, onChange }: VariablesTableProps) {
             return (
               <Fragment key={r.id}>
                 <TableRow className="group hover:bg-transparent border-t">
-                  <TableCell className="p-0 align-middle">
+                  <TableCell className="p-0 align-top">
                     <Input
                       value={r.key}
                       onChange={(e) => updateRow(i, { key: e.target.value })}
@@ -116,21 +173,20 @@ export function VariablesTable({ value, onChange }: VariablesTableProps) {
                       className={CELL_INPUT_CLASS}
                     />
                   </TableCell>
-                  <TableCell className="p-0 align-middle border-l">
-                    <Input
+                  <TableCell className="p-0 align-top border-l">
+                    <ValueCell
                       value={r.value}
-                      onChange={(e) => updateRow(i, { value: e.target.value })}
+                      onChange={(v) => updateRow(i, { value: v })}
                       disabled={isTrailingEmpty}
                       placeholder={isTrailingEmpty ? "" : "value"}
-                      className={CELL_INPUT_CLASS}
                     />
                   </TableCell>
-                  <TableCell className="w-9 p-0 align-middle border-l text-center">
+                  <TableCell className="w-9 p-0 align-top border-l text-center">
                     {isTrailingEmpty ? null : (
                       <Button
                         variant="ghost"
                         size="icon-sm"
-                        className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 text-muted-foreground hover:text-destructive"
+                        className="mt-1 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 text-muted-foreground hover:text-destructive"
                         onClick={() => deleteRow(i)}
                         aria-label={`delete variable ${r.key || "(unnamed)"}`}
                       >
