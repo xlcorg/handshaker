@@ -23,7 +23,8 @@ pub struct Environment {
     pub color: Option<String>,
 }
 
-/// Storage abstraction for environments. Implementations: [`in_memory::InMemoryEnvironmentStore`].
+/// Storage abstraction for environments. Implementations:
+/// [`in_memory::InMemoryEnvironmentStore`], [`file_store::FileEnvironmentStore`].
 /// List order is canonical (user-meaningful) and must be preserved by impls.
 pub trait EnvironmentStore: Send + Sync {
     /// Environments in user order.

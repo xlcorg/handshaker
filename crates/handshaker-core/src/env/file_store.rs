@@ -19,7 +19,11 @@ pub struct FileEnvironmentStore {
 
 impl FileEnvironmentStore {
     pub fn load(path: PathBuf) -> Result<Self, CoreError> {
-        let list: Vec<Environment> = read_json_or_default(&path)?;
+        let mut list: Vec<Environment> = read_json_or_default(&path)?;
+        // A hand-edited file may contain duplicate names; the store relies on
+        // name uniqueness. Keep the first occurrence of each name.
+        let mut seen = std::collections::HashSet::new();
+        list.retain(|e| seen.insert(e.name.clone()));
         Ok(Self { path, inner: RwLock::new(list) })
     }
 
@@ -194,6 +198,18 @@ mod tests {
         let store = FileEnvironmentStore::load(path).unwrap();
         let names: Vec<_> = store.list().into_iter().map(|e| e.name).collect();
         assert_eq!(names, ["local", "prod"]);
+    }
+
+    #[test]
+    fn load_dedups_duplicate_names_keeping_first() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("environments.json");
+        let raw = r#"{"schema_version":1,"data":[{"name":"a","variables":{"k":"first"}},{"name":"a","variables":{"k":"second"}},{"name":"b","variables":{}}]}"#;
+        std::fs::write(&path, raw).unwrap();
+        let store = FileEnvironmentStore::load(path).unwrap();
+        let names: Vec<_> = store.list().into_iter().map(|e| e.name).collect();
+        assert_eq!(names, ["a", "b"]);
+        assert_eq!(store.get("a").unwrap().variables.get("k"), Some(&"first".to_string()));
     }
 
     #[test]
