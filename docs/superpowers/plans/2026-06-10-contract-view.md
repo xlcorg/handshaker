@@ -2,9 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-> **Status:** 🚧 in progress — Phases A+B done 2026-06-10 (Tasks 1–3: `124bda3`, `8994acc`, `cea3c57`;
-> Tasks 4–8: `3420a9f`…`715bdeb`; spec+quality review пройдены на каждой задаче; 703 FE-тестов
-> + lint зелёные). Next: Task 9 (Phase C, contract overlay UI).
+> **Status:** 🚧 in progress — Phases A+B+C done (A+B 2026-06-10; C 2026-06-11). Tasks 1–3:
+> `124bda3`,`8994acc`,`cea3c57`; Tasks 4–8: `3420a9f`…`715bdeb`; Task 9: `4109ce1`; Task 10:
+> `bdcb442`+`0a5f0ab`; Task 11: `ce2fcdf`+`00d2c61` (+ Task-9-регрессия чинена `fe744cb`);
+> Task 12: `090daa8`+`ac79c6e`. Spec+quality review пройдены на каждой задаче; 718 FE-тестов +
+> lint зелёные. Next: Task 13 (Phase D — CallPanel integration + response-side hints).
 > Branch: `claude/nostalgic-jang-778d08` (harness worktree — do NOT `git worktree remove`).
 > Spec: `docs/superpowers/specs/2026-06-10-contract-view-design.md` (approved 2026-06-10).
 
@@ -984,7 +986,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - Modify: `src/features/workflow/RequestTabs.tsx`
 - Test: `src/features/workflow/RequestTabs.test.tsx`
 
-- [ ] **Step 1: Failing tests.** First refactor the test file minimally: add a render helper and use it everywhere (the new always-visible hints button needs `TooltipProvider`, which several existing cases don't provide):
+- [x] **Step 1: Failing tests.** First refactor the test file minimally: add a render helper and use it everywhere (the new always-visible hints button needs `TooltipProvider`, which several existing cases don't provide):
 
 ```tsx
 function renderTabs(ui: React.ReactElement) {
@@ -1039,9 +1041,9 @@ describe("RequestTabs contract toggles", () => {
 });
 ```
 
-- [ ] **Step 2: Run** — `pnpm test src/features/workflow/RequestTabs.test.tsx` — FAIL (buttons missing).
+- [x] **Step 2: Run** — `pnpm test src/features/workflow/RequestTabs.test.tsx` — FAIL (buttons missing).
 
-- [ ] **Step 3: Implement** in `RequestTabs.tsx`:
+- [x] **Step 3: Implement** in `RequestTabs.tsx`:
   - imports: `import { RotateCcw, Type, ListTree } from "lucide-react";` and `import { usePrefs } from "@/lib/use-prefs";`
   - props:
 
@@ -1104,9 +1106,9 @@ describe("RequestTabs contract toggles", () => {
 
   (Destructure the new props in the function signature.)
 
-- [ ] **Step 4: Run** — `pnpm test src/features/workflow/RequestTabs.test.tsx && pnpm lint` — green (incl. the pre-existing Reset cases via `renderTabs`).
+- [x] **Step 4: Run** — `pnpm test src/features/workflow/RequestTabs.test.tsx && pnpm lint` — green (incl. the pre-existing Reset cases via `renderTabs`). ✅ 13/13 + lint, commit `4109ce1`. (Code review: 2 «Important» nits — tooltip-on-disabled mirrors the pre-existing Reset button pattern → deferred as cross-cutting; real-pref round-trip test is deliberate per plan → kept.)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/features/workflow/RequestTabs.tsx src/features/workflow/RequestTabs.test.tsx
@@ -1121,7 +1123,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - Create: `src/features/contract/tree.ts`
 - Test: `src/features/contract/tree.test.ts`
 
-- [ ] **Step 1: Failing tests** — `src/features/contract/tree.test.ts`:
+- [x] **Step 1: Failing tests** — `src/features/contract/tree.test.ts`:
 
 ```ts
 import { describe, it, expect } from "vitest";
@@ -1201,9 +1203,9 @@ describe("deriveRows", () => {
 });
 ```
 
-- [ ] **Step 2: Run** — `pnpm test src/features/contract/tree.test.ts` — FAIL (module missing).
+- [x] **Step 2: Run** — `pnpm test src/features/contract/tree.test.ts` — FAIL (module missing).
 
-- [ ] **Step 3: Implement** — `src/features/contract/tree.ts`:
+- [x] **Step 3: Implement** — `src/features/contract/tree.ts`:
 
 ```ts
 import type { MessageSchemaIpc, MessageNodeIpc, FieldNodeIpc } from "@/ipc/bindings";
@@ -1280,9 +1282,9 @@ export function deriveRows(
 }
 ```
 
-- [ ] **Step 4: Run** — `pnpm test src/features/contract/tree.test.ts && pnpm lint` — green.
+- [x] **Step 4: Run** — `pnpm test src/features/contract/tree.test.ts && pnpm lint` — green. ✅ 5/5 → 6/6 + lint, commits `bdcb442` + `0a5f0ab` (review-fix: order-independent oneof headers via seen-set + `@param expanded` doc; no real binding deviations).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/features/contract/tree.ts src/features/contract/tree.test.ts
@@ -1297,7 +1299,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - Create: `src/features/contract/ContractTree.tsx`
 - Test: `src/features/contract/ContractTree.test.tsx`
 
-- [ ] **Step 1: Failing tests** — `src/features/contract/ContractTree.test.tsx` (reuse the SCHEMA fixture from `tree.test.ts` — copy it locally with the same `f` factory):
+- [x] **Step 1: Failing tests** — `src/features/contract/ContractTree.test.tsx` (reuse the SCHEMA fixture from `tree.test.ts` — copy it locally with the same `f` factory):
 
 ```tsx
 import { describe, it, expect } from "vitest";
@@ -1345,9 +1347,9 @@ describe("ContractTree", () => {
 });
 ```
 
-- [ ] **Step 2: Run** — `pnpm test src/features/contract/ContractTree.test.tsx` — FAIL.
+- [x] **Step 2: Run** — `pnpm test src/features/contract/ContractTree.test.tsx` — FAIL.
 
-- [ ] **Step 3: Implement** — `src/features/contract/ContractTree.tsx`:
+- [x] **Step 3: Implement** — `src/features/contract/ContractTree.tsx`:
 
 ```tsx
 import { useState } from "react";
@@ -1425,9 +1427,9 @@ export function ContractTree({ schema }: ContractTreeProps) {
 }
 ```
 
-- [ ] **Step 4: Run** — `pnpm test src/features/contract/ContractTree.test.tsx && pnpm lint` — green.
+- [x] **Step 4: Run** — `pnpm test src/features/contract/ContractTree.test.tsx && pnpm lint` — green. ✅ 5/5 + lint, commits `ce2fcdf` + `00d2c61` (review-fix: aria-label on `↻` marker + `useMemo(deriveRows)`). Deviation: `getByText("string")` → `getAllByText` (fixture has 3 string-typed fields). ⚠ Также вскрылась регрессия Task 9: всегда-видимая Tooltip-кнопка хинтов рушила изолированные CallPanel-тесты без `TooltipProvider` (prod ок — провайдер в `main.tsx`); починено отдельным коммитом `fe744cb` (обёртка рендеров в `TooltipProvider`). Полный прогон: 718/718 + lint.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/features/contract/ContractTree.tsx src/features/contract/ContractTree.test.tsx
@@ -1442,7 +1444,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - Create: `src/features/contract/ContractPanel.tsx`
 - Test: `src/features/contract/ContractPanel.test.tsx`
 
-- [ ] **Step 1: Failing tests** — `src/features/contract/ContractPanel.test.tsx` (SCHEMA fixture as in `tree.test.ts`; an `OUT` variant with `root: "t.Resp"` + one field `f("ok", "bool", "scalar")`):
+- [x] **Step 1: Failing tests** — `src/features/contract/ContractPanel.test.tsx` (SCHEMA fixture as in `tree.test.ts`; an `OUT` variant with `root: "t.Resp"` + one field `f("ok", "bool", "scalar")`):
 
 ```tsx
 import { describe, it, expect, vi } from "vitest";
@@ -1513,9 +1515,9 @@ describe("ContractPanel", () => {
 });
 ```
 
-- [ ] **Step 2: Run** — `pnpm test src/features/contract/ContractPanel.test.tsx` — FAIL.
+- [x] **Step 2: Run** — `pnpm test src/features/contract/ContractPanel.test.tsx` — FAIL.
 
-- [ ] **Step 3: Implement** — `src/features/contract/ContractPanel.tsx`:
+- [x] **Step 3: Implement** — `src/features/contract/ContractPanel.tsx`:
 
 ```tsx
 import { useEffect, useState } from "react";
@@ -1598,9 +1600,9 @@ export function ContractPanel({ open, onClose, method, inputSchema, outputSchema
 }
 ```
 
-- [ ] **Step 4: Run** — `pnpm test src/features/contract && pnpm lint` — green.
+- [x] **Step 4: Run** — `pnpm test src/features/contract && pnpm lint` — green. ✅ 16/16 contract + lint, commits `090daa8` + `ac79c6e` (review-fix: Esc-listener stabilized via `onCloseRef` per CallPanel idiom, before Task 13's unstable `onClose`; + doc comment on `side` persistence). No deviations.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/features/contract/ContractPanel.tsx src/features/contract/ContractPanel.test.tsx
