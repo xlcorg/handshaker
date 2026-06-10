@@ -9,8 +9,8 @@ function setup() {
   render(
     <EnvSwitcherMenu
       envs={[
-        { name: "local", variables: {}, color: null },
         { name: "prod", variables: {}, color: null },
+        { name: "local", variables: {}, color: null },
       ]}
       trigger={<button type="button">env-trigger</button>}
       onActiveSet={onActiveSet}
@@ -56,5 +56,32 @@ describe("EnvSwitcherMenu", () => {
     await user.click(screen.getByText("env-trigger"));
     await user.click(await screen.findByLabelText("Edit local"));
     expect(onEditEnv).toHaveBeenCalledWith("local");
+  });
+
+  it("renders envs in prop order (no alphabetical sorting)", async () => {
+    const user = userEvent.setup();
+    setup();
+    await user.click(screen.getByText("env-trigger"));
+    const prod = await screen.findByText("prod");
+    const local = screen.getByText("local");
+    // prod (first in props) must precede local in the DOM.
+    expect(prod.compareDocumentPosition(local) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("'No environment' is a regular-size row (no font-thin)", async () => {
+    const user = userEvent.setup();
+    setup();
+    await user.click(screen.getByText("env-trigger"));
+    const item = await screen.findByText("No environment");
+    expect(item.closest("[data-slot='dropdown-menu-item']")!.className).not.toContain("font-thin");
+  });
+
+  it("header has a + button that calls onNewEnv; no bottom 'New env…' item", async () => {
+    const user = userEvent.setup();
+    const { onNewEnv } = setup();
+    await user.click(screen.getByText("env-trigger"));
+    expect(screen.queryByText(/New env/)).not.toBeInTheDocument();
+    await user.click(await screen.findByLabelText("New environment"));
+    expect(onNewEnv).toHaveBeenCalled();
   });
 });
