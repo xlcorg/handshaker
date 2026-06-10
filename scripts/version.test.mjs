@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { isValidVersion, bumpCargoToml, bumpPackageJson, bumpCargoLock } from "./version.mjs";
+import {
+  isValidVersion,
+  bumpCargoToml,
+  bumpPackageJson,
+  bumpCargoLock,
+  nextVersion,
+  readCargoTomlVersion,
+} from "./version.mjs";
 
 describe("isValidVersion", () => {
   it("accepts x.y.z", () => {
@@ -103,5 +110,42 @@ describe("bumpCargoLock", () => {
 
   it("throws if the package is not present", () => {
     expect(() => bumpCargoLock(lock, "nonexistent", "0.2.0")).toThrow();
+  });
+});
+
+describe("nextVersion", () => {
+  it("bumps patch", () => {
+    expect(nextVersion("0.1.3", "patch")).toBe("0.1.4");
+    expect(nextVersion("1.2.9", "patch")).toBe("1.2.10");
+  });
+  it("bumps minor and resets patch", () => {
+    expect(nextVersion("0.1.3", "minor")).toBe("0.2.0");
+  });
+  it("bumps major and resets minor+patch", () => {
+    expect(nextVersion("0.1.3", "major")).toBe("1.0.0");
+  });
+  it("throws on an unknown level", () => {
+    expect(() => nextVersion("0.1.3", "huge")).toThrow();
+  });
+  it("throws on an invalid current version", () => {
+    expect(() => nextVersion("0.1", "patch")).toThrow();
+  });
+});
+
+describe("readCargoTomlVersion", () => {
+  const toml = [
+    "[package]",
+    'name = "handshaker"',
+    'version = "0.1.3"',
+    "",
+    "[workspace.dependencies]",
+    'tauri = { version = "2.11" }',
+  ].join("\n");
+
+  it("reads the [package] version, ignoring dependency versions", () => {
+    expect(readCargoTomlVersion(toml)).toBe("0.1.3");
+  });
+  it("throws if there is no [package] version", () => {
+    expect(() => readCargoTomlVersion("[workspace]\nmembers = []")).toThrow();
   });
 });

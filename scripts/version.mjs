@@ -6,6 +6,45 @@ export function isValidVersion(v) {
   return /^\d+\.\d+\.\d+$/.test(v);
 }
 
+/** The bump levels accepted by {@link nextVersion}. */
+export const BUMP_LEVELS = ["major", "minor", "patch"];
+
+/**
+ * Increment a strict `x.y.z` version by one semver level, resetting lower parts:
+ * patch -> x.y.(z+1), minor -> x.(y+1).0, major -> (x+1).0.0.
+ */
+export function nextVersion(current, level) {
+  if (!isValidVersion(current)) throw new Error(`nextVersion: invalid current version "${current}"`);
+  const [major, minor, patch] = current.split(".").map(Number);
+  switch (level) {
+    case "major":
+      return `${major + 1}.0.0`;
+    case "minor":
+      return `${major}.${minor + 1}.0`;
+    case "patch":
+      return `${major}.${minor}.${patch + 1}`;
+    default:
+      throw new Error(`nextVersion: unknown level "${level}" (use ${BUMP_LEVELS.join(" | ")})`);
+  }
+}
+
+/** Read the `[package]` `version = "..."` from a Cargo.toml, ignoring dependency versions. */
+export function readCargoTomlVersion(content) {
+  let inPackage = false;
+  for (const line of content.split(/\r?\n/)) {
+    const section = line.match(/^\s*\[([^\]]+)\]\s*$/);
+    if (section) {
+      inPackage = section[1].trim() === "package";
+      continue;
+    }
+    if (inPackage) {
+      const m = line.match(/^\s*version\s*=\s*"([^"]*)"/);
+      if (m) return m[1];
+    }
+  }
+  throw new Error('readCargoTomlVersion: no [package] version = "..." found');
+}
+
 /**
  * Replace the `version = "..."` line inside the `[package]` table of a Cargo.toml,
  * leaving every other `version = "..."` (e.g. under `[workspace.dependencies]`) untouched.
