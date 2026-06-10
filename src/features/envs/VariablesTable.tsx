@@ -100,6 +100,7 @@ function ValueCell({
       onChange={(e) => onChange(e.target.value)}
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
+      // break-all (not break-words): env values are often unbroken tokens/JWTs/URLs that must wrap
       className={cn(
         CELL_INPUT_CLASS,
         "resize-none py-2 align-top",

@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -32,5 +32,13 @@ describe("VariablesTable", () => {
     render(<VariablesTable value={{ token: "abc123" }} onChange={() => {}} />);
     const keyEl = screen.getByDisplayValue("token");
     expect(keyEl.tagName).toBe("INPUT");
+  });
+
+  it("editing a value cell propagates through onChange", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<VariablesTable value={{ token: "" }} onChange={onChange} />);
+    await user.type(screen.getByPlaceholderText("value"), "secret");
+    expect(onChange).toHaveBeenLastCalledWith({ token: "secret" });
   });
 });
