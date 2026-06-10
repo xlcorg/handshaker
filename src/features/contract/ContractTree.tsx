@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import type { MessageSchemaIpc } from "@/ipc/bindings";
 import { cn } from "@/lib/cn";
@@ -12,7 +12,7 @@ export interface ContractTreeProps {
  *  it resets with the panel, deliberately (no persistence per spec). */
 export function ContractTree({ schema }: ContractTreeProps) {
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
-  const rows = deriveRows(schema, expanded);
+  const rows = useMemo(() => deriveRows(schema, expanded), [schema, expanded]);
 
   const toggle = (path: string) =>
     setExpanded((prev) => {
@@ -28,6 +28,8 @@ export function ContractTree({ schema }: ContractTreeProps) {
 
   return (
     <div className="py-1 font-mono text-xs leading-6">
+      {/* Indent: 14px per depth level. Field rows add 8px base; oneof headers add 26px
+          (8px base + the 18px chevron-slot width) so their text aligns with field names. */}
       {rows.map((row) =>
         row.kind === "oneof" ? (
           <div
@@ -59,7 +61,7 @@ export function ContractTree({ schema }: ContractTreeProps) {
               {row.field.json_name}
             </span>
             {row.recursive ? (
-              <span title="recursive" className="text-muted-foreground">↻</span>
+              <span title="recursive" aria-label="recursive" className="text-muted-foreground">↻</span>
             ) : null}
             <span className="ml-auto flex-none pl-3 text-muted-foreground">
               {row.field.type_label}
