@@ -20,17 +20,21 @@ function setup(authKind: "none" | "env_var" = "none") {
   return { step, serviceAuth, onBody: vi.fn(), onMetadata: vi.fn() };
 }
 
+function renderTabs(ui: React.ReactElement) {
+  return render(<TooltipProvider>{ui}</TooltipProvider>);
+}
+
 describe("RequestTabs", () => {
   it("shows the Request (body) pane by default", () => {
     const p = setup();
-    render(<RequestTabs {...p} />);
+    renderTabs(<RequestTabs {...p} />);
     expect(screen.getByTestId("body-editor")).toHaveTextContent('{"a":1}');
   });
 
   it("switches to the Metadata pane", async () => {
     const user = userEvent.setup();
     const p = setup();
-    render(<RequestTabs {...p} />);
+    renderTabs(<RequestTabs {...p} />);
     await user.click(screen.getByRole("tab", { name: /metadata/i }));
     expect(screen.getByLabelText("metadata-key-0")).toHaveValue("x");
   });
@@ -38,7 +42,7 @@ describe("RequestTabs", () => {
   it("Auth pane renders the inherited service auth read-only", async () => {
     const user = userEvent.setup();
     const p = setup("env_var");
-    render(<RequestTabs {...p} />);
+    renderTabs(<RequestTabs {...p} />);
     await user.click(screen.getByRole("tab", { name: /auth/i }));
     expect(screen.getByText(/env_var/i)).toBeInTheDocument();
     expect(screen.getByText(/TOK/)).toBeInTheDocument();
@@ -48,7 +52,7 @@ describe("RequestTabs", () => {
 
   it("does not wrap the Monaco request tab in overflow-auto (scrollbar bug)", () => {
     const p = setup();
-    render(<RequestTabs {...p} />);
+    renderTabs(<RequestTabs {...p} />);
     const container = screen.getByTestId("body-editor").parentElement!;
     expect(container.className).toContain("overflow-hidden");
     expect(container.className).not.toContain("overflow-auto");
@@ -57,7 +61,7 @@ describe("RequestTabs", () => {
   it("gives the Metadata tab its own scroll wrapper", async () => {
     const user = userEvent.setup();
     const p = setup();
-    render(<RequestTabs {...p} />);
+    renderTabs(<RequestTabs {...p} />);
     await user.click(screen.getByRole("tab", { name: /metadata/i }));
     expect(screen.getByLabelText("metadata-key-0").closest(".overflow-auto")).not.toBeNull();
   });
@@ -65,7 +69,7 @@ describe("RequestTabs", () => {
   it("renders a tablist with underline-style tabs (no pill bg-accent on the active tab)", async () => {
     const user = userEvent.setup();
     const p = setup();
-    render(<RequestTabs {...p} />);
+    renderTabs(<RequestTabs {...p} />);
     expect(screen.getByRole("tablist")).toBeInTheDocument();
 
     const requestTab = screen.getByRole("tab", { name: /request/i });
@@ -81,11 +85,7 @@ describe("RequestTabs", () => {
     const user = userEvent.setup();
     const onResetTemplate = vi.fn();
     const p = { ...setup(), onResetTemplate };
-    render(
-      <TooltipProvider>
-        <RequestTabs {...p} />
-      </TooltipProvider>,
-    );
+    renderTabs(<RequestTabs {...p} />);
     const btn = screen.getByRole("button", { name: /reset body to template/i });
     await user.click(btn);
     expect(onResetTemplate).toHaveBeenCalledTimes(1);
@@ -94,11 +94,7 @@ describe("RequestTabs", () => {
   it("hides the Reset button when not on the Request tab", async () => {
     const user = userEvent.setup();
     const p = { ...setup(), onResetTemplate: vi.fn() };
-    render(
-      <TooltipProvider>
-        <RequestTabs {...p} />
-      </TooltipProvider>,
-    );
+    renderTabs(<RequestTabs {...p} />);
     await user.click(screen.getByRole("tab", { name: /metadata/i }));
     expect(screen.queryByRole("button", { name: /reset body to template/i })).toBeNull();
   });
@@ -112,11 +108,50 @@ describe("RequestTabs", () => {
       onMetadata: vi.fn(),
       onResetTemplate: vi.fn(),
     };
-    render(
-      <TooltipProvider>
-        <RequestTabs {...p} />
-      </TooltipProvider>,
-    );
+    renderTabs(<RequestTabs {...p} />);
     expect(screen.getByRole("button", { name: /reset body to template/i })).toBeDisabled();
+  });
+});
+
+describe("RequestTabs contract toggles", () => {
+  it("toggles the bodyHints pref via the hints button", async () => {
+    const user = userEvent.setup();
+    renderTabs(<RequestTabs {...setup()} />);
+    const btn = screen.getByRole("button", { name: /inline type hints/i });
+    const initial = btn.getAttribute("aria-pressed");
+    await user.click(btn);
+    expect(btn).toHaveAttribute("aria-pressed", initial === "true" ? "false" : "true");
+    await user.click(btn); // restore module-level prefs state for sibling tests
+    expect(btn).toHaveAttribute("aria-pressed", initial);
+  });
+
+  it("shows the contract button only when onToggleContract is provided, and reports pressed state", async () => {
+    const user = userEvent.setup();
+    const onToggleContract = vi.fn();
+    const { unmount } = renderTabs(<RequestTabs {...setup()} />);
+    expect(screen.queryByRole("button", { name: /method contract/i })).toBeNull();
+    unmount();
+
+    renderTabs(<RequestTabs {...setup()} contractOpen onToggleContract={onToggleContract} />);
+    const btn = screen.getByRole("button", { name: /method contract/i });
+    expect(btn).toHaveAttribute("aria-pressed", "true");
+    await user.click(btn);
+    expect(onToggleContract).toHaveBeenCalledTimes(1);
+  });
+
+  it("hides both toggles off the Request tab", async () => {
+    const user = userEvent.setup();
+    renderTabs(<RequestTabs {...setup()} onToggleContract={vi.fn()} />);
+    await user.click(screen.getByRole("tab", { name: /metadata/i }));
+    expect(screen.queryByRole("button", { name: /inline type hints/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /method contract/i })).toBeNull();
+  });
+
+  it("disables the contract button when no method is selected", () => {
+    const step = newStep({ address: "h", tls: false, service: "S", method: "", requestJson: "{}" });
+    renderTabs(
+      <RequestTabs step={step} serviceAuth={{ kind: "none" }} onBody={vi.fn()} onMetadata={vi.fn()} onToggleContract={vi.fn()} />,
+    );
+    expect(screen.getByRole("button", { name: /method contract/i })).toBeDisabled();
   });
 });

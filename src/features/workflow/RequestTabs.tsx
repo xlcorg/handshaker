@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { RotateCcw } from "lucide-react";
+import { RotateCcw, Type, ListTree } from "lucide-react";
 import { BodyEditor } from "@/features/invoke/BodyEditor";
 import { UnderlineTabs } from "@/components/ui/underline-tabs";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import type { SavedAuthConfigIpc, MessageSchemaIpc } from "@/ipc/bindings";
+import { usePrefs } from "@/lib/use-prefs";
 import { MetadataEditor } from "./MetadataEditor";
 import type { MetadataRow, Step } from "./model";
 
@@ -21,10 +22,14 @@ export interface RequestTabsProps {
   onResetTemplate?: () => void;
   /** Flat field-schema for the current method; drives body autocomplete. */
   schema?: MessageSchemaIpc | null;
+  /** Contract overlay toggle (editable draft only). Omit to hide the button. */
+  contractOpen?: boolean;
+  onToggleContract?: () => void;
 }
 
-export function RequestTabs({ step, serviceAuth, onBody, onMetadata, onSubmit, onResetTemplate, schema }: RequestTabsProps) {
+export function RequestTabs({ step, serviceAuth, onBody, onMetadata, onSubmit, onResetTemplate, schema, contractOpen, onToggleContract }: RequestTabsProps) {
   const [tab, setTab] = useState<Tab>("request");
+  const [prefs, setPref] = usePrefs();
   return (
     <div className="flex h-full flex-col">
       <div className="h-10 flex-none flex items-center border-b border-border px-3.5">
@@ -37,19 +42,50 @@ export function RequestTabs({ step, serviceAuth, onBody, onMetadata, onSubmit, o
             { value: "auth", label: "Auth" },
           ]}
         />
-        {tab === "request" && onResetTemplate ? (
-          <Tooltip content="Reset body to template">
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={onResetTemplate}
-              disabled={step.method.trim().length === 0}
-              aria-label="Reset body to template"
-              className="ml-auto text-muted-foreground hover:text-foreground"
-            >
-              <RotateCcw />
-            </Button>
-          </Tooltip>
+        {tab === "request" ? (
+          <div className="ml-auto flex items-center gap-1">
+            <Tooltip content="Inline type hints">
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                onClick={() => setPref("bodyHints", !prefs.bodyHints)}
+                aria-label="Toggle inline type hints"
+                aria-pressed={prefs.bodyHints}
+                className={prefs.bodyHints ? "text-foreground" : "text-muted-foreground hover:text-foreground"}
+              >
+                <Type />
+              </Button>
+            </Tooltip>
+            {onToggleContract ? (
+              <Tooltip content="Method contract">
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={onToggleContract}
+                  disabled={step.method.trim().length === 0}
+                  aria-label="Toggle method contract"
+                  aria-pressed={contractOpen ?? false}
+                  className={contractOpen ? "text-foreground" : "text-muted-foreground hover:text-foreground"}
+                >
+                  <ListTree />
+                </Button>
+              </Tooltip>
+            ) : null}
+            {onResetTemplate ? (
+              <Tooltip content="Reset body to template">
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={onResetTemplate}
+                  disabled={step.method.trim().length === 0}
+                  aria-label="Reset body to template"
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <RotateCcw />
+                </Button>
+              </Tooltip>
+            ) : null}
+          </div>
         ) : null}
       </div>
       <div className="min-h-0 flex-1 overflow-hidden">
