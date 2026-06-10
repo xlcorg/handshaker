@@ -12,6 +12,9 @@ vi.mock("@/ipc/client", () => ({
   varsResolve: vi.fn(),
   grpcInvokeOneshot: vi.fn(),
   grpcCancel: vi.fn(),
+  // No reflection in tests: both schema sides resolve null → contract overlay
+  // shows its "unavailable" placeholder.
+  grpcMessageSchema: vi.fn().mockResolvedValue(null),
 }));
 
 import { CallPanel } from "./CallPanel";
