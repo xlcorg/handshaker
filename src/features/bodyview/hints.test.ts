@@ -77,4 +77,14 @@ describe("computeInlayHints", () => {
     expect(computeInlayHints('{ "query": ', SCHEMA)).toEqual([]);
     expect(computeInlayHints('{ "nope": 1 }', SCHEMA)).toEqual([]);
   });
+
+  it("labels repeated enum field with 'repeated enum' prefix", () => {
+    const schema: MessageSchemaIpc = {
+      root: "t.R",
+      messages: [{ full_name: "t.R", fields: [f("tags", "repeated Dir", "enum", { repeated: true, enum_type: "t.Dir" })] }],
+      enums: [{ full_name: "t.Dir", values: ["N", "S"] }],
+    };
+    const hints = computeInlayHints('{ "tags": "N" }', schema);
+    expect(hints[0].label).toBe("repeated enum Dir: N | S");
+  });
 });

@@ -24,8 +24,9 @@ function hintLabel(schema: MessageSchemaIpc, field: FieldNodeIpc): string {
   return field.type_label;
 }
 
-/** Object keys from root to the node's ENCLOSING object (array hops add nothing) —
- *  the same path convention `descendSchema` expects. */
+/** Object-key segments from root *down to but not including* this node's own key —
+ *  i.e. the path its enclosing context sits at, as `descendSchema` expects.
+ *  Array hops (parent.key === null) contribute nothing. */
 function pathTo(tree: JsonTree, node: JsonNode): string[] {
   const segs: string[] = [];
   let cur: JsonNode | null = node.parentId ? tree.nodes[node.parentId] ?? null : null;
@@ -45,7 +46,7 @@ export function computeInlayHints(text: string, schema: MessageSchemaIpc): Inlay
   const out: InlayHintItem[] = [];
   for (const id of parsed.tree.order) {
     const node = parsed.tree.nodes[id];
-    if (node.key === null) continue; // root / array elements
+    if (node.key === null) continue; // root or array element — arrays are hinted via their own node
     const d = descendSchema(schema, pathTo(parsed.tree, node));
     if (!d || d.kind === "map") continue; // unknown path, or arbitrary map-entry keys
     const field = d.node.fields.find((fl) => fl.json_name === node.key);

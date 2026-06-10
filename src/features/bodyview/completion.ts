@@ -266,7 +266,8 @@ export function setModelSchema(
   else schemaByModel.delete(model);
 }
 
-/** Read access for sibling providers (inlay hints) sharing the same model↔schema map. */
+/** Read access for sibling providers (inlay hints) sharing the same model↔schema map.
+ *  Returns `undefined` (not `null`) when no schema is attached — WeakMap semantics. */
 export function getModelSchema(
   model: Monaco.editor.ITextModel,
 ): MessageSchemaIpc | undefined {
