@@ -4,19 +4,19 @@ Handshaker — десктопный gRPC-клиент (Tauri 2 + React 18 + Rust
 Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src-tauri` (IPC) ·
 `src` (React-фронтенд).
 
-## Active work — нет активного плана
+## Active work — Group B #3: просмотр контракта метода (contract view)
 
-Все спланированные фичи **завершены** и перенесены в
-`docs/superpowers/{specs,plans}/archive/` (см. правило «Архивирование завершённых
-планов и спеков» ниже). Новую работу начинай с брейншторма/спека → плана, и пока
-план активен — держи его описание здесь. Интеграционная ветка — `main`; фичи
-ведутся в отдельных worktree-ветках (`claude/*`) и вливаются в `main` fast-forward.
+**План:** `docs/superpowers/plans/2026-06-10-contract-view.md` (⬜ ready to execute,
+ветка `claude/nostalgic-jang-778d08`) · **Спек:**
+`docs/superpowers/specs/2026-06-10-contract-view-design.md` (одобрен 2026-06-10).
+Фича: inline inlay-хинты типов + top-level ghost-скелет в теле запроса (и хинты на
+ответе) + плавающая overlay-панель полного контракта Request/Response; два
+независимых тоггла в таб-стрипе Request. Бэкенд — параметр `side: input|output` на
+`grpc_message_schema` (билдер уже умеет любой root). Исполнение — subagent-driven,
+фазы A–D, границы — 🧹 /clear-чекпойнты; статус задач — чекбоксы в план-файле.
 
-**Следующая запланированная работа — Group B #3: просмотр контракта метода.**
-Бэкенд-эндпоинт схемы полей уже есть (`grpc_message_schema` → плоская `MessageSchema`,
-отгружена в Group B #4): он несёт `proto_name`/`oneof_group`/типы, которые контракт-вью
-переиспользует напрямую — отдельный эндпоинт не нужен. Спек ещё не написан — начинай
-с брейншторма.
+Интеграционная ветка — `main`; фичи ведутся в отдельных worktree-ветках
+(`claude/*`) и вливаются в `main` fast-forward.
 
 ### Завершённые фичи (всё в `archive/`)
 
