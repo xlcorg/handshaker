@@ -8,7 +8,8 @@ import type { JsonTree } from "./jsonTree";
 import type { ValueSpan } from "./spans";
 import type { DisposableLike } from "./editorLike";
 import { exceedsByteCeiling } from "./elide";
-import { attachBodyController, BADGE_CLASS } from "./controller";
+import { attachBodyController } from "./controller";
+import { badgeDecorationOptions } from "./badgeDecoration";
 
 type Mode = "request" | "response";
 
@@ -73,7 +74,7 @@ export function BodyView({ mode, value, onChange, onSubmit }: BodyViewProps) {
       const pos = model.getPositionAt(b.previewEnd);
       return {
         range: new l.monaco.Range(pos.lineNumber, pos.column, pos.lineNumber, pos.column),
-        options: { after: { content: ` ${b.label} `, inlineClassName: BADGE_CLASS } },
+        options: badgeDecorationOptions(b.label),
       };
     });
     if (l.decorations) l.decorations.set(decos);
