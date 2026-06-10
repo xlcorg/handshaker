@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import type { MessageSchemaIpc } from "@/ipc/bindings";
 import { Button } from "@/components/ui/button";
@@ -27,16 +27,20 @@ export function ContractPanel({
   inputSchema,
   outputSchema,
 }: ContractPanelProps) {
+  // Selected side persists across open/close by design — the user's last choice is kept.
   const [side, setSide] = useState<Side>("request");
 
+  // A ref holds the freshest onClose so the window listener subscribes once per open.
+  const onCloseRef = useRef<() => void>(() => {});
+  onCloseRef.current = onClose;
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !e.defaultPrevented) onClose();
+      if (e.key === "Escape" && !e.defaultPrevented) onCloseRef.current();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
   const schema = side === "request" ? inputSchema : outputSchema;
