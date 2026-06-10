@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { MessageSchemaIpc, FieldNodeIpc } from "@/ipc/bindings";
-import { computeInlayHints } from "./hints";
+import { computeInlayHints, registerBodyInlayHints } from "./hints";
+import { setModelSchema } from "./completion";
 
 function f(json: string, label: string, kind: FieldNodeIpc["value_kind"], extra: Partial<FieldNodeIpc> = {}): FieldNodeIpc {
   return {
@@ -86,5 +87,47 @@ describe("computeInlayHints", () => {
     };
     const hints = computeInlayHints('{ "tags": "N" }', schema);
     expect(hints[0].label).toBe("repeated enum Dir: N | S");
+  });
+});
+
+function fakeModel(text: string) {
+  return {
+    getValue: () => text,
+    getPositionAt(offset: number) {
+      let line = 1, col = 1;
+      for (let i = 0; i < offset && i < text.length; i++) {
+        if (text[i] === "\n") { line++; col = 1; } else col++;
+      }
+      return { lineNumber: line, column: col };
+    },
+  };
+}
+
+describe("registerBodyInlayHints", () => {
+  it("serves hints for models with an attached schema, none otherwise", () => {
+    const providers: any[] = [];
+    const fakeMonaco = {
+      Emitter: class { event = () => ({ dispose() {} }); fire() {} },
+      languages: {
+        registerInlayHintsProvider: (lang: string, p: unknown) => {
+          expect(lang).toBe("json-with-vars");
+          providers.push(p);
+        },
+        InlayHintKind: { Type: 1 },
+      },
+    };
+    registerBodyInlayHints(fakeMonaco as never);
+    expect(providers).toHaveLength(1);
+
+    const model = fakeModel('{ "query": "x" }');
+    expect(providers[0].provideInlayHints(model).hints).toEqual([]);
+
+    setModelSchema(model as never, SCHEMA);
+    const res = providers[0].provideInlayHints(model);
+    expect(res.hints).toHaveLength(1);
+    expect(res.hints[0].label).toBe("string");
+    expect(res.hints[0].paddingLeft).toBe(true);
+    expect(res.hints[0].position.lineNumber).toBe(1);
+    setModelSchema(model as never, null);
   });
 });

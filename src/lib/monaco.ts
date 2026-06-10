@@ -1,5 +1,6 @@
 import { lazy } from "react";
 import { registerBodyCompletion } from "@/features/bodyview/completion";
+import { registerBodyInlayHints } from "@/features/bodyview/hints";
 
 /**
  * Bundle Monaco locally — no CDN dependency. Desktop apps need to work offline.
@@ -40,6 +41,7 @@ const setupPromise = (async () => {
   // Monarch tokenizes left-to-right and can't tell yet.
   monaco.languages.register({ id: "json-with-vars" });
   registerBodyCompletion(monaco);
+  registerBodyInlayHints(monaco);
 
   monaco.languages.setLanguageConfiguration("json-with-vars", {
     brackets: [
@@ -118,6 +120,8 @@ const setupPromise = (async () => {
       "scrollbarSlider.background": "#26262680",
       "scrollbarSlider.hoverBackground": "#A3A3A366",
       "scrollbarSlider.activeBackground": "#A3A3A399",
+      "editorInlayHint.foreground": "#8C8C8C",
+      "editorInlayHint.background": "#1A1A1A",
     },
   });
 
@@ -150,6 +154,8 @@ const setupPromise = (async () => {
       "scrollbarSlider.background": "#E5E5E580",
       "scrollbarSlider.hoverBackground": "#73737366",
       "scrollbarSlider.activeBackground": "#73737399",
+      "editorInlayHint.foreground": "#8C8C8C",
+      "editorInlayHint.background": "#F2F2F2",
     },
   });
 

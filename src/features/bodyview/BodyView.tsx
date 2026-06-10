@@ -12,6 +12,7 @@ import { attachBodyController } from "./controller";
 import { badgeDecorationOptions } from "./badgeDecoration";
 import type { MessageSchemaIpc } from "@/ipc/bindings";
 import { setModelSchema, computeSuggestions } from "./completion";
+import { refreshBodyHints } from "./hints";
 
 type Mode = "request" | "response";
 
@@ -190,6 +191,7 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
     if (mode !== "request") return;
     const model = live.current?.editor.getModel();
     setModelSchema(model ?? null, schema ?? null);
+    refreshBodyHints();
   }, [schema, mode]);
 
   // Clear the model's schema entry when BodyView unmounts.
@@ -215,7 +217,13 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
     [mode, onChange],
   );
 
-  const options = mode === "response" ? BODY_READONLY_OPTIONS : BODY_EDIT_OPTIONS;
+  const options = useMemo(
+    () => ({
+      ...(mode === "response" ? BODY_READONLY_OPTIONS : BODY_EDIT_OPTIONS),
+      inlayHints: { enabled: prefs.bodyHints ? ("on" as const) : ("off" as const) },
+    }),
+    [mode, prefs.bodyHints],
+  );
   // Response model text is derived (pretty/elided) and set imperatively in onMount;
   // pass the raw value only as the initial Monaco value, then never via React again
   // for response (so prop-sync doesn't clobber the rendered text). Keyed remount on
