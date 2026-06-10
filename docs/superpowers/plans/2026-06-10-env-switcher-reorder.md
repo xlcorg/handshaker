@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Status:** 🚧 in progress — tasks 1–3 done (core stores `6f93b2d`+`6a30cc7`, IPC `bd8437e`), next: task 4
+**Status:** ✅ code-complete — все 9 задач выполнены, subagent-driven, каждая прошла spec+quality ревью + финальное ревью всей ветки. Коммиты: core `6f93b2d`+`6a30cc7` · IPC `bd8437e` · EnvPill удалён `b85bd97` · меню `ac79d30` · computeReorder `b19c8f2` · DnD `d119742` · тест-фиксы `63f902e` · rename-позиция `f52058f`+`0e62679` · полиш `d45aa56`. Автоматика зелёная: core все тесты · tauri 44 · vitest 699/699 · lint · build. **Остаток: ручной WebView2-прогон (Step 2 ниже) — до него фичу не считать done.**
 **Spec:** `docs/superpowers/specs/2026-06-10-env-switcher-reorder-design.md`
 **Branch:** `claude/blissful-wing-ddce4f` (worktree `.claude/worktrees/blissful-wing-ddce4f`)
 
@@ -1252,6 +1252,14 @@ Expected: everything green. Fix anything that isn't before proceeding.
 - Drag an env row: menu stays open, DropLine appears at the correct before/after edge, drop reorders the list, hover-pencil still works.
 - Reorder, close the app, relaunch — the order survived (persisted in `environments.json`).
 - Rename a middle env — it keeps its position.
+
+Дополнения из код-ревью (проверить там же):
+
+- Открытие меню с клавиатуры (Enter/↓ на триггере) теперь фокусирует `+` первым пунктом (он первый в DOM) — оценить, не мешает ли.
+- Во время drag hover-подсветка исходной строки «замерзает» (pointermove подавлен) — косметика, глянуть.
+- DropLine не показывается на no-op позициях (над самой перетаскиваемой строкой и её текущим местом) — убедиться, что это читается как «бросать некуда», а не как баг.
+- Если указатель ушёл с рядов (на хедер/мимо меню) — линия последнего ряда остаётся до drop/dragend; так же ведёт себя сайдбар.
+- Drag, начатый с области карандаша, тянет всю строку — ок?
 
 - [ ] **Step 3: Update the plan banner** (this file) to `🎉 feature-complete` with the final commit hashes, and update `CLAUDE.md`'s «Active work» line accordingly.
 

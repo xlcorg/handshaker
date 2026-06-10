@@ -8,12 +8,13 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 
 **Активный план:** `docs/superpowers/plans/2026-06-10-env-switcher-reorder.md`
 (спек: `docs/superpowers/specs/2026-06-10-env-switcher-reorder-design.md`, ветка
-`claude/blissful-wing-ddce4f`). Девять задач: Vec-backed env-сторы +
-`EnvironmentStore::reorder` → IPC `env_reorder` + биндинги → удаление мёртвого
-`EnvPill` → реструктуризация `EnvSwitcherMenu` (обычный «No environment», `+` в
-шапке вместо «New env…», без сортировки) → DnD-реордеринг (`computeReorder` +
-`DropLine`) → rename сохраняет позицию → полная верификация + живой WebView2-прогон.
-Режим — subagent-driven. Статус смотри в баннере план-файла.
+`claude/blissful-wing-ddce4f`). **✅ code-complete** — все 9 задач выполнены
+(Vec-backed env-сторы + `reorder` → IPC `env_reorder` → `EnvPill` удалён →
+меню без сортировки/`font-thin`, `+` в шапке → DnD-реордеринг с `DropLine` →
+rename сохраняет позицию → полиш), автоматика зелёная (core/tauri/699 vitest/
+lint/build), финальное ревью пройдено. **Остаток: ручной WebView2-прогон**
+(чеклист — Task 9 Step 2 план-файла); после него — банер 🎉, архив plan+spec
+и ff-merge в `main`. Статус смотри в баннере план-файла.
 
 Интеграционная ветка — `main`; фичи ведутся в отдельных worktree-ветках
 (`claude/*`) и вливаются в `main` fast-forward.

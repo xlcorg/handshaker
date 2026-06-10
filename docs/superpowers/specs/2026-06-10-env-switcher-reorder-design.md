@@ -1,7 +1,7 @@
 # Env switcher — menu polish + manual environment ordering — design
 
 **Date:** 2026-06-10
-**Status:** 📐 spec approved — plan not yet written
+**Status:** ✅ implemented (code-complete; awaiting the required live WebView2 pass). Plan: `docs/superpowers/plans/2026-06-10-env-switcher-reorder.md`
 **Branch:** `claude/blissful-wing-ddce4f`
 
 ## Scope
