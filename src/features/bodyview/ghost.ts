@@ -1,0 +1,96 @@
+import type { MessageSchemaIpc } from "@/ipc/bindings";
+import { parseWithSpans } from "./parse";
+
+export interface GhostBlock {
+  /** 1-based line the zone is inserted AFTER (the last top-level entry / the `{`). */
+  afterLine: number;
+  /** Rendered ghost lines, already indented: `  "jsonName": TypeLabel`. */
+  lines: string[];
+}
+
+function lineOfOffset(text: string, offset: number): number {
+  let line = 1;
+  for (let i = 0; i < offset && i < text.length; i++) if (text[i] === "\n") line++;
+  return line;
+}
+
+/** Top-level diff: root-message fields minus keys present at depth 1. Null when
+ *  the body is unparseable, the root isn't an object, or nothing is missing. */
+export function computeGhostLines(text: string, schema: MessageSchemaIpc): GhostBlock | null {
+  const parsed = parseWithSpans(text);
+  if (!parsed || parsed.tree.rootId === null) return null;
+  const root = parsed.tree.nodes[parsed.tree.rootId];
+  if (!root || root.kind !== "object") return null;
+  const rootMsg = schema.messages.find((m) => m.full_name === schema.root);
+  if (!rootMsg) return null;
+
+  const present = new Set(root.childIds.map((id) => parsed.tree.nodes[id]?.key));
+  const missing = rootMsg.fields.filter((fl) => !present.has(fl.json_name));
+  if (missing.length === 0) return null;
+
+  const spanByNode = new Map(parsed.spans.map((s) => [s.nodeId, s]));
+  const lastChildId = root.childIds[root.childIds.length - 1];
+  const anchorOffset = lastChildId !== undefined
+    ? (spanByNode.get(lastChildId)?.end ?? spanByNode.get(root.id)!.start + 1)
+    : (spanByNode.get(root.id)?.start ?? 0) + 1;
+
+  return {
+    afterLine: lineOfOffset(text, anchorOffset),
+    lines: missing.map((fl) => `  "${fl.json_name}": ${fl.type_label}`),
+  };
+}
+
+// --- Monaco glue (structurally typed so tests need no real editor) -----------
+
+interface ViewZoneAccessorLike {
+  addZone(zone: {
+    afterLineNumber: number;
+    heightInLines: number;
+    domNode: HTMLElement;
+    suppressMouseDown?: boolean;
+  }): string;
+  removeZone(id: string): void;
+}
+
+export interface ViewZoneEditorLike {
+  changeViewZones(cb: (accessor: ViewZoneAccessorLike) => void): void;
+}
+
+export function ghostDomNode(lines: string[]): HTMLElement {
+  const node = document.createElement("div");
+  node.className = "hs-ghost-skeleton";
+  for (const l of lines) {
+    const row = document.createElement("div");
+    row.textContent = l;
+    node.appendChild(row);
+  }
+  return node;
+}
+
+/** Owns at most ONE view zone on an editor; `apply(null)` removes it. */
+export class GhostZone {
+  private zoneId: string | null = null;
+  constructor(private readonly editor: ViewZoneEditorLike) {}
+
+  apply(block: GhostBlock | null, contentLeft = 0): void {
+    this.editor.changeViewZones((acc) => {
+      if (this.zoneId !== null) {
+        acc.removeZone(this.zoneId);
+        this.zoneId = null;
+      }
+      if (!block) return;
+      const node = ghostDomNode(block.lines);
+      node.style.paddingLeft = `${contentLeft}px`;
+      this.zoneId = acc.addZone({
+        afterLineNumber: block.afterLine,
+        heightInLines: block.lines.length,
+        domNode: node,
+        suppressMouseDown: true,
+      });
+    });
+  }
+
+  dispose(): void {
+    this.apply(null);
+  }
+}
