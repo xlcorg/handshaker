@@ -11,7 +11,7 @@ use commands::collection::{
     collection_move_item_across, collection_rename_item, collection_restore_item, collection_set_expanded,
     collection_set_node_auth, collection_set_variables, collection_upsert,
 };
-use commands::env::{env_active_get, env_active_set, env_delete, env_list, env_upsert};
+use commands::env::{env_active_get, env_active_set, env_delete, env_list, env_reorder, env_upsert};
 use commands::events::ContractUpdated;
 use commands::grpc::{
     grpc_build_request_skeleton, grpc_cancel, grpc_describe, grpc_invoke_oneshot,
@@ -42,6 +42,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             env_active_set,
             env_upsert,
             env_delete,
+            env_reorder,
             vars_resolve,
             auth_resolve,
             collection_list,

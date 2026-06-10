@@ -47,6 +47,12 @@ impl AppState {
         self.env_store.upsert(env)
     }
 
+    /// Inner logic for `env_reorder`. Validation (exact permutation of the
+    /// current env set) lives in `EnvironmentStore::reorder`.
+    pub fn env_reorder_impl(&self, names: Vec<String>) -> Result<(), CoreError> {
+        self.env_store.reorder(&names)
+    }
+
     /// Inner logic for `env_delete`. Rejects if `name` matches the currently
     /// active env (the frontend is expected to switch active first, typically
     /// to `None` ≡ "No environment"). Idempotent for unknown names.
@@ -92,6 +98,12 @@ pub async fn env_upsert(state: State<'_, AppState>, env: EnvironmentIpc) -> Resu
 #[specta::specta]
 pub async fn env_delete(state: State<'_, AppState>, name: String) -> Result<(), IpcError> {
     state.env_delete_impl(&name).await.map_err(IpcError::from)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn env_reorder(state: State<'_, AppState>, names: Vec<String>) -> Result<(), IpcError> {
+    state.env_reorder_impl(names).map_err(IpcError::from)
 }
 
 #[cfg(test)]
@@ -210,5 +222,25 @@ mod tests {
         state.env_delete_impl("prod").await.unwrap();
         assert!(state.env_list_impl().is_empty());
         assert_eq!(state.env_active_get_impl().await, None);
+    }
+
+    #[tokio::test]
+    async fn env_reorder_rearranges_list() {
+        let state = build_state(&[("a", &[]), ("b", &[]), ("c", &[])], None);
+        state
+            .env_reorder_impl(vec!["c".into(), "a".into(), "b".into()])
+            .unwrap();
+        let names: Vec<String> = state.env_list_impl().into_iter().map(|e| e.name).collect();
+        assert_eq!(names, vec!["c", "a", "b"]);
+    }
+
+    #[tokio::test]
+    async fn env_reorder_rejects_set_mismatch() {
+        let state = build_state(&[("a", &[]), ("b", &[])], None);
+        assert!(state.env_reorder_impl(vec!["a".into()]).is_err());
+        assert!(state
+            .env_reorder_impl(vec!["a".into(), "ghost".into()])
+            .is_err());
+        assert_eq!(state.env_list_impl().len(), 2);
     }
 }

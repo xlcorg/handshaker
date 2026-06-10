@@ -129,6 +129,14 @@ async envDelete(name: string) : Promise<Result<null, IpcError>> {
     else return { status: "error", error: e  as any };
 }
 },
+async envReorder(names: string[]) : Promise<Result<null, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("env_reorder", { names }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async varsResolve(template: string) : Promise<Result<ResolutionReportIpc, IpcError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("vars_resolve", { template }) };
