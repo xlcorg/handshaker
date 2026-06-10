@@ -134,6 +134,23 @@ describe("EnvSwitcherMenu", () => {
     fireEvent(node, e);
   }
 
+  it("no DropLine is shown while hovering a no-op drop position", async () => {
+    const user = userEvent.setup();
+    setup();
+    await user.click(screen.getByText("env-trigger"));
+    const prodRow = (await screen.findByText("prod")).closest("[data-env-row]") as HTMLElement;
+    const localRow = screen.getByText("local").closest("[data-env-row]") as HTMLElement;
+    // envs are [prod, local]: dropping local AFTER prod is where it already is — a no-op.
+    fireEvent.dragStart(localRow);
+    fireEvent.dragOver(prodRow, { clientY: 5 }); // jsdom ⇒ zone "after"
+    expect(document.querySelector("[data-drop-line]")).toBeNull();
+    // A real move (prod after local) still shows the indicator.
+    fireEvent.dragEnd(localRow);
+    fireEvent.dragStart(prodRow);
+    fireEvent.dragOver(localRow, { clientY: 5 });
+    expect(document.querySelector("[data-drop-line]")).not.toBeNull();
+  });
+
   it("dropping above a row's midpoint inserts before it", async () => {
     const user = userEvent.setup();
     // envs = [prod, local] so dragging local BEFORE prod → ["local", "prod"]

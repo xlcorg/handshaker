@@ -79,16 +79,19 @@ export const EnvSwitcherMenu = forwardRef<HTMLButtonElement, EnvSwitcherMenuProp
               data-env-row={env.name}
               draggable
               onDragStart={(e) => {
-                if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
+                if (e.dataTransfer) {
+                  e.dataTransfer.effectAllowed = "move";
+                  e.dataTransfer.setData("text/plain", env.name);
+                }
                 setDragName(env.name);
               }}
               onDragOver={(e) => {
                 if (!dragName) return;
                 e.preventDefault();
-                setHint({
-                  name: env.name,
-                  zone: zoneFromPointer(e.currentTarget.getBoundingClientRect(), e.clientY),
-                });
+                const zone = zoneFromPointer(e.currentTarget.getBoundingClientRect(), e.clientY);
+                const wouldReorder =
+                  computeReorder(envs.map((x) => x.name), dragName, env.name, zone) !== null;
+                setHint(wouldReorder ? { name: env.name, zone } : null);
               }}
               onDrop={(e) => {
                 e.preventDefault();
