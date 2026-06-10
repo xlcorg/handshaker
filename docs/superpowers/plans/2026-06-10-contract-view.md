@@ -2,7 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-> **Status:** ⬜ ready to execute — no tasks started.
+> **Status:** 🚧 in progress — Phase A done 2026-06-10 (Tasks 1–3: `124bda3`, `8994acc`, `cea3c57`;
+> spec+quality review пройдены на каждой задаче). Next: Task 4 (Phase B, `bodyHints` pref).
 > Branch: `claude/nostalgic-jang-778d08` (harness worktree — do NOT `git worktree remove`).
 > Spec: `docs/superpowers/specs/2026-06-10-contract-view-design.md` (approved 2026-06-10).
 
@@ -57,7 +58,7 @@ Existing pure helpers reused (do not modify): `parseWithSpans` (`parse.ts`), `de
 - Modify: `crates/handshaker-core/src/grpc/invoke/schema.rs`
 - Modify: the `MessageSchema` re-export site — grep `MessageSchema` in `crates/handshaker-core/src/grpc/invoke/mod.rs` (and `grpc/mod.rs` if names are listed explicitly) and add `MessageSide` alongside it.
 
-- [ ] **Step 1: Write the failing test** — in the `#[cfg(test)] mod tests` of `schema.rs`, using the existing `field`/`file`/`pool_with` helpers:
+- [x] **Step 1: Write the failing test** — in the `#[cfg(test)] mod tests` of `schema.rs`, using the existing `field`/`file`/`pool_with` helpers:
 
 ```rust
 #[test]
@@ -94,10 +95,10 @@ fn side_selects_input_or_output_root() {
 }
 ```
 
-- [ ] **Step 2: Run it** — `cargo test -p handshaker-core side_selects`
+- [x] **Step 2: Run it** — `cargo test -p handshaker-core side_selects`
 Expected: compile FAIL (`MessageSide` not found / wrong arg count).
 
-- [ ] **Step 3: Implement.** In `schema.rs`, below `FieldValueKind`:
+- [x] **Step 3: Implement.** In `schema.rs`, below `FieldValueKind`:
 
 ```rust
 /// Which side of a method the schema is built from.
@@ -129,10 +130,10 @@ pub fn build_message_schema_from_pool(
 
 Update the module doc header (`//! Flat field-schema for a method's input message`) → `//! Flat field-schema for a method's input or output message`. Update the existing test that calls `build_message_schema_from_pool(&pool, "t.Svc", "Call")` (and its `ServiceNotFound`/`MethodNotFound` asserts) to pass `MessageSide::Input`. Add `MessageSide` to the re-export site(s) found above.
 
-- [ ] **Step 4: Run** — `cargo test -p handshaker-core`
-Expected: all green (incl. the new test and the updated old ones).
+- [x] **Step 4: Run** — `cargo test -p handshaker-core`
+Expected: all green (incl. the new test and the updated old ones). ✅ 124 passed, commit `124bda3`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add crates/handshaker-core
@@ -151,7 +152,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - Modify: `src/features/workflow/actions.ts` (`fetchMessageSchemaSafe`, ~line 67)
 - Test: `src/features/workflow/actions.test.ts` (extend the existing `fetchMessageSchemaSafe` describe)
 
-- [ ] **Step 1: Rust IPC enum + failing unit test.** In `src-tauri/src/ipc/schema.rs` add (plus `use handshaker_core::grpc::MessageSide;` to the imports):
+- [x] **Step 1: Rust IPC enum + failing unit test.** In `src-tauri/src/ipc/schema.rs` add (plus `use handshaker_core::grpc::MessageSide;` to the imports):
 
 ```rust
 /// Which side of the method the schema is built from.
@@ -182,7 +183,7 @@ fn side_converts_to_core() {
 }
 ```
 
-- [ ] **Step 2: Command param.** In `src-tauri/src/commands/grpc.rs`, add `MessageSideIpc` to the existing `use crate::ipc::schema::{...}` list and change the command (doc comment: "input message" → "input or output message — drives autocomplete and the contract view"):
+- [x] **Step 2: Command param.** In `src-tauri/src/commands/grpc.rs`, add `MessageSideIpc` to the existing `use crate::ipc::schema::{...}` list and change the command (doc comment: "input message" → "input or output message — drives autocomplete and the contract view"):
 
 ```rust
 pub async fn grpc_message_schema(
@@ -196,13 +197,13 @@ pub async fn grpc_message_schema(
     // build_message_schema_from_pool(&..., &service, &method, side.into())?.into()
 ```
 
-- [ ] **Step 3: Run** — `cargo test -p handshaker`
+- [x] **Step 3: Run** — `cargo test -p handshaker`
 Expected: green (conversion test passes, command compiles).
 
-- [ ] **Step 4: Regenerate bindings** — `cargo run -p handshaker --bin export-bindings --features export-bindings --quiet`
+- [x] **Step 4: Regenerate bindings** — `cargo run -p handshaker --bin export-bindings --features export-bindings --quiet`
 Then confirm: `grep -n "side" src/ipc/bindings.ts` shows `grpcMessageSchema(..., side: MessageSideIpc)` and `export type MessageSideIpc = "input" | "output"`.
 
-- [ ] **Step 5: Thread through the TS fetch layer.** `src/ipc/client.ts` (add `MessageSideIpc` to the type imports from `./bindings`):
+- [x] **Step 5: Thread through the TS fetch layer.** `src/ipc/client.ts` (add `MessageSideIpc` to the type imports from `./bindings`):
 
 ```ts
 export async function grpcMessageSchema(
@@ -235,7 +236,7 @@ export async function fetchMessageSchemaSafe(
 }
 ```
 
-- [ ] **Step 6: Extend the actions test.** In `src/features/workflow/actions.test.ts`, inside the existing `fetchMessageSchemaSafe` describe (reuse its existing `ipc`/`grpcMessageSchema` mock — follow the file's established mock shape):
+- [x] **Step 6: Extend the actions test.** *(deviation, justified: файл не имел существующего `fetchMessageSchemaSafe`-describe — создан новый с моком `grpcMessageSchema` в фабрике, 3 теста.)* In `src/features/workflow/actions.test.ts`, inside the existing `fetchMessageSchemaSafe` describe (reuse its existing `ipc`/`grpcMessageSchema` mock — follow the file's established mock shape):
 
 ```ts
 it("forwards the requested side to the IPC call", async () => {
@@ -251,10 +252,10 @@ it("forwards the requested side to the IPC call", async () => {
 
 Also check whether existing `fetchMessageSchemaSafe` assertions pin the exact call args — if they do, append `"input"` (the default) to their expected arg lists.
 
-- [ ] **Step 7: Run** — `pnpm test src/features/workflow/actions.test.ts && pnpm lint`
-Expected: green. (`useMessageSchema` still compiles — it relies on the default `side`.)
+- [x] **Step 7: Run** — `pnpm test src/features/workflow/actions.test.ts && pnpm lint`
+Expected: green. (`useMessageSchema` still compiles — it relies on the default `side`.) ✅ cargo 43 / FE 684 / lint clean, commit `8994acc` (включая doc-tail фикс `schema.rs` из ревью Task 1).
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src-tauri src/ipc/bindings.ts src/ipc/client.ts src/features/workflow/actions.ts src/features/workflow/actions.test.ts
@@ -269,7 +270,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - Modify: `src/features/workflow/useMessageSchema.ts`
 - Test: `src/features/workflow/useMessageSchema.test.ts`
 
-- [ ] **Step 1: Write the failing test** (append to the existing describe; pick a fresh address so the module-level cache from earlier tests can't collide):
+- [x] **Step 1: Write the failing test** (append to the existing describe; pick a fresh address so the module-level cache from earlier tests can't collide):
 
 ```ts
 const OUT: MessageSchemaIpc = { root: "t.Out", messages: [], enums: [] };
@@ -291,10 +292,10 @@ it("caches input and output sides separately", async () => {
 });
 ```
 
-- [ ] **Step 2: Run** — `pnpm test src/features/workflow/useMessageSchema.test.ts`
+- [x] **Step 2: Run** — `pnpm test src/features/workflow/useMessageSchema.test.ts`
 Expected: FAIL (hook takes one argument / both renders share one cache entry).
 
-- [ ] **Step 3: Implement** — in `useMessageSchema.ts` (import `MessageSideIpc` type from `@/ipc/bindings`):
+- [x] **Step 3: Implement** — in `useMessageSchema.ts` (import `MessageSideIpc` type from `@/ipc/bindings`):
 
 ```ts
 /** Process-wide cache keyed by address|tls|service|method|side. Holds null results too. */
@@ -309,10 +310,10 @@ export function useMessageSchema(
   }, [key, address, tls, service, method, side]);
 ```
 
-- [ ] **Step 4: Run** — `pnpm test src/features/workflow/useMessageSchema.test.ts && pnpm lint`
-Expected: green (existing tests pass via the `"input"` default).
+- [x] **Step 4: Run** — `pnpm test src/features/workflow/useMessageSchema.test.ts && pnpm lint`
+Expected: green (existing tests pass via the `"input"` default). ✅ 3/3 + lint clean, commit `cea3c57`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/features/workflow/useMessageSchema.ts src/features/workflow/useMessageSchema.test.ts
@@ -1615,6 +1616,10 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - Modify: `src/features/response/ResponseBody.tsx`
 - Modify: `src/features/bodyview/BodyView.tsx` (response-mode schema attach)
 - Test: `src/features/workflow/CallPanel.editable.test.tsx`
+
+> Note (из ревью Task 2): заодно поправь JSDoc у `fetchMessageSchemaSafe` в
+> `src/features/workflow/actions.ts` (~line 64) — null-схема теперь деградирует не
+> только autocomplete, но и contract view / response hints.
 
 - [ ] **Step 1: Failing tests** — append to `CallPanel.editable.test.tsx`:
 
