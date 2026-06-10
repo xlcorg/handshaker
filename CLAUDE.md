@@ -4,29 +4,32 @@ Handshaker — десктопный gRPC-клиент (Tauri 2 + React 18 + Rust
 Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src-tauri` (IPC) ·
 `src` (React-фронтенд).
 
-## Active work — env switcher: полиш меню + ручной порядок окружений
+## Active work — Group B #3: просмотр контракта метода
 
-**Активный план:** `docs/superpowers/plans/2026-06-10-env-switcher-reorder.md`
-(спек: `docs/superpowers/specs/2026-06-10-env-switcher-reorder-design.md`, ветка
-`claude/blissful-wing-ddce4f`). **✅ code-complete** — все 9 задач выполнены
-(Vec-backed env-сторы + `reorder` → IPC `env_reorder` → `EnvPill` удалён →
-меню без сортировки/`font-thin`, `+` в шапке → DnD-реордеринг с `DropLine` →
-rename сохраняет позицию → полиш), автоматика зелёная (core/tauri/699 vitest/
-lint/build), финальное ревью пройдено. **Остаток: ручной WebView2-прогон**
-(чеклист — Task 9 Step 2 план-файла); после него — банер 🎉, архив plan+spec
-и ff-merge в `main`. Статус смотри в баннере план-файла.
+**Спек ещё не написан — начинай с брейншторма.** Бэкенд-эндпоинт схемы полей уже
+есть (`grpc_message_schema` → плоская `MessageSchema`, отгружена в Group B #4): он
+несёт `proto_name`/`oneof_group`/типы, которые контракт-вью переиспользует
+напрямую — отдельный эндпоинт не нужен.
 
 Интеграционная ветка — `main`; фичи ведутся в отдельных worktree-ветках
 (`claude/*`) и вливаются в `main` fast-forward.
 
-**Следующая запланированная работа — Group B #3: просмотр контракта метода.**
-Бэкенд-эндпоинт схемы полей уже есть (`grpc_message_schema` → плоская `MessageSchema`,
-отгружена в Group B #4): он несёт `proto_name`/`oneof_group`/типы, которые контракт-вью
-переиспользует напрямую — отдельный эндпоинт не нужен. Спек ещё не написан — начинай
-с брейншторма.
-
 ### Завершённые фичи (всё в `archive/`)
 
+- **Env switcher — полиш меню + ручной порядок окружений** (🎉 DONE 2026-06-11,
+  влито в `main` ff, commits `41d1be5`…`6751e43`) — порядок стал свойством списка:
+  оба `EnvironmentStore`-импла перешли с `HashMap` на `Vec<Environment>` (порядок
+  вектора = порядок пользователя) + `reorder(names)` на трейте + общий
+  exact-permutation хелпер `reordered()` → новый IPC `env_reorder` персистит дропы.
+  Фронт: убрана алфавитная сортировка, `+` в шапке меню (вместо нижнего «New env…»),
+  `EnvPill` удалён как мёртвый код, env-строки draggable внутри Radix-меню с
+  `DropLine`-индикатором (drop коммитит `hint.zone` последнего dragOver — WYSIWYG,
+  без пересчёта по координатам дропа), rename сохраняет позицию (upsert+delete с
+  повторной выдачей порядка). Строка «No environment» — **Inter 200 / `font-extralight`**
+  (300 визуально неотличим от 400 на 14px серого — подобрано по харнессу с измерением
+  computed font-weight; каждый вес требует своего `@fontsource/inter/NNN.css`, иначе
+  тихий фолбэк). Subagent-driven, spec+quality ревью на каждой задаче + финальное
+  ревью ветки; core/tauri/699 vitest/lint/build зелёные; живо проверено в WebView2.
 - **Request body autocomplete + message-schema endpoint (Group B #4)** (🎉 DONE
   2026-06-10, влито в `main` ff, commits `2328d93`…`afa5aa9`) — новый бэкенд
   `grpc_message_schema` строит плоскую `MessageSchema` (root + map сообщений/enum'ов,
