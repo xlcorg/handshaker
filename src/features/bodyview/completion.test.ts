@@ -6,6 +6,7 @@ import {
   computeSuggestions,
   collectPresentKeys,
   insertionColumns,
+  separatorAfter,
 } from "./completion";
 
 // Schema fixture:
@@ -171,6 +172,20 @@ describe("collectPresentKeys", () => {
   it("an unterminated string at the caret is not counted as present", () => {
     const text = '{ "title": "x", "do';
     expect(collectPresentKeys(text, text.length)).toEqual(new Set(["title"]));
+  });
+});
+
+describe("separatorAfter", () => {
+  it("appends a comma when another property follows the insertion point", () => {
+    expect(separatorAfter('\n  "userId": ""\n}')).toBe(",");
+  });
+
+  it("appends nothing before a closing brace/bracket, an existing comma, or EOF", () => {
+    expect(separatorAfter("\n}")).toBe("");
+    expect(separatorAfter("]")).toBe("");
+    expect(separatorAfter(', "x": 1')).toBe("");
+    expect(separatorAfter("")).toBe("");
+    expect(separatorAfter("   \n  ")).toBe("");
   });
 });
 

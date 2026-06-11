@@ -377,6 +377,15 @@ export function getModelSchema(
   return schemaByModel.get(model);
 }
 
+/** Separator to append after an accepted completion, given the text that follows the
+ *  replacement range. Mirrors VS Code's `evaluateSeparatorAfter`: another token ahead
+ *  (the next property/value) needs a `,`; a closing brace/bracket, an existing comma,
+ *  or end-of-text needs nothing. */
+export function separatorAfter(textAfter: string): "" | "," {
+  const next = /\S/.exec(textAfter)?.[0];
+  return next === undefined || next === "," || next === "}" || next === "]" ? "" : ",";
+}
+
 /** When a key is completed but a value already follows, insert only the quoted key. */
 function colonAlreadyAhead(model: Monaco.editor.ITextModel, position: Monaco.Position): boolean {
   const lineEnd = model.getLineMaxColumn(position.lineNumber);
@@ -462,6 +471,13 @@ export function registerBodyCompletion(monaco: typeof Monaco): void {
         endColumn: cols.endColumn,
       };
       const keyOnly = ctx.where === "key" && colonAlreadyAhead(model, position);
+      // Separator comma when the next token after the replaced range is another
+      // property/value (VS Code parity). Not for key-only inserts — a `:` follows.
+      const sep = separatorAfter(
+        model.getValue().slice(
+          model.getOffsetAt({ lineNumber: position.lineNumber, column: cols.endColumn }),
+        ),
+      );
       // When the caret is inside a string, `insertionColumns` extended the range left
       // over the opening `"`. Monaco then filters suggestions against the leading text
       // INCLUDING that quote (e.g. `"ti`), so a bare label like `title` matches nothing
@@ -471,7 +487,7 @@ export function registerBodyCompletion(monaco: typeof Monaco): void {
 
       const suggestions: Monaco.languages.CompletionItem[] = items.map((s) => {
         const asKeyOnly = keyOnly && s.kind !== "value";
-        const insertText = asKeyOnly ? `"${s.label}"` : s.insertText;
+        const insertText = asKeyOnly ? `"${s.label}"` : s.insertText + sep;
         return {
           label: s.label,
           detail: s.detail,
