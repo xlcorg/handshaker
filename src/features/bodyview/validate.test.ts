@@ -48,6 +48,23 @@ describe("computeUnknownFieldMarkers", () => {
     expect(ms[0].message).toBe('"nanos" is not a field of g.Ts');
   });
 
+  it("resolves keys inside repeated-message array elements (array hops add no path segment)", () => {
+    const schema: MessageSchemaIpc = {
+      root: "t.R",
+      enums: [],
+      messages: [
+        { full_name: "t.R", fields: [f("items", "repeated Item", "message", { repeated: true, message_type: "t.Item" })] },
+        { full_name: "t.Item", fields: [f("name", "string", "scalar")] },
+      ],
+    };
+    expect(computeUnknownFieldMarkers('{ "items": [ { "name": "x" } ] }', schema)).toEqual([]);
+    const text = '{ "items": [ { "bogus": 1 } ] }';
+    const ms = computeUnknownFieldMarkers(text, schema)!;
+    expect(ms).toHaveLength(1);
+    expect(text.slice(ms[0].start, ms[0].end)).toBe('"bogus"');
+    expect(ms[0].message).toBe('"bogus" is not a field of t.Item');
+  });
+
   it("exempts map values (arbitrary keys)", () => {
     expect(computeUnknownFieldMarkers('{ "labels": { "anything": "v" } }', SCHEMA)).toEqual([]);
   });

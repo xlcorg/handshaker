@@ -12,7 +12,6 @@ import { attachBodyController } from "./controller";
 import { badgeDecorationOptions } from "./badgeDecoration";
 import type { MessageSchemaIpc } from "@/ipc/bindings";
 import { setModelSchema, computeSuggestions, collectPresentKeys } from "./completion";
-import { refreshBodyHints } from "./hints";
 import { GhostZone, computeGhostLines } from "./ghost";
 import { computeUnknownFieldMarkers } from "./validate";
 
@@ -24,9 +23,9 @@ export interface BodyViewProps {
   onChange?: (next: string) => void;
   /** Ctrl/Cmd+Enter inside the editor (Monaco swallows it, so we bind a command). */
   onSubmit?: () => void;
-  /** Flat field-schema attached to the model: request → autocomplete + ghost
-   *  skeleton; response → type inlay hints (completions stay suppressed by
-   *  readOnly, and the request editor keeps inlay hints off — see `options`). */
+  /** Flat field-schema attached to the model — request mode only: autocomplete,
+   *  ghost skeleton, unknown-field markers. Response mode receives none (the
+   *  Contract tab carries the contract). */
   schema?: MessageSchemaIpc | null;
 }
 
@@ -183,8 +182,8 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
         ghost: null, ghostTimer: null,
         lineCount: editor.getModel()?.getLineCount() ?? 1,
       };
-      // Attach schema to the model for both request (autocomplete + hints) and
-      // response (inlay hints; completions remain suppressed by readOnly).
+      // Attach schema to the model (request mode is the only consumer:
+      // autocomplete + ghost + unknown-field markers; response passes none).
       setModelSchema(editor.getModel(), schemaRef.current ?? null);
       if (mode === "request") {
         // Postman-style: opening a quote (a key or a value string) force-opens the
@@ -256,13 +255,12 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
   }, []);
 
   // Keep the model's attached schema current as the selected method changes.
-  // Runs for both request and response: request uses it for autocomplete + the
-  // ghost, response for inlay hints (applyGhost self-gates on l.ghost, which
-  // response mode never creates, so it's safe to call here unconditionally).
+  // Only request mode receives a schema (autocomplete + ghost + markers);
+  // response mode's schema is always null/undefined, and applyGhost self-gates
+  // on l.ghost (never created in response mode), so this runs unconditionally.
   useEffect(() => {
     const model = live.current?.editor.getModel();
     setModelSchema(model ?? null, schema ?? null);
-    refreshBodyHints();
     applyGhost();
   }, [schema, mode, applyGhost]);
 
@@ -309,17 +307,8 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
   );
 
   const options = useMemo(
-    () => ({
-      ...(mode === "response" ? BODY_READONLY_OPTIONS : BODY_EDIT_OPTIONS),
-      // Type inlay hints are response-only: the request editor already carries the
-      // contract via the ghost skeleton + autocomplete, so a hint on a filled field
-      // would only repeat what its value shows. The response has neither, making
-      // hints the sole inline type/enum source there (gated by the same toggle).
-      inlayHints: {
-        enabled: mode === "response" && prefs.bodyHints ? ("on" as const) : ("off" as const),
-      },
-    }),
-    [mode, prefs.bodyHints],
+    () => (mode === "response" ? BODY_READONLY_OPTIONS : BODY_EDIT_OPTIONS),
+    [mode],
   );
   // Response model text is derived (pretty/elided) and set imperatively in onMount;
   // pass the raw value only as the initial Monaco value, then never via React again

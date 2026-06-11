@@ -1,16 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 
-// Mock the heavy Monaco module: render a textarea-ish stub, expose value/readOnly/hints.
+// Mock the heavy Monaco module: render a textarea-ish stub, expose value/readOnly.
 vi.mock("@/lib/monaco", () => ({
   MonacoEditor: ({ value, options }: {
     value: string;
-    options?: { readOnly?: boolean; inlayHints?: { enabled?: string } };
+    options?: { readOnly?: boolean };
   }) => (
     <pre
       data-testid="monaco"
       data-readonly={String(!!options?.readOnly)}
-      data-inlayhints={options?.inlayHints?.enabled ?? ""}
     >{value}</pre>
   ),
   monacoThemeFor: () => "handshaker-dark",
@@ -46,21 +45,5 @@ describe("BodyView", () => {
   it("response mode is read-only", () => {
     render(<BodyView mode="response" value={`{"a":1}`} />);
     expect(screen.getByTestId("monaco").getAttribute("data-readonly")).toBe("true");
-  });
-
-  it("request mode keeps inlay hints off even with bodyHints on (ghost + autocomplete carry the contract)", () => {
-    prefs = { theme: "dark", bodyHints: true };
-    render(<BodyView mode="request" value="{}" onChange={vi.fn()} />);
-    expect(screen.getByTestId("monaco").getAttribute("data-inlayhints")).toBe("off");
-  });
-
-  it("response mode follows the bodyHints toggle for inlay hints", () => {
-    prefs = { theme: "dark", bodyHints: true };
-    const { unmount } = render(<BodyView mode="response" value="{}" />);
-    expect(screen.getByTestId("monaco").getAttribute("data-inlayhints")).toBe("on");
-    unmount();
-    prefs = { theme: "dark", bodyHints: false };
-    render(<BodyView mode="response" value="{}" />);
-    expect(screen.getByTestId("monaco").getAttribute("data-inlayhints")).toBe("off");
   });
 });

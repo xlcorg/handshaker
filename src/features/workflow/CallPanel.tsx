@@ -19,7 +19,6 @@ import {
 import { newId } from "@/lib/ids";
 import { useEffect, useRef } from "react";
 import type { MetadataRow, Step } from "./model";
-import type { MessageSchemaIpc } from "@/ipc/bindings";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { usePrefs } from "@/lib/use-prefs";
 
@@ -85,8 +84,8 @@ export function CallPanel({ step, onPatch, onExecuted, editable }: CallPanelProp
 
   const reflection = useDraftReflection(step.address, step.tls, !!editable);
 
-  // Schema for the draft's method — input side for request autocomplete + hints,
-  // output side for the contract view and response-side inlay hints.
+  // Schema for the draft's method — input side for request autocomplete + ghost,
+  // output side for the Contract tab.
   // History panels pass an empty target so no fetch fires.
   const schemaTarget = editable
     ? { address: step.address, tls: step.tls, service: step.service, method: step.method }
@@ -147,7 +146,6 @@ export function CallPanel({ step, onPatch, onExecuted, editable }: CallPanelProp
           <div className="flex h-full min-h-0 flex-col">
             <ResponseSlot
               step={step}
-              schema={outputSchema}
               contract={editable ? { input: schema, output: outputSchema, method: step.method } : null}
             />
           </div>
@@ -159,11 +157,9 @@ export function CallPanel({ step, onPatch, onExecuted, editable }: CallPanelProp
 
 function ResponseSlot({
   step,
-  schema,
   contract,
 }: {
   step: Step;
-  schema: MessageSchemaIpc | null;
   contract: ContractInfo | null;
 }) {
   const respState: RespState =
@@ -178,6 +174,6 @@ function ResponseSlot({
           : "idle";
 
   return (
-    <ResponsePanel state={respState} outcome={step.outcome} error={step.error} schema={schema} contract={contract} />
+    <ResponsePanel state={respState} outcome={step.outcome} error={step.error} contract={contract} />
   );
 }

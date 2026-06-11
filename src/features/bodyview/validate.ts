@@ -1,7 +1,20 @@
 import type { MessageSchemaIpc } from "@/ipc/bindings";
 import { parseWithSpans, repairTrailingCommas } from "./parse";
 import { descendSchema } from "./completion";
-import { pathTo } from "./hints";
+import type { JsonNode, JsonTree } from "./jsonTree";
+
+/** Object-key segments from root *down to but not including* this node's own key —
+ *  i.e. the path its enclosing context sits at, as `descendSchema` expects.
+ *  Array hops (parent.key === null) contribute nothing. */
+function pathTo(tree: JsonTree, node: JsonNode): string[] {
+  const segs: string[] = [];
+  let cur: JsonNode | null = node.parentId ? tree.nodes[node.parentId] ?? null : null;
+  while (cur) {
+    if (cur.key !== null) segs.unshift(cur.key);
+    cur = cur.parentId ? tree.nodes[cur.parentId] ?? null : null;
+  }
+  return segs;
+}
 
 export interface ContractMarker {
   /** 0-based char offsets of the offending key token (quotes included). */

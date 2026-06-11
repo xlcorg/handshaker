@@ -22,15 +22,13 @@ export interface ResponsePanelProps {
   outcome: InvokeOutcomeIpc | null;
   /** Client/transport error message (no gRPC outcome), shown in the Body tab. */
   error?: string | null;
-  /** Output-message schema → inlay type hints on the rendered response body. */
-  schema?: MessageSchemaIpc | null;
   /** Method contract for the Contract tab; omit/null → three tabs (history panels). */
   contract?: ContractInfo | null;
 }
 
 type ResponseTab = "body" | "trailers" | "headers" | "contract";
 
-export function ResponsePanel({ state, outcome, error, schema, contract }: ResponsePanelProps) {
+export function ResponsePanel({ state, outcome, error, contract }: ResponsePanelProps) {
   const [tab, setTab] = useState<ResponseTab>("body");
   // A manual tab choice wins over both the pre-send default and the
   // response-arrival auto-switch.
@@ -131,7 +129,7 @@ export function ResponsePanel({ state, outcome, error, schema, contract }: Respo
         </div>
       )}
       {state === "success" && outcome && tab === "body" && outcome.response_json !== null && (
-        <ResponseBody json={outcome.response_json} schema={schema} />
+        <ResponseBody json={outcome.response_json} />
       )}
       {state === "success" && outcome && tab === "trailers" && <KVTable rows={trailers} />}
       {state === "success" && outcome && tab === "headers" && <KVTable rows={headers} />}

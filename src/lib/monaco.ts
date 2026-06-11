@@ -1,6 +1,5 @@
 import { lazy } from "react";
 import { registerBodyCompletion } from "@/features/bodyview/completion";
-import { registerBodyInlayHints } from "@/features/bodyview/hints";
 
 /**
  * Bundle Monaco locally — no CDN dependency. Desktop apps need to work offline.
@@ -41,7 +40,6 @@ const setupPromise = (async () => {
   // Monarch tokenizes left-to-right and can't tell yet.
   monaco.languages.register({ id: "json-with-vars" });
   registerBodyCompletion(monaco);
-  registerBodyInlayHints(monaco);
 
   monaco.languages.setLanguageConfiguration("json-with-vars", {
     brackets: [
