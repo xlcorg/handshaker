@@ -1285,7 +1285,7 @@ git -C . commit -m "feat(response): Contract tab with default-tab and auto-switc
 - Modify: `src/features/workflow/CallPanel.tsx` (ResponseSlot + call site)
 - Modify: `src/features/workflow/CallPanel.editable.test.tsx`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Add to `CallPanel.editable.test.tsx` (same render pattern as the file's other
 tests; the mocked `grpcMessageSchema` resolves both sides to `null`, and `draft`
@@ -1315,12 +1315,12 @@ describe("CallPanel contract tab", () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `pnpm vitest run src/features/workflow/CallPanel.editable.test.tsx`
 Expected: new tests FAIL (no Contract tab rendered yet).
 
-- [ ] **Step 3: Wire the contract through**
+- [x] **Step 3: Wire the contract through**
 
 In `CallPanel.tsx` import `type ContractInfo` from
 `@/features/response/ResponsePanel`, pass it at the call site:
@@ -1342,17 +1342,25 @@ function ResponseSlot({ step, schema, contract }: { step: Step; schema: MessageS
 }
 ```
 
-- [ ] **Step 4: Run to verify pass**
+- [x] **Step 4: Run to verify pass**
 
 Run: `pnpm vitest run src/features/workflow/CallPanel.editable.test.tsx`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git -C . add src/features/workflow/CallPanel.tsx src/features/workflow/CallPanel.editable.test.tsx
 git -C . commit -m "feat(workflow): thread method contract into the Response panel tab"
 ```
+
+> ✅ 2026-06-12: done — commit `34b1a48` + review follow-up `03da8da`
+> (side-aware mock `grpcMessageSchema`: тест пиняет назначение input/output
+> сторон контракта, мутационная проверка swap'а пройдена). Spec+quality ревью
+> пройдены. Latent-гард «contract truthy→falsy» НЕ добавлен — анализ подтвердил
+> недостижимость: единственный продакшн-рендер `ResponsePanel` — `ResponseSlot`,
+> а `editable` во всех трёх call-сайтах `CallPanel` — JSX-литерал
+> (FocusView always-true, List/LedgerView omitted).
 
 ### Task 8: Full gate + docs + live-pass handoff
 
