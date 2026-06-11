@@ -128,3 +128,57 @@ export function renderProtoDoc(schema: MessageSchemaIpc): ProtoDoc {
     ],
   };
 }
+
+function dedupeByFullName<T extends { full_name: string }>(items: T[]): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const x of items) {
+    if (!seen.has(x.full_name)) {
+      seen.add(x.full_name);
+      out.push(x);
+    }
+  }
+  return out;
+}
+
+/** Whole-method contract: an `rpc` signature line (fullName "" — never a scroll
+ *  target), then one deduplicated listing of every type reachable from either
+ *  side. Shared types print once — refs from both sides land on the same block;
+ *  a missing side renders as `?` in the signature. */
+export function renderContractDoc(
+  method: string,
+  input: MessageSchemaIpc | null,
+  output: MessageSchemaIpc | null,
+): ProtoDoc {
+  const messages = dedupeByFullName([...(input?.messages ?? []), ...(output?.messages ?? [])]);
+  const enums = dedupeByFullName([...(input?.enums ?? []), ...(output?.enums ?? [])]);
+  // Collision resolution must see the union — a request-side and a
+  // response-side type with the same short name both print full names.
+  const names = displayNames({ root: "", messages, enums });
+
+  const signature: ProtoToken[] = [
+    { kind: "keyword", text: "rpc " },
+    { kind: "name", text: method },
+    { kind: "punct", text: "(" },
+    input ? typeRef(input.root, names) : { kind: "punct", text: "?" },
+    { kind: "punct", text: ") " },
+    { kind: "keyword", text: "returns " },
+    { kind: "punct", text: "(" },
+    output ? typeRef(output.root, names) : { kind: "punct", text: "?" },
+    { kind: "punct", text: ");" },
+  ];
+
+  const rootNames = [...new Set([input?.root, output?.root].filter((r): r is string => r != null))];
+  const roots = rootNames
+    .map((r) => messages.find((m) => m.full_name === r))
+    .filter((m): m is MessageNodeIpc => m !== undefined);
+  const rest = messages.filter((m) => !rootNames.includes(m.full_name));
+
+  return {
+    blocks: [
+      { fullName: "", lines: [signature] },
+      ...[...roots, ...rest].map((m) => messageBlock(m, names)),
+      ...enums.map((e) => enumBlock(e, names)),
+    ],
+  };
+}

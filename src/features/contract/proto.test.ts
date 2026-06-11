@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { MessageSchemaIpc, FieldNodeIpc } from "@/ipc/bindings";
-import { renderProtoDoc, type ProtoBlock, type ProtoToken } from "./proto";
+import { renderProtoDoc, renderContractDoc, type ProtoBlock, type ProtoToken } from "./proto";
 
 function f(
   proto: string,
@@ -150,5 +150,88 @@ describe("renderProtoDoc", () => {
       enums: [],
     };
     expect(blockText(renderProtoDoc(schema).blocks[0])).toBe("message Empty {}");
+  });
+});
+
+describe("renderContractDoc", () => {
+  const IN: MessageSchemaIpc = {
+    root: "t.Req",
+    messages: [
+      {
+        full_name: "t.Req",
+        fields: [
+          f("query", 1, "string", "scalar"),
+          f("item", 2, "Item", "message", { message_type: "t.Item" }),
+        ],
+      },
+      { full_name: "t.Item", fields: [f("name", 1, "string", "scalar")] },
+    ],
+    enums: [],
+  };
+  const OUT: MessageSchemaIpc = {
+    root: "t.Resp",
+    messages: [
+      {
+        full_name: "t.Resp",
+        fields: [
+          f("items", 1, "repeated Item", "message", { repeated: true, message_type: "t.Item" }),
+          f("status", 2, "Status", "enum", { enum_type: "t.Status" }),
+        ],
+      },
+      { full_name: "t.Item", fields: [f("name", 1, "string", "scalar")] },
+    ],
+    enums: [{ full_name: "t.Status", values: [{ name: "OK", number: 0 }] }],
+  };
+
+  it("opens with the rpc signature line referencing both roots", () => {
+    const doc = renderContractDoc("Search", IN, OUT);
+    expect(doc.blocks[0].fullName).toBe("");
+    expect(lineText(doc.blocks[0].lines[0])).toBe("rpc Search(Req) returns (Resp);");
+    const refs = doc.blocks[0].lines[0].filter(
+      (t): t is Extract<ProtoToken, { kind: "typeRef" }> => t.kind === "typeRef",
+    );
+    expect(refs.map((r) => r.target)).toEqual(["t.Req", "t.Resp"]);
+  });
+
+  it("prints a shared type once, in root-first union order", () => {
+    const doc = renderContractDoc("Search", IN, OUT);
+    expect(doc.blocks.map((b) => b.fullName)).toEqual(["", "t.Req", "t.Resp", "t.Item", "t.Status"]);
+  });
+
+  it("all typeRef targets in the merged doc resolve to printed blocks", () => {
+    const doc = renderContractDoc("Search", IN, OUT);
+    const printed = new Set(doc.blocks.map((b) => b.fullName));
+    const refs = doc.blocks
+      .flatMap(allTokens)
+      .filter((t): t is Extract<ProtoToken, { kind: "typeRef" }> => t.kind === "typeRef");
+    expect(refs.length).toBeGreaterThanOrEqual(5); // rpc(2) + item + items + status
+    for (const r of refs) expect(printed.has(r.target)).toBe(true);
+  });
+
+  it("renders ? for a missing side and still lists the present side", () => {
+    const doc = renderContractDoc("Search", IN, null);
+    expect(lineText(doc.blocks[0].lines[0])).toBe("rpc Search(Req) returns (?);");
+    expect(doc.blocks.map((b) => b.fullName)).toEqual(["", "t.Req", "t.Item"]);
+  });
+
+  it("an identical request and response root prints one block", () => {
+    const doc = renderContractDoc("Ping", IN, IN);
+    expect(lineText(doc.blocks[0].lines[0])).toBe("rpc Ping(Req) returns (Req);");
+    expect(doc.blocks.map((b) => b.fullName)).toEqual(["", "t.Req", "t.Item"]);
+  });
+
+  it("resolves short-name collisions across the two sides with full names", () => {
+    const a: MessageSchemaIpc = {
+      root: "a.Filter",
+      messages: [{ full_name: "a.Filter", fields: [] }],
+      enums: [],
+    };
+    const b: MessageSchemaIpc = {
+      root: "b.Filter",
+      messages: [{ full_name: "b.Filter", fields: [] }],
+      enums: [],
+    };
+    const doc = renderContractDoc("F", a, b);
+    expect(lineText(doc.blocks[0].lines[0])).toBe("rpc F(a.Filter) returns (b.Filter);");
   });
 });
