@@ -1,0 +1,150 @@
+import { describe, it, expect } from "vitest";
+import type { MessageSchemaIpc, FieldNodeIpc } from "@/ipc/bindings";
+import { renderProtoDoc, type ProtoBlock, type ProtoToken } from "./proto";
+
+function f(
+  proto: string,
+  number: number,
+  label: string,
+  kind: FieldNodeIpc["value_kind"],
+  extra: Partial<FieldNodeIpc> = {},
+): FieldNodeIpc {
+  const json = proto.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
+  return {
+    json_name: json, proto_name: proto, type_label: label, value_kind: kind,
+    number, optional: false, repeated: false, message_type: null, enum_type: null,
+    oneof_group: null, ...extra,
+  };
+}
+
+const lineText = (l: ProtoToken[]) => l.map((t) => t.text).join("");
+const blockText = (b: ProtoBlock) => b.lines.map(lineText).join("\n");
+const allTokens = (b: ProtoBlock) => b.lines.flat();
+
+const SCHEMA: MessageSchemaIpc = {
+  root: "t.Req",
+  messages: [
+    {
+      full_name: "t.Req",
+      fields: [
+        f("query", 1, "string", "scalar"),
+        f("items", 2, "repeated Item", "message", { repeated: true, message_type: "t.Item" }),
+        f("filter", 3, "Filter", "message", { message_type: "t.Filter" }),
+        f("counts", 4, "map<string, int32>", "map"),
+        f("by_id", 5, "map<string, Item>", "map", { message_type: "t.Item" }),
+        f("user_id", 6, "string", "scalar", { oneof_group: "target" }),
+        f("email", 7, "string", "scalar", { oneof_group: "target" }),
+        f("nick", 8, "string", "scalar", { optional: true }),
+        f("sort", 9, "Status", "enum", { enum_type: "t.Status" }),
+      ],
+    },
+    { full_name: "t.Item", fields: [f("name", 1, "string", "scalar")] },
+    { full_name: "t.Filter", fields: [f("parent", 1, "Filter", "message", { message_type: "t.Filter" })] },
+  ],
+  enums: [
+    { full_name: "t.Status", values: [{ name: "UNKNOWN", number: 0 }, { name: "ACTIVE", number: 1 }] },
+  ],
+};
+
+describe("renderProtoDoc", () => {
+  it("prints the root message first, then the rest in schema order, then enums", () => {
+    const doc = renderProtoDoc(SCHEMA);
+    expect(doc.blocks.map((b) => b.fullName)).toEqual(["t.Req", "t.Item", "t.Filter", "t.Status"]);
+  });
+
+  it("renders the full proto shape: scalars, repeated, refs, maps, oneof, optional", () => {
+    const doc = renderProtoDoc(SCHEMA);
+    expect(blockText(doc.blocks[0])).toBe(
+      [
+        "message Req {",
+        "  string query = 1;",
+        "  repeated Item items = 2;",
+        "  Filter filter = 3;",
+        "  map<string, int32> counts = 4;",
+        "  map<string, Item> by_id = 5;",
+        "  oneof target {",
+        "    string user_id = 6;",
+        "    string email = 7;",
+        "  }",
+        "  optional string nick = 8;",
+        "  Status sort = 9;",
+        "}",
+      ].join("\n"),
+    );
+  });
+
+  it("renders enum blocks with value numbers", () => {
+    const doc = renderProtoDoc(SCHEMA);
+    expect(blockText(doc.blocks[3])).toBe(
+      ["enum Status {", "  UNKNOWN = 0;", "  ACTIVE = 1;", "}"].join("\n"),
+    );
+  });
+
+  it("emits clickable typeRef tokens whose targets all resolve to printed blocks", () => {
+    const doc = renderProtoDoc(SCHEMA);
+    const printed = new Set(doc.blocks.map((b) => b.fullName));
+    const refs = doc.blocks
+      .flatMap(allTokens)
+      .filter((t): t is Extract<ProtoToken, { kind: "typeRef" }> => t.kind === "typeRef");
+    expect(refs.length).toBeGreaterThanOrEqual(4); // items, filter, by_id value, sort, parent
+    for (const r of refs) expect(printed.has(r.target)).toBe(true);
+  });
+
+  it("a recursive self-reference is just a ref to the already-printed block", () => {
+    const doc = renderProtoDoc(SCHEMA);
+    const filter = doc.blocks.find((b) => b.fullName === "t.Filter")!;
+    const ref = allTokens(filter).find((t) => t.kind === "typeRef");
+    expect(ref).toMatchObject({ text: "Filter", target: "t.Filter" });
+  });
+
+  it("carries tooltips: full name on type names and refs, json_name on field names", () => {
+    const doc = renderProtoDoc(SCHEMA);
+    const header = doc.blocks[0].lines[0].find((t) => t.kind === "name");
+    expect(header).toMatchObject({ text: "Req", tooltip: "t.Req" });
+    const byId = doc.blocks[0].lines.find((l) => lineText(l).includes("by_id"))!;
+    expect(byId.find((t) => t.kind === "name")).toMatchObject({ text: "by_id", tooltip: "byId" });
+    expect(byId.find((t) => t.kind === "typeRef")).toMatchObject({ text: "Item", tooltip: "t.Item" });
+  });
+
+  it("a non-contiguous oneof run opens a second block", () => {
+    const schema: MessageSchemaIpc = {
+      root: "t.M",
+      messages: [{
+        full_name: "t.M",
+        fields: [
+          f("a", 1, "string", "scalar", { oneof_group: "g" }),
+          f("mid", 2, "string", "scalar"),
+          f("b", 3, "string", "scalar", { oneof_group: "g" }),
+        ],
+      }],
+      enums: [],
+    };
+    const text = blockText(renderProtoDoc(schema).blocks[0]);
+    expect(text.match(/oneof g \{/g)).toHaveLength(2);
+  });
+
+  it("prints full names when short names collide", () => {
+    const schema: MessageSchemaIpc = {
+      root: "a.Filter",
+      messages: [
+        { full_name: "a.Filter", fields: [f("x", 1, "Filter", "message", { message_type: "b.Filter" })] },
+        { full_name: "b.Filter", fields: [] },
+      ],
+      enums: [],
+    };
+    const doc = renderProtoDoc(schema);
+    expect(blockText(doc.blocks[0])).toBe(
+      ["message a.Filter {", "  b.Filter x = 1;", "}"].join("\n"),
+    );
+    expect(blockText(doc.blocks[1])).toBe("message b.Filter {}");
+  });
+
+  it("prints an empty message on one line", () => {
+    const schema: MessageSchemaIpc = {
+      root: "t.Empty",
+      messages: [{ full_name: "t.Empty", fields: [] }],
+      enums: [],
+    };
+    expect(blockText(renderProtoDoc(schema).blocks[0])).toBe("message Empty {}");
+  });
+});
