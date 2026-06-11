@@ -1096,7 +1096,7 @@ git -C . commit -m "feat(contract): ContractView with Request/Response side swit
 - Modify: `src/features/response/ResponsePanel.tsx`
 - Modify: `src/features/response/ResponsePanel.test.tsx`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `ResponsePanel.test.tsx` (the existing monaco/use-prefs mocks at the
 top of the file already cover these tests; add `fireEvent` to the testing-library
@@ -1167,12 +1167,12 @@ describe("ResponsePanel contract tab", () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `pnpm vitest run src/features/response/ResponsePanel.test.tsx`
 Expected: new tests FAIL (no `contract` prop / no Contract tab yet); old ones pass.
 
-- [ ] **Step 3: Implement the tab**
+- [x] **Step 3: Implement the tab**
 
 In `ResponsePanel.tsx`:
 
@@ -1259,17 +1259,25 @@ contract branch (after the `EmptyState` line):
 The existing body/trailers/headers branches already check `tab === "…"`, so they
 are mutually exclusive with the contract tab.
 
-- [ ] **Step 4: Run to verify pass**
+- [x] **Step 4: Run to verify pass**
 
 Run: `pnpm vitest run src/features/response/ResponsePanel.test.tsx`
 Expected: PASS (all, including the 4 pre-existing tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git -C . add src/features/response/ResponsePanel.tsx src/features/response/ResponsePanel.test.tsx
 git -C . commit -m "feat(response): Contract tab with default-tab and auto-switch logic"
 ```
+
+> ✅ 2026-06-12: done — commit `97ab7ea`, spec+quality ревью пройдены (9/9 в файле,
+> полный сьют 753, tsc чистый). Заметки ревью: (1) в Task 7 закрыть latent-ветку
+> «`contract` исчез при выбранном табе Contract → пустая панель» (гард
+> `if (!contract && tab === "contract") setTab("body")`), если реальный caller
+> может так сделать; (2) на live-проход Task 8 — однокадровый flash «Awaiting
+> first call» при маунте с готовыми схемами (лечится lazy-init `useState`) и
+> решение, должен ли `userPickedTab` пере-взводиться при смене метода.
 
 ### Task 7: CallPanel wiring + integration tests
 
