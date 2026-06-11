@@ -4,6 +4,7 @@ import {
   resolveCompletionContext,
   descendSchema,
   computeSuggestions,
+  collectPresentKeys,
   insertionColumns,
 } from "./completion";
 
@@ -39,7 +40,7 @@ function f(
   json: string,
   type_label: string,
   value_kind: "scalar" | "message" | "enum" | "map",
-  extra: Partial<{ message_type: string; enum_type: string; repeated: boolean }> = {},
+  extra: Partial<{ message_type: string; enum_type: string; repeated: boolean; oneof_group: string }> = {},
 ) {
   return {
     json_name: json,
@@ -49,7 +50,7 @@ function f(
     repeated: extra.repeated ?? false,
     message_type: extra.message_type ?? null,
     enum_type: extra.enum_type ?? null,
-    oneof_group: null,
+    oneof_group: extra.oneof_group ?? null,
   };
 }
 
@@ -143,6 +144,63 @@ describe("computeSuggestions", () => {
   });
   it("no schema-less crash on unparseable / unknown paths", () => {
     expect(computeSuggestions(SCHEMA, '{ "nope": { ')).toEqual([]);
+  });
+});
+
+describe("collectPresentKeys", () => {
+  it("collects keys of the innermost object around the caret — both sides of it", () => {
+    const text = '{ "title": "x", "done": true }';
+    expect(collectPresentKeys(text, 2)).toEqual(new Set(["title", "done"]));
+  });
+
+  it("excludes the key token the caret sits in (the property keeps completing itself)", () => {
+    const text = '{ "title": "x", "done": true }';
+    expect(collectPresentKeys(text, text.indexOf("title") + 2)).toEqual(new Set(["done"]));
+  });
+
+  it("scopes to the caret's object, not its parents or siblings", () => {
+    const text = '{ "addr": { "city": "a" }, "done": true }';
+    const insideAddr = text.indexOf('"city"');
+    expect(collectPresentKeys(text, insideAddr)).toEqual(new Set(["city"]));
+  });
+
+  it("caret at end of a mid-typing text uses the open frame", () => {
+    expect(collectPresentKeys('{ "title": "x", ', 16)).toEqual(new Set(["title"]));
+  });
+
+  it("an unterminated string at the caret is not counted as present", () => {
+    const text = '{ "title": "x", "do';
+    expect(collectPresentKeys(text, text.length)).toEqual(new Set(["title"]));
+  });
+});
+
+describe("present-key filtering", () => {
+  it("hides keys already present in the enclosing object", () => {
+    expect(labels(computeSuggestions(SCHEMA, "{\n  ", new Set(["title", "done"])))).toEqual([
+      "addr", "tags", "status", "counts", "people",
+    ]);
+  });
+
+  it("a present oneof member hides its siblings too", () => {
+    const oneofSchema: MessageSchemaIpc = {
+      root: "t.O",
+      enums: [],
+      messages: [{
+        full_name: "t.O",
+        fields: [
+          f("byId", "string", "scalar", { oneof_group: "selector" }),
+          f("byName", "string", "scalar", { oneof_group: "selector" }),
+          f("limit", "int32", "scalar"),
+        ],
+      }],
+    };
+    expect(labels(computeSuggestions(oneofSchema, "{\n  ", new Set(["byId"])))).toEqual(["limit"]);
+  });
+
+  it("value suggestions are unaffected by present keys", () => {
+    expect(labels(computeSuggestions(SCHEMA, '{ "status": ', new Set(["status"])))).toEqual([
+      "UNKNOWN", "ACTIVE",
+    ]);
   });
 });
 

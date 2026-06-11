@@ -117,6 +117,87 @@ export function resolveCompletionContext(text: string): CompletionContext {
   return { path: pathKeys, where: "key" };
 }
 
+/**
+ * Keys already present in the innermost object containing `caret`, excluding the
+ * key token the caret sits in — the property being edited must keep completing
+ * itself (mirrors VS Code's JSON service, which seeds its `proposed` set with
+ * every existing property except `currentProperty`). Lenient full-text scan: an
+ * unterminated string swallows the rest of the text, dropping any keys after it
+ * (acceptable mid-typing degradation).
+ */
+export function collectPresentKeys(text: string, caret: number): ReadonlySet<string> {
+  interface KeyFrame { type: "object" | "array"; keys: Set<string> }
+  const stack: KeyFrame[] = [];
+  let caretFrame: KeyFrame | null = null;
+  let lastString: string | null = null;
+  let caretInLastString = false;
+
+  let i = 0;
+  const n = text.length;
+  while (i < n) {
+    // Strings never push/pop frames, so capturing at the next loop top after a
+    // token that spans the caret still snapshots the correct enclosing frame.
+    if (caretFrame === null && i >= caret) caretFrame = stack[stack.length - 1] ?? null;
+    const c = text[i];
+    if (c === '"') {
+      let j = i + 1;
+      let buf = "";
+      let terminated = false;
+      while (j < n) {
+        const d = text[j];
+        if (d === "\\") {
+          buf += text[j + 1] ?? "";
+          j += 2;
+          continue;
+        }
+        if (d === '"') {
+          terminated = true;
+          j += 1;
+          break;
+        }
+        buf += d;
+        j += 1;
+      }
+      if (!terminated) break; // mid-typing tail — keys beyond it are lost (lenient)
+      lastString = buf;
+      caretInLastString = caret > i && caret < j;
+      i = j;
+      continue;
+    }
+    switch (c) {
+      case "{":
+        stack.push({ type: "object", keys: new Set() });
+        lastString = null;
+        break;
+      case "[":
+        stack.push({ type: "array", keys: new Set() });
+        lastString = null;
+        break;
+      case "}":
+      case "]":
+        stack.pop();
+        lastString = null;
+        break;
+      case ":": {
+        const top = stack[stack.length - 1];
+        if (top?.type === "object" && lastString !== null && !caretInLastString) {
+          top.keys.add(lastString);
+        }
+        break;
+      }
+      case ",":
+        lastString = null;
+        break;
+      default:
+        break;
+    }
+    i += 1;
+  }
+  // Caret at/past the end of the text: the innermost still-open frame encloses it.
+  if (caretFrame === null) caretFrame = stack[stack.length - 1] ?? null;
+  return caretFrame?.type === "object" ? caretFrame.keys : new Set();
+}
+
 // ---------------------------------------------------------------------------
 // Schema descent.
 // ---------------------------------------------------------------------------
@@ -201,17 +282,33 @@ function keyKind(field: FieldNodeIpc): Suggestion["kind"] {
   }
 }
 
-export function buildKeySuggestions(schema: MessageSchemaIpc, ctx: CompletionContext): Suggestion[] {
+export function buildKeySuggestions(
+  schema: MessageSchemaIpc,
+  ctx: CompletionContext,
+  presentKeys: ReadonlySet<string> = new Set(),
+): Suggestion[] {
   const d = descendSchema(schema, ctx.path);
   if (!d || d.kind === "map") return []; // unknown path, or arbitrary map keys
-  return d.node.fields.map((field) => ({
-    label: field.json_name,
-    detail: field.type_label,
-    insertText: `"${field.json_name}": ${scaffold(field)}`,
-    kind: keyKind(field),
-    isSnippet: true,
-    triggerNext: field.value_kind === "message" || field.value_kind === "enum",
-  }));
+  // A present member also rules out its oneof siblings — two set members of one
+  // oneof are invalid protobuf JSON.
+  const takenOneofs = new Set<string>();
+  for (const fl of d.node.fields) {
+    if (fl.oneof_group && presentKeys.has(fl.json_name)) takenOneofs.add(fl.oneof_group);
+  }
+  return d.node.fields
+    .filter(
+      (field) =>
+        !presentKeys.has(field.json_name) &&
+        (!field.oneof_group || !takenOneofs.has(field.oneof_group)),
+    )
+    .map((field) => ({
+      label: field.json_name,
+      detail: field.type_label,
+      insertText: `"${field.json_name}": ${scaffold(field)}`,
+      kind: keyKind(field),
+      isSnippet: true,
+      triggerNext: field.value_kind === "message" || field.value_kind === "enum",
+    }));
 }
 
 export function buildValueSuggestions(schema: MessageSchemaIpc, ctx: CompletionContext): Suggestion[] {
@@ -242,11 +339,17 @@ export function buildValueSuggestions(schema: MessageSchemaIpc, ctx: CompletionC
   return [];
 }
 
-/** Full pipeline: text-before-cursor → suggestions. The Monaco provider wraps this. */
-export function computeSuggestions(schema: MessageSchemaIpc, textBefore: string): Suggestion[] {
+/** Full pipeline: text-before-cursor → suggestions. The Monaco provider wraps this.
+ *  `presentKeys` (from `collectPresentKeys` over the full text) hides fields the
+ *  enclosing object already has; value suggestions ignore it. */
+export function computeSuggestions(
+  schema: MessageSchemaIpc,
+  textBefore: string,
+  presentKeys?: ReadonlySet<string>,
+): Suggestion[] {
   const ctx = resolveCompletionContext(textBefore);
   return ctx.where === "key"
-    ? buildKeySuggestions(schema, ctx)
+    ? buildKeySuggestions(schema, ctx, presentKeys)
     : buildValueSuggestions(schema, ctx);
 }
 
@@ -340,7 +443,13 @@ export function registerBodyCompletion(monaco: typeof Monaco): void {
       });
       const ctx = resolveCompletionContext(textBefore);
       const items =
-        ctx.where === "key" ? buildKeySuggestions(schema, ctx) : buildValueSuggestions(schema, ctx);
+        ctx.where === "key"
+          ? buildKeySuggestions(
+              schema,
+              ctx,
+              collectPresentKeys(model.getValue(), model.getOffsetAt(position)),
+            )
+          : buildValueSuggestions(schema, ctx);
       if (items.length === 0) return { suggestions: [] };
 
       const word = model.getWordUntilPosition(position);

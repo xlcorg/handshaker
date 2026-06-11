@@ -11,7 +11,7 @@ import { exceedsByteCeiling } from "./elide";
 import { attachBodyController } from "./controller";
 import { badgeDecorationOptions } from "./badgeDecoration";
 import type { MessageSchemaIpc } from "@/ipc/bindings";
-import { setModelSchema, computeSuggestions } from "./completion";
+import { setModelSchema, computeSuggestions, collectPresentKeys } from "./completion";
 import { refreshBodyHints } from "./hints";
 import { GhostZone, computeGhostLines } from "./ghost";
 
@@ -170,7 +170,10 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
             endLineNumber: pos.lineNumber,
             endColumn: pos.column,
           });
-          if (computeSuggestions(sc, textBefore).length > 0) {
+          // Same present-key filter as the provider, so a fully-populated object
+          // doesn't force-open an empty ("No suggestions") widget.
+          const present = collectPresentKeys(model.getValue(), model.getOffsetAt(pos));
+          if (computeSuggestions(sc, textBefore, present).length > 0) {
             editor.trigger("autocomplete", "editor.action.triggerSuggest", {});
           }
         });
