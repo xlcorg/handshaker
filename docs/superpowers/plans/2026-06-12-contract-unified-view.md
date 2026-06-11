@@ -238,7 +238,7 @@ green with all of them updated in one commit.
 - Modify: `src/features/response/ResponsePanel.test.tsx` (replace one test)
 - Modify: `src/features/workflow/CallPanel.editable.test.tsx` (rework one test)
 
-- [ ] **Step 1: Rewrite the ContractView tests**
+- [x] **Step 1: Rewrite the ContractView tests**
 
 Replace the entire `describe("ContractView", …)` block in
 `src/features/contract/ContractView.test.tsx` (keep the `IN`/`OUT` fixtures;
@@ -289,12 +289,12 @@ describe("ContractView", () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `pnpm vitest run src/features/contract/ContractView.test.tsx`
 Expected: FAIL — tsc/props mismatch (`side` required) and/or rpc line missing.
 
-- [ ] **Step 3: Rewrite `ContractView.tsx`**
+- [x] **Step 3: Rewrite `ContractView.tsx`**
 
 Full new content of `src/features/contract/ContractView.tsx` (the `ContractSide`
 type, `SIDES`, the header strip, and the `cn` import all go away):
@@ -345,7 +345,7 @@ export function ContractView({ method, input, output }: ContractViewProps) {
 }
 ```
 
-- [ ] **Step 4: Drop the `side` state from `ResponsePanel.tsx`**
+- [x] **Step 4: Drop the `side` state from `ResponsePanel.tsx`**
 
 In `src/features/response/ResponsePanel.tsx`:
 
@@ -362,7 +362,7 @@ In `src/features/response/ResponsePanel.tsx`:
       )}
 ```
 
-- [ ] **Step 5: Replace the side-switch test in `ResponsePanel.test.tsx`**
+- [x] **Step 5: Replace the side-switch test in `ResponsePanel.test.tsx`**
 
 Replace `it("the side switch survives leaving and re-entering the Contract tab", …)`
 (lines 115–123) with:
@@ -378,7 +378,7 @@ Replace `it("the side switch survives leaving and re-entering the Contract tab",
   });
 ```
 
-- [ ] **Step 6: Rework the side-assignment test in `CallPanel.editable.test.tsx`**
+- [x] **Step 6: Rework the side-assignment test in `CallPanel.editable.test.tsx`**
 
 In `it("threads the request and response schemas to the correct contract sides", …)`
 (lines 109–140): the mock and `sideDraft` stay; replace everything from the
@@ -401,23 +401,29 @@ In `it("threads the request and response schemas to the correct contract sides",
 (`getAllByText` — the method name also appears in the draft header's method
 picker; the proto line is the one inside a `whitespace-pre` div.)
 
-- [ ] **Step 7: Run the three test files**
+- [x] **Step 7: Run the three test files**
 
 Run: `pnpm vitest run src/features/contract/ContractView.test.tsx src/features/response/ResponsePanel.test.tsx src/features/workflow/CallPanel.editable.test.tsx`
 Expected: PASS (5 + 9 + 8 = 22 tests).
 
-- [ ] **Step 8: Full frontend gate**
+- [x] **Step 8: Full frontend gate**
 
 Run: `pnpm lint; if ($?) { pnpm vitest run }`
 Expected: tsc clean (would catch any leftover `ContractSide`/`side` references),
 all tests pass.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```powershell
 git -C . add src/features/contract/ContractView.tsx src/features/contract/ContractView.test.tsx src/features/response/ResponsePanel.tsx src/features/response/ResponsePanel.test.tsx src/features/workflow/CallPanel.editable.test.tsx
 git -C . commit -m "feat(contract): unified view - rpc signature, no side switch"
 ```
+
+> ✅ 2026-06-12: done — commit `1a48cb6`, spec+quality ревью пройдены без правок
+> (22/22 в трёх файлах, полный сьют 794, tsc чистый). Minor-заметки ревью на
+> будущее касание: `min-h-0` на корне ContractView — мёртвый остаток flex-эпохи;
+> `div.whitespace-pre`-селектор в трёх тест-файлах лучше заменить на
+> `data-testid="proto-line"` при следующем касании ProtoView.
 
 Append the trailer `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`.
 
