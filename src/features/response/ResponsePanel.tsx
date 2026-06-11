@@ -30,22 +30,10 @@ type ResponseTab = "body" | "trailers" | "headers" | "contract";
 
 export function ResponsePanel({ state, outcome, error, contract }: ResponsePanelProps) {
   const [tab, setTab] = useState<ResponseTab>("body");
-  // A manual tab choice wins over both the pre-send default and the
-  // response-arrival auto-switch.
-  const userPickedTab = useRef(false);
-
-  const hasSchemas = !!contract && (contract.input !== null || contract.output !== null);
+  // Sending always pulls the view to Body — that's where the response lands.
+  // Until then the default is Body; Contract is an explicit click away.
   useEffect(() => {
-    if (state === "idle" && hasSchemas && !userPickedTab.current) setTab("contract");
-  }, [state, hasSchemas]);
-
-  // A response just arrived (idle/sending → success|error): pull the user from
-  // the auto-chosen contract back to the body. Manual picks stay put.
-  const prevState = useRef(state);
-  useEffect(() => {
-    const arrived = (state === "success" || state === "error") && prevState.current !== state;
-    prevState.current = state;
-    if (arrived && !userPickedTab.current) setTab((t) => (t === "contract" ? "body" : t));
+    if (state === "sending") setTab("body");
   }, [state]);
 
   const isError = state === "error";
@@ -92,10 +80,7 @@ export function ResponsePanel({ state, outcome, error, contract }: ResponsePanel
       >
         <UnderlineTabs
           value={tab}
-          onChange={(v) => {
-            userPickedTab.current = true;
-            setTab(v as ResponseTab);
-          }}
+          onChange={(v) => setTab(v as ResponseTab)}
           busy={showProgress}
           items={[
             { value: "body", label: "Body" },

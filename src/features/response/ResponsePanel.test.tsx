@@ -86,28 +86,29 @@ describe("ResponsePanel contract tab", () => {
     expect(screen.getByText(/awaiting first call/i)).toBeInTheDocument();
   });
 
-  it("defaults to the Contract tab pre-send when schemas are available", () => {
+  it("defaults to the Body tab pre-send; Contract is an explicit click away", () => {
     render(<ResponsePanel state="idle" outcome={null} contract={contract} />);
+    expect(screen.getByRole("tab", { name: "Body" }).getAttribute("aria-selected")).toBe("true");
     expect(screen.getByRole("tab", { name: "Contract" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Contract" }));
     expect(screen.getByText("query")).toBeInTheDocument();
     expect(screen.queryByText(/awaiting first call/i)).toBeNull();
   });
 
-  it("auto-switches to Body when a response arrives on the auto-chosen Contract tab", () => {
+  it("Send pulls the view to Body even from a manually picked Contract tab", () => {
     const { rerender } = render(<ResponsePanel state="idle" outcome={null} contract={contract} />);
+    fireEvent.click(screen.getByRole("tab", { name: "Contract" }));
     expect(screen.getByText("query")).toBeInTheDocument();
-    rerender(<ResponsePanel state="success" outcome={ok} contract={contract} />);
-    expect(screen.getByTestId("monaco")).toBeInTheDocument();
+    rerender(<ResponsePanel state="sending" outcome={null} contract={contract} />);
+    expect(screen.getByRole("tab", { name: "Body" }).getAttribute("aria-selected")).toBe("true");
     expect(screen.queryByText("query")).toBeNull();
   });
 
-  it("a manual Contract pick survives a response arrival", () => {
-    const { rerender } = render(<ResponsePanel state="idle" outcome={null} contract={contract} />);
-    // Two explicit clicks: leaving and re-entering Contract marks the choice as
-    // manual without relying on whether clicking the active tab fires onChange.
-    fireEvent.click(screen.getByRole("tab", { name: "Body" }));
+  it("a mid-flight Contract pick survives the response arrival (only Send switches tabs)", () => {
+    const { rerender } = render(<ResponsePanel state="sending" outcome={null} contract={contract} />);
     fireEvent.click(screen.getByRole("tab", { name: "Contract" }));
     rerender(<ResponsePanel state="success" outcome={ok} contract={contract} />);
+    expect(screen.getByRole("tab", { name: "Contract" }).getAttribute("aria-selected")).toBe("true");
     expect(screen.getByText("query")).toBeInTheDocument();
     expect(screen.queryByTestId("monaco")).toBeNull();
   });

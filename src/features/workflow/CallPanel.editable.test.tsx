@@ -130,8 +130,9 @@ describe("CallPanel contract tab", () => {
         <CallPanel step={sideDraft} onPatch={() => {}} editable />
       </TooltipProvider>,
     );
-    // Schemas resolve async; the idle panel then auto-defaults to the Contract
-    // tab, which lists both sides at once.
+    // The panel defaults to Body; open the Contract tab explicitly. Schemas
+    // resolve async — the tab then lists both sides at once.
+    fireEvent.click(screen.getByRole("tab", { name: "Contract" }));
     expect(await screen.findByText("req_field")).toBeInTheDocument();
     expect(screen.getByText("resp_field")).toBeInTheDocument();
     // The rpc signature pins which root landed on which side — a swapped
