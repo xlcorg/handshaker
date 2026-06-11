@@ -66,12 +66,17 @@ describe("GhostZone", () => {
   it("adds, replaces and removes the single zone", () => {
     const ed = fakeZoneEditor();
     const gz = new GhostZone(ed);
-    gz.apply({ afterLine: 2, lines: ["a", "b"] }, 40);
+    gz.apply({ afterLine: 2, lines: ["a", "b"] });
     expect(ed.zones.size).toBe(1);
     const z = [...ed.zones.values()][0];
     expect(z.afterLineNumber).toBe(2);
     expect(z.heightInLines).toBe(2);
-    expect(z.domNode.style.paddingLeft).toBe("40px");
+    // No manual horizontal offset: Monaco renders a view-zone domNode in the
+    // content area (the marginDomNode is the margin-side counterpart), so it
+    // already starts at the code's content origin. The ghost text carries its
+    // own 2-space indent — adding contentLeft would over-indent it past the
+    // real fields by a full gutter width.
+    expect(z.domNode.style.paddingLeft).toBe("");
 
     gz.apply({ afterLine: 1, lines: ["c"] });
     expect(ed.zones.size).toBe(1);

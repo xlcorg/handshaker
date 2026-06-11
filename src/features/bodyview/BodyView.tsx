@@ -128,9 +128,7 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
       const sc = schemaRef.current;
       const block =
         readPrefs().bodyHints && sc ? computeGhostLines(l.editor.getValue(), sc) : null;
-      // contentLeft sampled at apply-time; gutter-width changes (rare, usually
-      // edit-driven) re-sample on the next recompute.
-      l.ghost?.apply(block, l.editor.getLayoutInfo().contentLeft);
+      l.ghost?.apply(block);
     }, delay);
   }, []);
 

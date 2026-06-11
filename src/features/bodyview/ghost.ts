@@ -75,15 +75,19 @@ export class GhostZone {
   private zoneId: string | null = null;
   constructor(private readonly editor: ViewZoneEditorLike) {}
 
-  apply(block: GhostBlock | null, contentLeft = 0): void {
+  apply(block: GhostBlock | null): void {
     this.editor.changeViewZones((acc) => {
       if (this.zoneId !== null) {
         acc.removeZone(this.zoneId);
         this.zoneId = null;
       }
       if (!block) return;
+      // A view-zone domNode is rendered in the content area (Monaco's separate
+      // marginDomNode is the margin-side counterpart), so it already aligns at
+      // the code's content origin — past the line-number gutter. The ghost text
+      // carries its own 2-space field indent, so no horizontal offset is needed;
+      // adding contentLeft here would push it a full gutter-width too far right.
       const node = ghostDomNode(block.lines);
-      node.style.paddingLeft = `${contentLeft}px`;
       this.zoneId = acc.addZone({
         afterLineNumber: block.afterLine,
         heightInLines: block.lines.length,
