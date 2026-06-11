@@ -36,6 +36,8 @@ const SCHEMA: MessageSchemaIpc = {
         f("email", 7, "string", "scalar", { oneof_group: "target" }),
         f("nick", 8, "string", "scalar", { optional: true }),
         f("sort", 9, "Status", "enum", { enum_type: "t.Status" }),
+        f("tags", 10, "repeated string", "scalar", { repeated: true }),
+        f("states", 11, "map<string, Status>", "map", { enum_type: "t.Status" }),
       ],
     },
     { full_name: "t.Item", fields: [f("name", 1, "string", "scalar")] },
@@ -68,6 +70,8 @@ describe("renderProtoDoc", () => {
         "  }",
         "  optional string nick = 8;",
         "  Status sort = 9;",
+        "  repeated string tags = 10;",
+        "  map<string, Status> states = 11;",
         "}",
       ].join("\n"),
     );
@@ -86,7 +90,7 @@ describe("renderProtoDoc", () => {
     const refs = doc.blocks
       .flatMap(allTokens)
       .filter((t): t is Extract<ProtoToken, { kind: "typeRef" }> => t.kind === "typeRef");
-    expect(refs.length).toBeGreaterThanOrEqual(4); // items, filter, by_id value, sort, parent
+    expect(refs).toHaveLength(6); // items, filter, by_id value, sort, states value, parent
     for (const r of refs) expect(printed.has(r.target)).toBe(true);
   });
 
