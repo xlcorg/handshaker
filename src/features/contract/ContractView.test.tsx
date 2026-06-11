@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect } from "vitest";
+import { render, screen } from "@testing-library/react";
 import { ContractView } from "./ContractView";
 import type { MessageSchemaIpc } from "@/ipc/bindings";
 
@@ -21,31 +21,38 @@ const OUT: MessageSchemaIpc = {
   enums: [],
 };
 
-describe("ContractView", () => {
-  it("renders the selected side's schema and reports the switch state", () => {
-    const onSide = vi.fn();
-    render(<ContractView method="Search" input={IN} output={OUT} side="request" onSide={onSide} />);
-    expect(screen.getByText("query")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Request" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: "Response" })).toHaveAttribute("aria-pressed", "false");
-    fireEvent.click(screen.getByRole("button", { name: "Response" }));
-    expect(onSide).toHaveBeenCalledWith("response");
-  });
+/** Text of every rendered proto line, in document order. */
+const renderedLines = (container: HTMLElement) =>
+  Array.from(container.querySelectorAll("div.whitespace-pre")).map((d) => d.textContent);
 
-  it("renders the response side when selected, and the method name", () => {
-    render(<ContractView method="Search" input={IN} output={OUT} side="response" onSide={vi.fn()} />);
-    expect(screen.getByText(/Out/)).toBeInTheDocument();
-    expect(screen.queryByText("query")).toBeNull();
-    expect(screen.getByText("Search")).toBeInTheDocument();
+describe("ContractView", () => {
+  it("renders both sides at once under the rpc signature", () => {
+    const { container } = render(<ContractView method="Search" input={IN} output={OUT} />);
+    const lines = renderedLines(container);
+    expect(lines[0]).toBe("rpc Search(In) returns (Out);");
+    expect(screen.getByText("query")).toBeInTheDocument(); // request field
+    expect(lines).toContain("message Out {}"); // response root block
   });
 
   it("asks to pick a method when none is selected", () => {
-    render(<ContractView method="" input={null} output={null} side="request" onSide={vi.fn()} />);
+    render(<ContractView method="" input={null} output={null} />);
     expect(screen.getByText(/Выбери метод/)).toBeInTheDocument();
   });
 
-  it("shows the unavailable placeholder when the schema is missing", () => {
-    render(<ContractView method="Search" input={null} output={OUT} side="request" onSide={vi.fn()} />);
+  it("shows the unavailable placeholder when both schemas are missing", () => {
+    render(<ContractView method="Search" input={null} output={null} />);
     expect(screen.getByText(/Контракт недоступен/)).toBeInTheDocument();
+  });
+
+  it("renders the present side and notes the missing one", () => {
+    const { container } = render(<ContractView method="Search" input={null} output={OUT} />);
+    expect(renderedLines(container)[0]).toBe("rpc Search(?) returns (Out);");
+    expect(screen.getByText(/Request-схема недоступна/)).toBeInTheDocument();
+  });
+
+  it("notes a missing response side likewise", () => {
+    const { container } = render(<ContractView method="Search" input={IN} output={null} />);
+    expect(renderedLines(container)[0]).toBe("rpc Search(In) returns (?);");
+    expect(screen.getByText(/Response-схема недоступна/)).toBeInTheDocument();
   });
 });

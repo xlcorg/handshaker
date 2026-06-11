@@ -7,7 +7,7 @@ import { ClientErrorView } from "./ClientErrorView";
 import { KVTable, type KVRow } from "./KVTable";
 import { RespMeta, type RespState } from "./RespMeta";
 import { UnderlineTabs } from "@/components/ui/underline-tabs";
-import { ContractView, type ContractSide } from "@/features/contract/ContractView";
+import { ContractView } from "@/features/contract/ContractView";
 import type { InvokeOutcomeIpc, MessageSchemaIpc } from "@/ipc/bindings";
 
 /** Editable-draft contract for the Contract tab. Omit/null → three tabs (history). */
@@ -32,7 +32,6 @@ type ResponseTab = "body" | "trailers" | "headers" | "contract";
 
 export function ResponsePanel({ state, outcome, error, schema, contract }: ResponsePanelProps) {
   const [tab, setTab] = useState<ResponseTab>("body");
-  const [side, setSide] = useState<ContractSide>("request");
   // A manual tab choice wins over both the pre-send default and the
   // response-arrival auto-switch.
   const userPickedTab = useRef(false);
@@ -128,13 +127,7 @@ export function ResponsePanel({ state, outcome, error, schema, contract }: Respo
       )}
       {tab === "contract" && contract && (
         <div className="min-h-0 flex-1">
-          <ContractView
-            method={contract.method}
-            input={contract.input}
-            output={contract.output}
-            side={side}
-            onSide={setSide}
-          />
+          <ContractView method={contract.method} input={contract.input} output={contract.output} />
         </div>
       )}
       {state === "success" && outcome && tab === "body" && outcome.response_json !== null && (

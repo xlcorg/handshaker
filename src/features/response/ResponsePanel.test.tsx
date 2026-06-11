@@ -112,13 +112,12 @@ describe("ResponsePanel contract tab", () => {
     expect(screen.queryByTestId("monaco")).toBeNull();
   });
 
-  it("the side switch survives leaving and re-entering the Contract tab", () => {
-    render(<ResponsePanel state="success" outcome={ok} contract={contract} />);
+  it("shows both contract sides at once on the Contract tab", () => {
+    const { container } = render(<ResponsePanel state="success" outcome={ok} contract={contract} />);
     fireEvent.click(screen.getByRole("tab", { name: "Contract" }));
-    fireEvent.click(screen.getByRole("button", { name: "Response" }));
-    expect(screen.getByText(/Out/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("tab", { name: "Body" }));
-    fireEvent.click(screen.getByRole("tab", { name: "Contract" }));
-    expect(screen.getByRole("button", { name: "Response" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("query")).toBeInTheDocument();
+    const lines = Array.from(container.querySelectorAll("div.whitespace-pre")).map((d) => d.textContent);
+    expect(lines[0]).toBe("rpc Search(In) returns (Out);");
+    expect(lines).toContain("message Out {}");
   });
 });

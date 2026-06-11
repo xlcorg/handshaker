@@ -130,13 +130,17 @@ describe("CallPanel contract tab", () => {
         <CallPanel step={sideDraft} onPatch={() => {}} editable />
       </TooltipProvider>,
     );
-    // Schemas resolve async; the idle panel then auto-defaults to the Contract tab,
-    // which opens on the Request side.
+    // Schemas resolve async; the idle panel then auto-defaults to the Contract
+    // tab, which lists both sides at once.
     expect(await screen.findByText("req_field")).toBeInTheDocument();
-    expect(screen.queryByText("resp_field")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Response" }));
     expect(screen.getByText("resp_field")).toBeInTheDocument();
-    expect(screen.queryByText("req_field")).toBeNull();
+    // The rpc signature pins which root landed on which side — a swapped
+    // input/output wiring would print `rpc GetSides(Resp) returns (Req);`.
+    const rpcLine = screen
+      .getAllByText("GetSides")
+      .map((el) => el.closest("div.whitespace-pre"))
+      .find((d) => d !== null);
+    expect(rpcLine?.textContent).toBe("rpc GetSides(Req) returns (Resp);");
   });
 });
 
