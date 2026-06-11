@@ -335,8 +335,8 @@ export function buildValueSuggestions(schema: MessageSchemaIpc, ctx: CompletionC
     const en = schema.enums.find((e) => e.full_name === enumType);
     if (!en) return [];
     return en.values.map((v, i) => ({
-      label: v,
-      insertText: `"${v}"`,
+      label: v.name,
+      insertText: `"${v.name}"`,
       kind: "value" as const,
       sortText: sortKey(i),
     }));

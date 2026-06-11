@@ -317,9 +317,10 @@ export type ContractUpdated = {
  * Stable key identifying the target whose contract just refreshed.
  */
 target_key: string }
-export type EnumNodeIpc = { full_name: string; values: string[] }
+export type EnumNodeIpc = { full_name: string; values: EnumValueIpc[] }
+export type EnumValueIpc = { name: string; number: number }
 export type EnvironmentIpc = { name: string; variables: Partial<{ [key in string]: string }>; color: string | null }
-export type FieldNodeIpc = { json_name: string; proto_name: string; type_label: string; value_kind: FieldValueKindIpc; repeated: boolean; message_type: string | null; enum_type: string | null; oneof_group: string | null }
+export type FieldNodeIpc = { json_name: string; proto_name: string; type_label: string; value_kind: FieldValueKindIpc; repeated: boolean; message_type: string | null; enum_type: string | null; oneof_group: string | null; number: number; optional: boolean }
 export type FieldValueKindIpc = "scalar" | "message" | "enum" | "map"
 export type FolderIpc = { id: string; name: string; items: ItemIpc[]; expanded: boolean }
 export type GrpcTargetIpc = { address: string; tls: boolean; skip_verify: boolean }

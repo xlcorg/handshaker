@@ -16,7 +16,7 @@ function hintLabel(schema: MessageSchemaIpc, field: FieldNodeIpc): string {
   if (field.value_kind === "enum" && field.enum_type) {
     const en = schema.enums.find((e) => e.full_name === field.enum_type);
     if (en) {
-      const head = en.values.slice(0, ENUM_PREVIEW_MAX).join(" | ");
+      const head = en.values.slice(0, ENUM_PREVIEW_MAX).map((v) => v.name).join(" | ");
       const tail = en.values.length > ENUM_PREVIEW_MAX ? " | …" : "";
       const short = field.enum_type.split(".").pop() ?? field.enum_type;
       return `${field.repeated ? "repeated enum" : "enum"} ${short}: ${head}${tail}`;

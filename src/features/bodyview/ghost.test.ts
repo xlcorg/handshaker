@@ -5,7 +5,8 @@ import { computeGhostLines, GhostZone, ghostDomNode } from "./ghost";
 function f(json: string, label: string, kind: FieldNodeIpc["value_kind"], extra: Partial<FieldNodeIpc> = {}): FieldNodeIpc {
   return {
     json_name: json, proto_name: json, type_label: label, value_kind: kind,
-    repeated: false, message_type: null, enum_type: null, oneof_group: null, ...extra,
+    repeated: false, message_type: null, enum_type: null, oneof_group: null,
+    number: 1, optional: false, ...extra,
   };
 }
 

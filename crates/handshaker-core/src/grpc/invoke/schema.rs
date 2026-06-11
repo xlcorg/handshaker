@@ -41,12 +41,22 @@ pub struct FieldNode {
     pub enum_type: Option<String>,
     /// oneof name if this field is a member (for the contract view; completion ignores it).
     pub oneof_group: Option<String>,
+    /// Proto field number (`= N;` in the contract view).
+    pub number: u32,
+    /// proto3 `optional` (a synthetic single-field `_<name>` oneof in descriptors).
+    pub optional: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct EnumValueNode {
+    pub name: String,
+    pub number: i32,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct EnumNode {
     pub full_name: String,
-    pub values: Vec<String>,
+    pub values: Vec<EnumValueNode>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -129,7 +139,8 @@ fn build_field(
 ) -> FieldNode {
     let json_name = field.json_name().to_string();
     let proto_name = field.name().to_string();
-    let oneof_group = real_oneof_name(field);
+    let (oneof_group, optional) = oneof_info(field);
+    let number = field.number() as u32;
 
     if field.is_map() {
         let entry = match field.kind() {
@@ -158,6 +169,8 @@ fn build_field(
             message_type,
             enum_type,
             oneof_group,
+            number,
+            optional,
         };
     }
 
@@ -198,6 +211,8 @@ fn build_field(
         message_type,
         enum_type,
         oneof_group,
+        number,
+        optional,
     }
 }
 
@@ -215,7 +230,10 @@ fn record_enum(e: &EnumDescriptor, enums: &mut Vec<EnumNode>, visited: &mut Hash
     if visited.insert(e.full_name().to_string()) {
         enums.push(EnumNode {
             full_name: e.full_name().to_string(),
-            values: e.values().map(|v| v.name().to_string()).collect(),
+            values: e
+                .values()
+                .map(|v| EnumValueNode { name: v.name().to_string(), number: v.number() })
+                .collect(),
         });
     }
 }
@@ -224,15 +242,20 @@ fn short_name(full: &str) -> String {
     full.rsplit('.').next().unwrap_or(full).to_string()
 }
 
-/// proto3 `optional` synthesizes a single-field oneof named `_<field>`. Treat such a
-/// synthetic oneof as "not a oneof" so the contract view doesn't show phantom groups.
-fn real_oneof_name(field: &FieldDescriptor) -> Option<String> {
-    let oneof = field.containing_oneof()?;
-    let synthetic = oneof.fields().count() == 1 && oneof.name().starts_with('_');
-    if synthetic {
-        None
-    } else {
-        Some(oneof.name().to_string())
+/// Real oneof name + proto3 `optional` flag. proto3 `optional` synthesizes a
+/// single-field oneof named `_<field>`; that synthetic oneof is reported as
+/// `optional` instead of a phantom group.
+fn oneof_info(field: &FieldDescriptor) -> (Option<String>, bool) {
+    match field.containing_oneof() {
+        None => (None, false),
+        Some(oneof) => {
+            let synthetic = oneof.fields().count() == 1 && oneof.name().starts_with('_');
+            if synthetic {
+                (None, true)
+            } else {
+                (Some(oneof.name().to_string()), false)
+            }
+        }
     }
 }
 
@@ -384,7 +407,45 @@ mod tests {
         assert_eq!(n.enum_type.as_deref(), Some("t.Status"));
         assert_eq!(n.type_label, "Status");
         let en = schema.enums.iter().find(|e| e.full_name == "t.Status").expect("enum node");
-        assert_eq!(en.values, vec!["UNKNOWN".to_string(), "ACTIVE".to_string()]);
+        assert_eq!(
+            en.values,
+            vec![
+                EnumValueNode { name: "UNKNOWN".into(), number: 0 },
+                EnumValueNode { name: "ACTIVE".into(), number: 1 },
+            ]
+        );
+    }
+
+    #[test]
+    fn fields_carry_numbers_and_proto3_optional_flag() {
+        // Same message shape as real_oneof_is_reported_synthetic_is_not:
+        // a(=1, oneof choice), b(=2, oneof choice), nick(=3, proto3 optional).
+        let mut a = field("a", 1, Ty::String);
+        a.oneof_index = Some(0);
+        let mut b = field("b", 2, Ty::Int32);
+        b.oneof_index = Some(0);
+        let mut opt = field("nick", 3, Ty::String);
+        opt.proto3_optional = Some(true);
+        opt.oneof_index = Some(1);
+        let m = DescriptorProto {
+            name: Some("M".into()),
+            field: vec![a, b, opt],
+            oneof_decl: vec![
+                OneofDescriptorProto { name: Some("choice".into()), ..Default::default() },
+                OneofDescriptorProto { name: Some("_nick".into()), ..Default::default() },
+            ],
+            ..Default::default()
+        };
+        let pool = pool_with(file("t", vec![m]));
+        let schema = build_schema(&pool.get_message_by_name("t.M").unwrap());
+        let root = msg_node(&schema, "t.M");
+
+        assert_eq!(field_node(root, "a").number, 1);
+        assert_eq!(field_node(root, "b").number, 2);
+        assert_eq!(field_node(root, "nick").number, 3);
+        assert!(field_node(root, "nick").optional);
+        assert!(!field_node(root, "a").optional);
+        assert!(!field_node(root, "b").optional);
     }
 
     #[test]

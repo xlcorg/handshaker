@@ -6,7 +6,8 @@ import { setModelSchema } from "./completion";
 function f(json: string, label: string, kind: FieldNodeIpc["value_kind"], extra: Partial<FieldNodeIpc> = {}): FieldNodeIpc {
   return {
     json_name: json, proto_name: json, type_label: label, value_kind: kind,
-    repeated: false, message_type: null, enum_type: null, oneof_group: null, ...extra,
+    repeated: false, message_type: null, enum_type: null, oneof_group: null,
+    number: 1, optional: false, ...extra,
   };
 }
 
@@ -28,8 +29,8 @@ const SCHEMA: MessageSchemaIpc = {
     { full_name: "t.Item", fields: [f("name", "string", "scalar")] },
   ],
   enums: [
-    { full_name: "t.SortDir", values: ["ASC", "DESC"] },
-    { full_name: "t.Mood", values: ["A", "B", "C", "D", "E", "F"] },
+    { full_name: "t.SortDir", values: [{ name: "ASC", number: 0 }, { name: "DESC", number: 1 }] },
+    { full_name: "t.Mood", values: ["A", "B", "C", "D", "E", "F"].map((name, i) => ({ name, number: i })) },
   ],
 };
 
@@ -83,7 +84,7 @@ describe("computeInlayHints", () => {
     const schema: MessageSchemaIpc = {
       root: "t.R",
       messages: [{ full_name: "t.R", fields: [f("tags", "repeated Dir", "enum", { repeated: true, enum_type: "t.Dir" })] }],
-      enums: [{ full_name: "t.Dir", values: ["N", "S"] }],
+      enums: [{ full_name: "t.Dir", values: [{ name: "N", number: 0 }, { name: "S", number: 1 }] }],
     };
     const hints = computeInlayHints('{ "tags": "N" }', schema);
     expect(hints[0].label).toBe("repeated enum Dir: N | S");

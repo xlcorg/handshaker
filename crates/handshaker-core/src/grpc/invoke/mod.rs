@@ -13,8 +13,8 @@ use crate::grpc::transport::DynamicCodec;
 pub(crate) mod skeleton;
 pub mod schema;
 pub use schema::{
-    build_message_schema_from_pool, EnumNode, FieldNode, FieldValueKind, MessageNode,
-    MessageSchema, MessageSide,
+    build_message_schema_from_pool, EnumNode, EnumValueNode, FieldNode, FieldValueKind,
+    MessageNode, MessageSchema, MessageSide,
 };
 
 /// Outcome of one unary call. `status_code == 0` means success (`response_json` is `Some`).

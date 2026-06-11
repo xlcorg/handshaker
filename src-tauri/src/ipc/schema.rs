@@ -2,7 +2,7 @@
 //!
 //! Keeps handshaker-core specta-free. Conversion is cheap (Vec/String moves, no I/O).
 
-use handshaker_core::grpc::{EnumNode, FieldNode, FieldValueKind, MessageNode, MessageSchema, MessageSide};
+use handshaker_core::grpc::{EnumNode, EnumValueNode, FieldNode, FieldValueKind, MessageNode, MessageSchema, MessageSide};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
@@ -29,12 +29,20 @@ pub struct FieldNodeIpc {
     pub message_type: Option<String>,
     pub enum_type: Option<String>,
     pub oneof_group: Option<String>,
+    pub number: u32,
+    pub optional: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct EnumValueIpc {
+    pub name: String,
+    pub number: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct EnumNodeIpc {
     pub full_name: String,
-    pub values: Vec<String>,
+    pub values: Vec<EnumValueIpc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -76,7 +84,15 @@ impl From<FieldNode> for FieldNodeIpc {
             message_type: f.message_type,
             enum_type: f.enum_type,
             oneof_group: f.oneof_group,
+            number: f.number,
+            optional: f.optional,
         }
+    }
+}
+
+impl From<EnumValueNode> for EnumValueIpc {
+    fn from(v: EnumValueNode) -> Self {
+        Self { name: v.name, number: v.number }
     }
 }
 
@@ -84,7 +100,7 @@ impl From<EnumNode> for EnumNodeIpc {
     fn from(e: EnumNode) -> Self {
         Self {
             full_name: e.full_name,
-            values: e.values,
+            values: e.values.into_iter().map(Into::into).collect(),
         }
     }
 }
@@ -142,14 +158,19 @@ mod tests {
                     message_type: None,
                     enum_type: None,
                     oneof_group: None,
+                    number: 1,
+                    optional: false,
                 }],
             }],
-            enums: vec![EnumNode { full_name: "t.E".into(), values: vec!["A".into()] }],
+            enums: vec![EnumNode {
+                full_name: "t.E".into(),
+                values: vec![EnumValueNode { name: "A".into(), number: 0 }],
+            }],
         };
         let ipc: MessageSchemaIpc = core.into();
         assert_eq!(ipc.root, "t.M");
         assert_eq!(ipc.messages[0].fields[0].json_name, "aStr");
         assert!(matches!(ipc.messages[0].fields[0].value_kind, FieldValueKindIpc::Scalar));
-        assert_eq!(ipc.enums[0].values, vec!["A".to_string()]);
+        assert_eq!(ipc.enums[0].values[0].name, "A");
     }
 }

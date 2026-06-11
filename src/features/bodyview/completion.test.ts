@@ -17,7 +17,7 @@ import {
 //   enum Status { UNKNOWN, ACTIVE }
 const SCHEMA: MessageSchemaIpc = {
   root: "t.M",
-  enums: [{ full_name: "t.Status", values: ["UNKNOWN", "ACTIVE"] }],
+  enums: [{ full_name: "t.Status", values: [{ name: "UNKNOWN", number: 0 }, { name: "ACTIVE", number: 1 }] }],
   messages: [
     {
       full_name: "t.M",
@@ -52,6 +52,8 @@ function f(
     message_type: extra.message_type ?? null,
     enum_type: extra.enum_type ?? null,
     oneof_group: extra.oneof_group ?? null,
+    number: 1,
+    optional: false,
   };
 }
 
@@ -235,7 +237,7 @@ describe("present-key filtering", () => {
 //   R { map<string, Status> roles }   enum Status { UNKNOWN, ACTIVE }
 const MAP_ENUM_SCHEMA: MessageSchemaIpc = {
   root: "t.R",
-  enums: [{ full_name: "t.Status", values: ["UNKNOWN", "ACTIVE"] }],
+  enums: [{ full_name: "t.Status", values: [{ name: "UNKNOWN", number: 0 }, { name: "ACTIVE", number: 1 }] }],
   messages: [
     { full_name: "t.R", fields: [f("roles", "map<string, Status>", "map", { enum_type: "t.Status" })] },
   ],
