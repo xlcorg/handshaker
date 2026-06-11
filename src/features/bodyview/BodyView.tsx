@@ -41,6 +41,8 @@ interface Live {
   typeSub: DisposableLike | null;
   ghost: GhostZone | null;
   ghostTimer: number | null;
+  /** Line count after the last edit — a change means the ghost anchor moved. */
+  lineCount: number;
 }
 
 export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewProps) {
@@ -117,21 +119,33 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
     paintBadges();
   };
 
-  // Recompute the ghost skeleton; debounced so per-keystroke edits don't churn zones.
+  // Recompute the ghost skeleton NOW (cancelling any pending debounce).
   // Deps intentionally empty: reads live/schemaRef (stable refs) and readPrefs()
   // (module-level read) — nothing closes over React state.
+  const applyGhost = useCallback(() => {
+    const l = live.current;
+    if (!l || !l.ghost) return;
+    if (l.ghostTimer !== null) {
+      window.clearTimeout(l.ghostTimer);
+      l.ghostTimer = null;
+    }
+    const sc = schemaRef.current;
+    const block =
+      readPrefs().bodyHints && sc ? computeGhostLines(l.editor.getValue(), sc) : null;
+    l.ghost.apply(block);
+  }, []);
+
+  // Debounced recompute for same-line typing, so mid-token (briefly invalid JSON)
+  // states don't flicker the ghost on every keystroke.
   const scheduleGhost = useCallback((delay: number) => {
     const l = live.current;
     if (!l || !l.ghost) return;
     if (l.ghostTimer !== null) window.clearTimeout(l.ghostTimer);
     l.ghostTimer = window.setTimeout(() => {
       l.ghostTimer = null;
-      const sc = schemaRef.current;
-      const block =
-        readPrefs().bodyHints && sc ? computeGhostLines(l.editor.getValue(), sc) : null;
-      l.ghost?.apply(block);
+      applyGhost();
     }, delay);
-  }, []);
+  }, [applyGhost]);
 
   // --- mount -------------------------------------------------------------
   const onMount = useCallback(
@@ -146,6 +160,7 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
         editor, monaco, tree: null, spans: [], badges: [],
         decorations: null, expanded: new Set(), controller: null, typeSub: null,
         ghost: null, ghostTimer: null,
+        lineCount: editor.getModel()?.getLineCount() ?? 1,
       };
       // Attach schema to the model for both request (autocomplete + hints) and
       // response (inlay hints; completions remain suppressed by readOnly).
@@ -178,7 +193,7 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
           }
         });
         live.current.ghost = new GhostZone(editor);
-        scheduleGhost(0);
+        applyGhost();
       }
       if (mode === "response") {
         renderResponse(editor.getValue());
@@ -208,7 +223,7 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
         onBadgeExpand: mode === "response" ? expandNode : undefined,
       });
     },
-    [mode, scheduleGhost],
+    [mode, applyGhost],
   );
 
   // Dispose the controller + type subscriptions when BodyView itself unmounts.
@@ -220,19 +235,19 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
   }, []);
 
   // Keep the model's attached schema current as the selected method changes.
-  // Runs for both request and response: request uses it for autocomplete + hints,
-  // response for inlay hints (ghost scheduler self-gates on l.ghost, which response
-  // mode never creates, so scheduleGhost(0) is safe to call here unconditionally).
+  // Runs for both request and response: request uses it for autocomplete + the
+  // ghost, response for inlay hints (applyGhost self-gates on l.ghost, which
+  // response mode never creates, so it's safe to call here unconditionally).
   useEffect(() => {
     const model = live.current?.editor.getModel();
     setModelSchema(model ?? null, schema ?? null);
     refreshBodyHints();
-    scheduleGhost(0);
-  }, [schema, mode, scheduleGhost]);
+    applyGhost();
+  }, [schema, mode, applyGhost]);
 
   // Re-apply (or clear) the ghost zone when the bodyHints toggle changes.
-  // No mode guard needed: scheduleGhost no-ops when ghost is null (response mode).
-  useEffect(() => { scheduleGhost(0); }, [prefs.bodyHints, scheduleGhost]);
+  // No mode guard needed: applyGhost no-ops when ghost is null (response mode).
+  useEffect(() => { applyGhost(); }, [prefs.bodyHints, applyGhost]);
 
   // Clear the model's schema entry when BodyView unmounts.
   useEffect(
@@ -251,11 +266,23 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
         const parsed = parseWithSpans(v);
         live.current.tree = parsed?.tree ?? null;
         live.current.spans = parsed?.spans ?? [];
-        scheduleGhost(150);
+        // Line-structure edits (Enter / paste / line deletion) displace the zone's
+        // anchor: Monaco only shifts zones when lines are inserted ABOVE them, so
+        // the caret line Enter creates at the anchor boundary would sit below the
+        // stale zone for the debounce duration — a visible caret jump. Re-anchor
+        // synchronously (same task as the edit, before the next paint); plain
+        // same-line typing keeps the flicker-damping debounce.
+        const lineCount = v.split("\n").length;
+        if (lineCount !== live.current.lineCount) {
+          live.current.lineCount = lineCount;
+          applyGhost();
+        } else {
+          scheduleGhost(150);
+        }
       }
       onChange?.(v);
     },
-    [mode, onChange, scheduleGhost],
+    [mode, onChange, applyGhost, scheduleGhost],
   );
 
   const options = useMemo(
