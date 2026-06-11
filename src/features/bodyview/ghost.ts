@@ -57,6 +57,12 @@ interface ViewZoneAccessorLike {
 
 export interface ViewZoneEditorLike {
   changeViewZones(cb: (accessor: ViewZoneAccessorLike) => void): void;
+  /** Copies the editor's exact font (family/size/line-height) onto `target`.
+   *  Required: Monaco applies fontInfo only to `.view-lines`, so a view-zone
+   *  domNode otherwise inherits the app's UI font — rows come out taller than
+   *  the reserved `heightInLines` (the block drifts onto the next real line)
+   *  and the proportional indent doesn't line up with the code. */
+  applyFontInfo(target: HTMLElement): void;
 }
 
 export function ghostDomNode(lines: string[]): HTMLElement {
@@ -88,6 +94,7 @@ export class GhostZone {
       // carries its own 2-space field indent, so no horizontal offset is needed;
       // adding contentLeft here would push it a full gutter-width too far right.
       const node = ghostDomNode(block.lines);
+      this.editor.applyFontInfo(node);
       this.zoneId = acc.addZone({
         afterLineNumber: block.afterLine,
         heightInLines: block.lines.length,

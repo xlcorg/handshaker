@@ -406,8 +406,10 @@ body, .font-sans {
 }
 
 /* Ghost skeleton of missing top-level request fields (BodyView view zone).
-   No font overrides: the view-zone domNode inherits the editor's exact font
-   (family/size/weight), so the ghost reads as the same text — only dimmed.
+   No font rules here: view zones do NOT inherit the editor font (Monaco applies
+   fontInfo only to .view-lines), so GhostZone copies it imperatively via
+   editor.applyFontInfo — keeping family/size/line-height in exact lockstep with
+   the editor. CSS only dims the text.
    (No italic: a slanted monospace looks like a different typeface.) */
 .hs-ghost-skeleton {
   opacity: 0.45;

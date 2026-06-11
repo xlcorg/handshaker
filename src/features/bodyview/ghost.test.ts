@@ -51,15 +51,18 @@ describe("computeGhostLines", () => {
 describe("GhostZone", () => {
   function fakeZoneEditor() {
     const zones = new Map<string, { afterLineNumber: number; heightInLines: number; domNode: HTMLElement }>();
+    const fontApplied: HTMLElement[] = [];
     let n = 0;
     return {
       zones,
+      fontApplied,
       changeViewZones(cb: (acc: { addZone(z: never): string; removeZone(id: string): void }) => void) {
         cb({
           addZone: (z: never) => { const id = `z${n++}`; zones.set(id, z); return id; },
           removeZone: (id: string) => { zones.delete(id); },
         } as never);
       },
+      applyFontInfo(target: HTMLElement) { fontApplied.push(target); },
     };
   }
 
@@ -86,6 +89,19 @@ describe("GhostZone", () => {
     expect(ed.zones.size).toBe(0);
     gz.dispose(); // idempotent
     expect(ed.zones.size).toBe(0);
+  });
+
+  it("copies the editor's font metrics onto the zone dom node", () => {
+    // Monaco applies fontInfo (family/size/line-height) only to .view-lines;
+    // the sibling .view-zones container inherits the app cascade instead. Without
+    // an explicit applyFontInfo the ghost renders in the UI font: rows taller
+    // than the reserved heightInLines (vertical drift onto the next real line)
+    // and a proportional indent that doesn't line up with the code.
+    const ed = fakeZoneEditor();
+    const gz = new GhostZone(ed);
+    gz.apply({ afterLine: 1, lines: ["x"] });
+    const z = [...ed.zones.values()][0];
+    expect(ed.fontApplied).toContain(z.domNode);
   });
 
   it("renders one div per ghost line via textContent (no HTML injection)", () => {
