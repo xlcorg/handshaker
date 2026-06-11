@@ -416,3 +416,16 @@ body, .font-sans {
   white-space: pre;
   pointer-events: none;
 }
+
+/* Contract tab — proto listing. Token colors ride the shared --syntax-* vars;
+   the flash highlights a block after a click-to-scroll jump. */
+.hs-proto-kw { color: hsl(var(--syntax-num)); }
+.hs-proto-scalar { color: hsl(var(--syntax-str)); }
+.hs-proto-ref { color: hsl(var(--syntax-key)); }
+.hs-proto-name { color: hsl(var(--foreground)); }
+.hs-proto-punct { color: hsl(var(--syntax-punct)); }
+@keyframes hs-proto-flash {
+  from { background-color: hsl(var(--accent)); }
+  to { background-color: transparent; }
+}
+.hs-proto-flash { animation: hs-proto-flash 800ms var(--ease-out); }
