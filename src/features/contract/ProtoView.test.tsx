@@ -1,18 +1,14 @@
-import { describe, it, expect, vi, beforeAll } from "vitest";
+import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { ProtoView } from "./ProtoView";
 import type { ProtoDoc } from "./proto";
 
 beforeAll(() => {
   Element.prototype.scrollIntoView = vi.fn();
-  if (!window.matchMedia) {
-    Object.defineProperty(window, "matchMedia", {
-      value: (query: string) => ({
-        matches: false, media: query,
-        addEventListener: () => {}, removeEventListener: () => {},
-      }),
-    });
-  }
+});
+
+beforeEach(() => {
+  vi.clearAllMocks();
 });
 
 const DOC: ProtoDoc = {
@@ -61,6 +57,28 @@ describe("ProtoView", () => {
     fireEvent.click(screen.getByRole("button", { name: "Item" }));
     const target = container.querySelector('[data-block="t.Item"]') as HTMLElement;
     expect(target.classList.contains("hs-proto-flash")).toBe(true);
-    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
+  });
+
+  it("uses instant scroll when prefers-reduced-motion is active", () => {
+    const originalMatchMedia = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: query === "(prefers-reduced-motion: reduce)",
+      media: query,
+      onchange: null,
+      addListener() {},
+      removeListener() {},
+      addEventListener() {},
+      removeEventListener() {},
+      dispatchEvent() { return false; },
+    })) as unknown as typeof window.matchMedia;
+
+    try {
+      render(<ProtoView doc={DOC} />);
+      fireEvent.click(screen.getByRole("button", { name: "Item" }));
+      expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith({ behavior: "auto", block: "start" });
+    } finally {
+      window.matchMedia = originalMatchMedia;
+    }
   });
 });

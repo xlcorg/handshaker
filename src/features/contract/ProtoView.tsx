@@ -21,6 +21,8 @@ export function ProtoView({ doc }: { doc: ProtoDoc }) {
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     el.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
     // Restart the flash when re-clicking the same target: remove → reflow → add.
+    // NB: manual classList works only while the block's className prop stays static;
+    // if it ever becomes conditional, React re-renders would wipe the flash class.
     el.classList.remove("hs-proto-flash");
     void el.offsetWidth;
     el.classList.add("hs-proto-flash");
