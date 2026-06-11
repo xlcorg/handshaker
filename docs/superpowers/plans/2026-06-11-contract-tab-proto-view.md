@@ -4,7 +4,10 @@
 > (recommended) or superpowers:executing-plans to implement this plan task-by-task.
 > Steps use checkbox (`- [ ]`) syntax for tracking.
 
-> **Status:** 🚧 not started · Branch `claude/nostalgic-jang-778d08` (existing feature worktree).
+> **Status:** 🚧 in progress — Phase A done 2026-06-11 (Task 1: `f30797d`+`69f3b6b`,
+> Task 2: `193715b`+`cb08bc4`; оба прошли spec+quality ревью; vitest 732 / core 125 /
+> handshaker 43 / tsc clean). Далее — Phase B, Task 3 (после /clear).
+> Branch `claude/nostalgic-jang-778d08` (existing feature worktree).
 > **Spec:** `docs/superpowers/specs/2026-06-11-contract-tab-proto-view-design.md` (approved 2026-06-11).
 > Supersedes the floating-overlay part of the contract-view feature
 > (`docs/superpowers/plans/2026-06-10-contract-view.md`, Phases A–E shipped).
@@ -20,7 +23,7 @@ proto-source listing (field numbers, `optional`, enum value numbers).
 Request|Response side switch; `ResponsePanel` hosts the fourth tab with
 default-tab and auto-switch-on-response logic. The overlay is deleted first.
 
-**Tech Stack:** Rust (`prost-reflect` 0.16) · Tauri + specta · React 18 ·
+**Tech Stack:** Rust (`prost-reflect` 0.14) · Tauri + specta · React 18 ·
 Vitest + RTL · Cargo tests.
 
 **Gate commands (used throughout):**
@@ -159,7 +162,7 @@ changes shape).
 - Modify test factories: `src/features/bodyview/completion.test.ts`,
   `hints.test.ts`, `ghost.test.ts`, `validate.test.ts`
 
-- [ ] **Step 1: Write the failing core tests**
+- [x] **Step 1: Write the failing core tests**
 
 In `schema.rs` tests: update the enum assertion and add a numbers/optional test.
 
@@ -206,12 +209,12 @@ In `schema.rs` tests: update the enum assertion and add a numbers/optional test.
     }
 ```
 
-- [ ] **Step 2: Run core tests to verify they fail**
+- [x] **Step 2: Run core tests to verify they fail**
 
 Run: `cargo test -p handshaker-core`
 Expected: compile error — `EnumValueNode` not found / no field `number`.
 
-- [ ] **Step 3: Implement the core extension**
+- [x] **Step 3: Implement the core extension**
 
 In `schema.rs`:
 
@@ -277,12 +280,12 @@ Re-exports: add `EnumValueNode` to `pub use schema::{…}` in
 `crates/handshaker-core/src/grpc/invoke/mod.rs` and to the `pub use invoke::{…}`
 list in `crates/handshaker-core/src/grpc/mod.rs`.
 
-- [ ] **Step 4: Run core tests to verify they pass**
+- [x] **Step 4: Run core tests to verify they pass**
 
 Run: `cargo test -p handshaker-core`
 Expected: PASS (all schema tests incl. the new one).
 
-- [ ] **Step 5: Mirror in the IPC layer**
+- [x] **Step 5: Mirror in the IPC layer**
 
 `src-tauri/src/ipc/schema.rs` — extend the import to include `EnumValueNode`,
 then:
@@ -331,18 +334,18 @@ Update the module's `from_core_maps_fields` test: the `FieldNode` literal gains
 `values: vec![EnumValueNode { name: "A".into(), number: 0 }]`; the final
 assertion becomes `assert_eq!(ipc.enums[0].values[0].name, "A");`.
 
-- [ ] **Step 6: Run src-tauri tests**
+- [x] **Step 6: Run src-tauri tests**
 
 Run: `cargo test -p handshaker`
 Expected: PASS.
 
-- [ ] **Step 7: Regenerate bindings**
+- [x] **Step 7: Regenerate bindings**
 
 Run: `cargo run -p handshaker --bin export-bindings --features export-bindings`
 Expected: `wrote …\src\ipc\bindings.ts`; `git diff` shows `FieldNodeIpc` with
 `number`/`optional`, new `EnumValueIpc`, `EnumNodeIpc.values: EnumValueIpc[]`.
 
-- [ ] **Step 8: Update the TS consumers**
+- [x] **Step 8: Update the TS consumers**
 
 `src/features/bodyview/completion.ts` (~line 337), enum value suggestions:
 
@@ -362,7 +365,7 @@ Expected: `wrote …\src\ipc\bindings.ts`; `git diff` shows `FieldNodeIpc` with
 
 (`tail` length check is count-based — unchanged.)
 
-- [ ] **Step 9: Update the four bodyview test factories**
+- [x] **Step 9: Update the four bodyview test factories**
 
 In `hints.test.ts`, `ghost.test.ts`, `validate.test.ts` the shared factory gains
 two defaults (before `...extra`):
@@ -387,19 +390,25 @@ In `completion.test.ts` the local `f` (line 40) gains the same two literals
 - `completion.test.ts:20` and `:238`:
   `values: [{ name: "UNKNOWN", number: 0 }, { name: "ACTIVE", number: 1 }]`
 
-- [ ] **Step 10: Run the frontend gate**
+- [x] **Step 10: Run the frontend gate**
 
 Run: `pnpm lint; if ($?) { pnpm test }`
 Expected: lint clean, all tests pass.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```powershell
 git -C . add -A
 git -C . commit -m "feat(schema): field numbers, proto3 optional flag, enum value numbers"
 ```
 
-🧹 **/clear-чекпойнт** — конец Phase A.
+> ✅ 2026-06-11: done — commit `193715b` + review follow-up `cb08bc4`
+> (redundant `as u32` cast dropped). Gates: core 125 / handshaker 43 /
+> tsc clean / vitest 732. Quality-review note for будущего касания
+> `oneof_info`: synthetic-проверку можно ужесточить через
+> `field.field_descriptor_proto().proto3_optional()` вместо name-эвристики.
+
+🧹 **/clear-чекпойнт** — конец Phase A. ✅ пройден 2026-06-11.
 
 ---
 
