@@ -51,7 +51,7 @@ mid-branch, the suite stays green.
 - Modify: `src/features/workflow/CallPanel.editable.test.tsx`
 - Modify: `docs/superpowers/plans/2026-06-10-contract-view.md`
 
-- [ ] **Step 1: Delete the six overlay files**
+- [x] **Step 1: Delete the six overlay files**
 
 ```powershell
 git -C . rm src/features/contract/ContractPanel.tsx src/features/contract/ContractPanel.test.tsx src/features/contract/ContractTree.tsx src/features/contract/ContractTree.test.tsx src/features/contract/tree.ts src/features/contract/tree.test.ts
@@ -59,7 +59,7 @@ git -C . rm src/features/contract/ContractPanel.tsx src/features/contract/Contra
 
 (`src/features/contract/` stays — Tasks 3–5 repopulate it.)
 
-- [ ] **Step 2: Strip the toggle from `RequestTabs.tsx`**
+- [x] **Step 2: Strip the toggle from `RequestTabs.tsx`**
 
 Remove `ListTree` from the lucide import (line 2), the two props from
 `RequestTabsProps` and the destructuring (lines 25–28, 30):
@@ -73,7 +73,7 @@ Remove `ListTree` from the lucide import (line 2), the two props from
 and the whole `{onToggleContract ? (<Tooltip content="Method contract">…</Tooltip>) : null}`
 button block (lines 59–73). The hints toggle and `↺ Reset` button stay untouched.
 
-- [ ] **Step 3: Strip the overlay from `CallPanel.tsx`**
+- [x] **Step 3: Strip the overlay from `CallPanel.tsx`**
 
 Remove the `ContractPanel` import, the state line
 `const [contractOpen, setContractOpen] = useState(false);` (line 89, keep the
@@ -97,7 +97,7 @@ schema fetches below it), and replace the request-panel contents (lines 137–15
 If `useState` becomes unused in the React import, drop it (lint will flag it).
 `outputSchema` stays — `ResponseSlot` uses it, and Task 7 reuses it for the tab.
 
-- [ ] **Step 4: Update the tests that referenced the overlay**
+- [x] **Step 4: Update the tests that referenced the overlay**
 
 - `RequestTabs.test.tsx`, describe `"RequestTabs contract toggles"` (line 116):
   - delete `it("shows the contract button only when onToggleContract is provided, and reports pressed state")` (lines 128–140);
@@ -112,12 +112,12 @@ If `useState` becomes unused in the React import, drop it (lint will flag it).
   (lines 84–108 — both `it`s) and reword the comment on lines 15–16 to
   `// No reflection in tests: both schema sides resolve null.`
 
-- [ ] **Step 5: Run the suite**
+- [x] **Step 5: Run the suite**
 
 Run: `pnpm lint; if ($?) { pnpm test }`
 Expected: lint clean; all tests pass (count drops vs. 752 — overlay tests removed).
 
-- [ ] **Step 6: Mark the old plan's overlay checklist superseded**
+- [x] **Step 6: Mark the old plan's overlay checklist superseded**
 
 In `docs/superpowers/plans/2026-06-10-contract-view.md`, directly under the
 Task 14 Step 2 heading add:
@@ -130,12 +130,15 @@ Task 14 Step 2 heading add:
 > автокомплит, ↺, response-хинты) остаются в силе.
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git -C . add -A
 git -C . commit -m "refactor(contract): remove floating overlay (superseded by Response-panel tab)"
 ```
+
+> ✅ 2026-06-11: done — commits `f30797d` (removal, 732 FE tests green) +
+> `69f3b6b` (review follow-up: stale overlay references in comments).
 
 Append the standard trailer: `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`.
 
