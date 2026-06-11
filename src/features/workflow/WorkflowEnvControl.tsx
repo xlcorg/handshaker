@@ -5,7 +5,7 @@ import { ConfirmDeleteEnvDialog } from "@/features/envs/ConfirmDeleteEnvDialog";
 import { EnvEditorDialog } from "@/features/envs/EnvEditorDialog";
 import { EnvSwitcherMenu } from "@/features/envs/EnvSwitcherMenu";
 import { colorHex, resolveColorKey } from "@/features/envs/colors";
-import { envList } from "@/ipc/client";
+import { envList, envReorder } from "@/ipc/client";
 import type { EnvironmentIpc } from "@/ipc/bindings";
 
 import { useActiveWorkflow, workflowStore } from "./store";
@@ -13,10 +13,10 @@ import { useActiveWorkflow, workflowStore } from "./store";
 /**
  * Titlebar env switcher bound to the ACTIVE WORKFLOW.
  *
- * Mirrors {@link EnvPill}, except env selection routes through
- * {@link workflowStore.setWorkflowEnv} (which updates the active workflow's
- * `envName` and syncs the backend via `envActiveSet`). This component never
- * calls `ipc.envActiveSet` directly — the store owns that.
+ * Env selection routes through {@link workflowStore.setWorkflowEnv} (which
+ * updates the active workflow's `envName` and syncs the backend via
+ * `envActiveSet`). This component never calls `ipc.envActiveSet` directly —
+ * the store owns that.
  */
 export function WorkflowEnvControl() {
   const wf = useActiveWorkflow();
@@ -31,6 +31,27 @@ export function WorkflowEnvControl() {
       setEnvs([]);
     }
   }, []);
+
+  const handleReorder = useCallback(
+    async (names: string[]) => {
+      // Optimistic: apply the new order locally; on IPC failure refetch so the
+      // menu snaps back to the backend's order.
+      setEnvs((prev) => {
+        const byName = new Map(prev.map((e) => [e.name, e] as const));
+        const next = names.flatMap((n) => {
+          const env = byName.get(n);
+          return env ? [env] : [];
+        });
+        return next.length === prev.length ? next : prev;
+      });
+      try {
+        await envReorder(names);
+      } catch {
+        await refreshEnvs();
+      }
+    },
+    [refreshEnvs],
+  );
 
   useEffect(() => {
     void refreshEnvs();
@@ -63,6 +84,7 @@ export function WorkflowEnvControl() {
         onActiveSet={(next) => workflowStore.setWorkflowEnv(next)}
         onEditEnv={(name) => setEditor({ originalName: name })}
         onNewEnv={() => setEditor({ originalName: null })}
+        onReorder={handleReorder}
       />
       {editor && (
         <EnvEditorDialog

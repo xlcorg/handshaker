@@ -20,17 +20,27 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync, execSync } from "node:child_process";
 import { createInterface } from "node:readline";
-import { isValidVersion, bumpCargoToml, bumpPackageJson, bumpCargoLock } from "./version.mjs";
+import {
+  isValidVersion,
+  bumpCargoToml,
+  bumpPackageJson,
+  bumpCargoLock,
+  nextVersion,
+  readCargoTomlVersion,
+  BUMP_LEVELS,
+} from "./version.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 // ---- arg parsing -----------------------------------------------------------
 const argv = process.argv.slice(2);
-const flags = new Set(argv.filter((a) => a.startsWith("-")));
-const positional = argv.filter((a) => !a.startsWith("-"));
-const version = positional[0];
 const remoteIdx = argv.indexOf("--remote");
 const remote = remoteIdx !== -1 ? argv[remoteIdx + 1] : "origin";
+const remoteValIdx = remoteIdx === -1 ? -1 : remoteIdx + 1; // -1 (not 0) when --remote absent
+const flags = new Set(argv.filter((a) => a.startsWith("-")));
+// positional args, excluding the value consumed by --remote
+const positional = argv.filter((a, i) => !a.startsWith("-") && i !== remoteValIdx);
+const spec = positional[0]; // undefined | "patch" | "minor" | "major" | "x.y.z"
 
 const DRY = flags.has("--dry-run");
 const NO_PUSH = flags.has("--no-push");
@@ -42,8 +52,27 @@ function die(msg) {
   process.exit(1);
 }
 
-if (!isValidVersion(version)) {
-  die("Usage: pnpm release <x.y.z> [--dry-run] [--no-push] [--skip-checks] [--yes] [--remote <name>]\n  (strict MAJOR.MINOR.PATCH, no 'v' prefix)");
+const USAGE =
+  "Usage: pnpm release [<x.y.z>|major|minor|patch] [--dry-run] [--no-push] [--skip-checks] [--yes] [--remote <name>]\n" +
+  "  no arg = patch bump of the current version (read from src-tauri/Cargo.toml)";
+
+// Current version is the single source of truth (Cargo.toml); used both to derive a
+// keyword/default bump and to show `current -> target` in the plan.
+let currentVersion = null;
+try {
+  currentVersion = readCargoTomlVersion(readFileSync(join(root, "src-tauri", "Cargo.toml"), "utf8"));
+} catch {
+  /* surfaced below only if we actually need it to derive the bump */
+}
+
+let version;
+if (spec === undefined || BUMP_LEVELS.includes(spec)) {
+  if (!currentVersion) die(`could not read the current version from src-tauri/Cargo.toml\n${USAGE}`);
+  version = nextVersion(currentVersion, spec ?? "patch");
+} else if (isValidVersion(spec)) {
+  version = spec;
+} else {
+  die(USAGE);
 }
 
 const tag = `v${version}`;
@@ -78,7 +107,7 @@ if (tagExists) blockers.push(`tag ${tag} already exists locally — git tag -d $
 
 // ---- plan ------------------------------------------------------------------
 console.log(`Release plan:`);
-console.log(`  version  ${version}`);
+console.log(`  version  ${currentVersion ?? "?"} → ${version}`);
 console.log(`  branch   ${branch}`);
 console.log(`  tag      ${tag} (annotated)`);
 console.log(`  files    src-tauri/Cargo.toml · package.json · Cargo.lock`);
@@ -116,10 +145,11 @@ async function confirm() {
   }
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   const answer = await new Promise((res) =>
-    rl.question(`\nProceed — bump, commit, tag ${tag}${NO_PUSH ? "" : `, and push to ${remote}`}? [y/N] `, res),
+    rl.question(`\nProceed — bump, commit, tag ${tag}${NO_PUSH ? "" : `, and push to ${remote}`}? [Y/n] `, res),
   );
   rl.close();
-  return /^y(es)?$/i.test(answer.trim());
+  // Default Yes: Enter (empty) proceeds; only an explicit n/no aborts.
+  return !/^n(o)?$/i.test(answer.trim());
 }
 
 if (!(await confirm())) die("aborted.");

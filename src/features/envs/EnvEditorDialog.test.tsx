@@ -1,12 +1,13 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 vi.mock("@/ipc/client", () => ({
-  ipc: { envUpsert: vi.fn(), envActiveSet: vi.fn(), envDelete: vi.fn() },
+  ipc: { envUpsert: vi.fn(), envActiveSet: vi.fn(), envDelete: vi.fn(), envReorder: vi.fn() },
 }));
 
 import { EnvEditorDialog } from "./EnvEditorDialog";
+import { ipc } from "@/ipc/client";
 
 function renderDialog() {
   render(
@@ -114,9 +115,111 @@ describe("EnvEditorDialog name validation", () => {
     );
     await user.type(screen.getByLabelText("Name"), "prod");
     await user.click(screen.getByRole("button", { name: /create/i }));
-    const { ipc } = await import("@/ipc/client");
     expect(ipc.envUpsert).toHaveBeenCalledWith(
       expect.objectContaining({ name: "prod", color: "red" }),
     );
+  });
+
+  it("saves the color picked from the popover", async () => {
+    const user = userEvent.setup();
+    render(
+      <EnvEditorDialog
+        open
+        originalName={null}
+        activeEnv={null}
+        envs={[]}
+        onOpenChange={() => {}}
+        onSaved={() => {}}
+      />,
+    );
+    await user.type(screen.getByLabelText("Name"), "prod"); // name default = red
+    await user.click(screen.getByRole("button", { name: "Environment color" }));
+    await user.click(await screen.findByRole("button", { name: "Blue" }));
+    await user.click(screen.getByRole("button", { name: /create/i }));
+    expect(ipc.envUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "prod", color: "blue" }),
+    );
+  });
+
+  it("dialog content is height-capped and column-flex (scales + internal scroll)", () => {
+    render(
+      <EnvEditorDialog
+        open
+        originalName={null}
+        activeEnv={null}
+        envs={[]}
+        onOpenChange={() => {}}
+        onSaved={() => {}}
+      />,
+    );
+    const content = document.querySelector('[data-slot="dialog-content"]')!;
+    expect(content.className).toContain("max-h-[85vh]");
+    expect(content.className).toContain("flex-col");
+  });
+
+  it("the variables region scrolls internally", () => {
+    render(
+      <EnvEditorDialog
+        open
+        originalName={null}
+        activeEnv={null}
+        envs={[]}
+        onOpenChange={() => {}}
+        onSaved={() => {}}
+      />,
+    );
+    const region = screen.getByText("Variables").closest("div")!;
+    expect(region.className).toContain("overflow-auto");
+  });
+});
+
+describe("EnvEditorDialog rename order preservation", () => {
+  const threeEnvs = [
+    { name: "a", variables: {}, color: null },
+    { name: "b", variables: {}, color: null },
+    { name: "c", variables: {}, color: null },
+  ];
+
+  beforeEach(() => {
+    vi.mocked(ipc.envUpsert).mockClear();
+    vi.mocked(ipc.envActiveSet).mockClear();
+    vi.mocked(ipc.envDelete).mockClear();
+    vi.mocked(ipc.envReorder).mockClear();
+  });
+
+  it("rename restores the env's position via envReorder", async () => {
+    const user = userEvent.setup();
+    render(
+      <EnvEditorDialog
+        open
+        originalName="b"
+        activeEnv={null}
+        envs={threeEnvs}
+        onOpenChange={() => {}}
+        onSaved={() => {}}
+      />,
+    );
+    const nameInput = screen.getByLabelText("Name");
+    await user.clear(nameInput);
+    await user.type(nameInput, "b2");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(ipc.envDelete).toHaveBeenCalledWith("b");
+    expect(ipc.envReorder).toHaveBeenCalledWith(["a", "b2", "c"]);
+  });
+
+  it("a non-rename save does not call envReorder", async () => {
+    const user = userEvent.setup();
+    render(
+      <EnvEditorDialog
+        open
+        originalName="b"
+        activeEnv={null}
+        envs={threeEnvs}
+        onOpenChange={() => {}}
+        onSaved={() => {}}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(ipc.envReorder).not.toHaveBeenCalled();
   });
 });

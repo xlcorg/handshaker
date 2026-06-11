@@ -7,30 +7,27 @@ use crate::error::CoreError;
 
 use super::{validate_env_name, Environment, EnvironmentStore};
 
-/// Thread-safe in-memory store. Backed by `RwLock<HashMap<String, Environment>>`.
-/// Critical sections are O(1) HashMap operations — using `std::sync::RwLock` from
-/// async code is safe under this load.
+/// Thread-safe in-memory store. Backed by `RwLock<Vec<Environment>>` — the
+/// vector order is the canonical user order. Env counts are tiny; O(n) name
+/// lookups are fine.
 pub struct InMemoryEnvironmentStore {
-    inner: RwLock<HashMap<String, Environment>>,
+    inner: RwLock<Vec<Environment>>,
 }
 
 impl InMemoryEnvironmentStore {
     pub fn new() -> Self {
-        Self { inner: RwLock::new(HashMap::new()) }
+        Self { inner: RwLock::new(Vec::new()) }
     }
 
     /// Bootstrap with a single empty `"Default"` env. Used by Tauri startup.
     pub fn with_default() -> Self {
-        let mut map = HashMap::new();
-        map.insert(
-            "Default".to_string(),
-            Environment {
+        Self {
+            inner: RwLock::new(vec![Environment {
                 name: "Default".to_string(),
                 variables: HashMap::new(),
                 color: None,
-            },
-        );
-        Self { inner: RwLock::new(map) }
+            }]),
+        }
     }
 }
 
@@ -40,28 +37,25 @@ impl Default for InMemoryEnvironmentStore {
 
 impl EnvironmentStore for InMemoryEnvironmentStore {
     fn list(&self) -> Vec<Environment> {
-        self.inner
-            .read()
-            .expect("env store lock poisoned")
-            .values()
-            .cloned()
-            .collect()
+        self.inner.read().expect("env store lock poisoned").clone()
     }
 
     fn get(&self, name: &str) -> Option<Environment> {
         self.inner
             .read()
             .expect("env store lock poisoned")
-            .get(name)
+            .iter()
+            .find(|e| e.name == name)
             .cloned()
     }
 
     fn upsert(&self, env: Environment) -> Result<(), CoreError> {
         validate_env_name(&env.name)?;
-        self.inner
-            .write()
-            .expect("env store lock poisoned")
-            .insert(env.name.clone(), env);
+        let mut guard = self.inner.write().expect("env store lock poisoned");
+        match guard.iter_mut().find(|e| e.name == env.name) {
+            Some(slot) => *slot = env,
+            None => guard.push(env),
+        }
         Ok(())
     }
 
@@ -69,7 +63,13 @@ impl EnvironmentStore for InMemoryEnvironmentStore {
         self.inner
             .write()
             .expect("env store lock poisoned")
-            .remove(name);
+            .retain(|e| e.name != name);
+        Ok(())
+    }
+
+    fn reorder(&self, names: &[String]) -> Result<(), CoreError> {
+        let mut guard = self.inner.write().expect("env store lock poisoned");
+        *guard = super::reordered(&guard, names)?;
         Ok(())
     }
 }
@@ -145,5 +145,67 @@ mod tests {
             h.await.unwrap();
         }
         assert_eq!(s.list().len(), 10);
+    }
+
+    fn named(name: &str) -> Environment {
+        Environment { name: name.into(), variables: HashMap::new(), color: None }
+    }
+
+    #[test]
+    fn list_preserves_insertion_order() {
+        let s = InMemoryEnvironmentStore::new();
+        for n in ["b", "a", "c"] {
+            s.upsert(named(n)).unwrap();
+        }
+        let names: Vec<_> = s.list().into_iter().map(|e| e.name).collect();
+        assert_eq!(names, ["b", "a", "c"]);
+    }
+
+    #[test]
+    fn upsert_existing_keeps_position() {
+        let s = InMemoryEnvironmentStore::new();
+        for n in ["a", "b", "c"] {
+            s.upsert(named(n)).unwrap();
+        }
+        let mut vars = HashMap::new();
+        vars.insert("k".to_string(), "v".to_string());
+        s.upsert(Environment { name: "b".into(), variables: vars, color: None }).unwrap();
+        let names: Vec<_> = s.list().into_iter().map(|e| e.name).collect();
+        assert_eq!(names, ["a", "b", "c"]);
+        assert_eq!(s.get("b").unwrap().variables.get("k"), Some(&"v".to_string()));
+    }
+
+    #[test]
+    fn delete_preserves_order() {
+        let s = InMemoryEnvironmentStore::new();
+        for n in ["a", "b", "c"] {
+            s.upsert(named(n)).unwrap();
+        }
+        s.delete("b").unwrap();
+        let names: Vec<_> = s.list().into_iter().map(|e| e.name).collect();
+        assert_eq!(names, ["a", "c"]);
+    }
+
+    #[test]
+    fn reorder_rearranges_list() {
+        let s = InMemoryEnvironmentStore::new();
+        for n in ["a", "b", "c"] {
+            s.upsert(named(n)).unwrap();
+        }
+        s.reorder(&["c".into(), "a".into(), "b".into()]).unwrap();
+        let names: Vec<_> = s.list().into_iter().map(|e| e.name).collect();
+        assert_eq!(names, ["c", "a", "b"]);
+    }
+
+    #[test]
+    fn reorder_rejects_set_mismatch_and_leaves_order_unchanged() {
+        let s = InMemoryEnvironmentStore::new();
+        for n in ["a", "b"] {
+            s.upsert(named(n)).unwrap();
+        }
+        assert!(s.reorder(&["a".into()]).is_err());
+        assert!(s.reorder(&["a".into(), "ghost".into()]).is_err());
+        let names: Vec<_> = s.list().into_iter().map(|e| e.name).collect();
+        assert_eq!(names, ["a", "b"]);
     }
 }

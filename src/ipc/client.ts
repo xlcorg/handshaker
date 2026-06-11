@@ -108,6 +108,11 @@ export async function envDelete(name: string): Promise<void> {
   if (r.status === "error") throw r.error;
 }
 
+export async function envReorder(names: string[]): Promise<void> {
+  const r = await commands.envReorder(names);
+  if (r.status === "error") throw r.error;
+}
+
 export async function varsResolve(template: string): Promise<ResolutionReportIpc> {
   const r = await commands.varsResolve(template);
   if (r.status === "error") throw r.error;
@@ -234,6 +239,7 @@ export const ipc = {
   envActiveSet,
   envUpsert,
   envDelete,
+  envReorder,
   varsResolve,
   collectionList,
   collectionGet,
