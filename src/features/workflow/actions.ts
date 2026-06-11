@@ -13,8 +13,8 @@ export interface CallTargetInit {
 
 /** Initial request body for a fresh or just-switched method: an empty object split
  *  across two lines so the ghost contract skeleton renders between the braces
- *  (a one-line `{}` would push the ghost below the closing brace). The full value
- *  template stays one click away — Reset-to-template (↺). */
+ *  (a one-line `{}` has no interior line, so the ghost is suppressed entirely).
+ *  The full value template stays one click away — Reset-to-template (↺). */
 export const EMPTY_BODY_TEMPLATE = "{\n}";
 
 /** Canonical JSON string (whitespace-normalized), or undefined if `s` is not JSON. */

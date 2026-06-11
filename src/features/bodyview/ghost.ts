@@ -37,14 +37,19 @@ export function computeGhostLines(text: string, schema: MessageSchemaIpc): Ghost
   const contentOffset = lastChildId !== undefined
     ? (spanByNode.get(lastChildId)?.end ?? 0)
     : (rootSpan?.start ?? 0) + 1;
+  const contentLine = lineOfOffset(text, contentOffset);
+  const closeLine = lineOfOffset(text, Math.max((rootSpan?.end ?? text.length) - 1, 0));
+  // A view zone only exists BETWEEN lines: without a line break before the
+  // closing brace there is no slot inside the object, and rendering after the
+  // brace's line would spill the fields outside the braces — suppress instead
+  // (Enter inside the braces reveals the ghost).
+  if (contentLine >= closeLine) return null;
   // Anchor at whichever sits lower: the last entry's end, or the line just above
   // the closing brace. Blank lines after the last entry — notably the caret line
   // Enter just created — thus stay ABOVE the ghost; the skeleton never wedges
-  // itself between the user's typing position and the code above it. (For a
-  // one-line `{}` the brace line minus one would be 0, so the content line wins.)
-  const closeLine = lineOfOffset(text, Math.max((rootSpan?.end ?? text.length) - 1, 0));
+  // itself between the user's typing position and the code above it.
   return {
-    afterLine: Math.max(lineOfOffset(text, contentOffset), closeLine - 1),
+    afterLine: Math.max(contentLine, closeLine - 1),
     lines: missing.map((fl) => `  "${fl.json_name}": ${fl.type_label}`),
   };
 }

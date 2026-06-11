@@ -28,11 +28,22 @@ describe("computeGhostLines", () => {
     expect(computeGhostLines('{\n  "query": "x",\n  "deadline": {}\n}', SCHEMA)).toBeNull();
   });
 
-  it("anchors after the opening brace for an empty object", () => {
-    expect(computeGhostLines("{}", SCHEMA)).toEqual({
+  it("renders between the braces of the empty body template", () => {
+    expect(computeGhostLines("{\n}", SCHEMA)).toEqual({
       afterLine: 1,
       lines: ['  "query": string', '  "deadline": Timestamp'],
     });
+  });
+
+  it("suppresses the ghost when the object is single-line — no slot above the brace", () => {
+    // A view zone only exists BETWEEN lines; rendering after a one-line object
+    // would spill the fields outside the braces. Enter inside reveals the ghost.
+    expect(computeGhostLines("{}", SCHEMA)).toBeNull();
+    expect(computeGhostLines('{ "query": "x" }', SCHEMA)).toBeNull();
+  });
+
+  it("suppresses the ghost when the last entry shares the closing brace's line", () => {
+    expect(computeGhostLines('{\n  "query": "x" }', SCHEMA)).toBeNull();
   });
 
   it("anchors after the closing brace of a multi-line last entry", () => {
