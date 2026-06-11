@@ -741,7 +741,7 @@ git -C . commit -m "feat(contract): pure proto-source renderer (ProtoDoc tokens)
 - Create: `src/features/contract/ProtoView.test.tsx`
 - Modify: `src/styles/globals.css` (append to the end)
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `src/features/contract/ProtoView.test.tsx`:
 
@@ -814,12 +814,12 @@ describe("ProtoView", () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `pnpm vitest run src/features/contract/ProtoView.test.tsx`
 Expected: FAIL — `Failed to resolve import "./ProtoView"`.
 
-- [ ] **Step 3: Implement `ProtoView.tsx`**
+- [x] **Step 3: Implement `ProtoView.tsx`**
 
 ```tsx
 import { useRef } from "react";
@@ -886,7 +886,7 @@ export function ProtoView({ doc }: { doc: ProtoDoc }) {
 }
 ```
 
-- [ ] **Step 4: Add the token colors + flash animation to `globals.css`**
+- [x] **Step 4: Add the token colors + flash animation to `globals.css`**
 
 Append at the end of `src/styles/globals.css` (the `--syntax-*` HSL triples are
 already theme-aware — defined for both light and dark):
@@ -909,17 +909,23 @@ already theme-aware — defined for both light and dark):
 (The global `prefers-reduced-motion` rule in this file already suppresses
 animations — the flash is decorative, that's the intended degradation.)
 
-- [ ] **Step 5: Run to verify pass**
+- [x] **Step 5: Run to verify pass**
 
 Run: `pnpm vitest run src/features/contract/ProtoView.test.tsx`
 Expected: PASS (2 tests).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git -C . add src/features/contract/ProtoView.tsx src/features/contract/ProtoView.test.tsx src/styles/globals.css
 git -C . commit -m "feat(contract): ProtoView with syntax colors and click-to-scroll"
 ```
+
+> ✅ 2026-06-11: done — commit `96b8bca` + review follow-up `8edcbd8` (точные
+> args-ассерции scrollIntoView, тест reduced-motion ветки, мёртвый matchMedia-мок
+> убран, NB-комментарий про classList/static className в `jump()`). Spec+quality
+> ревью пройдены. Полировка на live-проход Task 6: `scroll-margin-top` у блоков,
+> если приземление вплотную к верху выглядит тесно.
 
 ### Task 5: `ContractView` — side switch + placeholders
 
