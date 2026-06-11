@@ -7,7 +7,15 @@ import { ClientErrorView } from "./ClientErrorView";
 import { KVTable, type KVRow } from "./KVTable";
 import { RespMeta, type RespState } from "./RespMeta";
 import { UnderlineTabs } from "@/components/ui/underline-tabs";
+import { ContractView, type ContractSide } from "@/features/contract/ContractView";
 import type { InvokeOutcomeIpc, MessageSchemaIpc } from "@/ipc/bindings";
+
+/** Editable-draft contract for the Contract tab. Omit/null → three tabs (history). */
+export interface ContractInfo {
+  input: MessageSchemaIpc | null;
+  output: MessageSchemaIpc | null;
+  method: string;
+}
 
 export interface ResponsePanelProps {
   state: RespState;
@@ -16,12 +24,33 @@ export interface ResponsePanelProps {
   error?: string | null;
   /** Output-message schema → inlay type hints on the rendered response body. */
   schema?: MessageSchemaIpc | null;
+  /** Method contract for the Contract tab; omit/null → three tabs (history panels). */
+  contract?: ContractInfo | null;
 }
 
-type ResponseTab = "body" | "trailers" | "headers";
+type ResponseTab = "body" | "trailers" | "headers" | "contract";
 
-export function ResponsePanel({ state, outcome, error, schema }: ResponsePanelProps) {
+export function ResponsePanel({ state, outcome, error, schema, contract }: ResponsePanelProps) {
   const [tab, setTab] = useState<ResponseTab>("body");
+  const [side, setSide] = useState<ContractSide>("request");
+  // A manual tab choice wins over both the pre-send default and the
+  // response-arrival auto-switch.
+  const userPickedTab = useRef(false);
+
+  const hasSchemas = !!contract && (contract.input !== null || contract.output !== null);
+  useEffect(() => {
+    if (state === "idle" && hasSchemas && !userPickedTab.current) setTab("contract");
+  }, [state, hasSchemas]);
+
+  // A response just arrived (idle/sending → success|error): pull the user from
+  // the auto-chosen contract back to the body. Manual picks stay put.
+  const prevState = useRef(state);
+  useEffect(() => {
+    const arrived = (state === "success" || state === "error") && prevState.current !== state;
+    prevState.current = state;
+    if (arrived && !userPickedTab.current) setTab((t) => (t === "contract" ? "body" : t));
+  }, [state]);
+
   const isError = state === "error";
   const sending = state === "sending";
 
@@ -66,12 +95,16 @@ export function ResponsePanel({ state, outcome, error, schema }: ResponsePanelPr
       >
         <UnderlineTabs
           value={tab}
-          onChange={(v) => setTab(v as ResponseTab)}
+          onChange={(v) => {
+            userPickedTab.current = true;
+            setTab(v as ResponseTab);
+          }}
           busy={showProgress}
           items={[
             { value: "body", label: "Body" },
             { value: "trailers", label: "Trailers", hint: trailers.length || undefined },
             { value: "headers", label: "Headers", hint: headers.length || undefined },
+            ...(contract ? [{ value: "contract", label: "Contract" }] : []),
           ]}
         />
         <div className="ml-auto flex items-center gap-2.5">
@@ -86,12 +119,23 @@ export function ResponsePanel({ state, outcome, error, schema }: ResponsePanelPr
           />
         )}
       </div>
-      {state === "idle" && (
+      {state === "idle" && tab !== "contract" && (
         <EmptyState
           icon={<Activity className="size-[18px]" />}
           title="Awaiting first call"
           desc="Hit Send to invoke. Response body, trailers and timing will appear here."
         />
+      )}
+      {tab === "contract" && contract && (
+        <div className="min-h-0 flex-1">
+          <ContractView
+            method={contract.method}
+            input={contract.input}
+            output={contract.output}
+            side={side}
+            onSide={setSide}
+          />
+        </div>
       )}
       {state === "success" && outcome && tab === "body" && outcome.response_json !== null && (
         <ResponseBody json={outcome.response_json} schema={schema} />
