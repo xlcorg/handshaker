@@ -1782,6 +1782,12 @@ cargo test -p handshaker-core && cargo test -p handshaker
 Expected: everything green (FE suite grows from 681; both Rust crates pass; build succeeds).
 
 - [ ] **Step 2: Live WebView2 pass** (human-assisted — `pnpm tauri dev` against a reflection-enabled server). Checklist (обновлён под решения Phase E: хинты — только на ответе, запрос несёт контракт через ghost + автокомплит):
+
+> ⚠️ 2026-06-11: пункты про overlay-панель (Toggle/вкладки/Esc/печать-не-закрывает)
+> superseded — оверлей заменён табом Contract в Response-панели, см.
+> `docs/superpowers/specs/2026-06-11-contract-tab-proto-view-design.md` и план
+> `2026-06-11-contract-tab-proto-view.md`. Остальные пункты (хинты, ghost,
+> автокомплит, ↺, response-хинты) остаются в силе.
   - [x] ghost skeleton: рисуется между скобками пустого шаблона `{\n}`, прижат к `}`, шрифт/сетка/отступ совпадают с редактором, каретка не прыгает на Enter, однострочный объект — призрак подавлен, исчезает при заполнении всех полей, не показывается во вложенных объектах (проверено по ходу фикс-цикла 2026-06-11);
   - [x] autocomplete скрывает уже добавленные поля (+ членов занятого oneof); `"` не открывает пустой виджет на полностью заполненном объекте;
   - [ ] тоггл хинтов гасит ghost (запрос) и inlay-хинты (ответ) мгновенно;

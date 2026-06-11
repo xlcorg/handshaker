@@ -17,10 +17,9 @@ import {
   resetBodyToTemplate,
 } from "./actions";
 import { newId } from "@/lib/ids";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import type { MetadataRow, Step } from "./model";
 import type { MessageSchemaIpc } from "@/ipc/bindings";
-import { ContractPanel } from "@/features/contract/ContractPanel";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { usePrefs } from "@/lib/use-prefs";
 
@@ -86,7 +85,6 @@ export function CallPanel({ step, onPatch, onExecuted, editable }: CallPanelProp
 
   const reflection = useDraftReflection(step.address, step.tls, !!editable);
 
-  const [contractOpen, setContractOpen] = useState(false);
   // Schema for the draft's method — input side for request autocomplete + hints,
   // output side for the contract overlay and response-side inlay hints.
   // History panels pass an empty target so no fetch fires.
@@ -134,28 +132,15 @@ export function CallPanel({ step, onPatch, onExecuted, editable }: CallPanelProp
         }}
       >
         <ResizablePanel id="request" minSize="20%">
-          <div className="relative h-full">
-            <RequestTabs
-              step={step}
-              serviceAuth={step.auth}
-              onBody={onBody}
-              onMetadata={onMetadata}
-              onSubmit={() => sendShortcutRef.current()}
-              onResetTemplate={editable ? onResetBody : undefined}
-              schema={schema}
-              contractOpen={editable ? contractOpen : undefined}
-              onToggleContract={editable ? () => setContractOpen((o) => !o) : undefined}
-            />
-            {editable ? (
-              <ContractPanel
-                open={contractOpen}
-                onClose={() => setContractOpen(false)}
-                method={step.method}
-                inputSchema={schema}
-                outputSchema={outputSchema}
-              />
-            ) : null}
-          </div>
+          <RequestTabs
+            step={step}
+            serviceAuth={step.auth}
+            onBody={onBody}
+            onMetadata={onMetadata}
+            onSubmit={() => sendShortcutRef.current()}
+            onResetTemplate={editable ? onResetBody : undefined}
+            schema={schema}
+          />
         </ResizablePanel>
         <ResizableHandle withHandle />
         <ResizablePanel id="response" minSize="20%">

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { RotateCcw, Type, ListTree } from "lucide-react";
+import { RotateCcw, Type } from "lucide-react";
 import { BodyEditor } from "@/features/invoke/BodyEditor";
 import { UnderlineTabs } from "@/components/ui/underline-tabs";
 import { Button } from "@/components/ui/button";
@@ -22,12 +22,9 @@ export interface RequestTabsProps {
   onResetTemplate?: () => void;
   /** Flat field-schema for the current method; drives body autocomplete. */
   schema?: MessageSchemaIpc | null;
-  /** Contract overlay toggle (editable draft only). Omit to hide the button. */
-  contractOpen?: boolean;
-  onToggleContract?: () => void;
 }
 
-export function RequestTabs({ step, serviceAuth, onBody, onMetadata, onSubmit, onResetTemplate, schema, contractOpen, onToggleContract }: RequestTabsProps) {
+export function RequestTabs({ step, serviceAuth, onBody, onMetadata, onSubmit, onResetTemplate, schema }: RequestTabsProps) {
   const [tab, setTab] = useState<Tab>("request");
   const [prefs, setPref] = usePrefs();
   return (
@@ -56,21 +53,6 @@ export function RequestTabs({ step, serviceAuth, onBody, onMetadata, onSubmit, o
                 <Type />
               </Button>
             </Tooltip>
-            {onToggleContract ? (
-              <Tooltip content="Method contract">
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={onToggleContract}
-                  disabled={step.method.trim().length === 0}
-                  aria-label="Toggle method contract"
-                  aria-pressed={contractOpen ?? false}
-                  className={contractOpen ? "text-foreground" : "text-muted-foreground hover:text-foreground"}
-                >
-                  <ListTree />
-                </Button>
-              </Tooltip>
-            ) : null}
             {onResetTemplate ? (
               <Tooltip content="Reset body to template">
                 <Button

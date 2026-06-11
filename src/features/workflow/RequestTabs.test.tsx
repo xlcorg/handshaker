@@ -113,7 +113,7 @@ describe("RequestTabs", () => {
   });
 });
 
-describe("RequestTabs contract toggles", () => {
+describe("RequestTabs hints toggle", () => {
   it("toggles the bodyHints pref via the hints button", async () => {
     const user = userEvent.setup();
     renderTabs(<RequestTabs {...setup()} />);
@@ -125,33 +125,10 @@ describe("RequestTabs contract toggles", () => {
     expect(btn).toHaveAttribute("aria-pressed", initial);
   });
 
-  it("shows the contract button only when onToggleContract is provided, and reports pressed state", async () => {
+  it("hides the hints toggle off the Request tab", async () => {
     const user = userEvent.setup();
-    const onToggleContract = vi.fn();
-    const { unmount } = renderTabs(<RequestTabs {...setup()} />);
-    expect(screen.queryByRole("button", { name: /method contract/i })).toBeNull();
-    unmount();
-
-    renderTabs(<RequestTabs {...setup()} contractOpen onToggleContract={onToggleContract} />);
-    const btn = screen.getByRole("button", { name: /method contract/i });
-    expect(btn).toHaveAttribute("aria-pressed", "true");
-    await user.click(btn);
-    expect(onToggleContract).toHaveBeenCalledTimes(1);
-  });
-
-  it("hides both toggles off the Request tab", async () => {
-    const user = userEvent.setup();
-    renderTabs(<RequestTabs {...setup()} onToggleContract={vi.fn()} />);
+    renderTabs(<RequestTabs {...setup()} />);
     await user.click(screen.getByRole("tab", { name: /metadata/i }));
     expect(screen.queryByRole("button", { name: /inline type hints/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /method contract/i })).toBeNull();
-  });
-
-  it("disables the contract button when no method is selected", () => {
-    const step = newStep({ address: "h", tls: false, service: "S", method: "", requestJson: "{}" });
-    renderTabs(
-      <RequestTabs step={step} serviceAuth={{ kind: "none" }} onBody={vi.fn()} onMetadata={vi.fn()} onToggleContract={vi.fn()} />,
-    );
-    expect(screen.getByRole("button", { name: /method contract/i })).toBeDisabled();
   });
 });
