@@ -140,7 +140,7 @@ fn build_field(
     let json_name = field.json_name().to_string();
     let proto_name = field.name().to_string();
     let (oneof_group, optional) = oneof_info(field);
-    let number = field.number() as u32;
+    let number = field.number();
 
     if field.is_map() {
         let entry = match field.kind() {
