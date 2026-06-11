@@ -8,8 +8,15 @@
 > Task 12: `090daa8`+`ac79c6e`; Task 13: `43680b4`+`35154c5`. Spec+quality review пройдены на
 > каждой задаче. **Полный гейт зелёный (Task 14 Step 1):** `pnpm lint` clean · 725 FE-тестов ·
 > `pnpm build` ok · `cargo test -p handshaker-core` ok · `cargo test -p handshaker` 43/43.
-> **Остаток:** Task 14 Step 2 — live WebView2 pass (human-assisted, `pnpm tauri dev` против
-> reflection-сервера; чеклист в Task 14) → затем баннер → `🎉 feature-complete` + ff-merge в `main`.
+> **Live-pass доводка 2026-06-11 (Phase E, по живой верификации):** ghost-фиксы `de1d424`
+> (выравнивание у content origin + без italic), `8f157e6` (`applyFontInfo` на зону — шрифт/сетка),
+> `404632e` (якорь над `}`), `f76e445` (подавление на однострочном объекте), `ad58092`
+> (синхронный ре-якорь при изменении числа строк); продуктовые решения: `2302981` (без
+> автозаполнения при выборе метода — пустой шаблон `{\n}`), `fc49ec2` (inlay-хинты только на
+> ответе), `f1d550f` (комплит скрывает присутствующие ключи + занятые oneof). Гейт после
+> доводки: lint clean · 739/739 FE.
+> **Остаток:** Task 15 (Phase E) — error-tolerant ghost (висящая запятая) → Task 14 Step 2 —
+> добить live-чеклист → баннер → `🎉 feature-complete` + ff-merge в `main`.
 > Branch: `claude/nostalgic-jang-778d08` (harness worktree — do NOT `git worktree remove`).
 > Spec: `docs/superpowers/specs/2026-06-10-contract-view-design.md` (approved 2026-06-10).
 
@@ -1770,14 +1777,14 @@ cargo test -p handshaker-core && cargo test -p handshaker
 
 Expected: everything green (FE suite grows from 681; both Rust crates pass; build succeeds).
 
-- [ ] **Step 2: Live WebView2 pass** (human-assisted — `pnpm tauri dev` against a reflection-enabled server). Checklist:
-  - inlay hints appear while typing in the request body; labels match field types; enum preview correct;
-  - ghost skeleton appears after deleting a top-level field; disappears when all fields present; not shown in nested objects;
-  - hints toggle in the tab strip kills BOTH hints and ghost in request AND response editors instantly;
-  - contract toggle opens the floating panel; Request/Response tabs browse both contracts pre-send; nested expansion + recursion marker work;
-  - typing in the editor with the panel open does NOT close it; Esc with the suggest widget open closes the widget first, panel second;
-  - Reset-to-template (`executeEdits`) does not duplicate hints (monaco#4700 check);
-  - response hints appear on the rendered (possibly elided) response after Send.
+- [ ] **Step 2: Live WebView2 pass** (human-assisted — `pnpm tauri dev` against a reflection-enabled server). Checklist (обновлён под решения Phase E: хинты — только на ответе, запрос несёт контракт через ghost + автокомплит):
+  - [x] ghost skeleton: рисуется между скобками пустого шаблона `{\n}`, прижат к `}`, шрифт/сетка/отступ совпадают с редактором, каретка не прыгает на Enter, однострочный объект — призрак подавлен, исчезает при заполнении всех полей, не показывается во вложенных объектах (проверено по ходу фикс-цикла 2026-06-11);
+  - [x] autocomplete скрывает уже добавленные поля (+ членов занятого oneof); `"` не открывает пустой виджет на полностью заполненном объекте;
+  - [ ] тоггл хинтов гасит ghost (запрос) и inlay-хинты (ответ) мгновенно;
+  - [ ] contract toggle открывает плавающую панель; вкладки Request/Response листают оба контракта до Send; вложенное раскрытие + маркер рекурсии `↻` работают;
+  - [ ] печать в редакторе при открытой панели её не закрывает; Esc при открытом suggest-виджете закрывает сперва виджет, вторым Esc — панель;
+  - [ ] Reset-to-template (`↺`, executeEdits) — теперь единственный способ получить полный шаблон значений; без задвоения хинтов (monaco#4700) и ghost-артефактов;
+  - [ ] response-хинты на отрисованном (возможно, элидированном) ответе после Send: метки совпадают с типами полей, enum preview (`enum X: A | B | …`) корректен.
 
 - [ ] **Step 3: Update the plan status banner** to `🎉 feature-complete — live-verified <date>` (or list any deviations found), commit:
 
@@ -1789,3 +1796,42 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ```
 
 - [ ] **Step 4: Hand off to `superpowers:finishing-a-development-branch`** (ff-merge to `main`, archive plan+spec per the CLAUDE.md convention, update the CLAUDE.md Active-work section; do NOT remove the harness worktree).
+
+Steps 2–4 выполняются **после Phase E** (ниже).
+
+---
+
+## Phase E — live-pass доводка (UX по best practice)
+
+Выросла из живой верификации Task 14 Step 2; каждое решение одобрено пользователем
+2026-06-11. Уже сделано (коммиты в баннере): убрано автозаполнение при выборе метода
+(пустой шаблон `EMPTY_BODY_TEMPLATE = "{\n}"`), inlay-хинты оставлены только на ответе,
+комплит скрывает присутствующие ключи и членов занятых oneof-групп (по образцу
+vscode-json-languageservice), пять ghost-фиксов (шрифт/якорь/подавление/синхронный
+ре-якорь).
+
+### Task 15: error-tolerant ghost — висящая запятая не гасит призрак
+
+Best practice (VS Code / jsonc-parser): редакторские подсказки работают на
+error-tolerant парсинге («On invalid input, the parser tries to be as fault tolerant
+as possible, but still return a result»). У нас ghost завязан на строгий
+`parseWithSpans`: `{"a": "x",⏎}` → парс null → зона снимается ровно в каноничной
+паузе «поставил запятую, выбираю следующее поле».
+
+**Files:**
+- Modify: `src/features/bodyview/ghost.ts`, `src/features/bodyview/ghost.test.ts`
+
+- [ ] **Step 1: Failing tests** — `computeGhostLines`:
+  - `'{\n  "query": "x",\n}'` → блок `{ afterLine: 2, lines: ['  "deadline": Timestamp'] }`
+    (висящая запятая перед `}` не гасит ghost);
+  - `'{\n  "deadline": { "seconds": 1, },\n}'` → блок (вложенная висящая запятая тоже
+    ремонтируется; missing `query`, afterLine 2);
+  - ремонт не оживляет настоящие инвалиды: `'{ "query": '` → по-прежнему null.
+- [ ] **Step 2: Run** — `pnpm test src/features/bodyview/ghost.test.ts` — FAIL.
+- [ ] **Step 3: Implement** — фолбэк с **сохранением длины текста**: если строгий парс
+  упал — `text.replace(/,(?=\s*[}\]])/g, " ")` (каждая запятая, за которой до `}`/`]`
+  только whitespace, становится пробелом той же ширины → все оффсеты/строки якорной
+  математики остаются честными для исходного текста) и второй `parseWithSpans`.
+  Якорная логика без изменений.
+- [ ] **Step 4: Run** — ghost-тесты, затем полный гейт (`pnpm lint && pnpm test`).
+- [ ] **Step 5: Commit** — `fix(bodyview): tolerate trailing commas in ghost parsing`.
