@@ -381,14 +381,6 @@ export function setModelSchema(
   else schemaByModel.delete(model);
 }
 
-/** Read access for sibling providers (inlay hints) sharing the same model↔schema map.
- *  Returns `undefined` (not `null`) when no schema is attached — WeakMap semantics. */
-export function getModelSchema(
-  model: Monaco.editor.ITextModel,
-): MessageSchemaIpc | undefined {
-  return schemaByModel.get(model);
-}
-
 /** Separator to append after an accepted completion, given the text that follows the
  *  replacement range. Mirrors VS Code's `evaluateSeparatorAfter`: another token ahead
  *  (the next property/value) needs a `,`; a closing brace/bracket, an existing comma,

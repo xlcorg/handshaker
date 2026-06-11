@@ -30,7 +30,7 @@ export interface Prefs {
   grpcIcon: GrpcIconStyle;
   /** Service-group header style in the MethodPicker dropdown. */
   methodGroupStyle: MethodGroupStyle;
-  /** Inline contract hints in body editors: inlay type labels + the ghost skeleton. */
+  /** Inline contract hints in the request body editor: the ghost skeleton. */
   bodyHints: boolean;
 }
 
