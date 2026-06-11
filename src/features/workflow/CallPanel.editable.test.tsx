@@ -12,13 +12,18 @@ vi.mock("@/ipc/client", () => ({
   varsResolve: vi.fn(),
   grpcInvokeOneshot: vi.fn(),
   grpcCancel: vi.fn(),
-  // No reflection in tests: both schema sides resolve null.
+  // No reflection in tests: both schema sides resolve null. NB: useMessageSchema
+  // caches results (nulls too) process-wide per address|tls|service|method|side,
+  // so a test that wants real schemas must use a target none of the null-returning
+  // tests has touched.
   grpcMessageSchema: vi.fn().mockResolvedValue(null),
 }));
 
 import { CallPanel } from "./CallPanel";
 import { newStep } from "./model";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { grpcMessageSchema } from "@/ipc/client";
+import type { MessageSchemaIpc } from "@/ipc/bindings";
 
 const draft = newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "GetX" });
 
@@ -99,6 +104,39 @@ describe("CallPanel contract tab", () => {
       </TooltipProvider>,
     );
     expect(screen.queryByRole("tab", { name: "Contract" })).toBeNull();
+  });
+
+  it("threads the request and response schemas to the correct contract sides", async () => {
+    const schemaWithField = (root: string, name: string): MessageSchemaIpc => ({
+      root,
+      messages: [{
+        full_name: root,
+        fields: [{
+          json_name: name, proto_name: name, type_label: "string", value_kind: "scalar",
+          repeated: false, message_type: null, enum_type: null, oneof_group: null,
+          number: 1, optional: false,
+        }],
+      }],
+      enums: [],
+    });
+    vi.mocked(grpcMessageSchema).mockImplementation((_t, _s, _m, side) =>
+      Promise.resolve(schemaWithField(side === "input" ? "t.Req" : "t.Resp", side === "input" ? "req_field" : "resp_field")),
+    );
+    // Distinct method → fresh useMessageSchema cache keys (the tests above already
+    // cached null for `draft`'s keys, which would shadow this side-aware mock).
+    const sideDraft = newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "GetSides" });
+    render(
+      <TooltipProvider>
+        <CallPanel step={sideDraft} onPatch={() => {}} editable />
+      </TooltipProvider>,
+    );
+    // Schemas resolve async; the idle panel then auto-defaults to the Contract tab,
+    // which opens on the Request side.
+    expect(await screen.findByText("req_field")).toBeInTheDocument();
+    expect(screen.queryByText("resp_field")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Response" }));
+    expect(screen.getByText("resp_field")).toBeInTheDocument();
+    expect(screen.queryByText("req_field")).toBeNull();
   });
 });
 
