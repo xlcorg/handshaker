@@ -246,7 +246,13 @@ export interface Suggestion {
   isSnippet?: boolean;
   /** Ask Monaco to re-trigger suggestions after accepting (next nesting level). */
   triggerNext?: boolean;
+  /** Keeps the widget in proto declaration order (Monaco defaults to alphabetical),
+   *  matching the ghost skeleton and the contract panel. */
+  sortText?: string;
 }
+
+/** Zero-padded index → Monaco sortText (string compare). */
+const sortKey = (i: number) => String(i).padStart(4, "0");
 
 const NUMBER_LABELS = new Set([
   "double", "float", "int32", "int64", "uint32", "uint64",
@@ -301,13 +307,14 @@ export function buildKeySuggestions(
         !presentKeys.has(field.json_name) &&
         (!field.oneof_group || !takenOneofs.has(field.oneof_group)),
     )
-    .map((field) => ({
+    .map((field, i) => ({
       label: field.json_name,
       detail: field.type_label,
       insertText: `"${field.json_name}": ${scaffold(field)}`,
       kind: keyKind(field),
       isSnippet: true,
       triggerNext: field.value_kind === "message" || field.value_kind === "enum",
+      sortText: sortKey(i),
     }));
 }
 
@@ -327,7 +334,12 @@ export function buildValueSuggestions(schema: MessageSchemaIpc, ctx: CompletionC
     const enumType = field.enum_type;
     const en = schema.enums.find((e) => e.full_name === enumType);
     if (!en) return [];
-    return en.values.map((v) => ({ label: v, insertText: `"${v}"`, kind: "value" as const }));
+    return en.values.map((v, i) => ({
+      label: v,
+      insertText: `"${v}"`,
+      kind: "value" as const,
+      sortText: sortKey(i),
+    }));
   }
   // Bool suggestions only for non-map singular/repeated bool (map-value bool is niche).
   if (d.kind === "message" && (field.type_label === "bool" || field.type_label === "repeated bool")) {
@@ -493,6 +505,7 @@ export function registerBodyCompletion(monaco: typeof Monaco): void {
           detail: s.detail,
           kind: monacoKind(monaco, s.kind),
           insertText,
+          sortText: s.sortText,
           filterText: insideString ? `"${s.label}"` : undefined,
           insertTextRules:
             s.isSnippet && !asKeyOnly

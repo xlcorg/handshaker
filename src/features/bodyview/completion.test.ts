@@ -175,6 +175,18 @@ describe("collectPresentKeys", () => {
   });
 });
 
+describe("proto field order (sortText)", () => {
+  it("key suggestions carry ascending sortText in schema order", () => {
+    const sorts = computeSuggestions(SCHEMA, "{\n  ").map((s) => s.sortText);
+    expect(sorts).toEqual(["0000", "0001", "0002", "0003", "0004", "0005", "0006"]);
+  });
+
+  it("enum value suggestions follow declaration order", () => {
+    const sorts = computeSuggestions(SCHEMA, '{ "status": ').map((s) => s.sortText);
+    expect(sorts).toEqual(["0000", "0001"]);
+  });
+});
+
 describe("separatorAfter", () => {
   it("appends a comma when another property follows the insertion point", () => {
     expect(separatorAfter('\n  "userId": ""\n}')).toBe(",");
