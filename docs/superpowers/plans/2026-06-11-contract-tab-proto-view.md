@@ -1414,9 +1414,11 @@ git -C . commit -m "docs(plan): contract tab proto view - code-complete banner"
 
 - [ ] **Step 5: Live verification (user-driven, `pnpm tauri dev` + Ctrl+R)**
 
-- [ ] Выбор метода → Response-панель сама открывает таб **Contract** с proto-листингом (Request-сторона).
-- [ ] Переключатель **Request | Response** работает; выбор стороны переживает уход на Body и обратно.
-- [ ] Скролл при переключении стороны: позиция прошлой стороны не должна оставлять новую «в середине документа» (если мешает — `key={side}` на скроллере); приземление click-to-scroll не вплотную к верху (иначе `scroll-margin-top`).
+- [ ] Выбор метода → Response-панель сама открывает таб **Contract** с proto-листингом.
+- [ ] ~~Переключатель Request | Response~~ — заменён единым видом
+  (спек `2026-06-12-contract-unified-view-design.md`): rpc-строка сверху,
+  оба корня кликабельны, общие типы напечатаны один раз.
+- [ ] Приземление click-to-scroll не вплотную к верху (иначе `scroll-margin-top`).
 - [ ] Клик по имени типа (например, вложенного message) скроллит к его определению с короткой вспышкой.
 - [ ] Tooltip на имени поля показывает `json_name`; на имени типа — полное имя.
 - [ ] `optional`, `repeated`, `map<…>`, `oneof { … }`, номера полей и enum-значений выглядят как в .proto.
