@@ -67,6 +67,24 @@ describe("computeGhostLines", () => {
     expect(block).toEqual({ afterLine: 3, lines: ['  "deadline": Timestamp'] });
   });
 
+  it("tolerates a trailing comma before the closing brace (the between-fields pause)", () => {
+    expect(computeGhostLines('{\n  "query": "x",\n}', SCHEMA)).toEqual({
+      afterLine: 2,
+      lines: ['  "deadline": Timestamp'],
+    });
+  });
+
+  it("tolerates nested trailing commas too", () => {
+    expect(computeGhostLines('{\n  "deadline": { "seconds": 1, },\n}', SCHEMA)).toEqual({
+      afterLine: 2,
+      lines: ['  "query": string'],
+    });
+  });
+
+  it("repair does not revive genuinely invalid JSON", () => {
+    expect(computeGhostLines('{ "query": ', SCHEMA)).toBeNull();
+  });
+
   it("returns null for invalid JSON, a non-object root, and an unknown schema root", () => {
     expect(computeGhostLines('{ "query": ', SCHEMA)).toBeNull();
     expect(computeGhostLines("[1]", SCHEMA)).toBeNull();

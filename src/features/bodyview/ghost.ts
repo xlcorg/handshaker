@@ -15,10 +15,20 @@ function lineOfOffset(text: string, offset: number): number {
   return line;
 }
 
+/** Length-preserving repair of the canonical mid-edit state: every comma followed by
+ *  only whitespace up to a `}`/`]` becomes a space, so all offsets/lines stay valid
+ *  for the ORIGINAL text. Narrow-case mirror of jsonc-parser's fault tolerance
+ *  ("on invalid input ... as fault tolerant as possible") — the trailing comma is
+ *  exactly the pause between finishing one field and typing the next. */
+function repairTrailingCommas(text: string): string {
+  return text.replace(/,(?=\s*[}\]])/g, " ");
+}
+
 /** Top-level diff: root-message fields minus keys present at depth 1. Null when
- *  the body is unparseable, the root isn't an object, or nothing is missing. */
+ *  the body is unparseable (after trailing-comma repair), the root isn't an object,
+ *  or nothing is missing. */
 export function computeGhostLines(text: string, schema: MessageSchemaIpc): GhostBlock | null {
-  const parsed = parseWithSpans(text);
+  const parsed = parseWithSpans(text) ?? parseWithSpans(repairTrailingCommas(text));
   if (!parsed || parsed.tree.rootId === null) return null;
   const root = parsed.tree.nodes[parsed.tree.rootId];
   if (!root || root.kind !== "object") return null;
