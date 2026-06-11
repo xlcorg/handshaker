@@ -4,11 +4,14 @@
 > (recommended) or superpowers:executing-plans to implement this plan task-by-task.
 > Steps use checkbox (`- [ ]`) syntax for tracking.
 
-> **Status:** 🚧 in progress — Phase A done 2026-06-11 (Task 1: `f30797d`+`69f3b6b`,
-> Task 2: `193715b`+`cb08bc4`). Phase B done 2026-06-11 (Task 3: `7ae82bc`+`427737a`,
-> Task 4: `96b8bca`+`8edcbd8`, Task 5: `3f925c1`; все прошли spec+quality ревью;
-> per-file vitest зелёные, tsc clean). Далее — Phase C, Task 6 (после /clear).
-> NB: `pnpm lint` в этом репо — только `tsc -b`, eslint нет.
+> **Status:** 🚧 code-complete — awaiting live WebView2 verification (Task 8
+> Step 5 checklist + Step 6 finish). Phase A done 2026-06-11 (Task 1:
+> `f30797d`+`69f3b6b`, Task 2: `193715b`+`cb08bc4`). Phase B done 2026-06-11
+> (Task 3: `7ae82bc`+`427737a`, Task 4: `96b8bca`+`8edcbd8`, Task 5: `3f925c1`).
+> Phase C done 2026-06-12 (Task 6: `97ab7ea`, Task 7: `34b1a48`+`03da8da`;
+> все прошли spec+quality ревью). Full gate 2026-06-12: tsc clean ·
+> vitest 756 (111 файлов) · cargo handshaker-core + handshaker зелёные ·
+> `pnpm build` ок. NB: `pnpm lint` в этом репо — только `tsc -b`, eslint нет.
 > Branch `claude/nostalgic-jang-778d08` (existing feature worktree).
 > **Spec:** `docs/superpowers/specs/2026-06-11-contract-tab-proto-view-design.md` (approved 2026-06-11).
 > Supersedes the floating-overlay part of the contract-view feature
@@ -1368,7 +1371,7 @@ git -C . commit -m "feat(workflow): thread method contract into the Response pan
 - Modify: `docs/superpowers/plans/2026-06-11-contract-tab-proto-view.md` (banner)
 - Modify: `CLAUDE.md` (Active-work paragraph)
 
-- [ ] **Step 1: Run the full gate**
+- [x] **Step 1: Run the full gate**
 
 ```powershell
 pnpm lint
@@ -1380,17 +1383,20 @@ pnpm build
 
 Expected: all green. Record the final FE test count for the banner.
 
-- [ ] **Step 2: Update this plan's banner**
+> ✅ 2026-06-12: gate green — tsc clean · vitest 756 (111 files) ·
+> `cargo test -p handshaker-core` + `-p handshaker` ok · `pnpm build` ok.
+
+- [x] **Step 2: Update this plan's banner**
 
 Set status to `🚧 code-complete — awaiting live WebView2 verification`, list the
 task commits and the gate result.
 
-- [ ] **Step 3: Update `CLAUDE.md` Active-work**
+- [x] **Step 3: Update `CLAUDE.md` Active-work**
 
 Reword the Group B #3 paragraph: overlay заменён табом Contract в Response-панели
 (proto-вид, спек 2026-06-11), код готов, остаётся live-проверка и финиш ветки.
 
-- [ ] **Step 4: Commit docs**
+- [x] **Step 4: Commit docs**
 
 ```powershell
 git -C . add docs/superpowers/plans/2026-06-11-contract-tab-proto-view.md CLAUDE.md

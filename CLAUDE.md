@@ -6,18 +6,22 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 
 ## Active work — Group B #3: контракт метода → таб Contract (proto-вид)
 
-**План:** `docs/superpowers/plans/2026-06-11-contract-tab-proto-view.md` (🚧 not
-started, Tasks 1–8; ветка `claude/nostalgic-jang-778d08`) · **Спек:**
+**План:** `docs/superpowers/plans/2026-06-11-contract-tab-proto-view.md`
+(🚧 **code-complete** 2026-06-12, Tasks 1–7 + полный гейт выполнены; ветка
+`claude/nostalgic-jang-778d08`) · **Спек:**
 `docs/superpowers/specs/2026-06-11-contract-tab-proto-view-design.md` (одобрен
-2026-06-11). Редизайн по итогам live-прохода: плавающий оверлей `ContractPanel`
-признан неудобным и **удаляется**; контракт переезжает в 4-й таб Response-панели
-(Body · Trailers · Headers · Contract) как подсвеченный proto-исходник (номера
-полей, `optional`, enum-числа — маленькое расширение `grpc_message_schema`),
-внутри — переключатель Request | Response, клик по типу скроллит к определению.
+2026-06-11). Плавающий оверлей `ContractPanel` удалён; контракт — 4-й таб
+Response-панели (Body · Trailers · Headers · Contract): подсвеченный
+proto-исходник (номера полей, `optional`, enum-числа), переключатель
+Request | Response, клик по типу скроллит к определению; пре-send таб
+автооткрывается на Contract, по приходу ответа автоуходит на Body (ручной
+выбор таба — приоритетнее). Гейт: tsc clean · vitest 756 · cargo core+app ·
+build. **Остаётся:** live-проверка в WebView2 (чеклист Task 8 Step 5 плана,
+включая полировки: однокадровый flash «Awaiting first call», re-arm
+`userPickedTab` при смене метода, `scroll-margin-top`) и финиш ветки
+(Step 6: ff-merge в `main`, архив планов/спеков 2026-06-10 + 2026-06-11).
 Хинты/ghost/автокомплит/диагностика (Phases A–E старого плана
-`2026-06-10-contract-view.md` + спек `2026-06-10-contract-view-design.md`,
-всё закоммичено до `e47eb31`) не трогаются. Исполнение — subagent-driven,
-границы фаз — 🧹 /clear-чекпойнты; статус задач — чекбоксы в план-файле.
+`2026-06-10-contract-view.md`) не тронуты.
 
 Интеграционная ветка — `main`; фичи ведутся в отдельных worktree-ветках
 (`claude/*`) и вливаются в `main` fast-forward.
