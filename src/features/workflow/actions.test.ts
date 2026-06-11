@@ -24,37 +24,19 @@ beforeEach(() => {
 });
 
 describe("createStepFromMethod", () => {
-  it("builds a step with skeleton body from the contract", async () => {
-    vi.mocked(ipc.grpcBuildRequestSkeleton).mockResolvedValue(
-      '{\n  "order_id": ""\n}',
-    );
+  it("starts with the empty body template — the contract shows as ghost, not autofill", async () => {
     const step = await createStepFromMethod(
       { address: "order-api:443", tls: true },
       "order.v1.OrderService",
       "GetOrderState",
     );
-    expect(ipc.grpcBuildRequestSkeleton).toHaveBeenCalledWith(
-      { address: "order-api:443", tls: true, skip_verify: false },
-      "order.v1.OrderService",
-      "GetOrderState",
-    );
-    expect(step.requestJson).toContain("order_id");
+    expect(ipc.grpcBuildRequestSkeleton).not.toHaveBeenCalled();
+    expect(step.requestJson).toBe("{\n}");
     expect(step.status).toBe("draft");
     expect(step.service).toBe("order.v1.OrderService");
   });
 
-  it("falls back to {} when skeleton fails", async () => {
-    vi.mocked(ipc.grpcBuildRequestSkeleton).mockRejectedValue(new Error("boom"));
-    const step = await createStepFromMethod(
-      { address: "h:443", tls: true },
-      "S",
-      "M",
-    );
-    expect(step.requestJson).toBe("{}");
-  });
-
   it("seeds metadata (deep copy) from service defaultMetadata and records inline auth", async () => {
-    vi.mocked(ipc.grpcBuildRequestSkeleton).mockResolvedValue("{}");
     const defaults = [{ key: "x-tenant", value: "{{tenant}}", enabled: true }];
     const auth = { kind: "env_var" as const, env_var: "TOK", header_name: "authorization", prefix: "Bearer " };
     const step = await createStepFromMethod(
@@ -414,10 +396,8 @@ describe("buildRequestSkeletonSafe", () => {
 });
 
 describe("applyMethodSelection", () => {
-  it("replaces a pristine body with the new method's skeleton", async () => {
-    vi.mocked(ipc.grpcBuildRequestSkeleton)
-      .mockResolvedValueOnce('{"a":""}')  // old method skeleton (for pristine check)
-      .mockResolvedValueOnce('{"b":""}'); // new method skeleton
+  it("resets a pristine body to the empty template (the contract renders as ghost)", async () => {
+    vi.mocked(ipc.grpcBuildRequestSkeleton).mockResolvedValueOnce('{"a":""}'); // old method skeleton (pristine check)
     const patch = vi.fn();
     await applyMethodSelection(
       patch,
@@ -426,13 +406,13 @@ describe("applyMethodSelection", () => {
       { service: "p.S", method: "New" },
     );
     expect(patch).toHaveBeenNthCalledWith(1, { service: "p.S", method: "New" });
-    expect(patch).toHaveBeenNthCalledWith(2, { requestJson: '{"b":""}' });
+    expect(patch).toHaveBeenNthCalledWith(2, { requestJson: "{\n}" });
+    // no autofill: the new method's skeleton is only built on demand (Reset-to-template)
+    expect(ipc.grpcBuildRequestSkeleton).toHaveBeenCalledTimes(1);
   });
 
-  it("replaces when the body equals the skeleton modulo whitespace", async () => {
-    vi.mocked(ipc.grpcBuildRequestSkeleton)
-      .mockResolvedValueOnce('{"a":""}')
-      .mockResolvedValueOnce('{"b":""}');
+  it("resets a body that equals the old skeleton modulo whitespace", async () => {
+    vi.mocked(ipc.grpcBuildRequestSkeleton).mockResolvedValueOnce('{"a":""}');
     const patch = vi.fn();
     await applyMethodSelection(
       patch,
@@ -440,7 +420,7 @@ describe("applyMethodSelection", () => {
       { requestJson: '{\n  "a": ""\n}', service: "p.S", method: "Old" }, // == old skeleton
       { service: "p.S", method: "New" },
     );
-    expect(patch).toHaveBeenNthCalledWith(2, { requestJson: '{"b":""}' });
+    expect(patch).toHaveBeenNthCalledWith(2, { requestJson: "{\n}" });
   });
 
   it("preserves an edited body (patches service/method only)", async () => {
@@ -460,10 +440,12 @@ describe("applyMethodSelection", () => {
 describe("isPristineBody", () => {
   const skel = '{"a":""}';
 
-  it("treats empty / {} bodies as pristine", () => {
+  it("treats empty / empty-object bodies as pristine (any formatting)", () => {
     expect(isPristineBody("", skel)).toBe(true);
     expect(isPristineBody("   ", skel)).toBe(true);
     expect(isPristineBody("{}", skel)).toBe(true);
+    expect(isPristineBody("{\n}", skel)).toBe(true); // the empty body template itself
+    expect(isPristineBody("{ }", skel)).toBe(true);
   });
 
   it("ignores whitespace/formatting when comparing to the skeleton", () => {

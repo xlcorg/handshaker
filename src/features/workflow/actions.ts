@@ -11,6 +11,12 @@ export interface CallTargetInit {
   tls: boolean;
 }
 
+/** Initial request body for a fresh or just-switched method: an empty object split
+ *  across two lines so the ghost contract skeleton renders between the braces
+ *  (a one-line `{}` would push the ghost below the closing brace). The full value
+ *  template stays one click away — Reset-to-template (↺). */
+export const EMPTY_BODY_TEMPLATE = "{\n}";
+
 /** Canonical JSON string (whitespace-normalized), or undefined if `s` is not JSON. */
 function canonicalJson(s: string): string | undefined {
   try {
@@ -23,11 +29,11 @@ function canonicalJson(s: string): string | undefined {
 /** True when `body` is still the unedited skeleton (or empty), so a method switch may
  *  safely replace it. Whitespace/formatting differences are NOT edits; invalid JSON is. */
 export function isPristineBody(body: string, skeleton: string): boolean {
-  const trimmed = body.trim();
-  if (trimmed === "" || trimmed === "{}") return true;
-  const cs = canonicalJson(skeleton);
-  if (cs === undefined) return trimmed === skeleton.trim(); // skeleton is non-JSON → string compare
+  if (body.trim() === "") return true;
   const cb = canonicalJson(body);
+  if (cb === "{}") return true; // empty object in any formatting (incl. EMPTY_BODY_TEMPLATE)
+  const cs = canonicalJson(skeleton);
+  if (cs === undefined) return body.trim() === skeleton.trim(); // skeleton is non-JSON → string compare
   if (cb === undefined) return false; // mid-edit, invalid JSON → preserve
   return cb === cs;
 }
@@ -79,10 +85,12 @@ export async function fetchMessageSchemaSafe(
   }
 }
 
-/** MethodPicker handler for an editable draft. Patches service/method, then replaces the
- *  body with the new method's skeleton ONLY when the current body is still pristine
- *  (empty / `{}` / structurally equal to the pre-switch method's skeleton). An edited body
- *  is preserved verbatim — use Reset-to-template (`resetBodyToTemplate`) to regenerate. */
+/** MethodPicker handler for an editable draft. Patches service/method, then resets the
+ *  body to `EMPTY_BODY_TEMPLATE` ONLY when the current body is still pristine (empty /
+ *  `{}` / structurally equal to the pre-switch method's skeleton — legacy autofilled
+ *  drafts). No autofill: the contract renders as the ghost skeleton instead, and the
+ *  full value template is built on demand (`resetBodyToTemplate`, ↺). An edited body
+ *  is preserved verbatim. */
 export async function applyMethodSelection(
   patch: (p: Partial<Step>) => void,
   target: CallTargetInit,
@@ -92,10 +100,7 @@ export async function applyMethodSelection(
   const oldSkeleton = await buildRequestSkeletonSafe(target, current.service, current.method);
   const pristine = isPristineBody(current.requestJson, oldSkeleton);
   patch({ service: m.service, method: m.method });
-  if (pristine) {
-    const requestJson = await buildRequestSkeletonSafe(target, m.service, m.method);
-    patch({ requestJson });
-  }
+  if (pristine) patch({ requestJson: EMPTY_BODY_TEMPLATE });
 }
 
 /** Force-regenerate the request body from the current method's skeleton (Reset-to-template).
@@ -117,7 +122,7 @@ export async function createStepFromMethod(
   method: string,
   opts: { auth?: SavedAuthConfigIpc; defaultMetadata?: MetadataRow[] } = {},
 ): Promise<Step> {
-  const requestJson = await buildRequestSkeletonSafe(target, service, method);
+  const requestJson = EMPTY_BODY_TEMPLATE; // no autofill — the contract shows as ghost
   return newStep({
     address: target.address,
     tls: target.tls,
