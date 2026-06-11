@@ -86,7 +86,7 @@ export function CallPanel({ step, onPatch, onExecuted, editable }: CallPanelProp
   const reflection = useDraftReflection(step.address, step.tls, !!editable);
 
   // Schema for the draft's method — input side for request autocomplete + hints,
-  // output side for the contract overlay and response-side inlay hints.
+  // output side for the contract view and response-side inlay hints.
   // History panels pass an empty target so no fetch fires.
   const schemaTarget = editable
     ? { address: step.address, tls: step.tls, service: step.service, method: step.method }

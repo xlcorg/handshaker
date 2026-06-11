@@ -69,7 +69,7 @@ export async function buildRequestSkeletonSafe(
 
 /** Fetch the flat field-schema for a method's input or output message; never throws — returns
  *  null on any failure (no reflection / server down / unknown method). A null schema
- *  degrades gracefully: request autocomplete, inlay hints, the contract overlay, and
+ *  degrades gracefully: request autocomplete, inlay hints, the contract view, and
  *  response-side type hints are all suppressed, but the editor remains functional. */
 export async function fetchMessageSchemaSafe(
   target: CallTargetInit,
