@@ -4,16 +4,20 @@ Handshaker — десктопный gRPC-клиент (Tauri 2 + React 18 + Rust
 Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src-tauri` (IPC) ·
 `src` (React-фронтенд).
 
-## Active work — Group B #3: просмотр контракта метода (contract view)
+## Active work — Group B #3: контракт метода → таб Contract (proto-вид)
 
-**План:** `docs/superpowers/plans/2026-06-10-contract-view.md` (🚧 Phases A+B done,
-next Task 9 / Phase C; ветка `claude/nostalgic-jang-778d08`) · **Спек:**
-`docs/superpowers/specs/2026-06-10-contract-view-design.md` (одобрен 2026-06-10).
-Фича: inline inlay-хинты типов + top-level ghost-скелет в теле запроса (и хинты на
-ответе) + плавающая overlay-панель полного контракта Request/Response; два
-независимых тоггла в таб-стрипе Request. Бэкенд — параметр `side: input|output` на
-`grpc_message_schema` (билдер уже умеет любой root). Исполнение — subagent-driven,
-фазы A–D, границы — 🧹 /clear-чекпойнты; статус задач — чекбоксы в план-файле.
+**План:** `docs/superpowers/plans/2026-06-11-contract-tab-proto-view.md` (🚧 not
+started, Tasks 1–8; ветка `claude/nostalgic-jang-778d08`) · **Спек:**
+`docs/superpowers/specs/2026-06-11-contract-tab-proto-view-design.md` (одобрен
+2026-06-11). Редизайн по итогам live-прохода: плавающий оверлей `ContractPanel`
+признан неудобным и **удаляется**; контракт переезжает в 4-й таб Response-панели
+(Body · Trailers · Headers · Contract) как подсвеченный proto-исходник (номера
+полей, `optional`, enum-числа — маленькое расширение `grpc_message_schema`),
+внутри — переключатель Request | Response, клик по типу скроллит к определению.
+Хинты/ghost/автокомплит/диагностика (Phases A–E старого плана
+`2026-06-10-contract-view.md` + спек `2026-06-10-contract-view-design.md`,
+всё закоммичено до `e47eb31`) не трогаются. Исполнение — subagent-driven,
+границы фаз — 🧹 /clear-чекпойнты; статус задач — чекбоксы в план-файле.
 
 Интеграционная ветка — `main`; фичи ведутся в отдельных worktree-ветках
 (`claude/*`) и вливаются в `main` fast-forward.
