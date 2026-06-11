@@ -420,7 +420,7 @@ git -C . commit -m "feat(schema): field numbers, proto3 optional flag, enum valu
 - Create: `src/features/contract/proto.ts`
 - Create: `src/features/contract/proto.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `src/features/contract/proto.test.ts`:
 
@@ -577,12 +577,12 @@ describe("renderProtoDoc", () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `pnpm vitest run src/features/contract/proto.test.ts`
 Expected: FAIL — `Failed to resolve import "./proto"`.
 
-- [ ] **Step 3: Implement `proto.ts`**
+- [x] **Step 3: Implement `proto.ts`**
 
 ```ts
 import type { MessageSchemaIpc, MessageNodeIpc, EnumNodeIpc, FieldNodeIpc } from "@/ipc/bindings";
@@ -717,17 +717,22 @@ export function renderProtoDoc(schema: MessageSchemaIpc): ProtoDoc {
 }
 ```
 
-- [ ] **Step 4: Run to verify pass**
+- [x] **Step 4: Run to verify pass**
 
 Run: `pnpm vitest run src/features/contract/proto.test.ts`
 Expected: PASS (9 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git -C . add src/features/contract/proto.ts src/features/contract/proto.test.ts
 git -C . commit -m "feat(contract): pure proto-source renderer (ProtoDoc tokens)"
 ```
+
+> ✅ 2026-06-11: done — commit `7ae82bc` + review follow-up `427737a` (test
+> fixtures: repeated-scalar и enum-map ветки, точная `toHaveLength(6)`-ассерция).
+> Spec+quality ревью пройдены. Заметка ревью: `pnpm lint` в этом репо — только
+> `tsc -b`, eslint нет (поправить формулировку gate в баннере на Task 8).
 
 ### Task 4: `ProtoView` component + token colors + flash CSS
 
