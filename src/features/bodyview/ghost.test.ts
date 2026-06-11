@@ -41,6 +41,21 @@ describe("computeGhostLines", () => {
     expect(block).toEqual({ afterLine: 3, lines: ['  "query": string'] });
   });
 
+  it("stays below blank lines inside an empty object (the caret line after Enter)", () => {
+    // `{}` + Enter auto-indents to `{` / blank caret line / `}`; the ghost must
+    // anchor just above the closing brace, not after `{` — otherwise the block
+    // wedges between the brace and the line the user is typing on.
+    expect(computeGhostLines("{\n  \n}", SCHEMA)).toEqual({
+      afterLine: 2,
+      lines: ['  "query": string', '  "deadline": Timestamp'],
+    });
+  });
+
+  it("stays below a trailing blank line after the last entry", () => {
+    const block = computeGhostLines('{\n  "query": "x"\n  \n}', SCHEMA);
+    expect(block).toEqual({ afterLine: 3, lines: ['  "deadline": Timestamp'] });
+  });
+
   it("returns null for invalid JSON, a non-object root, and an unknown schema root", () => {
     expect(computeGhostLines('{ "query": ', SCHEMA)).toBeNull();
     expect(computeGhostLines("[1]", SCHEMA)).toBeNull();

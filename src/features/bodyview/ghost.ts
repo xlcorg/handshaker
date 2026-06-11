@@ -30,15 +30,21 @@ export function computeGhostLines(text: string, schema: MessageSchemaIpc): Ghost
   if (missing.length === 0) return null;
 
   const spanByNode = new Map(parsed.spans.map((s) => [s.nodeId, s]));
+  const rootSpan = spanByNode.get(root.id);
   const lastChildId = root.childIds[root.childIds.length - 1];
   // parseWithSpans guarantees a span for every node id, so the ?? branches are
   // unreachable; optional chaining just satisfies the type checker without `!`.
-  const anchorOffset = lastChildId !== undefined
-    ? (spanByNode.get(lastChildId)?.end ?? spanByNode.get(root.id)!.start + 1)
-    : (spanByNode.get(root.id)?.start ?? 0) + 1;
-
+  const contentOffset = lastChildId !== undefined
+    ? (spanByNode.get(lastChildId)?.end ?? 0)
+    : (rootSpan?.start ?? 0) + 1;
+  // Anchor at whichever sits lower: the last entry's end, or the line just above
+  // the closing brace. Blank lines after the last entry — notably the caret line
+  // Enter just created — thus stay ABOVE the ghost; the skeleton never wedges
+  // itself between the user's typing position and the code above it. (For a
+  // one-line `{}` the brace line minus one would be 0, so the content line wins.)
+  const closeLine = lineOfOffset(text, Math.max((rootSpan?.end ?? text.length) - 1, 0));
   return {
-    afterLine: lineOfOffset(text, anchorOffset),
+    afterLine: Math.max(lineOfOffset(text, contentOffset), closeLine - 1),
     lines: missing.map((fl) => `  "${fl.json_name}": ${fl.type_label}`),
   };
 }
