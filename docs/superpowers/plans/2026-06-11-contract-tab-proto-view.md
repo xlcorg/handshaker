@@ -13,6 +13,15 @@
 > vitest 756 (111 файлов) · cargo handshaker-core + handshaker зелёные ·
 > `pnpm build` ок. NB: `pnpm lint` в этом репо — только `tsc -b`, eslint нет.
 > Branch `claude/nostalgic-jang-778d08` (existing feature worktree).
+> Финальное ревью ветки 2026-06-12: пройдено; найденный блокер «main ушёл
+> вперёд на 30 коммитов (env-фичи + v0.1.14), ff невозможен» закрыт
+> merge-коммитом `a5849a6` (main → ветка; конфликт CLAUDE.md разрешён,
+> `bindings.ts` перегенерирован и совпал с авто-мерджем побайтово; гейт на
+> смердженном дереве: tsc clean · vitest 787 · cargo core 139 + app 45 ·
+> build ок). `main` снова ancestor HEAD — ff-merge возможен. Live-чеклист
+> Step 5 пополнен заметками ревью: flash «Awaiting first call» при маунте,
+> «Контракт недоступен» мелькает во время фетча схемы (null = и loading, и
+> unavailable), re-arm `userPickedTab` при смене метода.
 > **Spec:** `docs/superpowers/specs/2026-06-11-contract-tab-proto-view-design.md` (approved 2026-06-11).
 > Supersedes the floating-overlay part of the contract-view feature
 > (`docs/superpowers/plans/2026-06-10-contract-view.md`, Phases A–E shipped).
