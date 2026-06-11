@@ -1,19 +1,32 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 
-// Mock the heavy Monaco module: render a textarea-ish stub, expose value/readOnly.
+// Mock the heavy Monaco module: render a textarea-ish stub, expose value/readOnly/hints.
 vi.mock("@/lib/monaco", () => ({
-  MonacoEditor: ({ value, options }: { value: string; options?: { readOnly?: boolean } }) => (
-    <pre data-testid="monaco" data-readonly={String(!!options?.readOnly)}>{value}</pre>
+  MonacoEditor: ({ value, options }: {
+    value: string;
+    options?: { readOnly?: boolean; inlayHints?: { enabled?: string } };
+  }) => (
+    <pre
+      data-testid="monaco"
+      data-readonly={String(!!options?.readOnly)}
+      data-inlayhints={options?.inlayHints?.enabled ?? ""}
+    >{value}</pre>
   ),
   monacoThemeFor: () => "handshaker-dark",
   BODY_EDIT_OPTIONS: { readOnly: false },
   BODY_READONLY_OPTIONS: { readOnly: true },
 }));
+// Lazily read so each test can flip bodyHints before rendering.
+let prefs = { theme: "dark", bodyHints: false };
 vi.mock("@/lib/use-prefs", () => ({
-  usePrefs: () => [{ theme: "dark", bodyHints: false }],
-  readPrefs: () => ({ theme: "dark", bodyHints: false }),
+  usePrefs: () => [prefs],
+  readPrefs: () => prefs,
 }));
+
+beforeEach(() => {
+  prefs = { theme: "dark", bodyHints: false };
+});
 
 import { BodyView } from "./BodyView";
 
@@ -33,5 +46,21 @@ describe("BodyView", () => {
   it("response mode is read-only", () => {
     render(<BodyView mode="response" value={`{"a":1}`} />);
     expect(screen.getByTestId("monaco").getAttribute("data-readonly")).toBe("true");
+  });
+
+  it("request mode keeps inlay hints off even with bodyHints on (ghost + autocomplete carry the contract)", () => {
+    prefs = { theme: "dark", bodyHints: true };
+    render(<BodyView mode="request" value="{}" onChange={vi.fn()} />);
+    expect(screen.getByTestId("monaco").getAttribute("data-inlayhints")).toBe("off");
+  });
+
+  it("response mode follows the bodyHints toggle for inlay hints", () => {
+    prefs = { theme: "dark", bodyHints: true };
+    const { unmount } = render(<BodyView mode="response" value="{}" />);
+    expect(screen.getByTestId("monaco").getAttribute("data-inlayhints")).toBe("on");
+    unmount();
+    prefs = { theme: "dark", bodyHints: false };
+    render(<BodyView mode="response" value="{}" />);
+    expect(screen.getByTestId("monaco").getAttribute("data-inlayhints")).toBe("off");
   });
 });

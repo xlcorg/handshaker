@@ -23,8 +23,9 @@ export interface BodyViewProps {
   onChange?: (next: string) => void;
   /** Ctrl/Cmd+Enter inside the editor (Monaco swallows it, so we bind a command). */
   onSubmit?: () => void;
-  /** Flat field-schema attached to the model: request → autocomplete + inlay hints;
-   *  response → inlay hints (completions remain suppressed by readOnly). */
+  /** Flat field-schema attached to the model: request → autocomplete + ghost
+   *  skeleton; response → type inlay hints (completions stay suppressed by
+   *  readOnly, and the request editor keeps inlay hints off — see `options`). */
   schema?: MessageSchemaIpc | null;
 }
 
@@ -257,8 +258,13 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
   const options = useMemo(
     () => ({
       ...(mode === "response" ? BODY_READONLY_OPTIONS : BODY_EDIT_OPTIONS),
-      // Response editors get no hints until a schema is attached (output side wired later).
-      inlayHints: { enabled: prefs.bodyHints ? ("on" as const) : ("off" as const) },
+      // Type inlay hints are response-only: the request editor already carries the
+      // contract via the ghost skeleton + autocomplete, so a hint on a filled field
+      // would only repeat what its value shows. The response has neither, making
+      // hints the sole inline type/enum source there (gated by the same toggle).
+      inlayHints: {
+        enabled: mode === "response" && prefs.bodyHints ? ("on" as const) : ("off" as const),
+      },
     }),
     [mode, prefs.bodyHints],
   );
