@@ -1,4 +1,4 @@
-import { ResponsePanel } from "@/features/response/ResponsePanel";
+import { ResponsePanel, type ContractInfo } from "@/features/response/ResponsePanel";
 import type { RespState } from "@/features/response/RespMeta";
 import { authResolve } from "@/ipc/client";
 import { AddressBar } from "./AddressBar";
@@ -145,7 +145,11 @@ export function CallPanel({ step, onPatch, onExecuted, editable }: CallPanelProp
         <ResizableHandle withHandle />
         <ResizablePanel id="response" minSize="20%">
           <div className="flex h-full min-h-0 flex-col">
-            <ResponseSlot step={step} schema={outputSchema} />
+            <ResponseSlot
+              step={step}
+              schema={outputSchema}
+              contract={editable ? { input: schema, output: outputSchema, method: step.method } : null}
+            />
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>
@@ -153,7 +157,15 @@ export function CallPanel({ step, onPatch, onExecuted, editable }: CallPanelProp
   );
 }
 
-function ResponseSlot({ step, schema }: { step: Step; schema: MessageSchemaIpc | null }) {
+function ResponseSlot({
+  step,
+  schema,
+  contract,
+}: {
+  step: Step;
+  schema: MessageSchemaIpc | null;
+  contract: ContractInfo | null;
+}) {
   const respState: RespState =
     step.status === "sending"
       ? "sending"
@@ -165,5 +177,7 @@ function ResponseSlot({ step, schema }: { step: Step; schema: MessageSchemaIpc |
             : "error"
           : "idle";
 
-  return <ResponsePanel state={respState} outcome={step.outcome} error={step.error} schema={schema} />;
+  return (
+    <ResponsePanel state={respState} outcome={step.outcome} error={step.error} schema={schema} contract={contract} />
+  );
 }

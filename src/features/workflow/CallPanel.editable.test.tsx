@@ -80,3 +80,25 @@ describe("CallPanel editable", () => {
   });
 });
 
+describe("CallPanel contract tab", () => {
+  it("shows the Contract tab on the editable draft", () => {
+    render(
+      <TooltipProvider>
+        <CallPanel step={draft} onPatch={() => {}} editable />
+      </TooltipProvider>,
+    );
+    fireEvent.click(screen.getByRole("tab", { name: "Contract" }));
+    // schema fetch is mocked away → both sides null → placeholder text
+    expect(screen.getByText(/Контракт недоступен/)).toBeInTheDocument();
+  });
+
+  it("offers no Contract tab on non-editable (history) panels", () => {
+    render(
+      <TooltipProvider>
+        <CallPanel step={draft} onPatch={() => {}} />
+      </TooltipProvider>,
+    );
+    expect(screen.queryByRole("tab", { name: "Contract" })).toBeNull();
+  });
+});
+
