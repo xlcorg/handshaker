@@ -42,7 +42,7 @@ Purely additive — the suite stays green throughout.
 - Modify: `src/features/contract/proto.test.ts` (append; reuses the existing
   `f`/`lineText`/`blockText` helpers and imports already at the top of the file)
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `src/features/contract/proto.test.ts`. Extend the import on line 3 to
 include `renderContractDoc`:
@@ -138,12 +138,12 @@ describe("renderContractDoc", () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `pnpm vitest run src/features/contract/proto.test.ts`
 Expected: FAIL — `renderContractDoc` is not exported.
 
-- [ ] **Step 3: Implement `renderContractDoc`**
+- [x] **Step 3: Implement `renderContractDoc`**
 
 Append to `src/features/contract/proto.ts`:
 
@@ -206,17 +206,22 @@ export function renderContractDoc(
 (`displayNames`, `typeRef`, `messageBlock`, `enumBlock`, `MessageNodeIpc` all
 already exist in this file — nothing else changes.)
 
-- [ ] **Step 4: Run to verify pass**
+- [x] **Step 4: Run to verify pass**
 
 Run: `pnpm vitest run src/features/contract/proto.test.ts`
 Expected: PASS (9 existing + 6 new = 15 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git -C . add src/features/contract/proto.ts src/features/contract/proto.test.ts
 git -C . commit -m "feat(contract): renderContractDoc - rpc signature + merged dedup listing"
 ```
+
+> ✅ 2026-06-12: done — commit `1ace39d`, spec+quality ревью пройдены
+> (15/15 в файле, tsc чистый). Minor-заметки ревью: input-null ветка rpc-строки
+> покрывается компонентным тестом Task 2; `toHaveLength`-ужесточение
+> ref-каунта и tooltip на `?` — кандидаты на полировку, не блокеры.
 
 Append the trailer `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`.
 
