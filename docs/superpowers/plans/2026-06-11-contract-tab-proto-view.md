@@ -5,8 +5,10 @@
 > Steps use checkbox (`- [ ]`) syntax for tracking.
 
 > **Status:** 🚧 in progress — Phase A done 2026-06-11 (Task 1: `f30797d`+`69f3b6b`,
-> Task 2: `193715b`+`cb08bc4`; оба прошли spec+quality ревью; vitest 732 / core 125 /
-> handshaker 43 / tsc clean). Далее — Phase B, Task 3 (после /clear).
+> Task 2: `193715b`+`cb08bc4`). Phase B done 2026-06-11 (Task 3: `7ae82bc`+`427737a`,
+> Task 4: `96b8bca`+`8edcbd8`, Task 5: `3f925c1`; все прошли spec+quality ревью;
+> per-file vitest зелёные, tsc clean). Далее — Phase C, Task 6 (после /clear).
+> NB: `pnpm lint` в этом репо — только `tsc -b`, eslint нет.
 > Branch `claude/nostalgic-jang-778d08` (existing feature worktree).
 > **Spec:** `docs/superpowers/specs/2026-06-11-contract-tab-proto-view-design.md` (approved 2026-06-11).
 > Supersedes the floating-overlay part of the contract-view feature
@@ -933,7 +935,7 @@ git -C . commit -m "feat(contract): ProtoView with syntax colors and click-to-sc
 - Create: `src/features/contract/ContractView.tsx`
 - Create: `src/features/contract/ContractView.test.tsx`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `src/features/contract/ContractView.test.tsx`:
 
@@ -991,12 +993,12 @@ describe("ContractView", () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `pnpm vitest run src/features/contract/ContractView.test.tsx`
 Expected: FAIL — `Failed to resolve import "./ContractView"`.
 
-- [ ] **Step 3: Implement `ContractView.tsx`**
+- [x] **Step 3: Implement `ContractView.tsx`**
 
 ```tsx
 import { useMemo } from "react";
@@ -1066,19 +1068,23 @@ export function ContractView({ method, input, output, side, onSide }: ContractVi
 }
 ```
 
-- [ ] **Step 4: Run to verify pass**
+- [x] **Step 4: Run to verify pass**
 
 Run: `pnpm vitest run src/features/contract/ContractView.test.tsx`
 Expected: PASS (4 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git -C . add src/features/contract/ContractView.tsx src/features/contract/ContractView.test.tsx
 git -C . commit -m "feat(contract): ContractView with Request/Response side switch"
 ```
 
-🧹 **/clear-чекпойнт** — конец Phase B.
+> ✅ 2026-06-11: done — commit `3f925c1`, spec+quality ревью пройдены без правок
+> (4/4 теста, tsc чистый). Minor-заметки ревью ушли в live-чеклист Task 8
+> (scroll-carryover между сторонами, `scroll-margin-top`).
+
+🧹 **/clear-чекпойнт** — конец Phase B. ✅ пройден 2026-06-11.
 
 ---
 
@@ -1379,6 +1385,7 @@ git -C . commit -m "docs(plan): contract tab proto view - code-complete banner"
 
 - [ ] Выбор метода → Response-панель сама открывает таб **Contract** с proto-листингом (Request-сторона).
 - [ ] Переключатель **Request | Response** работает; выбор стороны переживает уход на Body и обратно.
+- [ ] Скролл при переключении стороны: позиция прошлой стороны не должна оставлять новую «в середине документа» (если мешает — `key={side}` на скроллере); приземление click-to-scroll не вплотную к верху (иначе `scroll-margin-top`).
 - [ ] Клик по имени типа (например, вложенного message) скроллит к его определению с короткой вспышкой.
 - [ ] Tooltip на имени поля показывает `json_name`; на имени типа — полное имя.
 - [ ] `optional`, `repeated`, `map<…>`, `oneof { … }`, номера полей и enum-значений выглядят как в .proto.
