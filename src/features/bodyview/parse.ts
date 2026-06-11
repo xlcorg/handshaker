@@ -10,6 +10,15 @@ class Cursor {
 
 class ParseError extends Error {}
 
+/** Length-preserving repair of the canonical mid-edit state: every comma followed by
+ *  only whitespace up to a `}`/`]` becomes a space, so all offsets/lines stay valid
+ *  for the ORIGINAL text. Narrow-case mirror of jsonc-parser's fault tolerance
+ *  ("on invalid input ... as fault tolerant as possible") — the trailing comma is
+ *  exactly the pause between finishing one field and typing the next. */
+export function repairTrailingCommas(text: string): string {
+  return text.replace(/,(?=\s*[}\]])/g, " ");
+}
+
 const kindOf = (v: unknown): JsonKind => {
   if (v === null) return "null";
   if (Array.isArray(v)) return "array";

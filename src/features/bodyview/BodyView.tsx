@@ -14,6 +14,7 @@ import type { MessageSchemaIpc } from "@/ipc/bindings";
 import { setModelSchema, computeSuggestions, collectPresentKeys } from "./completion";
 import { refreshBodyHints } from "./hints";
 import { GhostZone, computeGhostLines } from "./ghost";
+import { computeUnknownFieldMarkers } from "./validate";
 
 type Mode = "request" | "response";
 
@@ -133,6 +134,26 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
     const block =
       readPrefs().bodyHints && sc ? computeGhostLines(l.editor.getValue(), sc) : null;
     l.ghost.apply(block);
+    // Contract diagnostics ride the same cadence but ignore the hints toggle: an
+    // unknown field FAILS the Send (prost-reflect denies unknown fields), so this
+    // is a diagnostic, not a hint. null = unparseable mid-edit → keep the previous
+    // markers (VS Code behavior) instead of flashing them off per keystroke.
+    const model = l.editor.getModel();
+    if (!model) return;
+    const markers = sc ? computeUnknownFieldMarkers(l.editor.getValue(), sc) : [];
+    if (markers === null) return;
+    l.monaco.editor.setModelMarkers(model, "hs-contract", markers.map((mk) => {
+      const s = model.getPositionAt(mk.start);
+      const e = model.getPositionAt(mk.end);
+      return {
+        severity: l.monaco.MarkerSeverity.Error,
+        message: mk.message,
+        startLineNumber: s.lineNumber,
+        startColumn: s.column,
+        endLineNumber: e.lineNumber,
+        endColumn: e.column,
+      };
+    }));
   }, []);
 
   // Debounced recompute for same-line typing, so mid-token (briefly invalid JSON)
@@ -249,11 +270,13 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
   // No mode guard needed: applyGhost no-ops when ghost is null (response mode).
   useEffect(() => { applyGhost(); }, [prefs.bodyHints, applyGhost]);
 
-  // Clear the model's schema entry when BodyView unmounts.
+  // Clear the model's schema entry (and contract markers) when BodyView unmounts.
   useEffect(
     () => () => {
-      const model = live.current?.editor.getModel();
+      const l = live.current;
+      const model = l?.editor.getModel();
       setModelSchema(model ?? null, null);
+      if (l && model) l.monaco.editor.setModelMarkers(model, "hs-contract", []);
     },
     [],
   );

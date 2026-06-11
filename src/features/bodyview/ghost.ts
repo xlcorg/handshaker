@@ -1,5 +1,5 @@
 import type { MessageSchemaIpc } from "@/ipc/bindings";
-import { parseWithSpans } from "./parse";
+import { parseWithSpans, repairTrailingCommas } from "./parse";
 
 export interface GhostBlock {
   /** 1-based line the zone is inserted AFTER (the last top-level entry / the `{`). */
@@ -13,15 +13,6 @@ function lineOfOffset(text: string, offset: number): number {
   let line = 1;
   for (let i = 0; i < offset && i < text.length; i++) if (text[i] === "\n") line++;
   return line;
-}
-
-/** Length-preserving repair of the canonical mid-edit state: every comma followed by
- *  only whitespace up to a `}`/`]` becomes a space, so all offsets/lines stay valid
- *  for the ORIGINAL text. Narrow-case mirror of jsonc-parser's fault tolerance
- *  ("on invalid input ... as fault tolerant as possible") — the trailing comma is
- *  exactly the pause between finishing one field and typing the next. */
-function repairTrailingCommas(text: string): string {
-  return text.replace(/,(?=\s*[}\]])/g, " ");
 }
 
 /** Top-level diff: root-message fields minus keys present at depth 1. Null when

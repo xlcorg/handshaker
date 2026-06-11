@@ -27,8 +27,8 @@ function hintLabel(schema: MessageSchemaIpc, field: FieldNodeIpc): string {
 
 /** Object-key segments from root *down to but not including* this node's own key —
  *  i.e. the path its enclosing context sits at, as `descendSchema` expects.
- *  Array hops (parent.key === null) contribute nothing. */
-function pathTo(tree: JsonTree, node: JsonNode): string[] {
+ *  Array hops (parent.key === null) contribute nothing. (Shared with validate.ts.) */
+export function pathTo(tree: JsonTree, node: JsonNode): string[] {
   const segs: string[] = [];
   let cur: JsonNode | null = node.parentId ? tree.nodes[node.parentId] ?? null : null;
   while (cur) {
