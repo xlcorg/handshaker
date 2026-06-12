@@ -1,6 +1,6 @@
 import { ResponsePanel, type ContractInfo } from "@/features/response/ResponsePanel";
 import type { RespState } from "@/features/response/RespMeta";
-import { authResolve } from "@/ipc/client";
+import { authResolve, varsResolve, authInvalidate } from "@/ipc/client";
 import { AddressBar } from "./AddressBar";
 import { DraftAddressBar } from "./DraftAddressBar";
 import { useDraftReflection } from "./useDraftReflection";
@@ -22,6 +22,7 @@ import { useEffect, useRef } from "react";
 import type { MetadataRow, Step } from "./model";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { usePrefs } from "@/lib/use-prefs";
+import { useActiveWorkflow } from "./store";
 
 interface CallPanelProps {
   step: Step;
@@ -38,6 +39,7 @@ interface CallPanelProps {
 /** The editable, sendable surface for one step — reused by Focus(draft)/List/Ledger. */
 export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMethod }: CallPanelProps) {
   const [prefs, setPref] = usePrefs();
+  const activeWf = useActiveWorkflow();
   // prefs.split is our own convention ("horizontal" = a horizontal divider = Top/Bottom);
   // react-resizable-panels uses the inverse ("horizontal" = side-by-side), so flip it.
   const orientation = prefs.split === "horizontal" ? "vertical" : "horizontal";
@@ -50,7 +52,7 @@ export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMetho
   const onSend = async () => {
     const requestId = newId();
     onPatch({ status: "sending", error: null, requestId });
-    const auth = await resolveAuthHeader(step.auth, authResolve);
+    const auth = await resolveAuthHeader(step.auth, activeWf.envName, { authResolve, varsResolve });
     if (auth.kind === "error") {
       onPatch({ status: "error", outcome: null, error: auth.message, requestId: null });
       return;
@@ -58,6 +60,16 @@ export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMetho
     const res = await sendStep(step, auth.kind === "header" ? auth.header : null, { requestId });
     const patch = { ...stepPatchFromSendResult(res), requestId: null };
     onPatch(patch);
+    // Drop the cached oauth2 token if the server rejected it (gRPC UNAUTHENTICATED = 16):
+    // the next Send fetches a fresh one. No auto-retry (design choice).
+    if (
+      res.kind === "ok" &&
+      res.outcome.status_code === 16 &&
+      auth.kind === "header" &&
+      auth.invalidate
+    ) {
+      void authInvalidate(auth.invalidate);
+    }
     if (onExecuted && shouldRecordExecuted(res)) onExecuted(buildExecutedStep(step, patch));
   };
 
