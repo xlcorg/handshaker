@@ -2,7 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-> **Status:** 🚧 code-complete — all Phases A–D done (A+B 2026-06-10; C 2026-06-11; D 2026-06-11).
+> **Status:** 🎉 feature-complete — live-verified 2026-06-12 (Phases A–E; всё
+> отработано в нескольких live-итерациях вместе с наследниками — планами
+> 2026-06-11 + 2026-06-12). Два поздних амендмента: плавающий оверлей
+> `ContractPanel` заменён табом Contract (план 2026-06-11, `f30797d`), а
+> response-side inlay-хинты (часть Task 13) удалены целиком 2026-06-12
+> (`4465d1f` — контракт несёт таб Contract; `bodyHints` управляет только
+> ghost'ом, кнопка переименована в «Field hints»).
 > Tasks 1–3: `124bda3`,`8994acc`,`cea3c57`; Tasks 4–8: `3420a9f`…`715bdeb`; Task 9: `4109ce1`;
 > Task 10: `bdcb442`+`0a5f0ab`; Task 11: `ce2fcdf`+`00d2c61` (+ Task-9-регрессия чинена `fe744cb`);
 > Task 12: `090daa8`+`ac79c6e`; Task 13: `43680b4`+`35154c5`. Spec+quality review пройдены на
@@ -19,8 +25,8 @@
 > `5edc60a` (запятая-разделитель при принятии комплита), Task 17 `c11fe34` (sortText —
 > proto-порядок в виджете), Task 18 `be64d37` (Error-маркеры на полях вне контракта).
 > Гейт: lint clean · 752/752 FE.
-> **Остаток:** Task 14 Step 2 — добить live-чеклист → баннер → `🎉 feature-complete` +
-> ff-merge в `main`.
+> Остатка нет: live-чеклист закрыт итерациями 2026-06-11/12, ff-merge в `main`
+> выполнен при финише ветки 2026-06-12.
 > Branch: `claude/nostalgic-jang-778d08` (harness worktree — do NOT `git worktree remove`).
 > Spec: `docs/superpowers/specs/2026-06-10-contract-view-design.md` (approved 2026-06-10).
 

@@ -4,8 +4,9 @@
 > (recommended) or superpowers:executing-plans to implement this plan task-by-task.
 > Steps use checkbox (`- [ ]`) syntax for tracking.
 
-> **Status:** 🚧 code-complete — awaiting live WebView2 verification (Task 8
-> Step 5 checklist + Step 6 finish). Phase A done 2026-06-11 (Task 1:
+> **Status:** 🎉 feature-complete — live-verified 2026-06-12 (две live-итерации;
+> фидбек первой — Body-first табы + удаление response-хинтов — вшит как
+> live-pass amendments ниже). Phase A done 2026-06-11 (Task 1:
 > `f30797d`+`69f3b6b`, Task 2: `193715b`+`cb08bc4`). Phase B done 2026-06-11
 > (Task 3: `7ae82bc`+`427737a`, Task 4: `96b8bca`+`8edcbd8`, Task 5: `3f925c1`).
 > Phase C done 2026-06-12 (Task 6: `97ab7ea`, Task 7: `34b1a48`+`03da8da`;
@@ -1419,27 +1420,28 @@ git -C . add docs/superpowers/plans/2026-06-11-contract-tab-proto-view.md CLAUDE
 git -C . commit -m "docs(plan): contract tab proto view - code-complete banner"
 ```
 
-- [ ] **Step 5: Live verification (user-driven, `pnpm tauri dev` + Ctrl+R)**
+- [x] **Step 5: Live verification (user-driven, `pnpm tauri dev` + Ctrl+R)**
+  ✅ подтверждена пользователем 2026-06-12 (вторая итерация, после amendments).
 
-- [ ] ~~Выбор метода → Response-панель сама открывает таб Contract~~ — поведение
+- [x] ~~Выбор метода → Response-панель сама открывает таб Contract~~ — поведение
   заменено по live-фидбеку 2026-06-12 (`97664b4`): дефолтный таб всегда **Body**;
   Contract открывается только кликом; Send безусловно возвращает на Body.
-- [ ] ~~Переключатель Request | Response~~ — заменён единым видом
+- [x] ~~Переключатель Request | Response~~ — заменён единым видом
   (спек `2026-06-12-contract-unified-view-design.md`): rpc-строка сверху,
   оба корня кликабельны, общие типы напечатаны один раз.
-- [ ] Приземление click-to-scroll не вплотную к верху (иначе `scroll-margin-top`).
-- [ ] Клик по имени типа (например, вложенного message) скроллит к его определению с короткой вспышкой.
-- [ ] Tooltip на имени поля показывает `json_name`; на имени типа — полное имя.
-- [ ] `optional`, `repeated`, `map<…>`, `oneof { … }`, номера полей и enum-значений выглядят как в .proto.
-- [ ] Send из любого таба (включая вручную выбранный Contract) → таб **Body**;
+- [x] Приземление click-to-scroll не вплотную к верху (иначе `scroll-margin-top`).
+- [x] Клик по имени типа (например, вложенного message) скроллит к его определению с короткой вспышкой.
+- [x] Tooltip на имени поля показывает `json_name`; на имени типа — полное имя.
+- [x] `optional`, `repeated`, `map<…>`, `oneof { … }`, номера полей и enum-значений выглядят как в .proto.
+- [x] Send из любого таба (включая вручную выбранный Contract) → таб **Body**;
   выбор Contract уже во время полёта переживает приход ответа.
-- [ ] History-панель — три таба, без Contract.
-- [ ] Тоггл хинтов, ghost, автокомплит, `↺` — без регрессий (оверлея больше нет).
-- [ ] Response-body **без** inlay-тип-хинтов (фича удалена `4465d1f` — контракт
+- [x] History-панель — три таба, без Contract.
+- [x] Тоггл хинтов (теперь «Field hints»), ghost, автокомплит, `↺` — без регрессий (оверлея больше нет).
+- [x] Response-body **без** inlay-тип-хинтов (фича удалена `4465d1f` — контракт
   несёт таб Contract); тип-лейблы вроде `"…" string` не рендерятся.
-- [ ] Светлая/тёмная тема — цвета токенов читаемы (общие `--syntax-*`).
+- [x] Светлая/тёмная тема — цвета токенов читаемы (общие `--syntax-*`).
 
-- [ ] **Step 6: Finish (user green light required)**
+- [x] **Step 6: Finish (user green light required)**
 
 After the user confirms the checklist: flip this plan's banner to
 `🎉 feature-complete — live-verified <date>`, then run

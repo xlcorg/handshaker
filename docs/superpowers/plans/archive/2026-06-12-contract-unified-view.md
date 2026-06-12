@@ -4,8 +4,8 @@
 > (recommended) or superpowers:executing-plans to implement this plan task-by-task.
 > Steps use checkbox (`- [ ]`) syntax for tracking.
 
-> **Status:** ✅ code-complete 2026-06-12 — awaiting live WebView2 verification
-> (объединённый чеклист: Task 8 Step 5 плана 2026-06-11 + Step 5 ниже).
+> **Status:** 🎉 feature-complete — live-verified 2026-06-12 (объединённый
+> чеклист: Task 8 Step 5 плана 2026-06-11 + Step 5 ниже — подтверждён).
 > Task 1: `1ace39d` · Task 2: `1a48cb6` — оба прошли spec+quality ревью.
 > **Live-pass amendments 2026-06-12** (фидбек первой live-итерации, прошли
 > spec+quality ревью): response-side inlay-хинты удалены целиком
@@ -494,16 +494,17 @@ git -C . commit -m "docs(plan): contract unified view - code-complete banner"
 
 Append the trailer `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`.
 
-- [ ] **Step 5: Live verification (user-driven, объединённый чеклист)**
+- [x] **Step 5: Live verification (user-driven, объединённый чеклист)**
+  ✅ подтверждена пользователем 2026-06-12.
 
 Чеклист Task 8 Step 5 плана `2026-06-11-contract-tab-proto-view.md` (с правками
 из Step 2 выше) + новые пункты:
 
-- [ ] rpc-строка показывает метод и оба корневых типа; клик по каждому скроллит к блоку.
-- [ ] Общий тип (встречается в request и response) напечатан один раз; ссылки с обеих сторон ведут в него.
-- [ ] Одна сторона без схемы → `?` в rpc-строке + muted-строка «…-схема недоступна» под листингом.
+- [x] rpc-строка показывает метод и оба корневых типа; клик по каждому скроллит к блоку.
+- [x] Общий тип (встречается в request и response) напечатан один раз; ссылки с обеих сторон ведут в него.
+- [x] Одна сторона без схемы → `?` в rpc-строке + muted-строка «…-схема недоступна» под листингом.
 
-- [ ] **Step 6: Finish (user green light required)**
+- [x] **Step 6: Finish (user green light required)**
 
 После подтверждения чеклиста: флип баннеров обоих планов на
 `🎉 feature-complete — live-verified <date>`, затем

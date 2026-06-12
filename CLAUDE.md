@@ -4,37 +4,33 @@ Handshaker — десктопный gRPC-клиент (Tauri 2 + React 18 + Rust
 Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src-tauri` (IPC) ·
 `src` (React-фронтенд).
 
-## Active work — Group B #3: контракт метода → таб Contract (proto-вид)
+## Active work
 
-**План:** `docs/superpowers/plans/2026-06-11-contract-tab-proto-view.md`
-(🚧 **code-complete** 2026-06-12, Tasks 1–7 + полный гейт выполнены; ветка
-`claude/nostalgic-jang-778d08`) · **Спек:**
-`docs/superpowers/specs/2026-06-11-contract-tab-proto-view-design.md` (одобрен
-2026-06-11). Плавающий оверлей `ContractPanel` удалён; контракт — 4-й таб
-Response-панели (Body · Trailers · Headers · Contract): подсвеченный
-proto-исходник (номера полей, `optional`, enum-числа), клик по типу скроллит
-к определению. Переключатель Request|Response удалён — **единый вид**:
-rpc-строка `rpc M(In) returns (Out);` с кликабельными корнями + объединённый
-дедуплицированный листинг обеих сторон (спек+план 2026-06-12
-`contract-unified-view`, commits `1ace39d`+`1a48cb6`). **Live-pass amendments
-2026-06-12** (фидбек первой live-итерации): таб-логика — Body-first (`97664b4`:
-дефолт всегда Body, автодефолта на Contract нет, Send безусловно → Body);
-response-side inlay-тип-хинты удалены целиком (`4465d1f`+`78ffaa6`+`ed22d9b`:
-hints.ts/провайдер/schema-проброс в response; `pathTo` → validate.ts;
-`bodyHints` теперь управляет только ghost'ом запроса; кнопка-тоггл
-переименована в «Field hints»). Гейт: tsc clean · vitest 784 ·
-cargo core+app · build. **Остаётся:** повторная live-проверка в WebView2
-(чеклист Task 8 Step 5 плана, включая `scroll-margin-top`) и финиш ветки
-(Step 6: ff-merge в `main` — после merge `a5849a6` main снова ancestor HEAD;
-архив планов/спеков 2026-06-10 + 2026-06-11 + 2026-06-12).
-Ghost/автокомплит/диагностика (Phases A–E старого плана
-`2026-06-10-contract-view.md`) не тронуты, кроме удаления response-хинтов.
+Сейчас активной фичи нет — предыдущая (контракт метода → таб Contract) влита
+в `main` 2026-06-12. Следующая фича начинается с брейншторма → спека → плана
+(см. процесс ниже).
 
 Интеграционная ветка — `main`; фичи ведутся в отдельных worktree-ветках
 (`claude/*`) и вливаются в `main` fast-forward.
 
 ### Завершённые фичи (всё в `archive/`)
 
+- **Контракт метода → таб Contract (proto-вид, Group B #3)** (🎉 DONE
+  2026-06-12, влито в `main` ff; планы 2026-06-10/11/12 + спеки в `archive/`) —
+  плавающий оверлей `ContractPanel` удалён; контракт — 4-й таб Response-панели
+  (Body · Trailers · Headers · Contract): подсвеченный proto-исходник (номера
+  полей, `optional`, enum-числа), клик по типу скроллит к определению.
+  **Единый вид** (без переключателя Request|Response): rpc-строка
+  `rpc M(In) returns (Out);` с кликабельными корнями + объединённый
+  дедуплицированный по `full_name` листинг обеих сторон (`renderContractDoc`
+  в `src/features/contract/proto.ts`; `?` вместо отсутствующей стороны + muted
+  «…-схема недоступна»). Live-pass amendments: таб-логика Body-first (дефолт
+  всегда Body, Send безусловно → Body, автодефолта на Contract нет);
+  response-side inlay-тип-хинты удалены целиком (hints.ts/провайдер/
+  schema-проброс; `pathTo` → validate.ts; `bodyHints` управляет только
+  ghost'ом запроса, кнопка переименована в «Field hints»). Subagent-driven,
+  spec+quality ревью на каждой задаче + финальное ревью ветки; гейт: tsc clean ·
+  vitest 784 · cargo core+app · build; две live-итерации в WebView2.
 - **Edit Environment — масштаб окна + длинные значения + L1-вёрстка** (🎉 DONE
   2026-06-11, влито в `main` ff, commits `2b4d2da`…`d9ea0da`) — `EnvEditorDialog`
   перестал быть фикс-коробкой 672px без кап-высоты: `DialogContent` стал flex-колонкой
