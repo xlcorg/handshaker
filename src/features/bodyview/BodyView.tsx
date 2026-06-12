@@ -43,6 +43,8 @@ interface Live {
   ghostTimer: number | null;
   /** Line count after the last edit — a change means the ghost anchor moved. */
   lineCount: number;
+  /** Текст, который последним видел handleChange/маунт — для детекта внешних обновлений value. */
+  lastText: string;
 }
 
 export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewProps) {
@@ -181,6 +183,7 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
         decorations: null, expanded: new Set(), controller: null, typeSub: null,
         ghost: null, ghostTimer: null,
         lineCount: editor.getModel()?.getLineCount() ?? 1,
+        lastText: editor.getValue(),
       };
       // Attach schema to the model (request mode is the only consumer:
       // autocomplete + ghost + unknown-field markers; response passes none).
@@ -268,6 +271,21 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
   // No mode guard needed: applyGhost no-ops when ghost is null (response mode).
   useEffect(() => { applyGhost(); }, [prefs.bodyHints, applyGhost]);
 
+  // Внешние (не пользовательские) обновления контролируемого value — например
+  // Reset-to-template — обёртка Monaco применяет к модели программно и НЕ
+  // прокидывает в onChange. Ловим расхождение value с последним текстом,
+  // который видел handleChange, и пересинхронизируем tree/ghost.
+  useEffect(() => {
+    const l = live.current;
+    if (mode !== "request" || !l || value === l.lastText) return;
+    l.lastText = value;
+    const parsed = parseWithSpans(value);
+    l.tree = parsed?.tree ?? null;
+    l.spans = parsed?.spans ?? [];
+    l.lineCount = value.split("\n").length;
+    applyGhost();
+  }, [value, mode, applyGhost]);
+
   // Clear the model's schema entry (and contract markers) when BodyView unmounts.
   useEffect(
     () => () => {
@@ -284,6 +302,7 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
     (next: string | undefined) => {
       const v = next ?? "";
       if (mode === "request" && live.current) {
+        live.current.lastText = v;
         const parsed = parseWithSpans(v);
         live.current.tree = parsed?.tree ?? null;
         live.current.spans = parsed?.spans ?? [];
