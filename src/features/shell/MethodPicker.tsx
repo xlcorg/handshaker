@@ -17,13 +17,12 @@ export interface MethodPickerProps {
   selected: SelectedMethod;
   catalog: ServiceCatalogIpc | null;
   onSelect: (next: SelectedMethod) => void;
-  maxLabel?: number;
   className?: string;
   /** Draft-only: status + reload row at the bottom of the dropdown. Omit to hide. */
   reflection?: ReflectionFooterProps;
 }
 
-export function MethodPicker({ selected, catalog, onSelect, maxLabel = 160, className, reflection }: MethodPickerProps) {
+export function MethodPicker({ selected, catalog, onSelect, className, reflection }: MethodPickerProps) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -62,11 +61,11 @@ export function MethodPicker({ selected, catalog, onSelect, maxLabel = 160, clas
       <Box className="size-3 text-muted-foreground flex-none" />
       {hasMethod ? (
         <>
-          <span className="text-muted-foreground truncate" style={{ maxWidth: maxLabel }}>
+          <span className="text-muted-foreground truncate min-w-0">
             {shortService(selected.service)}
           </span>
-          <span className="text-muted-foreground/50">/</span>
-          <span className="text-foreground font-medium truncate" style={{ maxWidth: maxLabel }}>
+          <span className="text-muted-foreground/50 flex-none">/</span>
+          <span className="text-foreground font-medium truncate min-w-0">
             {selected.method}
           </span>
           {selected.kind !== "unary" && <KindBadge kind={selected.kind} />}
@@ -88,7 +87,7 @@ export function MethodPicker({ selected, catalog, onSelect, maxLabel = 160, clas
           type="button"
           title={hasMethod ? `${selected.service}/${selected.method}` : undefined}
           className={cn(
-            "group inline-flex items-center gap-2 h-7 px-2 -ml-1.5 rounded-md transition-colors font-mono text-xs",
+            "group inline-flex min-w-0 items-center gap-2 h-7 px-2 -ml-1.5 rounded-md transition-colors font-mono text-xs",
             "hover:bg-accent",
             open && "bg-accent",
             className,

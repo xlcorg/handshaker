@@ -52,6 +52,21 @@ describe("MethodPicker trigger", () => {
     );
     expect(screen.getByTitle("myapp.user.v1.UserService/GetUser")).toBeInTheDocument();
   });
+
+  it("does not hard-cap label segments to a fixed pixel width", () => {
+    // Regression: each segment used a fixed `maxWidth: 160` that truncated text even
+    // when the flex-1 trigger had plenty of room. Truncation must come from the flex
+    // layout (min-w-0 + truncate), not an inline pixel cap.
+    render(
+      <MethodPicker
+        selected={{ service: "myapp.user.v1.UserService", method: "GetUser", kind: "unary" }}
+        catalog={null}
+        onSelect={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("GetUser").style.maxWidth).toBe("");
+    expect(screen.getByText("UserService").style.maxWidth).toBe("");
+  });
 });
 
 describe("MethodPicker group style", () => {

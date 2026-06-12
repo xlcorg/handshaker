@@ -22,8 +22,20 @@ function ResizablePanelGroup({
   )
 }
 
-function ResizablePanel({ ...props }: ResizablePrimitive.PanelProps) {
-  return <ResizablePrimitive.Panel data-slot="resizable-panel" {...props} />
+function ResizablePanel({ style, ...props }: ResizablePrimitive.PanelProps) {
+  return (
+    <ResizablePrimitive.Panel
+      data-slot="resizable-panel"
+      // react-resizable-panels v4 hard-codes `overflow: auto` on the inner content
+      // wrapper this `style` lands on. Content that can't shrink to a narrowed panel
+      // (the tab header, the Monaco wrapper) then triggered a NATIVE horizontal
+      // scrollbar. Every panel here manages its own scroll internally (min-h-0 +
+      // scroll-thin regions), so clip the wrapper's horizontal axis — keeping
+      // overflow-y: auto so vertical content can never be clipped. Caller style wins.
+      style={{ overflowX: "hidden", ...style }}
+      {...props}
+    />
+  )
 }
 
 function ResizableHandle({

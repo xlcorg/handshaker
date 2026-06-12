@@ -45,6 +45,21 @@ describe("CallPanel body layout", () => {
     expect(container.querySelector('[data-slot="resizable-handle"]')).not.toBeNull();
   });
 
+  // react-resizable-panels v4 hard-codes `overflow: auto` on each panel's inner
+  // content wrapper. When a panel narrows, content that can't shrink (the tab header,
+  // the Monaco wrapper) overflowed it and the library's div showed a NATIVE horizontal
+  // scrollbar in both panels. The wrapper must clip its horizontal axis (content scrolls
+  // internally via min-h-0 + scroll-thin regions).
+  it("clips each panel's content horizontally so a narrowed panel can't show a native scrollbar", () => {
+    const { container } = renderCallPanel(<CallPanel step={draft} onPatch={() => {}} />);
+    const panels = container.querySelectorAll('[data-slot="resizable-panel"]');
+    expect(panels.length).toBe(2);
+    panels.forEach((p) => {
+      const content = p.firstElementChild as HTMLElement;
+      expect(content.style.overflowX).toBe("hidden");
+    });
+  });
+
   // The react-resizable-panels v4 fork reflects orientation via the group's
   // inline `flex-direction` style ("row" = horizontal, "column" = vertical) —
   // NOT via aria-orientation/data-orientation (verified against the installed fork).
