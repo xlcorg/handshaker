@@ -398,4 +398,15 @@ mod tests {
             other => panic!("expected UnresolvedVariable, got {other:?}"),
         }
     }
+
+    #[test]
+    fn collection_var_value_resolves_against_env_var() {
+        // Bug repro: env `notes-api-root`, collection `uri-root = {{notes-api-root}}`.
+        let env = map(&[("notes-api-root", "https://api.example.com")]);
+        let coll = map(&[("uri-root", "{{notes-api-root}}")]);
+        let r = resolve_template_with_diagnostics("{{uri-root}}/v1/notes", &vs(&env, &coll));
+        assert_eq!(r.resolved, "https://api.example.com/v1/notes");
+        assert!(r.unresolved_vars.is_empty());
+        assert!(r.cycle_chain.is_none());
+    }
 }
