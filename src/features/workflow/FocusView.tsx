@@ -1,4 +1,4 @@
-import { Check, CopyPlus, Save } from "lucide-react";
+import { CopyPlus, Save } from "lucide-react";
 import { toast } from "sonner";
 import { CallPanel } from "./CallPanel";
 import { useDraft, useDraftDirty, useDraftOrigin, workflowStore } from "./store";
@@ -69,9 +69,9 @@ export function FocusView({ onRequestSave, onQuickAddMethod }: FocusViewProps = 
                   role="status"
                   aria-label="Сохранено"
                   data-testid="autosave-status"
-                  className="inline-flex h-5 w-5 items-center justify-center text-muted-foreground"
+                  className="inline-flex h-5 w-5 items-center justify-center text-muted-foreground/60"
                 >
-                  <Check className="size-3.5" />
+                  <Save className="size-3.5" />
                 </span>
               </Tooltip>
             </span>
