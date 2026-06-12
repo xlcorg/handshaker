@@ -68,7 +68,7 @@ export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMetho
       auth.kind === "header" &&
       auth.invalidate
     ) {
-      void authInvalidate(auth.invalidate);
+      void authInvalidate(auth.invalidate).catch(() => {}); // best-effort, like cancelStep
     }
     if (onExecuted && shouldRecordExecuted(res)) onExecuted(buildExecutedStep(step, patch));
   };
