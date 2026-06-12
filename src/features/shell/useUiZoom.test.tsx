@@ -53,4 +53,24 @@ describe("useUiZoom", () => {
     press({ key: "=" });
     expect(readPrefs().zoom).toBe(start);
   });
+
+  it("preventDefault is called only when ctrl/meta is held", () => {
+    render(<Probe />);
+
+    const eWithCtrl = new KeyboardEvent("keydown", { key: "=", ctrlKey: true, cancelable: true });
+    act(() => { window.dispatchEvent(eWithCtrl); });
+    expect(eWithCtrl.defaultPrevented).toBe(true);
+
+    const eNoCtrl = new KeyboardEvent("keydown", { key: "=", cancelable: true });
+    act(() => { window.dispatchEvent(eNoCtrl); });
+    expect(eNoCtrl.defaultPrevented).toBe(false);
+  });
+
+  it("stops reacting after unmount (listener cleanup)", () => {
+    const { unmount } = render(<Probe />);
+    unmount();
+    const zoomAfterUnmount = readPrefs().zoom;
+    press({ key: "=", ctrlKey: true });
+    expect(readPrefs().zoom).toBe(zoomAfterUnmount);
+  });
 });
