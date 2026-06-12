@@ -17,6 +17,13 @@ impl AuthCredentialsIpc {
     }
 }
 
+/// Result of a forced token fetch (the "Get token" button) — lifetime only;
+/// the token itself stays in the backend cache.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct OAuth2TokenInfoIpc {
+    pub expires_in_secs: u64,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

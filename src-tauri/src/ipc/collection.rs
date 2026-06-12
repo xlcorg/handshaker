@@ -17,6 +17,15 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 use uuid::Uuid;
 
+// --- default helpers for auth serde -----------------------------------------
+
+fn default_auth_header_name() -> String {
+    "authorization".to_string()
+}
+fn default_auth_prefix() -> String {
+    "Bearer ".to_string()
+}
+
 // --- id parsing helpers -----------------------------------------------------
 
 pub(crate) fn parse_collection_id(s: &str) -> Result<CollectionId, CoreError> {
@@ -33,16 +42,29 @@ pub(crate) fn parse_item_id(s: &str) -> Result<ItemId, CoreError> {
 
 // --- auth DTOs --------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum SavedAuthConfigIpc {
     None,
-    EnvVar { env_var: String, header_name: String, prefix: String },
+    EnvVar {
+        env_var: String,
+        header_name: String,
+        prefix: String,
+        #[serde(default)]
+        environments: Vec<String>,
+    },
+    #[serde(rename = "oauth2_client_credentials")]
     Oauth2ClientCredentials {
         token_url: String,
         client_id: String,
-        client_secret_env_var: String,
+        client_secret: String,
         scopes: Vec<String>,
+        #[serde(default = "default_auth_header_name")]
+        header_name: String,
+        #[serde(default = "default_auth_prefix")]
+        prefix: String,
+        #[serde(default)]
+        environments: Vec<String>,
     },
 }
 
@@ -54,12 +76,16 @@ impl SavedAuthConfigIpc {
                 env_var: e.env_var,
                 header_name: e.header_name,
                 prefix: e.prefix,
+                environments: e.environments,
             },
             SavedAuthConfig::OAuth2ClientCredentials(o) => Self::Oauth2ClientCredentials {
                 token_url: o.token_url,
                 client_id: o.client_id,
-                client_secret_env_var: o.client_secret_env_var,
+                client_secret: o.client_secret,
                 scopes: o.scopes,
+                header_name: o.header_name,
+                prefix: o.prefix,
+                environments: o.environments,
             },
         }
     }
@@ -67,17 +93,20 @@ impl SavedAuthConfigIpc {
     pub fn into_core(self) -> SavedAuthConfig {
         match self {
             Self::None => SavedAuthConfig::None,
-            Self::EnvVar { env_var, header_name, prefix } => {
-                SavedAuthConfig::EnvVar(EnvVarAuthConfig { env_var, header_name, prefix })
+            Self::EnvVar { env_var, header_name, prefix, environments } => {
+                SavedAuthConfig::EnvVar(EnvVarAuthConfig { env_var, header_name, prefix, environments })
             }
-            Self::Oauth2ClientCredentials { token_url, client_id, client_secret_env_var, scopes } => {
-                SavedAuthConfig::OAuth2ClientCredentials(OAuth2ClientCredentialsConfig {
-                    token_url,
-                    client_id,
-                    client_secret_env_var,
-                    scopes,
-                })
-            }
+            Self::Oauth2ClientCredentials {
+                token_url, client_id, client_secret, scopes, header_name, prefix, environments,
+            } => SavedAuthConfig::OAuth2ClientCredentials(OAuth2ClientCredentialsConfig {
+                token_url,
+                client_id,
+                client_secret,
+                scopes,
+                header_name,
+                prefix,
+                environments,
+            }),
         }
     }
 }
@@ -317,6 +346,43 @@ mod tests {
         assert_eq!(req.metadata[0].key, "a");
         assert!(req.metadata[0].enabled);
         assert!(!req.metadata[1].enabled);
+    }
+
+    #[test]
+    fn oauth2_ipc_round_trips_through_core_with_new_fields() {
+        let ipc = SavedAuthConfigIpc::Oauth2ClientCredentials {
+            token_url: "u".into(),
+            client_id: "c".into(),
+            client_secret: "s".into(),
+            scopes: vec!["a".into()],
+            header_name: "x-auth".into(),
+            prefix: "Token ".into(),
+            environments: vec!["prod".into()],
+        };
+        let core = ipc.clone().into_core();
+        let back = SavedAuthConfigIpc::from_core(core);
+        assert_eq!(back, ipc);
+    }
+
+    #[test]
+    fn oauth2_ipc_tag_is_pinned() {
+        let ipc = SavedAuthConfigIpc::Oauth2ClientCredentials {
+            token_url: "u".into(), client_id: "c".into(), client_secret: "s".into(),
+            scopes: vec![], header_name: "authorization".into(), prefix: "Bearer ".into(),
+            environments: vec![],
+        };
+        let json = serde_json::to_string(&ipc).unwrap();
+        assert!(json.contains(r#""kind":"oauth2_client_credentials""#), "got {json}");
+    }
+
+    #[test]
+    fn env_var_ipc_round_trips_environments() {
+        let ipc = SavedAuthConfigIpc::EnvVar {
+            env_var: "V".into(), header_name: "authorization".into(), prefix: "Bearer ".into(),
+            environments: vec!["prod".into()],
+        };
+        let back = SavedAuthConfigIpc::from_core(ipc.clone().into_core());
+        assert_eq!(back, ipc);
     }
 
     #[test]
