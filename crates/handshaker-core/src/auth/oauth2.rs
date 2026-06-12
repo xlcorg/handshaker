@@ -387,4 +387,53 @@ mod tests {
         provider.invalidate(&c);
         assert!(!provider.has_cached_for_test(&c));
     }
+
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    fn cfg_at(url: String) -> OAuth2ClientCredentialsConfig {
+        let mut c = cfg();
+        c.token_url = url;
+        c
+    }
+
+    #[tokio::test]
+    async fn force_fetch_against_mock_server_succeeds() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/token"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(
+                r#"{"access_token":"live-tok","expires_in":120,"token_type":"Bearer"}"#,
+            ))
+            .mount(&server)
+            .await;
+
+        let provider = Oauth2TokenProvider::new();
+        let cfg = cfg_at(format!("{}/token", server.uri()));
+        let secs = provider.force_fetch(&cfg).await.unwrap();
+        assert_eq!(secs, 120);
+        // Now cached: header_for serves it without another request.
+        let creds = provider.header_for(&cfg).await.unwrap();
+        assert_eq!(creds.header_value, "Bearer live-tok");
+    }
+
+    #[tokio::test]
+    async fn fetch_against_mock_error_surfaces_auth_error() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/token"))
+            .respond_with(ResponseTemplate::new(401).set_body_string(
+                r#"{"error":"invalid_client","error_description":"nope"}"#,
+            ))
+            .mount(&server)
+            .await;
+
+        let provider = Oauth2TokenProvider::new();
+        let cfg = cfg_at(format!("{}/token", server.uri()));
+        let err = provider.force_fetch(&cfg).await.unwrap_err();
+        match err {
+            CoreError::Auth(m) => assert!(m.contains("invalid_client") && m.contains("nope")),
+            other => panic!("expected Auth, got {other:?}"),
+        }
+    }
 }
