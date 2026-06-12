@@ -8,6 +8,8 @@ vi.mock("@/ipc/client", () => ({
     collectionUpsert: vi.fn().mockResolvedValue(undefined),
     collectionSetVariables: vi.fn().mockResolvedValue(undefined),
     collectionSetNodeAuth: vi.fn().mockResolvedValue(undefined),
+    envList: vi.fn().mockResolvedValue([]),
+    varsResolve: vi.fn(async (t: string) => ({ resolved: t, unresolved_vars: [], cycle_chain: null })),
   },
 }));
 
@@ -89,6 +91,7 @@ describe("CollectionOverview", () => {
     fireEvent.click(screen.getByText("Bearer"));
     expect(ipc.collectionSetNodeAuth).toHaveBeenCalledWith("c1", null, {
       kind: "env_var", env_var: "", header_name: "authorization", prefix: "Bearer ",
+      environments: [],
     });
   });
 
