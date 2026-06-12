@@ -13,8 +13,8 @@ beforeEach(() => {
 });
 
 describe("zoomActionFromKey", () => {
-  const ev = (p: Partial<KeyboardEvent>) =>
-    ({ key: "", code: "", ctrlKey: false, metaKey: false, ...p }) as KeyboardEvent;
+  const ev = (p: Partial<Pick<KeyboardEvent, "key" | "code" | "ctrlKey" | "metaKey" | "altKey">>) =>
+    ({ key: "", code: "", ctrlKey: false, metaKey: false, altKey: false, ...p }) as KeyboardEvent;
 
   it("requires ctrl/meta", () => {
     expect(zoomActionFromKey(ev({ key: "=" }))).toBeNull();
@@ -30,6 +30,11 @@ describe("zoomActionFromKey", () => {
     expect(zoomActionFromKey(ev({ key: "0", ctrlKey: true }))).toBe("reset");
     expect(zoomActionFromKey(ev({ key: "x", code: "Numpad0", ctrlKey: true }))).toBe("reset");
     expect(zoomActionFromKey(ev({ key: "9", ctrlKey: true }))).toBeNull();
+  });
+
+  it("ignores AltGr combos (ctrl+alt — types characters on European layouts)", () => {
+    expect(zoomActionFromKey(ev({ key: "0", ctrlKey: true, altKey: true }))).toBeNull();
+    expect(zoomActionFromKey(ev({ key: "=", ctrlKey: true, altKey: true }))).toBeNull();
   });
 });
 

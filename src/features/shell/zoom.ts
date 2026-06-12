@@ -6,8 +6,9 @@ export type ZoomAction = "in" | "out" | "reset";
 /** Маппинг хоткея на действие зума. `key` — символ (раскладко-независимо для =/+/-/0),
  *  `code` — физические NumPad-клавиши, которые дают другой `key`. */
 export function zoomActionFromKey(
-  e: Pick<KeyboardEvent, "key" | "code" | "ctrlKey" | "metaKey">,
+  e: Pick<KeyboardEvent, "key" | "code" | "ctrlKey" | "metaKey" | "altKey">,
 ): ZoomAction | null {
+  if (e.altKey) return null; // AltGr = ctrl+alt на Windows: печатает символы на евро-раскладках
   if (!e.ctrlKey && !e.metaKey) return null;
   if (e.key === "=" || e.key === "+" || e.code === "NumpadAdd") return "in";
   if (e.key === "-" || e.code === "NumpadSubtract") return "out";
