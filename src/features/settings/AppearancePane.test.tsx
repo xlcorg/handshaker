@@ -44,6 +44,27 @@ function makeCb(over: Partial<TreeCallbacks> = {}): TreeCallbacks {
   };
 }
 
+describe("AppearancePane zoom row", () => {
+  it("steps zoom by 10% and resets", async () => {
+    const user = userEvent.setup();
+    render(<AppearancePane />);
+    // default 100%, Reset hidden
+    expect(screen.getByText("100%")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reset zoom" })).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Zoom in" }));
+    expect(screen.getByText("110%")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Reset zoom" }));
+    expect(screen.getByText("100%")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Zoom out" }));
+    expect(screen.getByText("90%")).toBeInTheDocument();
+    // restore default so it doesn't leak into sibling tests
+    await user.click(screen.getByRole("button", { name: "Reset zoom" }));
+  });
+});
+
 describe("AppearancePane", () => {
   it("gRPC icon toggle updates the pref", () => {
     render(<AppearancePane />);

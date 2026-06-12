@@ -1,4 +1,4 @@
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Minus, Plus } from "lucide-react";
 import { SettingsGroup, SettingsRow } from "./SettingsDialog";
 import { Switch } from "@/components/ui/switch";
 import { ToggleGroup } from "@/components/ui/toggle-group";
@@ -10,7 +10,8 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { usePrefs, type GrpcIconStyle, type MethodGroupStyle } from "@/lib/use-prefs";
+import { usePrefs, type GrpcIconStyle, type MethodGroupStyle, ZOOM_MIN, ZOOM_MAX } from "@/lib/use-prefs";
+import { nextZoom } from "@/features/shell/zoom";
 
 const METHOD_GROUP_STYLES: { key: MethodGroupStyle; label: string; hint: string }[] = [
   { key: "band", label: "Band", hint: "Filled header strip" },
@@ -26,7 +27,7 @@ export function AppearancePane() {
   const [prefs, setPref] = usePrefs();
   return (
     <>
-      <SettingsGroup title="Theme">
+      <SettingsGroup title="Display">
         <SettingsRow
           title="Density"
           hint="Row height and padding across the app."
@@ -47,6 +48,42 @@ export function AppearancePane() {
               onValueChange={(v) => setPref("grpcIcon", v as GrpcIconStyle)}
               options={["solid", "letter", "outline", "circle"]}
             />
+          }
+        />
+        <SettingsRow
+          title="Zoom"
+          hint="UI scale. Ctrl+= / Ctrl+- to step, Ctrl+0 to reset."
+          control={
+            <div className="flex items-center gap-1.5">
+              {prefs.zoom !== 1 && (
+                <Button variant="ghost" size="xs" aria-label="Reset zoom" onClick={() => setPref("zoom", 1)}>
+                  Reset
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                size="icon-xs"
+                aria-label="Zoom out"
+                disabled={prefs.zoom <= ZOOM_MIN}
+                onClick={() => setPref("zoom", nextZoom(prefs.zoom, "out"))}
+              >
+                <Minus />
+              </Button>
+              <span className="w-11 text-center font-mono text-xs tabular-nums">
+                {Math.round(prefs.zoom * 100)}%
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon-xs"
+                aria-label="Zoom in"
+                disabled={prefs.zoom >= ZOOM_MAX}
+                onClick={() => setPref("zoom", nextZoom(prefs.zoom, "in"))}
+              >
+                <Plus />
+              </Button>
+            </div>
           }
         />
       </SettingsGroup>
