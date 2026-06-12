@@ -2,6 +2,7 @@ import * as ipc from "@/ipc/client";
 import type { InvokeOutcomeIpc, SavedAuthConfigIpc, AuthCredentialsIpc, MessageSchemaIpc, MessageSideIpc } from "@/ipc/bindings";
 import { newStep, type MetadataRow, type Step } from "./model";
 import { resolveStepTemplates } from "./resolve";
+import { lastExecutedFor, responseSeedPatch } from "./lastExecuted";
 import { newId } from "@/lib/ids";
 import { readPrefs } from "@/lib/use-prefs";
 import { isCancelSentinel } from "./netDiagnostics";
@@ -85,21 +86,26 @@ export async function fetchMessageSchemaSafe(
   }
 }
 
-/** MethodPicker handler for an editable draft. Patches service/method, then resets the
- *  body to `EMPTY_BODY_TEMPLATE` ONLY when the current body is still pristine (empty /
- *  `{}` / structurally equal to the pre-switch method's skeleton — legacy autofilled
- *  drafts). No autofill: the contract renders as the ghost skeleton instead, and the
- *  full value template is built on demand (`resetBodyToTemplate`, ↺). An edited body
- *  is preserved verbatim. */
+/** MethodPicker handler for an editable draft. Patches service/method (+ the response
+ *  fields: this session's last executed call of the new method, or a clean panel),
+ *  then resets the body to `EMPTY_BODY_TEMPLATE` ONLY when the current body is still
+ *  pristine (empty / `{}` / structurally equal to the pre-switch method's skeleton).
+ *  No autofill: the contract renders as the ghost skeleton instead. */
 export async function applyMethodSelection(
   patch: (p: Partial<Step>) => void,
   target: CallTargetInit,
   current: { requestJson: string; service: string; method: string },
   m: { service: string; method: string },
+  history: Step[] = [],
 ): Promise<void> {
   const oldSkeleton = await buildRequestSkeletonSafe(target, current.service, current.method);
   const pristine = isPristineBody(current.requestJson, oldSkeleton);
-  patch({ service: m.service, method: m.method });
+  const last = lastExecutedFor(history, {
+    service: m.service,
+    method: m.method,
+    address: target.address,
+  });
+  patch({ service: m.service, method: m.method, ...responseSeedPatch(last) });
   if (pristine) patch({ requestJson: EMPTY_BODY_TEMPLATE });
 }
 

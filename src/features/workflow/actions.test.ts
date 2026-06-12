@@ -12,7 +12,8 @@ vi.mock("@/ipc/client", () => ({
 import * as ipc from "@/ipc/client";
 import { createStepFromMethod, sendStep, stepPatchFromSendResult, resolveAuthHeader, shouldRecordExecuted, buildExecutedStep, cancelStep } from "./actions";
 import { buildRequestSkeletonSafe, applyMethodSelection, isPristineBody, resetBodyToTemplate, fetchMessageSchemaSafe } from "./actions";
-import { newStep } from "./model";
+import { newStep, type Step } from "./model";
+import type { InvokeOutcomeIpc } from "@/ipc/bindings";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -405,7 +406,7 @@ describe("applyMethodSelection", () => {
       { requestJson: "{}", service: "p.S", method: "Old" }, // pristine
       { service: "p.S", method: "New" },
     );
-    expect(patch).toHaveBeenNthCalledWith(1, { service: "p.S", method: "New" });
+    expect(patch).toHaveBeenNthCalledWith(1, { service: "p.S", method: "New", status: "draft", outcome: null, error: null });
     expect(patch).toHaveBeenNthCalledWith(2, { requestJson: "{\n}" });
     // no autofill: the new method's skeleton is only built on demand (Reset-to-template)
     expect(ipc.grpcBuildRequestSkeleton).toHaveBeenCalledTimes(1);
@@ -433,7 +434,40 @@ describe("applyMethodSelection", () => {
       { service: "p.S", method: "New" },
     );
     expect(patch).toHaveBeenCalledTimes(1);
-    expect(patch).toHaveBeenCalledWith({ service: "p.S", method: "New" });
+    expect(patch).toHaveBeenCalledWith({ service: "p.S", method: "New", status: "draft", outcome: null, error: null });
+  });
+
+  it("seeds the response fields from history for the newly selected method", async () => {
+    const outcome = { status_code: 0 } as unknown as InvokeOutcomeIpc;
+    const history: Step[] = [{
+      ...(await createStepFromMethod({ address: "h:1", tls: false }, "p.S", "Other")),
+      status: "ok" as const,
+      outcome,
+    }];
+    const patches: Partial<Step>[] = [];
+    await applyMethodSelection(
+      (p) => patches.push(p),
+      { address: "h:1", tls: false },
+      { requestJson: "{}", service: "p.S", method: "Get" },
+      { service: "p.S", method: "Other" },
+      history,
+    );
+    const main = patches[0];
+    expect(main.outcome).toEqual(outcome);
+    expect(main.status).toBe("ok");
+  });
+
+  it("clears a stale response when the new method has no history", async () => {
+    const patches: Partial<Step>[] = [];
+    await applyMethodSelection(
+      (p) => patches.push(p),
+      { address: "h:1", tls: false },
+      { requestJson: "{}", service: "p.S", method: "Get" },
+      { service: "p.S", method: "Fresh" },
+      [],
+    );
+    expect(patches[0].outcome).toBeNull();
+    expect(patches[0].status).toBe("draft");
   });
 });
 

@@ -16,6 +16,7 @@ import {
   applyMethodSelection,
   resetBodyToTemplate,
 } from "./actions";
+import { workflowStore } from "./store";
 import { newId } from "@/lib/ids";
 import { useEffect, useRef } from "react";
 import type { MetadataRow, Step } from "./model";
@@ -108,6 +109,7 @@ export function CallPanel({ step, onPatch, onExecuted, editable }: CallPanelProp
           { address: step.address, tls: step.tls },
           { requestJson: step.requestJson, service: step.service, method: step.method },
           m,
+          workflowStore.activeWorkflow().steps,
         )
       }
       onSend={onSend}
