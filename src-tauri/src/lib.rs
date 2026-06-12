@@ -103,6 +103,7 @@ pub fn run() {
         .invoke_handler(specta_builder.invoke_handler())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_decorum::init())
         .setup(move |app| {
             specta_builder.mount_events(app);

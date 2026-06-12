@@ -45,6 +45,7 @@ tokio = { workspace = true, features = ["sync", "rt-multi-thread", "macros", "ti
 async-trait.workspace = true
 uuid = { workspace = true }
 rustls = { version = "0.23", default-features = false, features = ["ring"] }
+tauri-plugin-clipboard-manager = "2.3.2"
 
 [dev-dependencies]
 tempfile = { workspace = true }

@@ -370,11 +370,12 @@ export type MessageSideIpc = "input" | "output"
 export type MetadataRowIpc = { key: string; value: string; enabled: boolean }
 export type MethodEntryIpc = { name: string; path: string; input_message: string; output_message: string; client_streaming: boolean; server_streaming: boolean }
 /**
- * Result of a forced token fetch (the "Get token" button) — lifetime only;
- * the token itself stays in the backend cache.
+ * Result of a forced token fetch (the "Get token" button). The token is cached in
+ * the backend either way; it is returned so the UI can show/copy it on demand —
+ * session memory only, never persisted.
  * `u32` (not u64) because specta forbids BigInt in generated TypeScript.
  */
-export type OAuth2TokenInfoIpc = { expires_in_secs: number }
+export type OAuth2TokenInfoIpc = { access_token: string; expires_in_secs: number }
 export type ResolutionReportIpc = { resolved: string; unresolved_vars: string[]; cycle_chain: string[] | null }
 export type SavedAuthConfigIpc = { kind: "none" } | { kind: "env_var"; env_var: string; header_name: string; prefix: string; environments?: string[] } | { kind: "oauth2_client_credentials"; token_url: string; client_id: string; client_secret: string; scopes: string[]; header_name?: string; prefix?: string; environments?: string[] }
 export type SavedRequestIpc = { id: string; name: string; address_template: string; service: string; method: string; body_template: string; metadata: MetadataRowIpc[]; auth: SavedAuthConfigIpc; tls_override: boolean | null; last_used_at: number | null; use_count: number }

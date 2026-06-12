@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import { Key } from "lucide-react";
+import { Copy, Key } from "lucide-react";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ToggleGroup } from "@/components/ui/toggle-group";
@@ -26,8 +28,13 @@ const KIND_OPTIONS = [
 type TokenStatus =
   | { kind: "idle" }
   | { kind: "loading" }
-  | { kind: "ok"; message: string }
+  | { kind: "ok"; message: string; token: string }
   | { kind: "error"; message: string };
+
+/** Short preview for the UI — the full token only goes to the clipboard. */
+function truncateToken(token: string): string {
+  return token.length > 21 ? `${token.slice(0, 20)}…` : token;
+}
 
 function msg(e: unknown): string {
   if (e instanceof Error) return e.message;
@@ -56,9 +63,22 @@ export function SavedAuthEditor({ value, onChange }: SavedAuthEditorProps) {
     }
     try {
       const info = await ipc.authOauth2FetchToken(resolved.config);
-      setToken({ kind: "ok", message: `Token acquired · expires in ${Math.round(info.expires_in_secs / 60)} min` });
+      setToken({
+        kind: "ok",
+        message: `expires in ${Math.round(info.expires_in_secs / 60)} min`,
+        token: info.access_token,
+      });
     } catch (e) {
       setToken({ kind: "error", message: msg(e) });
+    }
+  };
+
+  const onCopyToken = async (token: string) => {
+    try {
+      await writeText(token);
+      toast.success("Token copied");
+    } catch (e) {
+      toast.error(`Couldn't copy token: ${msg(e)}`);
     }
   };
 
@@ -159,7 +179,21 @@ export function SavedAuthEditor({ value, onChange }: SavedAuthEditorProps) {
             <Button variant="outline" size="sm" onClick={onGetToken} disabled={token.kind === "loading"}>
               {token.kind === "loading" ? "Getting token…" : "Get token"}
             </Button>
-            {token.kind === "ok" && <span className="text-[11px] text-emerald-500">{token.message}</span>}
+            {token.kind === "ok" && (
+              <span className="flex min-w-0 items-center gap-1.5 text-[11px] text-emerald-500">
+                <code className="truncate font-mono text-muted-foreground">{truncateToken(token.token)}</code>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label="Copy token"
+                  className="text-muted-foreground hover:text-foreground"
+                  onClick={() => void onCopyToken(token.token)}
+                >
+                  <Copy />
+                </Button>
+                <span className="flex-none">{token.message}</span>
+              </span>
+            )}
             {token.kind === "error" && <span className="text-[11px] text-destructive">{token.message}</span>}
           </div>
         </div>

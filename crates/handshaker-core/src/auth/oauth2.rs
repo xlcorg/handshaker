@@ -192,15 +192,18 @@ impl Oauth2TokenProvider {
     }
 
     /// Force a fetch past the cache (the "Get token" button); caches the result.
-    /// Returns the token lifetime in seconds.
+    /// Returns the parsed response — the UI shows the lifetime and lets the user
+    /// copy the raw token.
     pub async fn force_fetch(
         &self,
         cfg: &OAuth2ClientCredentialsConfig,
-    ) -> Result<u64, CoreError> {
+    ) -> Result<TokenResponse, CoreError> {
         let resp = fetch_token(&self.client, cfg).await?;
-        let secs = resp.expires_in_secs;
-        self.store(CacheKey::from(cfg), resp);
-        Ok(secs)
+        self.store(
+            CacheKey::from(cfg),
+            TokenResponse { access_token: resp.access_token.clone(), ..resp },
+        );
+        Ok(resp)
     }
 
     pub fn invalidate(&self, cfg: &OAuth2ClientCredentialsConfig) {
@@ -410,8 +413,10 @@ mod tests {
 
         let provider = Oauth2TokenProvider::new();
         let cfg = cfg_at(format!("{}/token", server.uri()));
-        let secs = provider.force_fetch(&cfg).await.unwrap();
-        assert_eq!(secs, 120);
+        let resp = provider.force_fetch(&cfg).await.unwrap();
+        assert_eq!(resp.expires_in_secs, 120);
+        // The raw token comes back too (the UI shows/copies it on "Get token").
+        assert_eq!(resp.access_token, "live-tok");
         // Now cached: header_for serves it without another request.
         let creds = provider.header_for(&cfg).await.unwrap();
         assert_eq!(creds.header_value, "Bearer live-tok");

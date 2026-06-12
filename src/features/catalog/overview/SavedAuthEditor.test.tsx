@@ -7,10 +7,14 @@ vi.mock("@/ipc/client", () => ({
   ipc: {
     envList: vi.fn().mockResolvedValue([{ name: "prod", variables: {}, color: null }]),
     varsResolve: vi.fn(async (t: string) => ({ resolved: t, unresolved_vars: [], cycle_chain: null })),
-    authOauth2FetchToken: vi.fn().mockResolvedValue({ expires_in_secs: 840 }),
+    authOauth2FetchToken: vi
+      .fn()
+      .mockResolvedValue({ access_token: "eyJhbGciOiJSUzI1NiJ9.payload.signature", expires_in_secs: 840 }),
   },
 }));
+vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ writeText: vi.fn().mockResolvedValue(undefined) }));
 import { ipc } from "@/ipc/client";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 
 const oauth2: SavedAuthConfigIpc = {
   kind: "oauth2_client_credentials",
@@ -82,6 +86,18 @@ describe("SavedAuthEditor (oauth2)", () => {
     fireEvent.click(screen.getByRole("button", { name: /get token/i }));
     await waitFor(() => expect(ipc.authOauth2FetchToken).toHaveBeenCalledTimes(1));
     expect(await screen.findByText(/expires in 14 min/i)).toBeTruthy(); // 840s ≈ 14 min
+  });
+
+  it("Get token shows a truncated token and copies the full one to the clipboard", async () => {
+    render(<SavedAuthEditor value={oauth2} onChange={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: /get token/i }));
+    // Truncated preview — never the full token in the DOM.
+    expect(await screen.findByText(/eyJhbGciOiJSUzI1NiJ9…/)).toBeTruthy();
+    expect(screen.queryByText("eyJhbGciOiJSUzI1NiJ9.payload.signature")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /copy token/i }));
+    await waitFor(() =>
+      expect(writeText).toHaveBeenCalledWith("eyJhbGciOiJSUzI1NiJ9.payload.signature"),
+    );
   });
 
   it("editing a field emits an updated config via onChange", () => {

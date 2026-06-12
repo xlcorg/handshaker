@@ -30,8 +30,11 @@ impl AppState {
     ) -> Result<OAuth2TokenInfoIpc, CoreError> {
         match config.into_core() {
             SavedAuthConfig::OAuth2ClientCredentials(c) => {
-                let expires_in_secs = self.oauth2_provider.force_fetch(&c).await? as u32;
-                Ok(OAuth2TokenInfoIpc { expires_in_secs })
+                let resp = self.oauth2_provider.force_fetch(&c).await?;
+                Ok(OAuth2TokenInfoIpc {
+                    access_token: resp.access_token,
+                    expires_in_secs: resp.expires_in_secs as u32,
+                })
             }
             _ => Err(CoreError::InvalidTarget(
                 "auth_oauth2_fetch_token requires an oauth2 config".into(),
