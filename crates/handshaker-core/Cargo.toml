@@ -32,8 +32,12 @@ regex.workspace = true
 # Plan #6 — Collections
 uuid = { workspace = true }
 
+# OAuth2 client-credentials token fetch
+reqwest.workspace = true
+
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tonic-health.workspace = true
 tower = "0.5"
 tempfile.workspace = true
+wiremock.workspace = true

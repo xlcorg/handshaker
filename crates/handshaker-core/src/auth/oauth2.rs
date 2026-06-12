@@ -1,6 +1,7 @@
 //! OAuth2 client-credentials token fetch + cache.
 
 use std::collections::HashMap;
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use serde::Deserialize;
@@ -126,6 +127,114 @@ impl TokenCache {
 
     pub fn invalidate(&mut self, key: &CacheKey) {
         self.entries.remove(key);
+    }
+}
+
+/// Builds the resolved header for a config + access token.
+fn build_header(cfg: &OAuth2ClientCredentialsConfig, access_token: &str) -> AuthCredentials {
+    AuthCredentials {
+        header_name: cfg.header_name.clone(),
+        header_value: format!("{}{}", cfg.prefix, access_token),
+    }
+}
+
+async fn fetch_token(
+    client: &reqwest::Client,
+    cfg: &OAuth2ClientCredentialsConfig,
+) -> Result<TokenResponse, CoreError> {
+    let resp = client
+        .post(&cfg.token_url)
+        .form(&token_request_form(cfg))
+        .send()
+        .await
+        .map_err(|e| CoreError::Auth(format!("oauth2 token request transport error: {e}")))?;
+    let status = resp.status().as_u16();
+    let body = resp
+        .text()
+        .await
+        .map_err(|e| CoreError::Auth(format!("oauth2 token response read error: {e}")))?;
+    parse_token_response(status, &body)
+}
+
+/// Session-lived token cache + HTTP client. Single-user desktop: no concurrent-fetch
+/// dedup (YAGNI). The `std::Mutex` is never held across an `.await`.
+pub struct Oauth2TokenProvider {
+    cache: Mutex<TokenCache>,
+    client: reqwest::Client,
+}
+
+impl Oauth2TokenProvider {
+    pub fn new() -> Self {
+        let client = reqwest::Client::builder()
+            .use_rustls_tls()
+            .build()
+            .expect("build reqwest client");
+        Self { cache: Mutex::new(TokenCache::new()), client }
+    }
+
+    /// Cached fresh token, or a fresh fetch that is then cached. Builds the header
+    /// from the (possibly custom) `header_name`/`prefix`.
+    pub async fn header_for(
+        &self,
+        cfg: &OAuth2ClientCredentialsConfig,
+    ) -> Result<AuthCredentials, CoreError> {
+        let key = CacheKey::from(cfg);
+        {
+            let cache = self.cache.lock().expect("token cache poisoned");
+            if let Some(tok) = cache.get_fresh(&key, Instant::now()) {
+                return Ok(build_header(cfg, &tok.access_token));
+            }
+        }
+        let resp = fetch_token(&self.client, cfg).await?;
+        let token = resp.access_token.clone();
+        self.store(key, resp);
+        Ok(build_header(cfg, &token))
+    }
+
+    /// Force a fetch past the cache (the "Get token" button); caches the result.
+    /// Returns the token lifetime in seconds.
+    pub async fn force_fetch(
+        &self,
+        cfg: &OAuth2ClientCredentialsConfig,
+    ) -> Result<u64, CoreError> {
+        let resp = fetch_token(&self.client, cfg).await?;
+        let secs = resp.expires_in_secs;
+        self.store(CacheKey::from(cfg), resp);
+        Ok(secs)
+    }
+
+    pub fn invalidate(&self, cfg: &OAuth2ClientCredentialsConfig) {
+        self.cache
+            .lock()
+            .expect("token cache poisoned")
+            .invalidate(&CacheKey::from(cfg));
+    }
+
+    fn store(&self, key: CacheKey, resp: TokenResponse) {
+        let expires_at = Instant::now() + Duration::from_secs(resp.expires_in_secs);
+        self.cache.lock().expect("token cache poisoned").put(
+            key,
+            CachedToken { access_token: resp.access_token, expires_at },
+        );
+    }
+
+    #[cfg(test)]
+    fn seed_for_test(&self, cfg: &OAuth2ClientCredentialsConfig, token: &str, ttl: Duration) {
+        self.cache.lock().unwrap().put(
+            CacheKey::from(cfg),
+            CachedToken { access_token: token.to_string(), expires_at: Instant::now() + ttl },
+        );
+    }
+
+    #[cfg(test)]
+    fn has_cached_for_test(&self, cfg: &OAuth2ClientCredentialsConfig) -> bool {
+        self.cache.lock().unwrap().get_fresh(&CacheKey::from(cfg), Instant::now()).is_some()
+    }
+}
+
+impl Default for Oauth2TokenProvider {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -255,5 +364,27 @@ mod tests {
         cache.put(key("s"), CachedToken { access_token: "tok".into(), expires_at: base + Duration::from_secs(100) });
         cache.invalidate(&key("s"));
         assert!(cache.get_fresh(&key("s"), base).is_none());
+    }
+
+    #[tokio::test]
+    async fn header_for_uses_cached_token_and_applies_prefix() {
+        let provider = Oauth2TokenProvider::new();
+        let mut c = cfg();
+        c.header_name = "authorization".into();
+        c.prefix = "Bearer ".into();
+        // Seed a fresh token directly so no network call happens.
+        provider.seed_for_test(&c, "abc", Duration::from_secs(600));
+        let creds = provider.header_for(&c).await.unwrap();
+        assert_eq!(creds.header_name, "authorization");
+        assert_eq!(creds.header_value, "Bearer abc");
+    }
+
+    #[tokio::test]
+    async fn invalidate_drops_cached_token() {
+        let provider = Oauth2TokenProvider::new();
+        let c = cfg();
+        provider.seed_for_test(&c, "abc", Duration::from_secs(600));
+        provider.invalidate(&c);
+        assert!(!provider.has_cached_for_test(&c));
     }
 }
