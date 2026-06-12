@@ -16,11 +16,6 @@ vi.mock("@/features/catalog/CatalogProvider", () => ({
   useCatalog: () => ({ tree: cat.tree, duplicateItem: cat.duplicateItem }),
 }));
 
-const mockOpenSavedRequest = vi.fn();
-vi.mock("@/features/catalog/actions", () => ({
-  openSavedRequest: (...args: unknown[]) => mockOpenSavedRequest(...args),
-}));
-
 const mockPatchUiState = vi.fn();
 vi.mock("@/features/catalog/uiState", () => ({
   patchUiState: (...args: unknown[]) => mockPatchUiState(...args),
@@ -38,7 +33,6 @@ beforeEach(() => {
   workflowStore.reset();
   cat.tree = [];
   cat.duplicateItem.mockReset();
-  mockOpenSavedRequest.mockReset();
   mockPatchUiState.mockReset();
 });
 
@@ -143,7 +137,9 @@ describe("FocusView Save affordance", () => {
     await user.click(screen.getByRole("button", { name: "Duplicate request" }));
     expect(cat.duplicateItem).toHaveBeenCalledWith("c1", "r1");
     await waitFor(() => {
-      expect(mockOpenSavedRequest).toHaveBeenCalledWith("c1", copied);
+      const st = workflowStore.getState();
+      expect(st.draftOrigin?.requestId).toBe("r1-copy");
+      expect(st.draft?.method).toBe("Get");
     });
     expect(mockPatchUiState).toHaveBeenCalledWith(
       expect.objectContaining({ active_request: { collection_id: "c1", item_id: "r1-copy" } }),
