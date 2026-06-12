@@ -5,7 +5,12 @@ import type { CollectionIpc, ItemIpc } from "@/ipc/bindings";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 vi.mock("./CallPanel", () => ({
-  CallPanel: ({ step }: { step: { method: string } }) => <div>CALL:{step.method}</div>,
+  CallPanel: ({ step, originAuth }: { step: { method: string }; originAuth?: { kind: string } }) => (
+    <div>
+      <div>CALL:{step.method}</div>
+      <div data-testid="origin-auth">{originAuth?.kind ?? ""}</div>
+    </div>
+  ),
 }));
 
 const cat = vi.hoisted(() => ({
@@ -118,6 +123,34 @@ describe("FocusView Save affordance", () => {
     );
     renderFV(<FocusView onRequestSave={vi.fn()} />);
     expect(screen.getByTestId("draft-breadcrumb")).toHaveTextContent("Notes › Staging › Create");
+  });
+
+  it("passes the origin collection's auth to CallPanel for a bound draft", () => {
+    cat.tree = [
+      {
+        id: "c1", name: "Notes", default_tls: false, skip_tls_verify: false,
+        pinned: false, description: null, created_at: 0, variables: {},
+        auth: {
+          kind: "oauth2_client_credentials", token_url: "https://idp/token", client_id: "c",
+          client_secret: "{{s}}", scopes: [], header_name: "authorization", prefix: "Bearer ",
+          environments: [],
+        },
+        expanded: false,
+        items: [],
+      },
+    ];
+    workflowStore.setDraft(
+      newStep({ address: "h:443", tls: false, service: "p.S", method: "GetX" }),
+      { collectionId: "c1", requestId: "r1" },
+    );
+    renderFV();
+    expect(screen.getByTestId("origin-auth")).toHaveTextContent("oauth2_client_credentials");
+  });
+
+  it("passes no originAuth for an unbound draft", () => {
+    workflowStore.setDraft(newStep({ address: "h:443", tls: false, service: "p.S", method: "GetX" }));
+    renderFV();
+    expect(screen.getByTestId("origin-auth")).toHaveTextContent(/^$/);
   });
 
   it("duplicates the bound request and opens the copy", async () => {

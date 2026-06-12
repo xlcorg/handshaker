@@ -7,6 +7,7 @@ import { useDraftReflection } from "./useDraftReflection";
 import { useMessageSchema } from "./useMessageSchema";
 import { RequestTabs } from "./RequestTabs";
 import {
+  pickEffectiveAuth,
   resolveAuthHeader,
   sendStep,
   stepPatchFromSendResult,
@@ -19,6 +20,7 @@ import {
 import { workflowStore } from "./store";
 import { newId } from "@/lib/ids";
 import { useEffect, useRef } from "react";
+import type { SavedAuthConfigIpc } from "@/ipc/bindings";
 import type { MetadataRow, Step } from "./model";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { usePrefs } from "@/lib/use-prefs";
@@ -34,10 +36,12 @@ interface CallPanelProps {
   editable?: boolean;
   /** One-click save of a method row from MethodPicker to the collection. */
   onQuickAddMethod?: (service: string, method: string) => void;
+  /** Auth of the draft's origin collection — inherited when the step's own auth is none. */
+  originAuth?: SavedAuthConfigIpc;
 }
 
 /** The editable, sendable surface for one step — reused by Focus(draft)/List/Ledger. */
-export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMethod }: CallPanelProps) {
+export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMethod, originAuth }: CallPanelProps) {
   const [prefs, setPref] = usePrefs();
   const activeWf = useActiveWorkflow();
   // prefs.split is our own convention ("horizontal" = a horizontal divider = Top/Bottom);
@@ -49,10 +53,14 @@ export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMetho
   const onResetBody = () =>
     void resetBodyToTemplate(onPatch, { address: step.address, tls: step.tls }, step.service, step.method);
 
+  // Effective auth: the step's own config, falling back to the origin collection's
+  // (request-level auth has no editor UI, so saved requests carry `none`).
+  const effectiveAuth = pickEffectiveAuth(step.auth, originAuth ?? null, activeWf.envName);
+
   const onSend = async () => {
     const requestId = newId();
     onPatch({ status: "sending", error: null, requestId });
-    const auth = await resolveAuthHeader(step.auth, activeWf.envName, { authResolve, varsResolve });
+    const auth = await resolveAuthHeader(effectiveAuth, activeWf.envName, { authResolve, varsResolve });
     if (auth.kind === "error") {
       onPatch({ status: "error", outcome: null, error: auth.message, requestId: null });
       return;
@@ -70,7 +78,10 @@ export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMetho
     ) {
       void authInvalidate(auth.invalidate).catch(() => {}); // best-effort, like cancelStep
     }
-    if (onExecuted && shouldRecordExecuted(res)) onExecuted(buildExecutedStep(step, patch));
+    // Snapshot the auth actually used, so re-sending the history step works standalone.
+    if (onExecuted && shouldRecordExecuted(res)) {
+      onExecuted(buildExecutedStep({ ...step, auth: effectiveAuth }, patch));
+    }
   };
 
   const onCancel = () => {
@@ -150,7 +161,7 @@ export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMetho
         <ResizablePanel id="request" minSize="20%">
           <RequestTabs
             step={step}
-            serviceAuth={step.auth}
+            serviceAuth={effectiveAuth}
             onBody={onBody}
             onMetadata={onMetadata}
             onSubmit={() => sendShortcutRef.current()}

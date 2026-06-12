@@ -166,6 +166,23 @@ function authEnvironments(auth: SavedAuthConfigIpc): string[] {
   return [];
 }
 
+/** Nearest active non-`none` config wins: the step's own auth first, then the origin
+ *  collection's. Mirrors core `resolve_auth_chain` — `none` and env-scoped configs not
+ *  listing `activeEnv` are skipped (treated as absent). */
+export function pickEffectiveAuth(
+  stepAuth: SavedAuthConfigIpc,
+  collectionAuth: SavedAuthConfigIpc | null | undefined,
+  activeEnv: string | null,
+): SavedAuthConfigIpc {
+  for (const cfg of [stepAuth, collectionAuth]) {
+    if (!cfg || cfg.kind === "none") continue;
+    const envs = authEnvironments(cfg);
+    if (envs.length > 0 && (activeEnv === null || !envs.includes(activeEnv))) continue;
+    return cfg;
+  }
+  return { kind: "none" };
+}
+
 type Oauth2Config = Extract<SavedAuthConfigIpc, { kind: "oauth2_client_credentials" }>;
 
 /** Resolve `{{var}}` in every oauth2 template field. Returns the resolved config, or

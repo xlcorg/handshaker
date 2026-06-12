@@ -146,6 +146,70 @@ describe("CallPanel contract tab", () => {
   });
 });
 
+describe("CallPanel collection-auth inheritance (originAuth)", () => {
+  const collectionOauth = {
+    kind: "oauth2_client_credentials" as const,
+    token_url: "https://idp/token",
+    client_id: "cid",
+    client_secret: "{{s}}",
+    scopes: [],
+    header_name: "authorization",
+    prefix: "Bearer ",
+    environments: [] as string[],
+  };
+  const okOutcome: InvokeOutcomeIpc = {
+    status_code: 0,
+    status_message: "OK",
+    response_json: "{}",
+    trailing_metadata: {},
+    elapsed_ms: 1,
+  };
+  const passthrough = (t: string): Promise<ResolutionReportIpc> =>
+    Promise.resolve({ resolved: t, unresolved_vars: [], cycle_chain: null });
+
+  it("sends with the collection's oauth2 header when the step auth is none", async () => {
+    vi.mocked(varsResolve).mockImplementation(passthrough);
+    vi.mocked(authResolve).mockResolvedValue({
+      header_name: "authorization",
+      header_value: "Bearer T",
+    });
+    vi.mocked(grpcInvokeOneshot).mockResolvedValueOnce(okOutcome);
+    const onExecuted = vi.fn();
+
+    // step auth defaults to none — inheritance must kick in
+    const inheritDraft = newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "GetInherit" });
+    render(
+      <TooltipProvider>
+        <CallPanel step={inheritDraft} onPatch={() => {}} onExecuted={onExecuted} editable originAuth={collectionOauth} />
+      </TooltipProvider>,
+    );
+    fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
+
+    await waitFor(() => expect(grpcInvokeOneshot).toHaveBeenCalledTimes(1));
+    expect(authResolve).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "oauth2_client_credentials" }),
+    );
+    const requestArg = vi.mocked(grpcInvokeOneshot).mock.calls[0][1];
+    expect(requestArg.metadata).toMatchObject({ authorization: "Bearer T" });
+    // The executed history snapshot records the auth actually used, so re-send works.
+    expect(onExecuted).toHaveBeenCalledWith(
+      expect.objectContaining({ auth: expect.objectContaining({ kind: "oauth2_client_credentials" }) }),
+    );
+  });
+
+  it("shows the inherited collection config in the Auth tab", () => {
+    const inheritDraft = newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "GetAuthTab" });
+    render(
+      <TooltipProvider>
+        <CallPanel step={inheritDraft} onPatch={() => {}} editable originAuth={collectionOauth} />
+      </TooltipProvider>,
+    );
+    fireEvent.click(screen.getByRole("tab", { name: "Auth" }));
+    expect(screen.getByText(/oauth2_client_credentials/)).toBeInTheDocument();
+    expect(screen.getByText(/https:\/\/idp\/token/)).toBeInTheDocument();
+  });
+});
+
 describe("CallPanel oauth2 token invalidation", () => {
   it("invalidates the oauth2 token cache when a send returns UNAUTHENTICATED (16)", async () => {
     const passthrough = (t: string): Promise<ResolutionReportIpc> =>

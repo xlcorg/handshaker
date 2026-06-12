@@ -32,6 +32,10 @@ export function FocusView({ onRequestSave, onQuickAddMethod }: FocusViewProps = 
     toast.success(`Duplicated as "${item.name}"`);
   }
 
+  // Auth of the origin collection — CallPanel falls back to it when the step's own
+  // auth is none (request-level auth has no editor; collections carry the config).
+  const originAuth = origin ? tree.find((c) => c.id === origin.collectionId)?.auth : undefined;
+
   const segments = draft ? draftBreadcrumb(draft, origin, tree) : [];
   const prefix = segments.slice(0, -1);
   const last = segments[segments.length - 1] ?? "";
@@ -103,6 +107,7 @@ export function FocusView({ onRequestSave, onQuickAddMethod }: FocusViewProps = 
             onExecuted={(executed: Step) => workflowStore.commitExecutedStep(executed)}
             editable
             onQuickAddMethod={onQuickAddMethod}
+            originAuth={originAuth}
           />
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
