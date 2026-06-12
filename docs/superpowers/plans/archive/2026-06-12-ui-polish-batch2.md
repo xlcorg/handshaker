@@ -1,6 +1,6 @@
 # UI Polish Batch #2 Implementation Plan
 
-> **Статус (2026-06-12):** Tasks 1–8 ✅ DONE (subagent-driven, spec+quality ревью на каждой; финальное ревью ветки — Ready to merge). Гейт: tsc clean · vitest 818 · build · cargo core+app — зелёные. Осталось: Task 9 Step 3 — live-проверка в WebView2 (чеклист в Task 9), затем merge + архивация.
+> **Статус (2026-06-12): 🎉 feature-complete.** Tasks 1–9 ✅ DONE (subagent-driven, spec+quality ревью на каждой; финальное ревью ветки — Ready to merge). Гейт: tsc clean · vitest 818 · build · cargo core+app — зелёные. Live-проверка в WebView2 пройдена; live-pass amendments: Duplicate-иконка → `CopyPlus`, статус «Сохранено» → приглушённая `Save`-иконка с тултипом (`8ed2618`, `4dd09ca`). Влито в `main` ff.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -1456,7 +1456,7 @@ Expected: всё зелёное.
 Run: `cargo test -p handshaker-core` (из корня) и `cargo test` (из `src-tauri`)
 Expected: PASS (бэкенд не менялся — регрессий быть не должно).
 
-- [ ] **Step 3: Live-проверка (требует человека/Preview за WebView2)**
+- [x] **Step 3: Live-проверка (требует человека/Preview за WebView2)** — пройдена; замечания (иконки Duplicate/Сохранено) закрыты `8ed2618`/`4dd09ca`
 
 `pnpm tauri dev`, проверить руками:
 1. **Зум:** Ctrl+= / Ctrl+- / Ctrl+0; степпер и Reset в Settings → Appearance; рестарт приложения сохраняет масштаб; хоткей работает при фокусе в Monaco.
@@ -1466,6 +1466,6 @@ Expected: PASS (бэкенд не менялся — регрессий быть
 5. **Ghost:** выбрать метод с полями → ↺ Reset to template → ghost исчез; Ctrl+Z (пустое тело) → ghost вернулся.
 6. **Последний response:** Send на методе A → переключить на B → Response пуст; вернуться на A (через сайдбар и через MethodPicker) → последний ответ A виден.
 
-- [ ] **Step 4: Финал**
+- [x] **Step 4: Финал**
 
 Зафиксировать замечания live-прохода (если есть) отдельными фиксами, обновить статус-баннер этого плана и «Active work» в `CLAUDE.md`.

@@ -6,8 +6,8 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 
 ## Active work
 
-Сейчас активной фичи нет — предыдущая (контракт метода → таб Contract) влита
-в `main` 2026-06-12. Следующая фича начинается с брейншторма → спека → плана
+Сейчас активной фичи нет — предыдущая (UI polish batch #2) влита в `main`
+2026-06-12. Следующая фича начинается с брейншторма → спека → плана
 (см. процесс ниже).
 
 Интеграционная ветка — `main`; фичи ведутся в отдельных worktree-ветках
@@ -15,6 +15,24 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 
 ### Завершённые фичи (всё в `archive/`)
 
+- **UI polish batch #2 — зум · dark-only · quick-add · duplicate · ghost-фикс ·
+  последний response** (🎉 DONE 2026-06-12, влито в `main` ff; план+спека
+  `2026-06-12-ui-polish-batch2*` в `archive/`) — шесть независимых пунктов:
+  **зум UI** (`webview.setZoom`, Ctrl+=/−/0 с AltGr-guard, степпер+Reset в
+  Settings → Appearance, персист через `prefs.zoom`; `src/features/shell/zoom.ts`);
+  **dark-only** (`prefs.theme`/светлая Monaco-тема/кнопка в Titlebar выпилены
+  целиком); **quick-add** (hover-«+» на строке метода в MethodPicker → авто-сейв
+  по `planQuickAdd` (дедуп → открыть существующий) и немедленное открытие
+  созданного через `openSavedRequest`); **duplicate** (иконка `CopyPlus` в хедере
+  FocusView origin-bound черновика → копия рядом + открытие; IPC
+  `collection_duplicate_item` теперь отдаёт id фронту); **ghost-фикс** (обёртка
+  @monaco-editor/react глушит `onChange` на программные правки — пересчёт ghost
+  по дивергенции `lastText` в BodyView); **последний response сессии**
+  (`lastExecutedFor` по истории воркфлоу сидирует Response при `openSavedRequest`
+  и `applyMethodSelection`; заодно убран stale-ответ чужого метода). Live-pass
+  amendments: статус «Сохранено» → приглушённая `Save`-иконка с тултипом.
+  Subagent-driven, spec+quality ревью на каждой задаче + финальное ревью ветки;
+  гейт: tsc clean · vitest 818 · cargo core+app · build; live-проверка в WebView2.
 - **Контракт метода → таб Contract (proto-вид, Group B #3)** (🎉 DONE
   2026-06-12, влито в `main` ff; планы 2026-06-10/11/12 + спеки в `archive/`) —
   плавающий оверлей `ContractPanel` удалён; контракт — 4-й таб Response-панели
