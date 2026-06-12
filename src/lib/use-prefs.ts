@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 
-export type ThemeMode = "dark" | "light";
 export type Density = "compact" | "regular" | "cozy";
 export type SplitDir = "horizontal" | "vertical";
 export type FontUi = "inter" | "geist" | "system";
@@ -10,7 +9,6 @@ export type GrpcIconStyle = "solid" | "letter" | "outline" | "circle";
 export type MethodGroupStyle = "band" | "tree" | "weight" | "card" | "bar" | "chip" | "zebra";
 
 export interface Prefs {
-  theme: ThemeMode;
   density: Density;
   sidebar: boolean;
   /** Sidebar panel size as a percent of the window (resizable, persisted). Clamped to [12, 40]
@@ -35,7 +33,6 @@ export interface Prefs {
 }
 
 export const PREFS_DEFAULTS: Prefs = {
-  theme: "dark",
   density: "regular",
   sidebar: true,
   sidebarPanel: 18,

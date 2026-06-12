@@ -28,17 +28,6 @@ export function AppearancePane() {
     <>
       <SettingsGroup title="Theme">
         <SettingsRow
-          title="Mode"
-          hint="Dark or light. Stored locally."
-          control={
-            <ToggleGroup
-              value={prefs.theme}
-              onValueChange={(v) => setPref("theme", v as "dark" | "light")}
-              options={["dark", "light"]}
-            />
-          }
-        />
-        <SettingsRow
           title="Density"
           hint="Row height and padding across the app."
           control={

@@ -1,6 +1,6 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef } from "react";
 import type * as Monaco from "monaco-editor";
-import { MonacoEditor, monacoThemeFor, BODY_EDIT_OPTIONS, BODY_READONLY_OPTIONS } from "@/lib/monaco";
+import { MonacoEditor, BODY_EDIT_OPTIONS, BODY_READONLY_OPTIONS } from "@/lib/monaco";
 import { usePrefs, readPrefs } from "@/lib/use-prefs";
 import { parseWithSpans } from "./parse";
 import { renderJsonTree, type Badge } from "./render";
@@ -319,7 +319,7 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
         key={key}
         height="100%"
         defaultLanguage="json-with-vars"
-        theme={monacoThemeFor(prefs.theme)}
+        theme="handshaker-dark"
         value={value}
         onChange={mode === "request" ? handleChange : undefined}
         onMount={onMount}

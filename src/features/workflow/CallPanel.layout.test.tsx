@@ -19,8 +19,8 @@ vi.mock("@/ipc/client", () => ({
 // factory can reference it despite hoisting).
 const h = vi.hoisted(() => ({ split: "vertical" as "horizontal" | "vertical" }));
 vi.mock("@/lib/use-prefs", () => ({
-  usePrefs: () => [{ split: h.split, bodyPanel: 50, theme: "dark" }, vi.fn()],
-  readPrefs: () => ({ split: h.split, bodyPanel: 50, theme: "dark" }),
+  usePrefs: () => [{ split: h.split, bodyPanel: 50 }, vi.fn()],
+  readPrefs: () => ({ split: h.split, bodyPanel: 50 }),
 }));
 
 import { CallPanel } from "./CallPanel";

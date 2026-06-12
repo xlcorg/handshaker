@@ -121,38 +121,6 @@ const setupPromise = (async () => {
     },
   });
 
-  monaco.editor.defineTheme("handshaker-light", {
-    base: "vs",
-    inherit: true,
-    rules: [
-      { token: "string.key", foreground: "2259A0" },
-      { token: "string.key.quote", foreground: "2259A0" },
-      { token: "string", foreground: "356E35" },
-      { token: "string.quote", foreground: "356E35" },
-      { token: "string.escape", foreground: "356E35" },
-      { token: "number", foreground: "A5611D" },
-      { token: "keyword", foreground: "A5611D" },
-      { token: "delimiter", foreground: "8C8C8C" },
-      { token: "variable.template", foreground: "A5611D", fontStyle: "bold" },
-    ],
-    colors: {
-      "editor.background": "#FFFFFF",
-      "editor.foreground": "#0A0A0A",
-      "editorLineNumber.foreground": "#A3A3A3",
-      "editorLineNumber.activeForeground": "#0A0A0A",
-      "editor.lineHighlightBackground": "#FFFFFF",
-      "editor.lineHighlightBorder": "#FFFFFF",
-      "editorGutter.background": "#FFFFFF",
-      "editor.selectionBackground": "#0A0A0A26",
-      "editorCursor.foreground": "#0A0A0A",
-      "editorWidget.background": "#FFFFFF",
-      "editorWidget.border": "#E5E5E5",
-      "scrollbarSlider.background": "#E5E5E580",
-      "scrollbarSlider.hoverBackground": "#73737366",
-      "scrollbarSlider.activeBackground": "#73737399",
-    },
-  });
-
   return reactMod.default;
 })();
 
@@ -209,11 +177,4 @@ export const BODY_READONLY_OPTIONS = {
   readOnly: true,
 } as const;
 
-export type ThemeMode = "dark" | "light";
-
-export function monacoThemeFor(theme: ThemeMode): string {
-  return theme === "light" ? "handshaker-light" : "handshaker-dark";
-}
-
-/** Backwards-compatible default — dark. Prefer `monacoThemeFor(prefs.theme)`. */
 export const MONACO_THEME = "handshaker-dark" as const;

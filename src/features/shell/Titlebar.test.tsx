@@ -129,10 +129,11 @@ describe("Titlebar on macOS", () => {
     expect(screen.queryByText("Handshaker")).toBeNull();
   });
 
-  it("still renders the sidebar/theme/settings utilities", () => {
+  it("still renders the sidebar/settings utilities", () => {
     render(<Titlebar onOpenSettings={() => {}} />);
     expect(screen.getByRole("button", { name: "Toggle sidebar" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Settings" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Toggle theme" })).toBeNull();
   });
 
   it("renders the traffic-light inset when not fullscreen", () => {

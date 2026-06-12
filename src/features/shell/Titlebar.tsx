@@ -1,4 +1,4 @@
-import { Minus, Moon, PanelLeft, RefreshCw, Settings, Square, Sun, X } from "lucide-react";
+import { Minus, PanelLeft, RefreshCw, Settings, Square, X } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Tooltip } from "@/components/ui/tooltip";
 import { usePrefs } from "@/lib/use-prefs";
@@ -65,16 +65,6 @@ export function Titlebar({
         <Tooltip content="Toggle sidebar" side="bottom">
           <button type="button" onClick={() => setPref("sidebar", !prefs.sidebar)} className={btn} aria-label="Toggle sidebar">
             <PanelLeft size={13} />
-          </button>
-        </Tooltip>
-        <Tooltip content={prefs.theme === "dark" ? "Light mode" : "Dark mode"} side="bottom">
-          <button
-            type="button"
-            onClick={() => setPref("theme", prefs.theme === "dark" ? "light" : "dark")}
-            className={btn}
-            aria-label="Toggle theme"
-          >
-            {prefs.theme === "dark" ? <Sun size={13} /> : <Moon size={13} />}
           </button>
         </Tooltip>
         {onCheckForUpdates && (

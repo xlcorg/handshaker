@@ -12,11 +12,10 @@ vi.mock("@/lib/monaco", () => ({
       data-readonly={String(!!options?.readOnly)}
     >{value}</pre>
   ),
-  monacoThemeFor: () => "handshaker-dark",
   BODY_EDIT_OPTIONS: { readOnly: false },
   BODY_READONLY_OPTIONS: { readOnly: true },
 }));
-const prefs = { theme: "dark", bodyHints: false };
+const prefs = { bodyHints: false };
 vi.mock("@/lib/use-prefs", () => ({
   usePrefs: () => [prefs],
   readPrefs: () => prefs,

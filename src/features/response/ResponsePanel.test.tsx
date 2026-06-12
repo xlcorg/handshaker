@@ -5,11 +5,10 @@ vi.mock("@/lib/monaco", () => ({
   MonacoEditor: ({ value, options }: { value: string; options?: { readOnly?: boolean } }) => (
     <pre data-testid="monaco" data-readonly={String(!!options?.readOnly)}>{value}</pre>
   ),
-  monacoThemeFor: () => "handshaker-dark",
   BODY_EDIT_OPTIONS: { readOnly: false },
   BODY_READONLY_OPTIONS: { readOnly: true },
 }));
-vi.mock("@/lib/use-prefs", () => ({ usePrefs: () => [{ theme: "dark" }] }));
+vi.mock("@/lib/use-prefs", () => ({ usePrefs: () => [{}] }));
 
 import { ResponsePanel } from "./ResponsePanel";
 import type { InvokeOutcomeIpc, MessageSchemaIpc } from "@/ipc/bindings";

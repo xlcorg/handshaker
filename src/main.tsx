@@ -12,14 +12,12 @@ import "@/styles/globals.css";
 import { WorkflowApp } from "@/app/WorkflowApp";
 import { CatalogProvider } from "@/features/catalog/CatalogProvider";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { readPrefs } from "@/lib/use-prefs";
 // Side-effect import: kicks off Monaco chunk download in parallel with React
 // boot, so by the time the user picks a method the editor mounts instantly
 // instead of flashing a Suspense fallback.
 import "@/lib/monaco";
 
-const initial = readPrefs();
-document.documentElement.classList.toggle("dark", initial.theme === "dark");
+document.documentElement.classList.add("dark");
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

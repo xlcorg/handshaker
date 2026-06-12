@@ -35,13 +35,12 @@ vi.mock("@/lib/monaco", () => ({
     onMount?.(editor, monaco);
     return <div data-testid="monaco" />;
   },
-  monacoThemeFor: () => "handshaker-dark",
   BODY_EDIT_OPTIONS: { readOnly: false },
   BODY_READONLY_OPTIONS: { readOnly: true },
 }));
 vi.mock("@/lib/use-prefs", () => ({
-  usePrefs: () => [{ theme: "dark", bodyHints: false }],
-  readPrefs: () => ({ theme: "dark", bodyHints: false }),
+  usePrefs: () => [{ bodyHints: false }],
+  readPrefs: () => ({ bodyHints: false }),
 }));
 vi.mock("./controller", () => ({
   attachBodyController: () => ({ dispose: () => {} }),
