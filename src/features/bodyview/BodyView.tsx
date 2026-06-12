@@ -306,10 +306,7 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
     [mode, onChange, applyGhost, scheduleGhost],
   );
 
-  const options = useMemo(
-    () => (mode === "response" ? BODY_READONLY_OPTIONS : BODY_EDIT_OPTIONS),
-    [mode],
-  );
+  const options = mode === "response" ? BODY_READONLY_OPTIONS : BODY_EDIT_OPTIONS;
   // Response model text is derived (pretty/elided) and set imperatively in onMount;
   // pass the raw value only as the initial Monaco value, then never via React again
   // for response (so prop-sync doesn't clobber the rendered text). Keyed remount on

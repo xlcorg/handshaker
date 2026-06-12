@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 
 // Mock the heavy Monaco module: render a textarea-ish stub, expose value/readOnly.
@@ -16,16 +16,11 @@ vi.mock("@/lib/monaco", () => ({
   BODY_EDIT_OPTIONS: { readOnly: false },
   BODY_READONLY_OPTIONS: { readOnly: true },
 }));
-// Lazily read so each test can flip bodyHints before rendering.
-let prefs = { theme: "dark", bodyHints: false };
+const prefs = { theme: "dark", bodyHints: false };
 vi.mock("@/lib/use-prefs", () => ({
   usePrefs: () => [prefs],
   readPrefs: () => prefs,
 }));
-
-beforeEach(() => {
-  prefs = { theme: "dark", bodyHints: false };
-});
 
 import { BodyView } from "./BodyView";
 
