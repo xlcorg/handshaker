@@ -85,9 +85,13 @@ export function varsResolverFor(collectionId: string | null): (t: string) => Pro
 - `resolveAddressSafe` → `buildRequestSkeletonSafe`, `fetchMessageSchemaSafe`
   (reflection/skeleton/schema дозваниваются на тот же резолвнутый хост, что и Send);
 - `resolveAuthHeader` / `resolveOauthConfig` (OAuth2-поля — auth и так
-  per-collection) — `CallPanel` передаёт резолвер в `AuthDeps.varsResolve`;
-- `ResolvesPreview` (превью body) — новый опциональный проп `collectionId`,
-  включается в deps эффекта (смена коллекции ⇒ ре-резолв).
+  per-collection) — `CallPanel` передаёт резолвер в `AuthDeps.varsResolve`.
+
+> **Поправка при планировании (2026-06-13):** `ResolvesPreview` (превью body)
+> оказался мёртвым кодом — нигде не смонтирован, тестов нет. Вместо прокидывания
+> `collectionId` он **удаляется** (конвенция проекта); его `hasVars`/стили
+> переезжают в `VarResolveLine`. Индикация unresolved на Send-пути
+> (`stepPatchFromSendResult`) сохраняется.
 
 Существующая индикация Send-времени («Unresolved variables: …» в
 `stepPatchFromSendResult`) сохраняется и автоматически становится корректной.
