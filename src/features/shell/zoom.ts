@@ -1,5 +1,6 @@
+import { useEffect } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { clampZoom, ZOOM_STEP } from "@/lib/use-prefs";
+import { clampZoom, ZOOM_STEP, readPrefs, usePrefs } from "@/lib/use-prefs";
 
 export type ZoomAction = "in" | "out" | "reset";
 
@@ -28,4 +29,27 @@ export async function applyZoom(factor: number): Promise<void> {
   } catch {
     /* best-effort */
   }
+}
+
+/** Зум UI: применяет prefs.zoom к webview (на маунте и при каждом изменении)
+ *  и вешает глобальные хоткеи Ctrl+=/Ctrl+-/Ctrl+0. Capture-фаза, чтобы фокус
+ *  в Monaco не перехватывал сочетания. */
+export function useUiZoom(): void {
+  const [prefs, setPref] = usePrefs();
+
+  useEffect(() => {
+    void applyZoom(prefs.zoom);
+  }, [prefs.zoom]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const action = zoomActionFromKey(e);
+      if (!action) return;
+      e.preventDefault();
+      setPref("zoom", nextZoom(readPrefs().zoom, action));
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+    // setPref пишет в модульный prefs-стор, readPrefs читает свежее — биндим однажды.
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 }

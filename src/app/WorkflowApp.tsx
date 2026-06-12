@@ -30,6 +30,7 @@ import type { PanelImperativeHandle } from "react-resizable-panels";
 import { useUpdateCheck } from "@/features/updater/useUpdateCheck";
 import { UpdateToast } from "@/features/updater/UpdateToast";
 import { UpdaterProvider } from "@/features/updater/updaterContext";
+import { useUiZoom } from "@/features/shell/zoom";
 
 function renderView(view: ViewMode, onRequestSave: () => void) {
   switch (view) {
@@ -62,6 +63,9 @@ export function WorkflowApp() {
 
   // Debounced autosave of an origin-bound draft on every content edit (spec §6).
   useAutosaveDraft(cat.updateItemContent);
+
+  // Зум UI: персистентный prefs.zoom → webview.setZoom + хоткеи Ctrl+=/-/0.
+  useUiZoom();
 
   // Подхватить сохранённый бэкендом активный env при старте (спека §4).
   useEffect(() => {
