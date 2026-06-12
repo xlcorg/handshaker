@@ -61,7 +61,7 @@ describe("FocusView Save affordance", () => {
       { collectionId: "c1", requestId: "r1" },
     );
     renderFV(<FocusView onRequestSave={vi.fn()} />);
-    expect(screen.getByTestId("autosave-status")).toHaveTextContent("Сохранено");
+    expect(screen.getByTestId("autosave-status")).toHaveAccessibleName("Сохранено");
     expect(screen.queryByRole("button", { name: "Сохранить" })).not.toBeInTheDocument();
   });
 

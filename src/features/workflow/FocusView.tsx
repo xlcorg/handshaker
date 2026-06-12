@@ -1,4 +1,4 @@
-import { Copy, Save } from "lucide-react";
+import { Check, CopyPlus, Save } from "lucide-react";
 import { toast } from "sonner";
 import { CallPanel } from "./CallPanel";
 import { useDraft, useDraftDirty, useDraftOrigin, workflowStore } from "./store";
@@ -61,12 +61,19 @@ export function FocusView({ onRequestSave, onQuickAddMethod }: FocusViewProps = 
                   onClick={() => void duplicate().catch(() => {})}
                   className="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
                 >
-                  <Copy className="size-3.5" />
+                  <CopyPlus className="size-3.5" />
                 </button>
               </Tooltip>
-              <span className="text-muted-foreground" data-testid="autosave-status">
-                Сохранено
-              </span>
+              <Tooltip content="Сохранено">
+                <span
+                  role="status"
+                  aria-label="Сохранено"
+                  data-testid="autosave-status"
+                  className="inline-flex h-5 w-5 items-center justify-center text-muted-foreground"
+                >
+                  <Check className="size-3.5" />
+                </span>
+              </Tooltip>
             </span>
           ) : (
             <button
