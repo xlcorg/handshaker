@@ -1,9 +1,12 @@
 //! Auth configuration + resolution (master spec §5.3 / §5.4).
 //!
-//! Secrets are NEVER stored as plaintext: an `EnvVar` config names an OS
-//! environment variable, read at resolve time (master §4 line 143). OAuth2
-//! client-credentials token fetch is deferred (master §5.4) — it parses and
-//! persists, but resolution returns `CoreError::NotImplemented`.
+//! Secret handling differs per auth kind: an `EnvVar` config names an OS
+//! environment variable (read at resolve time, never persisted as plaintext —
+//! master §4 line 143), whereas OAuth2 client-credentials fields (including
+//! `client_secret`) are `{{var}}` templates resolved by the frontend before
+//! reaching the async token provider. Sync `resolve_auth` handles `None`/`EnvVar`;
+//! its OAuth2 arm returns `CoreError::NotImplemented` (the live path is
+//! `oauth2::Oauth2TokenProvider`).
 
 use std::collections::HashMap;
 
