@@ -105,7 +105,12 @@ function AuthReadOnly({ auth }: { auth: SavedAuthConfigIpc }) {
           </>
         ) : null}
         {auth.kind === "oauth2_client_credentials" ? (
-          <div className="text-destructive">OAuth2 — не реализовано (master §5.4)</div>
+          <>
+            <div>token_url: {auth.token_url}</div>
+            <div>client_id: {auth.client_id}</div>
+            <div>header: {auth.header_name}</div>
+            {auth.scopes.length > 0 ? <div>scopes: {auth.scopes.join(" ")}</div> : null}
+          </>
         ) : null}
       </div>
     </div>
