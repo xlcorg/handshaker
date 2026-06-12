@@ -11,6 +11,22 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::CoreError;
 
+pub mod oauth2;
+
+/// Whether an auth config scoped to `environments` is active under `active_env`.
+/// Empty list ⇒ always active. Otherwise the active env name must be listed
+/// ("No environment" ⇒ `None` ⇒ not listed ⇒ inactive).
+pub fn auth_active_for_env(environments: &[String], active_env: Option<&str>) -> bool {
+    environments.is_empty() || active_env.is_some_and(|e| environments.iter().any(|x| x == e))
+}
+
+fn default_auth_header_name() -> String {
+    "authorization".to_string()
+}
+fn default_auth_prefix() -> String {
+    "Bearer ".to_string()
+}
+
 /// A resolved header to attach to a request.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuthCredentials {
@@ -27,16 +43,29 @@ pub struct EnvVarAuthConfig {
     pub header_name: String,
     /// Prefix prepended to the secret value (e.g. `Bearer `).
     pub prefix: String,
+    /// Environments this config applies to. Empty ⇒ all (see `auth_active_for_env`).
+    #[serde(default)]
+    pub environments: Vec<String>,
 }
 
-/// OAuth2 client-credentials config. Token fetch is deferred (master §5.4).
+/// OAuth2 client-credentials config. All string fields are `{{var}}` templates,
+/// resolved on the frontend before reaching the token provider.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OAuth2ClientCredentialsConfig {
     pub token_url: String,
     pub client_id: String,
-    /// Env-var NAME holding the client secret (never plaintext).
-    pub client_secret_env_var: String,
+    /// The client secret value (a `{{var}}` template), NOT an env-var name.
+    pub client_secret: String,
     pub scopes: Vec<String>,
+    /// Header to set on the request (default `authorization`).
+    #[serde(default = "default_auth_header_name")]
+    pub header_name: String,
+    /// Prefix prepended to the access token (default `Bearer `).
+    #[serde(default = "default_auth_prefix")]
+    pub prefix: String,
+    /// Environments this config applies to. Empty ⇒ all.
+    #[serde(default)]
+    pub environments: Vec<String>,
 }
 
 /// One auth strategy for a node, per active environment.
@@ -46,6 +75,7 @@ pub enum SavedAuthConfig {
     /// Explicitly unauthenticated — stops inheritance (Postman "No Auth").
     None,
     EnvVar(EnvVarAuthConfig),
+    #[serde(rename = "oauth2_client_credentials")]
     OAuth2ClientCredentials(OAuth2ClientCredentialsConfig),
 }
 
@@ -81,6 +111,8 @@ pub fn resolve_auth(config: &SavedAuthConfig) -> Result<Option<AuthCredentials>,
             }))
         }
         SavedAuthConfig::OAuth2ClientCredentials(_) => {
+            // Sync resolution is not supported; the live path goes through
+            // `auth::oauth2::Oauth2TokenProvider` (async) via the IPC command.
             Err(CoreError::NotImplemented("oauth2 token fetch".into()))
         }
     }
@@ -104,6 +136,7 @@ mod tests {
             env_var: var.to_string(),
             header_name: "authorization".to_string(),
             prefix: "Bearer ".to_string(),
+            environments: vec![],
         });
         let creds = resolve_auth(&cfg).unwrap().unwrap();
         assert_eq!(creds.header_name, "authorization");
@@ -117,6 +150,7 @@ mod tests {
             env_var: "HANDSHAKER_DEFINITELY_UNSET_VAR_XYZ".to_string(),
             header_name: "authorization".to_string(),
             prefix: "Bearer ".to_string(),
+            environments: vec![],
         });
         match resolve_auth(&cfg).unwrap_err() {
             CoreError::Auth(m) => assert!(m.contains("not set")),
@@ -129,8 +163,11 @@ mod tests {
         let cfg = SavedAuthConfig::OAuth2ClientCredentials(OAuth2ClientCredentialsConfig {
             token_url: "https://idp/token".into(),
             client_id: "cid".into(),
-            client_secret_env_var: "SECRET".into(),
+            client_secret: "SECRET".into(),
             scopes: vec![],
+            header_name: "authorization".into(),
+            prefix: "Bearer ".into(),
+            environments: vec![],
         });
         assert!(matches!(resolve_auth(&cfg).unwrap_err(), CoreError::NotImplemented(_)));
     }
@@ -142,5 +179,54 @@ mod tests {
         let json = serde_json::to_string(&abe).unwrap();
         let back: AuthByEnv = serde_json::from_str(&json).unwrap();
         assert_eq!(abe, back);
+    }
+
+    #[test]
+    fn oauth2_config_defaults_fill_header_prefix_and_envs() {
+        // A pre-existing JSON without the new fields must still deserialize.
+        let json = r#"{"kind":"oauth2_client_credentials","token_url":"u","client_id":"c","client_secret":"s","scopes":[]}"#;
+        let cfg: SavedAuthConfig = serde_json::from_str(json).unwrap();
+        match cfg {
+            SavedAuthConfig::OAuth2ClientCredentials(c) => {
+                assert_eq!(c.header_name, "authorization");
+                assert_eq!(c.prefix, "Bearer ");
+                assert!(c.environments.is_empty());
+                assert_eq!(c.client_secret, "s");
+            }
+            other => panic!("expected oauth2, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn oauth2_variant_tag_is_pinned() {
+        let cfg = SavedAuthConfig::OAuth2ClientCredentials(OAuth2ClientCredentialsConfig {
+            token_url: "u".into(), client_id: "c".into(), client_secret: "s".into(),
+            scopes: vec![], header_name: "authorization".into(), prefix: "Bearer ".into(),
+            environments: vec![],
+        });
+        let json = serde_json::to_string(&cfg).unwrap();
+        assert!(json.contains(r#""kind":"oauth2_client_credentials""#), "got {json}");
+    }
+
+    #[test]
+    fn env_var_config_environments_default_empty() {
+        let json = r#"{"kind":"env_var","env_var":"V","header_name":"authorization","prefix":"Bearer "}"#;
+        let cfg: SavedAuthConfig = serde_json::from_str(json).unwrap();
+        match cfg {
+            SavedAuthConfig::EnvVar(c) => assert!(c.environments.is_empty()),
+            other => panic!("expected env_var, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn auth_active_for_env_rules() {
+        // empty list ⇒ always active
+        assert!(auth_active_for_env(&[], None));
+        assert!(auth_active_for_env(&[], Some("prod")));
+        // scoped ⇒ active only when the active env is listed
+        let prod = vec!["prod".to_string()];
+        assert!(auth_active_for_env(&prod, Some("prod")));
+        assert!(!auth_active_for_env(&prod, Some("dev")));
+        assert!(!auth_active_for_env(&prod, None)); // "No environment"
     }
 }

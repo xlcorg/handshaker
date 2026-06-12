@@ -119,6 +119,7 @@ mod tests {
             env_var: env_var.into(),
             header_name: "authorization".into(),
             prefix: "Bearer ".into(),
+            environments: vec![],
         })
     }
 
