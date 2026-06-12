@@ -7,8 +7,13 @@
 > **Status:** ✅ code-complete 2026-06-12 — awaiting live WebView2 verification
 > (объединённый чеклист: Task 8 Step 5 плана 2026-06-11 + Step 5 ниже).
 > Task 1: `1ace39d` · Task 2: `1a48cb6` — оба прошли spec+quality ревью.
-> Gate 2026-06-12: tsc clean · vitest 794 (112 файлов) · `pnpm build` ок
-> (Rust не тронут — cargo-гейты без изменений с merge `a5849a6`).
+> **Live-pass amendments 2026-06-12** (фидбек первой live-итерации, прошли
+> spec+quality ревью): response-side inlay-хинты удалены целиком
+> (`4465d1f`+`78ffaa6`+`ed22d9b`), таб-логика — Body-first (`97664b4`: дефолт
+> Body, без автодефолта на Contract, Send безусловно → Body). Подробности — в
+> баннере плана 2026-06-11.
+> Gate 2026-06-12 (после amendments): tsc clean · vitest 784 (111 файлов) ·
+> `pnpm build` ок (Rust не тронут — cargo-гейты без изменений с merge `a5849a6`).
 > **Spec:** `docs/superpowers/specs/2026-06-12-contract-unified-view-design.md`
 > (approved 2026-06-12). Amends the shipped
 > `2026-06-11-contract-tab-proto-view-design.md` (code-complete, commits up to

@@ -18,10 +18,17 @@
 > merge-коммитом `a5849a6` (main → ветка; конфликт CLAUDE.md разрешён,
 > `bindings.ts` перегенерирован и совпал с авто-мерджем побайтово; гейт на
 > смердженном дереве: tsc clean · vitest 787 · cargo core 139 + app 45 ·
-> build ок). `main` снова ancestor HEAD — ff-merge возможен. Live-чеклист
-> Step 5 пополнен заметками ревью: flash «Awaiting first call» при маунте,
-> «Контракт недоступен» мелькает во время фетча схемы (null = и loading, и
-> unavailable), re-arm `userPickedTab` при смене метода.
+> build ок). `main` снова ancestor HEAD — ff-merge возможен.
+> **Live-pass amendments 2026-06-12** (первая итерация live-проверки):
+> по фидбеку пользователя (1) удалена response-side inlay-hints фича целиком
+> (`4465d1f`+`78ffaa6`+`ed22d9b`: hints.ts/провайдер/schema-проброс в response;
+> `pathTo` переехал в validate.ts; `bodyHints` теперь управляет только ghost'ом)
+> и (2) таб-логика упрощена (`97664b4`): дефолт — Body, автодефолта на Contract
+> нет, Send безусловно переключает на Body (`userPickedTab`/`prevState` удалены —
+> заметки ревью про flash «Awaiting first call» и re-arm `userPickedTab` сняты
+> как неактуальные). Гейт после правок: tsc clean · vitest 784 (111 файлов) ·
+> build ок. Открытый минор: кнопка в Request-стрипе всё ещё подписана
+> «Inline type hints», хотя тоггл остался только у ghost'а.
 > **Spec:** `docs/superpowers/specs/2026-06-11-contract-tab-proto-view-design.md` (approved 2026-06-11).
 > Supersedes the floating-overlay part of the contract-view feature
 > (`docs/superpowers/plans/2026-06-10-contract-view.md`, Phases A–E shipped).
@@ -1414,7 +1421,9 @@ git -C . commit -m "docs(plan): contract tab proto view - code-complete banner"
 
 - [ ] **Step 5: Live verification (user-driven, `pnpm tauri dev` + Ctrl+R)**
 
-- [ ] Выбор метода → Response-панель сама открывает таб **Contract** с proto-листингом.
+- [ ] ~~Выбор метода → Response-панель сама открывает таб Contract~~ — поведение
+  заменено по live-фидбеку 2026-06-12 (`97664b4`): дефолтный таб всегда **Body**;
+  Contract открывается только кликом; Send безусловно возвращает на Body.
 - [ ] ~~Переключатель Request | Response~~ — заменён единым видом
   (спек `2026-06-12-contract-unified-view-design.md`): rpc-строка сверху,
   оба корня кликабельны, общие типы напечатаны один раз.
@@ -1422,9 +1431,12 @@ git -C . commit -m "docs(plan): contract tab proto view - code-complete banner"
 - [ ] Клик по имени типа (например, вложенного message) скроллит к его определению с короткой вспышкой.
 - [ ] Tooltip на имени поля показывает `json_name`; на имени типа — полное имя.
 - [ ] `optional`, `repeated`, `map<…>`, `oneof { … }`, номера полей и enum-значений выглядят как в .proto.
-- [ ] Send → автопереключение на **Body**; если таб Contract был выбран вручную — остаётся.
+- [ ] Send из любого таба (включая вручную выбранный Contract) → таб **Body**;
+  выбор Contract уже во время полёта переживает приход ответа.
 - [ ] History-панель — три таба, без Contract.
-- [ ] Тоггл хинтов, ghost, автокомплит, `↺`, response-хинты — без регрессий (оверлея больше нет).
+- [ ] Тоггл хинтов, ghost, автокомплит, `↺` — без регрессий (оверлея больше нет).
+- [ ] Response-body **без** inlay-тип-хинтов (фича удалена `4465d1f` — контракт
+  несёт таб Contract); тип-лейблы вроде `"…" string` не рендерятся.
 - [ ] Светлая/тёмная тема — цвета токенов читаемы (общие `--syntax-*`).
 
 - [ ] **Step 6: Finish (user green light required)**

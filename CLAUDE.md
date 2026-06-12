@@ -13,20 +13,22 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 2026-06-11). Плавающий оверлей `ContractPanel` удалён; контракт — 4-й таб
 Response-панели (Body · Trailers · Headers · Contract): подсвеченный
 proto-исходник (номера полей, `optional`, enum-числа), клик по типу скроллит
-к определению; пре-send таб автооткрывается на Contract, по приходу ответа
-автоуходит на Body (ручной выбор таба — приоритетнее). Переключатель
-Request|Response удалён — **единый вид**: rpc-строка
-`rpc M(In) returns (Out);` с кликабельными корнями + объединённый
+к определению. Переключатель Request|Response удалён — **единый вид**:
+rpc-строка `rpc M(In) returns (Out);` с кликабельными корнями + объединённый
 дедуплицированный листинг обеих сторон (спек+план 2026-06-12
-`contract-unified-view`, commits `1ace39d`+`1a48cb6`). Гейт: tsc clean ·
-vitest 794 · cargo core+app · build. **Остаётся:** live-проверка в WebView2
-(чеклист Task 8 Step 5 плана,
-включая полировки: однокадровый flash «Awaiting first call», re-arm
-`userPickedTab` при смене метода, `scroll-margin-top`) и финиш ветки
+`contract-unified-view`, commits `1ace39d`+`1a48cb6`). **Live-pass amendments
+2026-06-12** (фидбек первой live-итерации): таб-логика — Body-first (`97664b4`:
+дефолт всегда Body, автодефолта на Contract нет, Send безусловно → Body);
+response-side inlay-тип-хинты удалены целиком (`4465d1f`+`78ffaa6`+`ed22d9b`:
+hints.ts/провайдер/schema-проброс в response; `pathTo` → validate.ts;
+`bodyHints` теперь управляет только ghost'ом запроса — кнопка всё ещё подписана
+«Inline type hints», переименование отложено). Гейт: tsc clean · vitest 784 ·
+cargo core+app · build. **Остаётся:** повторная live-проверка в WebView2
+(чеклист Task 8 Step 5 плана, включая `scroll-margin-top`) и финиш ветки
 (Step 6: ff-merge в `main` — после merge `a5849a6` main снова ancestor HEAD;
 архив планов/спеков 2026-06-10 + 2026-06-11 + 2026-06-12).
-Хинты/ghost/автокомплит/диагностика (Phases A–E старого плана
-`2026-06-10-contract-view.md`) не тронуты.
+Ghost/автокомплит/диагностика (Phases A–E старого плана
+`2026-06-10-contract-view.md`) не тронуты, кроме удаления response-хинтов.
 
 Интеграционная ветка — `main`; фичи ведутся в отдельных worktree-ветках
 (`claude/*`) и вливаются в `main` fast-forward.
