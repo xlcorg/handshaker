@@ -82,6 +82,39 @@ describe("MethodPicker group style", () => {
   });
 });
 
+describe("MethodPicker quick-add button", () => {
+  it("renders a quick-add button per method when onQuickAdd is provided and fires it", async () => {
+    const onQuickAdd = vi.fn();
+    const onSelect = vi.fn();
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <MethodPicker
+        selected={{ service: "", method: "", kind: "unary" }}
+        catalog={CATALOG}
+        onSelect={onSelect}
+        onQuickAdd={onQuickAdd}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /select a method/i }));
+    await user.click(await screen.findByRole("button", { name: "Add GetUser to collection" }));
+    expect(onQuickAdd).toHaveBeenCalledWith("myapp.user.v1.UserService", "GetUser");
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("renders no quick-add buttons without onQuickAdd", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <MethodPicker
+        selected={{ service: "", method: "", kind: "unary" }}
+        catalog={CATALOG}
+        onSelect={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /select a method/i }));
+    expect(screen.queryByRole("button", { name: /to collection$/ })).toBeNull();
+  });
+});
+
 describe("ServiceGroupLabel", () => {
   const full = "myapp.user.v1.UserService";
   const short = "UserService";

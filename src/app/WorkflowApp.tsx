@@ -22,6 +22,9 @@ import { needsDiscardConfirm } from "@/features/catalog/discardGuard";
 import { saveNewRequest } from "@/features/catalog/save";
 import { useAutosaveDraft } from "@/features/catalog/useAutosaveDraft";
 import { findSavedLocations } from "@/features/catalog/grouping";
+import { planQuickAdd } from "@/features/catalog/quickAdd";
+import { EMPTY_BODY_TEMPLATE } from "@/features/workflow/actions";
+import { toast } from "sonner";
 import { newId } from "@/lib/ids";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { SidebarProvider } from "@/components/ui/sidebar";
@@ -32,14 +35,18 @@ import { UpdateToast } from "@/features/updater/UpdateToast";
 import { UpdaterProvider } from "@/features/updater/updaterContext";
 import { useUiZoom } from "@/features/shell/zoom";
 
-function renderView(view: ViewMode, onRequestSave: () => void) {
+function renderView(
+  view: ViewMode,
+  onRequestSave: () => void,
+  onQuickAddMethod: (service: string, method: string) => void,
+) {
   switch (view) {
     case "ledger":
       return <LedgerView />;
     case "list":
       return <ListView />;
     default:
-      return <FocusView onRequestSave={onRequestSave} />;
+      return <FocusView onRequestSave={onRequestSave} onQuickAddMethod={onQuickAddMethod} />;
   }
 }
 
@@ -176,6 +183,39 @@ export function WorkflowApp() {
       void patchUiState({ active_request: { collection_id: collectionId, item_id: req.id } });
     });
 
+  // Quick «+» on a MethodPicker row: save by recommendation and open the result.
+  async function quickAddMethod(service: string, method: string) {
+    const current = workflowStore.getState().draft;
+    const address = current?.address ?? "";
+    const plan = planQuickAdd(cat.tree, service, method, address);
+    if (plan.kind === "exists") {
+      const req = findSavedRequest(cat.tree, plan.location.collectionId, plan.location.requestId);
+      if (req) {
+        toast.info(`Уже в коллекции «${plan.location.collectionName}»`);
+        openRequest(plan.location.collectionId, req);
+      }
+      return;
+    }
+    const collectionId = plan.collectionId ?? (await cat.createCollection(plan.collectionName));
+    const folderId = plan.folderId ?? (await createFolder(collectionId, null, plan.folderName));
+    const saved: SavedRequestIpc = {
+      id: newId(),
+      name: plan.requestName,
+      address_template: address,
+      service,
+      method,
+      body_template: EMPTY_BODY_TEMPLATE,
+      metadata: [],
+      auth: { kind: "none" },
+      tls_override: current?.tls ?? false,
+      last_used_at: null,
+      use_count: 0,
+    };
+    await cat.addItem(collectionId, folderId, { type: "request", ...saved });
+    toast.success(`Сохранено в ${plan.collectionName} / ${plan.folderName}`);
+    openRequest(collectionId, saved);
+  }
+
   const addRequest = () =>
     guardedRun(() => {
       setPanelCollectionId(null);
@@ -228,11 +268,15 @@ export function WorkflowApp() {
                   onClose={() => setPanelCollectionId(null)}
                 />
               ) : (
-                renderView(wf.view, () => {
-                  // A direct save is not a continuation of a deferred open — drop any pending action.
-                  pendingOpenRef.current = null;
-                  setSaveOpen(true);
-                })
+                renderView(
+                  wf.view,
+                  () => {
+                    // A direct save is not a continuation of a deferred open — drop any pending action.
+                    pendingOpenRef.current = null;
+                    setSaveOpen(true);
+                  },
+                  (service: string, method: string) => void quickAddMethod(service, method),
+                )
               )}
             </div>
           </ResizablePanel>

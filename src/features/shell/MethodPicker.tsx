@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Box, ChevronDown, Search } from "lucide-react";
+import { Box, ChevronDown, Plus, Search } from "lucide-react";
 import { ReflectionFooter, type ReflectionFooterProps } from "@/features/workflow/ReflectionFooter";
 import {
   DropdownMenu,
@@ -20,9 +20,11 @@ export interface MethodPickerProps {
   className?: string;
   /** Draft-only: status + reload row at the bottom of the dropdown. Omit to hide. */
   reflection?: ReflectionFooterProps;
+  /** Hover «+» on a method row: one-click save to the collection. Omit to hide. */
+  onQuickAdd?: (service: string, method: string) => void;
 }
 
-export function MethodPicker({ selected, catalog, onSelect, className, reflection }: MethodPickerProps) {
+export function MethodPicker({ selected, catalog, onSelect, className, reflection, onQuickAdd }: MethodPickerProps) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -129,22 +131,43 @@ export function MethodPicker({ selected, catalog, onSelect, className, reflectio
                   {svc.methods.map((m) => {
                     const active = selected.service === svc.full && selected.method === m.name;
                     return (
-                      <button
-                        type="button"
-                        key={m.name}
-                        data-active={active}
-                        onClick={() => {
-                          onSelect({ service: svc.full, method: m.name, kind: m.kind });
-                          setOpen(false);
-                        }}
-                        className={cn(
-                          "mp-mrow w-full flex items-center gap-2 px-3 pl-8 h-7 font-mono text-xs transition-colors text-left",
-                          active ? "bg-accent text-foreground" : "text-foreground/85 hover:bg-accent/60",
+                      <div key={m.name} className="group/mrow relative">
+                        <button
+                          type="button"
+                          data-active={active}
+                          onClick={() => {
+                            onSelect({ service: svc.full, method: m.name, kind: m.kind });
+                            setOpen(false);
+                          }}
+                          className={cn(
+                            "mp-mrow w-full flex items-center gap-2 px-3 pl-8 h-7 font-mono text-xs transition-colors text-left",
+                            onQuickAdd && "pr-9",
+                            active ? "bg-accent text-foreground" : "text-foreground/85 hover:bg-accent/60",
+                          )}
+                        >
+                          <span className="mp-mname min-w-0 flex-1 truncate font-medium text-foreground">{m.name}</span>
+                          <KindDot kind={m.kind} />
+                        </button>
+                        {onQuickAdd && (
+                          <button
+                            type="button"
+                            aria-label={`Add ${m.name} to collection`}
+                            title="Add to collection"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onQuickAdd(svc.full, m.name);
+                              setOpen(false);
+                            }}
+                            className={cn(
+                              "absolute right-2 top-1/2 z-10 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded",
+                              "text-muted-foreground hover:bg-accent hover:text-foreground transition-opacity",
+                              "opacity-0 group-hover/mrow:opacity-100 focus-visible:opacity-100",
+                            )}
+                          >
+                            <Plus className="size-3" />
+                          </button>
                         )}
-                      >
-                        <span className="mp-mname min-w-0 flex-1 truncate font-medium text-foreground">{m.name}</span>
-                        <KindDot kind={m.kind} />
-                      </button>
+                      </div>
                     );
                   })}
                 </div>

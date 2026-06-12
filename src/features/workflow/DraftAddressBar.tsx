@@ -19,13 +19,15 @@ export interface DraftAddressBarProps {
   onSelectMethod: (m: SelectedMethod) => void;
   onSend: () => void;
   onCancel: () => void;
+  /** Hover «+» on a method row: one-click save to the collection. Omit to hide. */
+  onQuickAdd?: (service: string, method: string) => void;
 }
 
 /** Editable Focus header for a draft: TLS lock + host → full-width MethodPicker → Send.
  *  Reflection status & reload live inside the MethodPicker dropdown (Postman-style). */
 export function DraftAddressBar({
   step, catalog, reflecting, reflectError,
-  onAddress, onTls, onRefresh, onSelectMethod, onSend, onCancel,
+  onAddress, onTls, onRefresh, onSelectMethod, onSend, onCancel, onQuickAdd,
 }: DraftAddressBarProps) {
   const sending = step.status === "sending";
   return (
@@ -59,6 +61,7 @@ export function DraftAddressBar({
           step.address.trim() ? { loading: reflecting, error: reflectError, onRefresh } : undefined
         }
         className="flex-1"
+        onQuickAdd={onQuickAdd}
       />
       {sending ? (
         <Button size="sm" variant="ghost" onClick={onCancel} className="text-muted-foreground">

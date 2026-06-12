@@ -8,9 +8,11 @@ import type { Step } from "./model";
 export interface FocusViewProps {
   /** Open the Save dialog for the current unbound draft (Ctrl+S / the Save button). */
   onRequestSave?: () => void;
+  /** One-click save of a method row from MethodPicker to the collection. */
+  onQuickAddMethod?: (service: string, method: string) => void;
 }
 
-export function FocusView({ onRequestSave }: FocusViewProps = {}) {
+export function FocusView({ onRequestSave, onQuickAddMethod }: FocusViewProps = {}) {
   const draft = useDraft();
   const origin = useDraftOrigin();
   const dirty = useDraftDirty();
@@ -67,6 +69,7 @@ export function FocusView({ onRequestSave }: FocusViewProps = {}) {
             onPatch={(patch: Partial<Step>) => workflowStore.updateDraft(patch)}
             onExecuted={(executed: Step) => workflowStore.commitExecutedStep(executed)}
             editable
+            onQuickAddMethod={onQuickAddMethod}
           />
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">

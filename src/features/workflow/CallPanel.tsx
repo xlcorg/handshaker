@@ -31,10 +31,12 @@ interface CallPanelProps {
   onExecuted?: (executed: Step) => void;
   /** Focus(draft) only: editable host + reflection + MethodPicker header. */
   editable?: boolean;
+  /** One-click save of a method row from MethodPicker to the collection. */
+  onQuickAddMethod?: (service: string, method: string) => void;
 }
 
 /** The editable, sendable surface for one step — reused by Focus(draft)/List/Ledger. */
-export function CallPanel({ step, onPatch, onExecuted, editable }: CallPanelProps) {
+export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMethod }: CallPanelProps) {
   const [prefs, setPref] = usePrefs();
   // prefs.split is our own convention ("horizontal" = a horizontal divider = Top/Bottom);
   // react-resizable-panels uses the inverse ("horizontal" = side-by-side), so flip it.
@@ -114,6 +116,7 @@ export function CallPanel({ step, onPatch, onExecuted, editable }: CallPanelProp
       }
       onSend={onSend}
       onCancel={onCancel}
+      onQuickAdd={onQuickAddMethod}
     />
   ) : (
     <AddressBar step={step} onSend={onSend} onCancel={onCancel} />
