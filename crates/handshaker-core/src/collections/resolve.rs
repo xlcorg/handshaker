@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 
-use crate::auth::{resolve_auth, SavedAuthConfig};
+use crate::auth::{auth_active_for_env, resolve_auth, SavedAuthConfig};
 use crate::env::Environment;
 use crate::error::CoreError;
 use crate::grpc::GrpcTarget;
@@ -40,8 +40,8 @@ pub fn resolve_request(
     let tls = request.tls_override.unwrap_or(collection.default_tls);
     let target = GrpcTarget::new(address, tls, collection.skip_tls_verify)?;
 
-    // --- 3. Auth (nearest non-None config: request → collection; folders carry none) ---
-    let auth = resolve_auth_chain(request, collection)?;
+    // --- 3. Auth (nearest active config: request → collection; folders carry none) ---
+    let auth = resolve_auth_chain(request, collection, active_env.map(|e| e.name.as_str()))?;
 
     Ok(EffectiveRequest {
         target,
@@ -53,15 +53,23 @@ pub fn resolve_request(
     })
 }
 
-/// Nearest non-`None` config wins: request first, then collection. Folders carry no auth.
+/// Nearest active non-`None` config wins: request first, then collection. A config
+/// scoped to environments that excludes `active_env` is skipped (treated as absent).
 fn resolve_auth_chain(
     request: &SavedRequest,
     collection: &Collection,
+    active_env: Option<&str>,
 ) -> Result<Option<crate::auth::AuthCredentials>, CoreError> {
     for cfg in [&request.auth, &collection.auth] {
-        if !matches!(cfg, SavedAuthConfig::None) {
-            return resolve_auth(cfg);
+        let envs: &[String] = match cfg {
+            SavedAuthConfig::None => continue,
+            SavedAuthConfig::EnvVar(c) => &c.environments,
+            SavedAuthConfig::OAuth2ClientCredentials(c) => &c.environments,
+        };
+        if !auth_active_for_env(envs, active_env) {
+            continue;
         }
+        return resolve_auth(cfg);
     }
     Ok(None)
 }
@@ -234,5 +242,33 @@ mod tests {
         let eff = resolve_request(&req, &coll, None).unwrap();
         assert_eq!(eff.target.address, "h:1");
         assert!(eff.auth.is_none());
+    }
+
+    #[test]
+    fn collection_auth_scoped_to_prod_is_skipped_in_other_env() {
+        use crate::auth::EnvVarAuthConfig;
+
+        std::env::set_var("HS_TEST_PROD_TOKEN", "secret");
+        // Build a collection whose auth is a prod-scoped env-var Bearer config.
+        let mut collection = base_collection(&[("host", "h:1"), ("uid", "u")]);
+        collection.auth = SavedAuthConfig::EnvVar(EnvVarAuthConfig {
+            env_var: "HS_TEST_PROD_TOKEN".into(),
+            header_name: "authorization".into(),
+            prefix: "Bearer ".into(),
+            environments: vec!["prod".into()],
+        });
+        let request = base_request(); // auth: SavedAuthConfig::None
+
+        let dev = env("dev", &[]);
+        let prod = env("prod", &[]);
+
+        // dev ⇒ gated out ⇒ no auth header.
+        let eff_dev = resolve_request(&request, &collection, Some(&dev)).unwrap();
+        assert!(eff_dev.auth.is_none());
+        // prod ⇒ active ⇒ header present.
+        let eff_prod = resolve_request(&request, &collection, Some(&prod)).unwrap();
+        assert_eq!(eff_prod.auth.unwrap().header_value, "Bearer secret");
+
+        std::env::remove_var("HS_TEST_PROD_TOKEN");
     }
 }
