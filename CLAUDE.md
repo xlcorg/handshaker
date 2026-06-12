@@ -33,6 +33,15 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
   «Apply in environments»-popover; секрет нигде не логируется/не показывается.
   Subagent-driven, spec+quality ревью на каждой задаче + финальное ревью ветки;
   гейт: tsc clean · vitest 821 · cargo workspace · bindings no-drift · build.
+  Live-pass amendments (2026-06-13, ff `b2c1707`…`12443b4`): **наследование auth
+  коллекции на Send** — живой путь отправки видел только `step.auth` (= `none`,
+  у запроса нет auth-редактора) и заголовок не прикреплялся вовсе (16 на каждом
+  вызове); добавлен чистый `pickEffectiveAuth` (зеркало core `resolve_auth_chain`),
+  `CallPanel.originAuth` из живого дерева каталога — управляет Send, Auth-табом и
+  history-снапшотом. **Get token показывает/копирует токен** — `force_fetch`
+  возвращает `TokenResponse`, `OAuth2TokenInfoIpc.access_token` (память сессии),
+  превью 20 символов + Copy через `tauri-plugin-clipboard-manager`
+  (`navigator.clipboard` в WebView2 — за permission-промптом). vitest 832.
   Остаток: live WebView2-проход против реального OIDC-эндпойнта.
 - **UI polish batch #2 — зум · dark-only · quick-add · duplicate · ghost-фикс ·
   последний response** (🎉 DONE 2026-06-12, влито в `main` ff; план+спека
