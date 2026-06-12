@@ -1,8 +1,21 @@
 //! IPC wrapper for `ResolutionReport`.
 
+use std::collections::HashMap;
+
 use handshaker_core::vars::ResolutionReport;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use specta::Type;
+
+/// Optional resolve context for `vars_resolve`. All fields optional:
+/// - `collection_id` — live paths; the backend reads the collection's vars from the store;
+/// - `collection_vars` — editor overlay (unsaved rows); wins over `collection_id`;
+/// - `env_vars` — env-editor overlay; wins over the active environment.
+#[derive(Debug, Clone, Default, Deserialize, Type)]
+pub struct VarsResolveCtxIpc {
+    pub collection_id: Option<String>,
+    pub collection_vars: Option<HashMap<String, String>>,
+    pub env_vars: Option<HashMap<String, String>>,
+}
 
 #[derive(Debug, Clone, Serialize, Type)]
 pub struct ResolutionReportIpc {

@@ -137,9 +137,9 @@ async envReorder(names: string[]) : Promise<Result<null, IpcError>> {
     else return { status: "error", error: e  as any };
 }
 },
-async varsResolve(template: string) : Promise<Result<ResolutionReportIpc, IpcError>> {
+async varsResolve(template: string, ctx: VarsResolveCtxIpc | null) : Promise<Result<ResolutionReportIpc, IpcError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("vars_resolve", { template }) };
+    return { status: "ok", data: await TAURI_INVOKE("vars_resolve", { template, ctx }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -382,6 +382,13 @@ export type SavedRequestIpc = { id: string; name: string; address_template: stri
 export type ServiceCatalogIpc = { services: ServiceEntryIpc[] }
 export type ServiceEntryIpc = { full_name: string; methods: MethodEntryIpc[] }
 export type UiStateIpc = { sort_key: string | null; active_request: ActiveRequestRefIpc | null }
+/**
+ * Optional resolve context for `vars_resolve`. All fields optional:
+ * - `collection_id` — live paths; the backend reads the collection's vars from the store;
+ * - `collection_vars` — editor overlay (unsaved rows); wins over `collection_id`;
+ * - `env_vars` — env-editor overlay; wins over the active environment.
+ */
+export type VarsResolveCtxIpc = { collection_id: string | null; collection_vars: Partial<{ [key in string]: string }> | null; env_vars: Partial<{ [key in string]: string }> | null }
 
 /** tauri-specta globals **/
 

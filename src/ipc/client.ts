@@ -7,6 +7,7 @@ import type {
   InvokeOutcomeIpc,
   EnvironmentIpc,
   ResolutionReportIpc,
+  VarsResolveCtxIpc,
   CollectionIpc,
   CollectionMetaIpc,
   ItemIpc,
@@ -114,8 +115,11 @@ export async function envReorder(names: string[]): Promise<void> {
   if (r.status === "error") throw r.error;
 }
 
-export async function varsResolve(template: string): Promise<ResolutionReportIpc> {
-  const r = await commands.varsResolve(template);
+export async function varsResolve(
+  template: string,
+  ctx: VarsResolveCtxIpc | null = null,
+): Promise<ResolutionReportIpc> {
+  const r = await commands.varsResolve(template, ctx);
   if (r.status === "error") throw r.error;
   return r.data;
 }
