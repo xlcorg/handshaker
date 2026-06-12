@@ -7,6 +7,7 @@ vi.mock("@/lib/monaco", () => ({
   ),
   BODY_EDIT_OPTIONS: { readOnly: false },
   BODY_READONLY_OPTIONS: { readOnly: true },
+  MONACO_THEME: "handshaker-dark",
 }));
 vi.mock("@/lib/use-prefs", () => ({ usePrefs: () => [{}] }));
 
