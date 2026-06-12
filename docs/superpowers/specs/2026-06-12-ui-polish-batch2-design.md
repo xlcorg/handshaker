@@ -70,9 +70,14 @@ KindDot; видимость как у ⋯ в сайдбаре: `opacity-0 group-
   черновика, `body_template` = `EMPTY_BODY_TEMPLATE`, `metadata: []`,
   `auth: none`, `tls_override: null` (request-first паттерн).
 - **Дедуп:** если `findSavedLocations` уже находит этот service+method+address —
-  не сохранять, тост `Уже в коллекции «…»`.
-- **UX:** dropdown НЕ закрывается (можно добавить несколько методов подряд);
-  выбранный в черновике метод не меняется; тост `Сохранено в Collection / Folder`.
+  не создавать дубль, а **открыть существующий** сохранённый запрос;
+  тост `Уже в коллекции «…»`.
+- **После сохранения — сразу переключиться на созданный запрос** (решение
+  пользователя): открыть его как из сайдбара (`openSavedRequest` →
+  origin-bound черновик), dropdown закрывается; тост
+  `Сохранено в Collection / Folder`. Текущий черновик при этом origin-bound
+  (автосейв) либо заменяется через стандартный discard-guard, если он dirty
+  и не привязан.
 
 Реализация: чистая `planQuickAdd(tree, service, method, address)` →
 `{ kind: "exists", location } | { kind: "create", needCollection, folderName, … }`
