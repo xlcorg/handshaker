@@ -4,7 +4,7 @@ pub mod commands;
 pub mod ipc;
 mod state;
 
-use commands::auth::auth_resolve;
+use commands::auth::{auth_invalidate, auth_oauth2_fetch_token, auth_resolve};
 use commands::collection::{
     collection_add_item, collection_bump_usage, collection_delete, collection_delete_item,
     collection_duplicate_item, collection_get, collection_list, collection_move_item,
@@ -45,6 +45,8 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             env_reorder,
             vars_resolve,
             auth_resolve,
+            auth_oauth2_fetch_token,
+            auth_invalidate,
             collection_list,
             collection_get,
             collection_upsert,

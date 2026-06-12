@@ -19,9 +19,10 @@ impl AuthCredentialsIpc {
 
 /// Result of a forced token fetch (the "Get token" button) — lifetime only;
 /// the token itself stays in the backend cache.
+/// `u32` (not u64) because specta forbids BigInt in generated TypeScript.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct OAuth2TokenInfoIpc {
-    pub expires_in_secs: u64,
+    pub expires_in_secs: u32,
 }
 
 #[cfg(test)]

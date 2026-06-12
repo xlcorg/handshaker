@@ -513,6 +513,7 @@ mod tests {
             env_var: "TOK".into(),
             header_name: "authorization".into(),
             prefix: "Bearer ".into(),
+            environments: vec![],
         };
         state.collection_set_node_auth_impl(&cid(1), None, cfg.clone()).unwrap();
         state.collection_set_node_auth_impl(&cid(1), Some(cid(20)), cfg).unwrap();
@@ -534,6 +535,7 @@ mod tests {
             env_var: "TOK".into(),
             header_name: "authorization".into(),
             prefix: "Bearer ".into(),
+            environments: vec![],
         };
         let err = state.collection_set_node_auth_impl(&cid(1), Some(cid(10)), cfg).unwrap_err();
         assert!(matches!(err, CoreError::InvalidTarget(_)));

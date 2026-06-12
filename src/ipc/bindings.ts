@@ -153,6 +153,22 @@ async authResolve(config: SavedAuthConfigIpc) : Promise<Result<AuthCredentialsIp
     else return { status: "error", error: e  as any };
 }
 },
+async authOauth2FetchToken(config: SavedAuthConfigIpc) : Promise<Result<OAuth2TokenInfoIpc, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("auth_oauth2_fetch_token", { config }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async authInvalidate(config: SavedAuthConfigIpc) : Promise<Result<null, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("auth_invalidate", { config }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async collectionList() : Promise<Result<CollectionMetaIpc[], IpcError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("collection_list") };
@@ -353,8 +369,14 @@ export type MessageSchemaIpc = { root: string; messages: MessageNodeIpc[]; enums
 export type MessageSideIpc = "input" | "output"
 export type MetadataRowIpc = { key: string; value: string; enabled: boolean }
 export type MethodEntryIpc = { name: string; path: string; input_message: string; output_message: string; client_streaming: boolean; server_streaming: boolean }
+/**
+ * Result of a forced token fetch (the "Get token" button) — lifetime only;
+ * the token itself stays in the backend cache.
+ * `u32` (not u64) because specta forbids BigInt in generated TypeScript.
+ */
+export type OAuth2TokenInfoIpc = { expires_in_secs: number }
 export type ResolutionReportIpc = { resolved: string; unresolved_vars: string[]; cycle_chain: string[] | null }
-export type SavedAuthConfigIpc = { kind: "none" } | { kind: "env_var"; env_var: string; header_name: string; prefix: string } | { kind: "oauth_2_client_credentials"; token_url: string; client_id: string; client_secret_env_var: string; scopes: string[] }
+export type SavedAuthConfigIpc = { kind: "none" } | { kind: "env_var"; env_var: string; header_name: string; prefix: string; environments?: string[] } | { kind: "oauth2_client_credentials"; token_url: string; client_id: string; client_secret: string; scopes: string[]; header_name?: string; prefix?: string; environments?: string[] }
 export type SavedRequestIpc = { id: string; name: string; address_template: string; service: string; method: string; body_template: string; metadata: MetadataRowIpc[]; auth: SavedAuthConfigIpc; tls_override: boolean | null; last_used_at: number | null; use_count: number }
 export type ServiceCatalogIpc = { services: ServiceEntryIpc[] }
 export type ServiceEntryIpc = { full_name: string; methods: MethodEntryIpc[] }

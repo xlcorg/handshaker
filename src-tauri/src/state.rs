@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
+use handshaker_core::auth::oauth2::Oauth2TokenProvider;
 use handshaker_core::collections::{CollectionStore, FileCollectionStore, InMemoryCollectionStore};
 use handshaker_core::env::file_store::FileEnvironmentStore;
 use handshaker_core::env::in_memory::InMemoryEnvironmentStore;
@@ -45,6 +46,8 @@ pub struct AppState {
     pub ui_state_store: Arc<FileUiStateStore>,
     /// In-flight gRPC requests: `request_id` → cancellation `Notify`.
     pub in_flight: InFlight,
+    /// OAuth2 client-credentials token cache + HTTP client (session-lived).
+    pub oauth2_provider: Oauth2TokenProvider,
 }
 
 impl Default for AppState {
@@ -63,6 +66,7 @@ impl Default for AppState {
                 FileUiStateStore::load(&ui_dir).expect("temp ui-state store load"),
             ),
             in_flight: Mutex::new(HashMap::new()),
+            oauth2_provider: Oauth2TokenProvider::new(),
         }
     }
 }
@@ -91,6 +95,7 @@ impl AppState {
             contract_cache: Arc::new(FileContractCache::load(data_dir.join("contracts"))?),
             ui_state_store: Arc::new(FileUiStateStore::load(data_dir)?),
             in_flight: Mutex::new(HashMap::new()),
+            oauth2_provider: Oauth2TokenProvider::new(),
         })
     }
 }
