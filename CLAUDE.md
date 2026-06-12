@@ -6,8 +6,8 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 
 ## Active work
 
-Сейчас активной фичи нет — предыдущая (UI polish batch #2) влита в `main`
-2026-06-12. Следующая фича начинается с брейншторма → спека → плана
+Сейчас активной фичи нет — предыдущая (OAuth2 client-credentials auth) влита
+в `main` 2026-06-12. Следующая фича начинается с брейншторма → спека → плана
 (см. процесс ниже).
 
 Интеграционная ветка — `main`; фичи ведутся в отдельных worktree-ветках
@@ -15,6 +15,25 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 
 ### Завершённые фичи (всё в `archive/`)
 
+- **OAuth2 client-credentials auth per-collection** (🎉 DONE 2026-06-12,
+  ребейз+ff в `main`; план+спека `2026-06-12-oauth2-client-credentials*` в
+  `archive/`) — 4-й вид auth «OAuth2» у коллекции: все поля (`token_url`,
+  `client_id`, `client_secret`, `scopes`, `header_name`, `prefix`) — `{{var}}`-
+  шаблоны, резолвятся фронтом по активному окружению. Ядро:
+  `auth/oauth2.rs` — парсинг token-ответа (дробный `expires_in`, дефолт 300s),
+  `TokenCache` (skew 30s, ключ = resolved token_url+client_id+secret+scopes, без
+  header/prefix) + async `Oauth2TokenProvider` (reqwest `rustls-tls` →
+  **ring без aws-lc-rs** через feature-unification с tonic; `rustls-no-provider`
+  есть только в master reqwest). Env-scoping: `environments: Vec<String>` на
+  обоих видах auth (пусто ⇒ все; «No environment» ⇒ неактивен при скоупе),
+  гейт и в core-resolve-цепочке, и в `resolveAuthHeader`. IPC:
+  `auth_oauth2_fetch_token` (`expires_in_secs: u32` — specta режет u64) +
+  `auth_invalidate`; на gRPC UNAUTHENTICATED(16) кэш инвалидируется, авторетрая
+  нет (дизайн). UI: форма OAuth2 в `SavedAuthEditor` + кнопка «Get token» +
+  «Apply in environments»-popover; секрет нигде не логируется/не показывается.
+  Subagent-driven, spec+quality ревью на каждой задаче + финальное ревью ветки;
+  гейт: tsc clean · vitest 821 · cargo workspace · bindings no-drift · build.
+  Остаток: live WebView2-проход против реального OIDC-эндпойнта.
 - **UI polish batch #2 — зум · dark-only · quick-add · duplicate · ghost-фикс ·
   последний response** (🎉 DONE 2026-06-12, влито в `main` ff; план+спека
   `2026-06-12-ui-polish-batch2*` в `archive/`) — шесть независимых пунктов:
