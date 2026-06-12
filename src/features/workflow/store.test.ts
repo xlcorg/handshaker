@@ -209,6 +209,30 @@ describe("draft origin + dirty", () => {
     expect(workflowStore.getState().draftDirty).toBe(false);
   });
 
+  it("setDraft(step, origin) stamps the origin's collectionId onto the step", () => {
+    workflowStore.setDraft(
+      newStep({ address: "h", tls: false, service: "S", method: "M" }),
+      { collectionId: "c1", requestId: "r1" },
+    );
+    expect(workflowStore.getState().draft?.collectionId).toBe("c1");
+  });
+
+  it("setDraftOrigin patches the existing draft's collectionId (Save binding)", () => {
+    workflowStore.setDraft(newStep({ address: "h", tls: false, service: "S", method: "M" }));
+    expect(workflowStore.getState().draft?.collectionId).toBeNull();
+    workflowStore.setDraftOrigin({ collectionId: "c1", requestId: "r1" });
+    expect(workflowStore.getState().draft?.collectionId).toBe("c1");
+  });
+
+  it("setDraftOrigin(null) clears the draft's collectionId", () => {
+    workflowStore.setDraft(
+      newStep({ address: "h", tls: false, service: "S", method: "M" }),
+      { collectionId: "c1", requestId: "r1" },
+    );
+    workflowStore.setDraftOrigin(null);
+    expect(workflowStore.getState().draft?.collectionId).toBeNull();
+  });
+
   it("isContentPatch detects content vs transient keys", () => {
     expect(isContentPatch({ requestJson: "x" })).toBe(true);
     expect(isContentPatch({ metadata: [] })).toBe(true);

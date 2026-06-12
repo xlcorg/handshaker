@@ -17,6 +17,9 @@ export interface Step {
   service: string; // proto service full name, e.g. "payments.v1.PaymentService"
   method: string; // method name, e.g. "GetPayment"
   auth: SavedAuthConfigIpc; // inline auth for this call (resolved at Send)
+  /** Owning collection of the saved request this step came from — the {{var}}
+   *  resolve context. null = unbound draft (no collection variables). */
+  collectionId: string | null;
   requestJson: string; // editable request body (skeleton-prefilled)
   metadata: MetadataRow[];
   status: StepStatus;
@@ -42,6 +45,7 @@ export function newStep(init: {
   requestJson?: string;
   metadata?: MetadataRow[];
   auth?: SavedAuthConfigIpc;
+  collectionId?: string | null;
 }): Step {
   return {
     id: newId(),
@@ -50,6 +54,7 @@ export function newStep(init: {
     service: init.service,
     method: init.method,
     auth: init.auth ?? { kind: "none" },
+    collectionId: init.collectionId ?? null,
     requestJson: init.requestJson ?? "{}",
     metadata: init.metadata ?? [],
     status: "draft",

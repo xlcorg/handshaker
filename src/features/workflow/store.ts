@@ -64,11 +64,20 @@ export const workflowStore = {
     emit();
   },
   setDraft(step: Step | null, origin: DraftOrigin | null = null) {
-    state = { ...state, draft: step, draftOrigin: origin, draftDirty: false };
+    let draft = step;
+    if (step) {
+      const collectionId = origin?.collectionId ?? step.collectionId ?? null;
+      // Preserve object identity when the stamp is a no-op (callers rely on `toBe`).
+      draft = step.collectionId === collectionId ? step : { ...step, collectionId };
+    }
+    state = { ...state, draft, draftOrigin: origin, draftDirty: false };
     emit();
   },
   setDraftOrigin(origin: DraftOrigin | null) {
-    state = { ...state, draftOrigin: origin, draftDirty: false };
+    const draft = state.draft
+      ? { ...state.draft, collectionId: origin?.collectionId ?? null }
+      : null;
+    state = { ...state, draft, draftOrigin: origin, draftDirty: false };
     emit();
   },
   updateDraft(patch: Partial<Step>) {

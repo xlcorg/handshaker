@@ -43,9 +43,12 @@ describe("openSavedRequest", () => {
   it("loads a saved request into the draft, binds origin, and switches to Focus", () => {
     openSavedRequest("c1", savedFull);
     const draft = workflowStore.getState().draft;
-    const { id: _draftId, ...draftRest } = draft!;
-    const { id: _expectedId, ...expectedRest } = savedRequestToDraft(savedFull);
+    // collectionId is stamped from the origin by the store (asserted separately below).
+    const { id: _draftId, collectionId: _draftCol, ...draftRest } = draft!;
+    const { id: _expectedId, collectionId: _expCol, ...expectedRest } =
+      savedRequestToDraft(savedFull);
     expect(draftRest).toEqual(expectedRest);
+    expect(draft!.collectionId).toBe("c1"); // stamped from origin
     expect(workflowStore.getState().draftOrigin).toEqual({
       collectionId: "c1", requestId: "req-1", requestName: "GetX",
     });
