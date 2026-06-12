@@ -275,7 +275,7 @@ export function WorkflowApp() {
                     pendingOpenRef.current = null;
                     setSaveOpen(true);
                   },
-                  (service: string, method: string) => void quickAddMethod(service, method),
+                  (service: string, method: string) => void quickAddMethod(service, method).catch(() => {}),
                 )
               )}
             </div>

@@ -66,9 +66,9 @@ KindDot; видимость как у ⋯ в сайдбаре: `opacity-0 group-
   (если коллекций нет — создать «My Collection»); корневая папка с именем
   сервиса — переиспользовать существующую по имени или создать; имя запроса =
   короткое имя метода.
-- **Содержимое** `SavedRequestIpc`: `address_template`/`tls` из текущего
+- **Содержимое** `SavedRequestIpc`: `address_template`/`tls_override` из текущего
   черновика, `body_template` = `EMPTY_BODY_TEMPLATE`, `metadata: []`,
-  `auth: none`, `tls_override: null` (request-first паттерн).
+  `auth: none`.
 - **Дедуп:** если `findSavedLocations` уже находит этот service+method+address —
   не создавать дубль, а **открыть существующий** сохранённый запрос;
   тост `Уже в коллекции «…»`.

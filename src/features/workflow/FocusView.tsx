@@ -58,7 +58,7 @@ export function FocusView({ onRequestSave, onQuickAddMethod }: FocusViewProps = 
                 <button
                   type="button"
                   aria-label="Duplicate request"
-                  onClick={() => void duplicate()}
+                  onClick={() => void duplicate().catch(() => {})}
                   className="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
                 >
                   <Copy className="size-3.5" />
