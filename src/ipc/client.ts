@@ -13,6 +13,7 @@ import type {
   ItemSnapshotIpc,
   SavedAuthConfigIpc,
   AuthCredentialsIpc,
+  OAuth2TokenInfoIpc,
   UiStateIpc,
   MessageSchemaIpc,
   MessageSideIpc,
@@ -197,6 +198,19 @@ export async function authResolve(
   return r.data;
 }
 
+export async function authOauth2FetchToken(
+  config: SavedAuthConfigIpc,
+): Promise<OAuth2TokenInfoIpc> {
+  const r = await commands.authOauth2FetchToken(config);
+  if (r.status === "error") throw r.error;
+  return r.data;
+}
+
+export async function authInvalidate(config: SavedAuthConfigIpc): Promise<void> {
+  const r = await commands.authInvalidate(config);
+  if (r.status === "error") throw r.error;
+}
+
 export async function collectionSetNodeAuth(
   collectionId: string,
   itemId: string | null,
@@ -254,6 +268,8 @@ export const ipc = {
   collectionDeleteItem,
   collectionRestoreItem,
   authResolve,
+  authOauth2FetchToken,
+  authInvalidate,
   collectionSetNodeAuth,
   collectionSetExpanded,
   appSettingsGet,

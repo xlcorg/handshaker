@@ -1,5 +1,5 @@
 import * as ipc from "@/ipc/client";
-import type { InvokeOutcomeIpc, SavedAuthConfigIpc, AuthCredentialsIpc, MessageSchemaIpc, MessageSideIpc } from "@/ipc/bindings";
+import type { InvokeOutcomeIpc, SavedAuthConfigIpc, AuthCredentialsIpc, ResolutionReportIpc, MessageSchemaIpc, MessageSideIpc } from "@/ipc/bindings";
 import { newStep, type MetadataRow, type Step } from "./model";
 import { resolveStepTemplates } from "./resolve";
 import { lastExecutedFor, responseSeedPatch } from "./lastExecuted";
@@ -150,16 +150,90 @@ export type AuthHeader = { key: string; value: string };
 
 export type AuthHeaderResult =
   | { kind: "none" }
-  | { kind: "header"; header: AuthHeader }
+  | { kind: "header"; header: AuthHeader; invalidate?: SavedAuthConfigIpc }
   | { kind: "error"; message: string };
 
+export interface AuthDeps {
+  authResolve: (c: SavedAuthConfigIpc) => Promise<AuthCredentialsIpc | null>;
+  varsResolve: (t: string) => Promise<ResolutionReportIpc>;
+}
+
+/** Environments a config is scoped to ([] = all). */
+function authEnvironments(auth: SavedAuthConfigIpc): string[] {
+  if (auth.kind === "env_var" || auth.kind === "oauth2_client_credentials") {
+    return auth.environments ?? [];
+  }
+  return [];
+}
+
+type Oauth2Config = Extract<SavedAuthConfigIpc, { kind: "oauth2_client_credentials" }>;
+
+/** Resolve `{{var}}` in every oauth2 template field. Returns the resolved config, or
+ *  the list of unresolved variable names. */
+export async function resolveOauthConfig(
+  auth: Oauth2Config,
+  varsResolve: (t: string) => Promise<ResolutionReportIpc>,
+): Promise<{ ok: true; config: Oauth2Config } | { ok: false; message: string }> {
+  const unresolved: string[] = [];
+  const take = async (t: string): Promise<string> => {
+    const r = await varsResolve(t);
+    for (const v of r.unresolved_vars) if (!unresolved.includes(v)) unresolved.push(v);
+    return r.resolved;
+  };
+  const token_url = await take(auth.token_url);
+  const client_id = await take(auth.client_id);
+  const client_secret = await take(auth.client_secret);
+  const scopes: string[] = [];
+  for (const s of auth.scopes) scopes.push(await take(s));
+  if (unresolved.length > 0) {
+    return {
+      ok: false,
+      message: `Unresolved variables: ${unresolved.map((v) => `{{${v}}}`).join(", ")}`,
+    };
+  }
+  return {
+    ok: true,
+    config: {
+      kind: "oauth2_client_credentials",
+      token_url,
+      client_id,
+      client_secret,
+      scopes,
+      header_name: auth.header_name,
+      prefix: auth.prefix,
+      environments: auth.environments,
+    },
+  };
+}
+
+/** Resolve the auth header for a step. Env-gates scoped configs against `activeEnv`,
+ *  resolves `{{var}}` for oauth2 fields, and returns the resolved oauth2 config as an
+ *  `invalidate` handle (used to drop the cached token on a gRPC UNAUTHENTICATED). */
 export async function resolveAuthHeader(
   auth: SavedAuthConfigIpc,
-  authResolve: (c: SavedAuthConfigIpc) => Promise<AuthCredentialsIpc | null>,
+  activeEnv: string | null,
+  deps: AuthDeps,
 ): Promise<AuthHeaderResult> {
   if (auth.kind === "none") return { kind: "none" };
+
+  const envs = authEnvironments(auth);
+  if (envs.length > 0 && (activeEnv === null || !envs.includes(activeEnv))) {
+    return { kind: "none" };
+  }
+
   try {
-    const creds = await authResolve(auth);
+    if (auth.kind === "oauth2_client_credentials") {
+      const resolved = await resolveOauthConfig(auth, deps.varsResolve);
+      if (!resolved.ok) return { kind: "error", message: resolved.message };
+      const creds = await deps.authResolve(resolved.config);
+      if (!creds) return { kind: "none" };
+      return {
+        kind: "header",
+        header: { key: creds.header_name, value: creds.header_value },
+        invalidate: resolved.config,
+      };
+    }
+    const creds = await deps.authResolve(auth);
     if (!creds) return { kind: "none" };
     return { kind: "header", header: { key: creds.header_name, value: creds.header_value } };
   } catch (e) {

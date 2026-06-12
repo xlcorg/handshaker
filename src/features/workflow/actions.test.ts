@@ -236,8 +236,13 @@ describe("sendStep authHeader merge", () => {
 });
 
 describe("resolveAuthHeader", () => {
+  const passthroughVars = async (t: string) => ({ resolved: t, unresolved_vars: [], cycle_chain: null });
+
   it("returns kind 'none' when auth.kind is none (no resolve call)", async () => {
-    const r = await resolveAuthHeader({ kind: "none" }, ipc.authResolve);
+    const r = await resolveAuthHeader({ kind: "none" }, null, {
+      authResolve: ipc.authResolve,
+      varsResolve: passthroughVars,
+    });
     expect(r.kind).toBe("none");
     expect(ipc.authResolve).not.toHaveBeenCalled();
   });
@@ -245,21 +250,22 @@ describe("resolveAuthHeader", () => {
   it("returns a header when EnvVar auth resolves", async () => {
     vi.mocked(ipc.authResolve).mockResolvedValue({ header_name: "authorization", header_value: "Bearer t" });
     const auth = { kind: "env_var" as const, env_var: "TOK", header_name: "authorization", prefix: "Bearer " };
-    const r = await resolveAuthHeader(auth, ipc.authResolve);
-    expect(r).toEqual({ kind: "header", header: { key: "authorization", value: "Bearer t" } });
+    const r = await resolveAuthHeader(auth, null, { authResolve: ipc.authResolve, varsResolve: passthroughVars });
+    expect(r.kind).toBe("header");
+    if (r.kind === "header") expect(r.header).toEqual({ key: "authorization", value: "Bearer t" });
   });
 
   it("returns kind 'none' when authResolve yields null credentials", async () => {
     vi.mocked(ipc.authResolve).mockResolvedValue(null);
     const auth = { kind: "env_var" as const, env_var: "TOK", header_name: "authorization", prefix: "Bearer " };
-    const r = await resolveAuthHeader(auth, ipc.authResolve);
+    const r = await resolveAuthHeader(auth, null, { authResolve: ipc.authResolve, varsResolve: passthroughVars });
     expect(r.kind).toBe("none");
   });
 
-  it("returns kind 'error' when authResolve throws (OAuth2 NotImplemented)", async () => {
+  it("returns kind 'error' when authResolve throws", async () => {
     vi.mocked(ipc.authResolve).mockRejectedValue({ type: "NotImplemented", message: "oauth2 token fetch" });
     const auth = { kind: "oauth2_client_credentials" as const, token_url: "u", client_id: "c", client_secret: "S", scopes: [] };
-    const r = await resolveAuthHeader(auth, ipc.authResolve);
+    const r = await resolveAuthHeader(auth, null, { authResolve: ipc.authResolve, varsResolve: passthroughVars });
     expect(r.kind).toBe("error");
     if (r.kind === "error") expect(r.message).toContain("oauth2");
   });
