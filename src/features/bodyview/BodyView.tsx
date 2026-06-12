@@ -43,7 +43,7 @@ interface Live {
   ghostTimer: number | null;
   /** Line count after the last edit — a change means the ghost anchor moved. */
   lineCount: number;
-  /** Текст, который последним видел handleChange/маунт — для детекта внешних обновлений value. */
+  /** Last text seen by handleChange / mount — used to detect external value updates. */
   lastText: string;
 }
 
@@ -271,10 +271,10 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
   // No mode guard needed: applyGhost no-ops when ghost is null (response mode).
   useEffect(() => { applyGhost(); }, [prefs.bodyHints, applyGhost]);
 
-  // Внешние (не пользовательские) обновления контролируемого value — например
-  // Reset-to-template — обёртка Monaco применяет к модели программно и НЕ
-  // прокидывает в onChange. Ловим расхождение value с последним текстом,
-  // который видел handleChange, и пересинхронизируем tree/ghost.
+  // External (non-user) updates to the controlled value — e.g. Reset-to-template —
+  // are applied to the Monaco model programmatically by the wrapper and do NOT
+  // fire onChange. Catch the divergence between value and the last text seen by
+  // handleChange, and re-sync tree/ghost.
   useEffect(() => {
     const l = live.current;
     if (mode !== "request" || !l || value === l.lastText) return;
