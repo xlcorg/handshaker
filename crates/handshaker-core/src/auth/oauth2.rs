@@ -20,7 +20,7 @@ pub struct TokenResponse {
 #[derive(Deserialize)]
 struct RawTokenResponse {
     access_token: Option<String>,
-    expires_in: Option<u64>,
+    expires_in: Option<f64>,
 }
 
 #[derive(Deserialize)]
@@ -69,7 +69,7 @@ fn parse_token_response(status: u16, body: &str) -> Result<TokenResponse, CoreEr
         .ok_or_else(|| CoreError::Auth("oauth2 token response missing access_token".into()))?;
     Ok(TokenResponse {
         access_token,
-        expires_in_secs: raw.expires_in.unwrap_or(DEFAULT_EXPIRES_IN_SECS),
+        expires_in_secs: raw.expires_in.map(|v| v as u64).unwrap_or(DEFAULT_EXPIRES_IN_SECS),
     })
 }
 
@@ -131,6 +131,14 @@ mod tests {
     fn parse_missing_access_token_is_auth_error() {
         let err = parse_token_response(200, r#"{"expires_in":60}"#).unwrap_err();
         assert!(matches!(err, CoreError::Auth(_)));
+    }
+
+    #[test]
+    fn parse_ok_accepts_fractional_expires_in() {
+        // Some IdPs emit expires_in as a JSON float; truncate to whole seconds.
+        let r = parse_token_response(200, r#"{"access_token":"tok","expires_in":1800.0}"#).unwrap();
+        assert_eq!(r.access_token, "tok");
+        assert_eq!(r.expires_in_secs, 1800);
     }
 
     #[test]
