@@ -2,6 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Status:** 🎉 DONE — фича влита в `main` и живёт в продукте: `CallPanel`
+> рендерит `ResizablePanelGroup` с ориентацией из `prefs.split` и персистом
+> `prefs.bodyPanel` (верифицировано по коду при архивации 2026-06-12; чекбоксы
+> задач в этом файле не проставлялись по ходу исполнения).
+
 **Goal:** Make the draft Focus-view request/response panes drag-resizable with a persisted divider and a working left/right ↔ top/bottom toggle, and stop native scrollbars leaking into the request body pane on resize.
 
 **Architecture:** Replace the fixed 50/50 `flex` row in `CallPanel` with the shadcn `ResizablePanelGroup`/`ResizableHandle` (the same `react-resizable-panels` v4 wrapper already used for the sidebar). Orientation comes from the previously-dead `prefs.split`; divider position is a new persisted `prefs.bodyPanel` percent. The scrollbar bug is fixed by scoping `overflow` per request-tab so Monaco (which scrolls itself via `automaticLayout`) is never wrapped in `overflow-auto`.

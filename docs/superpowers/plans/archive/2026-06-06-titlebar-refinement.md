@@ -2,7 +2,12 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Status:** готов к исполнению · **Ветка:** `claude/infallible-lumiere-bc9ea5` · **Спека:** `docs/superpowers/specs/2026-06-06-titlebar-refinement-design.md` · **Режим:** subagent-driven
+**Status:** 🎉 DONE — фича влита в `main` и давно живёт в продукте (единый
+`Titlebar.tsx` + `Titlebar.test.tsx` с drag-region/`WorkflowSelector`/`ViewSwitcher`,
+командная палитра ⌘K удалена — верифицировано по коду при архивации 2026-06-12;
+чекбоксы задач в этом файле не проставлялись по ходу исполнения). Поверх этой
+базы позже легли «Draft address-bar redesign» и «macOS-стиль титлбара».
+· **Спека:** `docs/superpowers/specs/2026-06-06-titlebar-refinement-design.md` · **Режим:** subagent-driven
 
 **Goal:** Свести верхнюю панель в единый рабочий титлбар: починить перетаскивание окна, вернуть кнопки min/max/close + утилиты, выровнять env-селектор под workflow, персистить выбор env, центрировать англоязычный view-switcher и полностью удалить командную палитру ⌘K.
 

@@ -8,7 +8,13 @@
 
 **Tech Stack:** Tauri 2.11, `@tauri-apps/plugin-updater`, `@tauri-apps/plugin-process`, `tauri-apps/tauri-action@v0`, minisign update signing, React 18 + Vitest/RTL.
 
-**Status banner:** Phase 1 (Tasks 1–3) ✅ · Phase 2 (Tasks 4–6) ✅ · Task 7 workflow file ✅ — all committed, `tsc -b` clean, 551 FE tests green, `cargo build -p handshaker` green. **Remaining = operator + manual:** Operator prerequisites (make repo public, `tauri signer generate`, set secrets, paste real `pubkey` into `tauri.conf.json`), Task 7 Step 4 (tag `v0.1.0` → CI dry-run), Task 8 (manual e2e update on the MacBook). · **Дата:** 2026-06-07 · **Ветка:** `worktree-feat+auto-update` · **Спек:** [docs/superpowers/specs/2026-06-07-auto-update-design.md](../specs/2026-06-07-auto-update-design.md)
+**Status banner:** 🎉 DONE — Phase 1 (Tasks 1–3) ✅ · Phase 2 (Tasks 4–6) ✅ ·
+Task 7 workflow file ✅; operator-шаги тоже давно выполнены (реальный `pubkey`
+в `tauri.conf.json`, CI-workflow в `.github/workflows`, релизные теги до
+`v0.1.14+` — верифицировано при архивации 2026-06-12). Поверх добавлена ручная
+кнопка «Check for updates» (план 2026-06-09, merge `8f364a4`).
+**Remaining = manual:** Task 8 (e2e-проход обновления на MacBook) — стоячий
+человеческий пункт, как mac-проходы других архивных планов. · **Дата:** 2026-06-07 · **Ветка:** `worktree-feat+auto-update` · **Спек:** [docs/superpowers/specs/2026-06-07-auto-update-design.md](../specs/2026-06-07-auto-update-design.md)
 
 ---
 
