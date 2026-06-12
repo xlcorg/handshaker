@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Layers, X, AlignLeft, Lock, KeyRound, Braces, Bookmark, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -13,6 +13,7 @@ import { DescriptionBlock } from "./DescriptionBlock";
 import { VariablesBlock, type VarRow } from "./VariablesBlock";
 import { TlsBlock } from "./TlsBlock";
 import { SavedAuthEditor } from "./SavedAuthEditor";
+import { useActiveWorkflow } from "@/features/workflow/store";
 
 function countFolders(items: ItemIpc[]): number {
   return items.reduce((n, it) => (it.type === "folder" ? n + 1 + countFolders(it.items) : n), 0);
@@ -22,6 +23,15 @@ function entriesToRows(vars: Partial<{ [k: string]: string }>): VarRow[] {
   return Object.entries(vars)
     .filter((e): e is [string, string] => e[1] !== undefined)
     .map(([k, v]) => ({ id: newId(), k, v }));
+}
+
+function rowsToRecord(rows: VarRow[]): Record<string, string> {
+  const rec: Record<string, string> = {};
+  for (const r of rows) {
+    const k = r.k.trim();
+    if (k) rec[k] = r.v; // dup keys: last wins (matches persist)
+  }
+  return rec;
 }
 
 export interface CollectionOverviewProps {
@@ -73,13 +83,18 @@ export function CollectionOverview({ collection, onChanged, onSelectRequest, onC
     void ipc.collectionSetNodeAuth(collection.id, null, config).then(onChanged).catch(() => {});
   };
   const persistVars = (rows: VarRow[]) => {
-    const record: Record<string, string> = {};
-    for (const r of rows) {
-      const k = r.k.trim();
-      if (k) record[k] = r.v;
-    }
-    void ipc.collectionSetVariables(collection.id, record).then(onChanged).catch(() => {});
+    void ipc.collectionSetVariables(collection.id, rowsToRecord(rows)).then(onChanged).catch(() => {});
   };
+
+  const activeWf = useActiveWorkflow();
+  const varsRecord = useMemo(() => rowsToRecord(varRows), [varRows]);
+  // Unsaved editor rows overlay the stored collection vars; env = active env (backend resolves it).
+  const resolveRow = useCallback(
+    (t: string) =>
+      ipc.varsResolve(t, { collection_id: null, collection_vars: varsRecord, env_vars: null }),
+    [varsRecord],
+  );
+  const resolveKey = `${JSON.stringify(varsRecord)}|${activeWf.envName ?? ""}`;
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
@@ -184,6 +199,8 @@ export function CollectionOverview({ collection, onChanged, onSelectRequest, onC
                   setVarRows(next);
                   persistVars(next);
                 }}
+                resolveRow={resolveRow}
+                resolveKey={resolveKey}
               />
             </COBlock>
           )}

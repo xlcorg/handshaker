@@ -3,6 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tooltip } from "@/components/ui/tooltip";
 import { newId } from "@/lib/ids";
+import { VarResolveLine, hasVars } from "@/features/vars/VarResolveLine";
+import type { ResolutionReportIpc } from "@/ipc/bindings";
 
 export interface VarRow {
   id: string;
@@ -13,9 +15,12 @@ export interface VarRow {
 interface VariablesBlockProps {
   rows: VarRow[];
   onChange: (nextRows: VarRow[]) => void;
+  /** Optional per-row resolve preview; the caller bakes the ctx into the resolver. */
+  resolveRow?: (value: string) => Promise<ResolutionReportIpc>;
+  resolveKey?: string;
 }
 
-export function VariablesBlock({ rows, onChange }: VariablesBlockProps) {
+export function VariablesBlock({ rows, onChange, resolveRow, resolveKey }: VariablesBlockProps) {
   const add = () => onChange([...rows, { id: newId(), k: "", v: "" }]);
 
   const upd = (id: string, key: "k" | "v", val: string) =>
@@ -52,7 +57,7 @@ export function VariablesBlock({ rows, onChange }: VariablesBlockProps) {
         <span />
       </div>
       {rows.map((row) => (
-        <div key={row.id} className="group/var grid grid-cols-[1fr_1.4fr_28px] gap-2 items-center">
+        <div key={row.id} className="group/var grid grid-cols-[1fr_1.4fr_28px] gap-x-2 gap-y-0.5 items-center">
           <Input
             value={row.k}
             onChange={(e) => upd(row.id, "k", e.target.value)}
@@ -74,6 +79,11 @@ export function VariablesBlock({ rows, onChange }: VariablesBlockProps) {
               <Trash2 size={13} />
             </button>
           </Tooltip>
+          {resolveRow && hasVars(row.v) && (
+            <div className="col-start-2">
+              <VarResolveLine value={row.v} resolver={resolveRow} resolveKey={resolveKey} className="px-1 pb-0.5" />
+            </div>
+          )}
         </div>
       ))}
       <div className="pt-1">

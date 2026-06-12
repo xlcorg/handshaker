@@ -102,6 +102,25 @@ describe("CollectionOverview", () => {
     expect(ipc.collectionSetVariables).toHaveBeenCalledWith("c1", { base: "y" });
   });
 
+  it("shows a resolve preview under a variable row whose value has {{vars}}", async () => {
+    vi.mocked(ipc.varsResolve).mockResolvedValue({
+      resolved: "https://api.example.com",
+      unresolved_vars: [],
+      cycle_chain: null,
+    });
+    const p = props({ collection: collection({ variables: { "uri-root": "{{notes-api-root}}" } }) });
+    r(<CollectionOverview {...p} />);
+    fireEvent.click(screen.getByText("Variables"));
+    expect(
+      await screen.findByText(/→ resolves: https:\/\/api\.example\.com/),
+    ).toBeInTheDocument();
+    expect(ipc.varsResolve).toHaveBeenCalledWith("{{notes-api-root}}", {
+      collection_id: null,
+      collection_vars: { "uri-root": "{{notes-api-root}}" },
+      env_vars: null,
+    });
+  });
+
   it("the close button calls onClose", () => {
     const p = props();
     r(<CollectionOverview {...p} />);
