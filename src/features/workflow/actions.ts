@@ -1,7 +1,7 @@
 import * as ipc from "@/ipc/client";
-import type { InvokeOutcomeIpc, SavedAuthConfigIpc, AuthCredentialsIpc, ResolutionReportIpc, MessageSchemaIpc, MessageSideIpc } from "@/ipc/bindings";
+import type { InvokeOutcomeIpc, SavedAuthConfigIpc, AuthCredentialsIpc, ResolutionReportIpc, MessageSchemaIpc, MessageSideIpc, VarsResolveCtxIpc } from "@/ipc/bindings";
 import { newStep, type MetadataRow, type Step } from "./model";
-import { resolveStepTemplates } from "./resolve";
+import { resolveStepTemplates, type Resolver } from "./resolve";
 import { lastExecutedFor, responseSeedPatch } from "./lastExecuted";
 import { newId } from "@/lib/ids";
 import { readPrefs } from "@/lib/use-prefs";
@@ -10,6 +10,20 @@ import { isCancelSentinel } from "./netDiagnostics";
 export interface CallTargetInit {
   address: string;
   tls: boolean;
+  /** Owning collection for {{var}} resolution; null/omitted ⇒ no collection vars. */
+  collectionId?: string | null;
+}
+
+/** Resolve ctx for a step bound to `collectionId`; null when unbound. */
+export function varsCtxFor(collectionId: string | null | undefined): VarsResolveCtxIpc | null {
+  return collectionId
+    ? { collection_id: collectionId, collection_vars: null, env_vars: null }
+    : null;
+}
+
+/** A Resolver with the collection ctx baked in — inject into resolve/auth deps. */
+export function varsResolverFor(collectionId: string | null | undefined): Resolver {
+  return (t) => ipc.varsResolve(t, varsCtxFor(collectionId));
 }
 
 /** Initial request body for a fresh or just-switched method: an empty object split
@@ -42,9 +56,12 @@ export function isPristineBody(body: string, skeleton: string): boolean {
 /** Best-effort `{{var}}` resolution for a connection address. Unresolved placeholders are
  *  left literal (the subsequent gRPC call surfaces the failure), mirroring the Send path so
  *  reflection/skeleton dial the same resolved host the eventual invoke will. */
-export async function resolveAddressSafe(address: string): Promise<string> {
+export async function resolveAddressSafe(
+  address: string,
+  collectionId: string | null = null,
+): Promise<string> {
   try {
-    return (await ipc.varsResolve(address)).resolved;
+    return (await ipc.varsResolve(address, varsCtxFor(collectionId))).resolved;
   } catch {
     return address;
   }
@@ -57,7 +74,7 @@ export async function buildRequestSkeletonSafe(
   method: string,
 ): Promise<string> {
   try {
-    const address = await resolveAddressSafe(target.address);
+    const address = await resolveAddressSafe(target.address, target.collectionId ?? null);
     return await ipc.grpcBuildRequestSkeleton(
       { address, tls: target.tls, skip_verify: false },
       service,
@@ -79,7 +96,7 @@ export async function fetchMessageSchemaSafe(
   side: MessageSideIpc = "input",
 ): Promise<MessageSchemaIpc | null> {
   try {
-    const address = await resolveAddressSafe(target.address);
+    const address = await resolveAddressSafe(target.address, target.collectionId ?? null);
     return await ipc.grpcMessageSchema({ address, tls: target.tls, skip_verify: false }, service, method, side);
   } catch {
     return null;
@@ -132,6 +149,7 @@ export async function createStepFromMethod(
   return newStep({
     address: target.address,
     tls: target.tls,
+    collectionId: target.collectionId ?? null,
     service,
     method,
     requestJson,
@@ -266,6 +284,7 @@ export async function sendStep(
     method: string;
     requestJson: string;
     metadata: MetadataRow[];
+    collectionId?: string | null;
   },
   authHeader?: AuthHeader | null,
   opts?: { requestId?: string; timeoutMs?: number },
@@ -273,7 +292,7 @@ export async function sendStep(
   const requestId = opts?.requestId ?? newId();
   const timeoutMs = opts?.timeoutMs ?? readPrefs().requestTimeoutMs;
   try {
-    const r = await resolveStepTemplates(step, ipc.varsResolve);
+    const r = await resolveStepTemplates(step, varsResolverFor(step.collectionId));
     if (!r.ok) return { kind: "unresolved", unresolved: r.unresolved, cycle: r.cycle };
     const metadata: Record<string, string> = {};
     for (const m of r.request.metadata) metadata[m.key] = m.value;

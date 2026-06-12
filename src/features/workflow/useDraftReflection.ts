@@ -19,7 +19,12 @@ function reflectErr(e: unknown): string {
 
 /** Reflect a draft's contract: debounced `grpcDescribe` on (address, tls) change, plus a
  *  manual `refresh()` that bypasses the backend cache via `grpcRefreshContract`. */
-export function useDraftReflection(address: string, tls: boolean, enabled = true): DraftReflection {
+export function useDraftReflection(
+  address: string,
+  tls: boolean,
+  enabled = true,
+  collectionId: string | null = null,
+): DraftReflection {
   const [catalog, setCatalog] = useState<ServiceCatalogIpc | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,7 +41,7 @@ export function useDraftReflection(address: string, tls: boolean, enabled = true
       setLoading(true);
       setError(null);
       try {
-        const resolved = await resolveAddressSafe(addr);
+        const resolved = await resolveAddressSafe(addr, collectionId);
         const target = { address: resolved, tls, skip_verify: false };
         const c = force ? await ipc.grpcRefreshContract(target) : await ipc.grpcDescribe(target);
         setCatalog(c);
@@ -47,7 +52,7 @@ export function useDraftReflection(address: string, tls: boolean, enabled = true
         setLoading(false);
       }
     },
-    [address, tls, enabled],
+    [address, tls, enabled, collectionId],
   );
 
   useEffect(() => {

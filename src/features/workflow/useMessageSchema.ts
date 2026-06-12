@@ -11,6 +11,7 @@ export interface SchemaTarget {
   tls: boolean;
   service: string;
   method: string;
+  collectionId?: string | null;
 }
 
 /** Returns the flat field-schema for the given call target and side, or null while
@@ -20,8 +21,8 @@ export function useMessageSchema(
   target: SchemaTarget,
   side: MessageSideIpc = "input",
 ): MessageSchemaIpc | null {
-  const { address, tls, service, method } = target;
-  const key = `${address}|${tls}|${service}|${method}|${side}`;
+  const { address, tls, service, method, collectionId = null } = target;
+  const key = `${address}|${tls}|${service}|${method}|${side}|${collectionId ?? ""}`;
   const [schema, setSchema] = useState<MessageSchemaIpc | null>(() => cache.get(key) ?? null);
 
   useEffect(() => {
@@ -34,14 +35,14 @@ export function useMessageSchema(
       return;
     }
     let cancelled = false;
-    void fetchMessageSchemaSafe({ address, tls }, service, method, side).then((s) => {
+    void fetchMessageSchemaSafe({ address, tls, collectionId }, service, method, side).then((s) => {
       cache.set(key, s);
       if (!cancelled) setSchema(s);
     });
     return () => {
       cancelled = true;
     };
-  }, [key, address, tls, service, method, side]);
+  }, [key, address, tls, service, method, side, collectionId]);
 
   return schema;
 }

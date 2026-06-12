@@ -12,6 +12,7 @@ vi.mock("@/ipc/client", () => ({
 import * as ipc from "@/ipc/client";
 import { createStepFromMethod, sendStep, stepPatchFromSendResult, resolveAuthHeader, shouldRecordExecuted, buildExecutedStep, cancelStep } from "./actions";
 import { buildRequestSkeletonSafe, applyMethodSelection, isPristineBody, resetBodyToTemplate, fetchMessageSchemaSafe } from "./actions";
+import { varsCtxFor, varsResolverFor } from "./actions";
 import { newStep, type Step } from "./model";
 import type { InvokeOutcomeIpc } from "@/ipc/bindings";
 
@@ -48,6 +49,21 @@ describe("createStepFromMethod", () => {
     expect(step.metadata).toEqual(defaults);
     expect(step.metadata).not.toBe(defaults);       // deep copy: array identity differs
     expect(step.metadata[0]).not.toBe(defaults[0]); // and row identity differs
+  });
+});
+
+describe("varsCtxFor / varsResolverFor", () => {
+  it("builds a collection ctx only when an id is present", () => {
+    expect(varsCtxFor("c1")).toEqual({ collection_id: "c1", collection_vars: null, env_vars: null });
+    expect(varsCtxFor(null)).toBeNull();
+    expect(varsCtxFor(undefined)).toBeNull();
+  });
+
+  it("varsResolverFor passes the ctx to ipc.varsResolve", async () => {
+    await varsResolverFor("c1")("{{x}}");
+    expect(ipc.varsResolve).toHaveBeenCalledWith("{{x}}", {
+      collection_id: "c1", collection_vars: null, env_vars: null,
+    });
   });
 });
 
@@ -157,6 +173,24 @@ describe("sendStep", () => {
     expect(res.kind).toBe("unresolved");
     if (res.kind === "unresolved") expect(res.unresolved).toEqual(["host"]);
     expect(ipc.grpcInvokeOneshot).not.toHaveBeenCalled();
+  });
+
+  it("sendStep resolves templates in the step's collection ctx", async () => {
+    await sendStep({
+      address: "{{uri-root}}", tls: false, service: "p.S", method: "M",
+      requestJson: "{}", metadata: [], collectionId: "c1",
+    });
+    expect(ipc.varsResolve).toHaveBeenCalledWith("{{uri-root}}", {
+      collection_id: "c1", collection_vars: null, env_vars: null,
+    });
+  });
+
+  it("sendStep without a collection resolves with a null ctx", async () => {
+    await sendStep({
+      address: "h:1", tls: false, service: "p.S", method: "M",
+      requestJson: "{}", metadata: [],
+    });
+    expect(ipc.varsResolve).toHaveBeenCalledWith("h:1", null);
   });
 
   it("sendStep invokes with resolved address + metadata when all vars resolve", async () => {

@@ -1,6 +1,6 @@
 import { ResponsePanel, type ContractInfo } from "@/features/response/ResponsePanel";
 import type { RespState } from "@/features/response/RespMeta";
-import { authResolve, varsResolve, authInvalidate } from "@/ipc/client";
+import { authResolve, authInvalidate } from "@/ipc/client";
 import { AddressBar } from "./AddressBar";
 import { DraftAddressBar } from "./DraftAddressBar";
 import { useDraftReflection } from "./useDraftReflection";
@@ -16,6 +16,7 @@ import {
   cancelStep,
   applyMethodSelection,
   resetBodyToTemplate,
+  varsResolverFor,
 } from "./actions";
 import { workflowStore } from "./store";
 import { newId } from "@/lib/ids";
@@ -51,7 +52,7 @@ export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMetho
   const onBody = (value: string) => onPatch({ requestJson: value });
   const onMetadata = (rows: MetadataRow[]) => onPatch({ metadata: rows });
   const onResetBody = () =>
-    void resetBodyToTemplate(onPatch, { address: step.address, tls: step.tls }, step.service, step.method);
+    void resetBodyToTemplate(onPatch, { address: step.address, tls: step.tls, collectionId: step.collectionId }, step.service, step.method);
 
   // Effective auth: the step's own config, falling back to the origin collection's
   // (request-level auth has no editor UI, so saved requests carry `none`).
@@ -60,7 +61,13 @@ export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMetho
   const onSend = async () => {
     const requestId = newId();
     onPatch({ status: "sending", error: null, requestId });
-    const auth = await resolveAuthHeader(effectiveAuth, activeWf.envName, { authResolve, varsResolve });
+    // Merge of both lines: main's `effectiveAuth` (inherit the collection's auth when the
+    // step's own is none — the 16 UNAUTHENTICATED fix) + this branch's collection-scoped
+    // vars resolver, so {{var}} in auth fields resolves against the step's collection too.
+    const auth = await resolveAuthHeader(effectiveAuth, activeWf.envName, {
+      authResolve,
+      varsResolve: varsResolverFor(step.collectionId),
+    });
     if (auth.kind === "error") {
       onPatch({ status: "error", outcome: null, error: auth.message, requestId: null });
       return;
@@ -108,14 +115,14 @@ export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMetho
     return () => window.removeEventListener("keydown", onKey);
   }, [editable]);
 
-  const reflection = useDraftReflection(step.address, step.tls, !!editable);
+  const reflection = useDraftReflection(step.address, step.tls, !!editable, step.collectionId);
 
   // Schema for the draft's method — input side for request autocomplete + ghost,
   // output side for the Contract tab.
   // History panels pass an empty target so no fetch fires.
   const schemaTarget = editable
-    ? { address: step.address, tls: step.tls, service: step.service, method: step.method }
-    : { address: "", tls: false, service: "", method: "" };
+    ? { address: step.address, tls: step.tls, service: step.service, method: step.method, collectionId: step.collectionId }
+    : { address: "", tls: false, service: "", method: "", collectionId: null };
   const schema = useMessageSchema(schemaTarget, "input");
   const outputSchema = useMessageSchema(schemaTarget, "output");
 
@@ -131,7 +138,7 @@ export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMetho
       onSelectMethod={(m) =>
         void applyMethodSelection(
           onPatch,
-          { address: step.address, tls: step.tls },
+          { address: step.address, tls: step.tls, collectionId: step.collectionId },
           { requestJson: step.requestJson, service: step.service, method: step.method },
           m,
           workflowStore.activeWorkflow().steps,
