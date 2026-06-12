@@ -1,29 +1,50 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { CollectionIpc } from "@/ipc/bindings";
+import type { CollectionIpc, ItemIpc } from "@/ipc/bindings";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 vi.mock("./CallPanel", () => ({
   CallPanel: ({ step }: { step: { method: string } }) => <div>CALL:{step.method}</div>,
 }));
 
-const cat = vi.hoisted(() => ({ tree: [] as CollectionIpc[] }));
+const cat = vi.hoisted(() => ({
+  tree: [] as CollectionIpc[],
+  duplicateItem: vi.fn(),
+}));
 vi.mock("@/features/catalog/CatalogProvider", () => ({
-  useCatalog: () => ({ tree: cat.tree }),
+  useCatalog: () => ({ tree: cat.tree, duplicateItem: cat.duplicateItem }),
+}));
+
+const mockOpenSavedRequest = vi.fn();
+vi.mock("@/features/catalog/actions", () => ({
+  openSavedRequest: (...args: unknown[]) => mockOpenSavedRequest(...args),
+}));
+
+const mockPatchUiState = vi.fn();
+vi.mock("@/features/catalog/uiState", () => ({
+  patchUiState: (...args: unknown[]) => mockPatchUiState(...args),
 }));
 
 import { FocusView } from "./FocusView";
 import { workflowStore } from "./store";
 import { newStep } from "./model";
 
+function renderFV(ui = <FocusView />) {
+  return render(<TooltipProvider>{ui}</TooltipProvider>);
+}
+
 beforeEach(() => {
   workflowStore.reset();
   cat.tree = [];
+  cat.duplicateItem.mockReset();
+  mockOpenSavedRequest.mockReset();
+  mockPatchUiState.mockReset();
 });
 
 describe("FocusView Save affordance", () => {
   it("shows the empty state and no Save button when there is no draft", () => {
-    render(<FocusView />);
+    renderFV();
     expect(screen.getByText(/Нет активного реквеста/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Сохранить" })).not.toBeInTheDocument();
   });
@@ -32,7 +53,7 @@ describe("FocusView Save affordance", () => {
     const user = userEvent.setup();
     const onRequestSave = vi.fn();
     workflowStore.setDraft(newStep({ address: "h:443", tls: false, service: "p.S", method: "GetX" }));
-    render(<FocusView onRequestSave={onRequestSave} />);
+    renderFV(<FocusView onRequestSave={onRequestSave} />);
     expect(screen.getByText("CALL:GetX")).toBeInTheDocument();
     expect(screen.queryByTestId("draft-dirty-dot")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Сохранить" }));
@@ -45,21 +66,21 @@ describe("FocusView Save affordance", () => {
       newStep({ address: "h:443", tls: false, service: "p.S", method: "GetX" }),
       { collectionId: "c1", requestId: "r1" },
     );
-    render(<FocusView onRequestSave={vi.fn()} />);
+    renderFV(<FocusView onRequestSave={vi.fn()} />);
     expect(screen.getByTestId("autosave-status")).toHaveTextContent("Сохранено");
     expect(screen.queryByRole("button", { name: "Сохранить" })).not.toBeInTheDocument();
   });
 
   it("shows the unbound breadcrumb label for a draft with no origin", () => {
     workflowStore.setDraft(newStep({ address: "h:443", tls: false, service: "p.S", method: "GetX" }));
-    render(<FocusView onRequestSave={vi.fn()} />);
+    renderFV(<FocusView onRequestSave={vi.fn()} />);
     expect(screen.getByTestId("draft-breadcrumb")).toHaveTextContent("Новый реквест");
   });
 
   it("shows a dirty dot once the unbound draft is edited", () => {
     workflowStore.setDraft(newStep({ address: "h:443", tls: false, service: "p.S", method: "GetX" }));
     workflowStore.updateDraft({ requestJson: '{"a":1}' });
-    render(<FocusView onRequestSave={vi.fn()} />);
+    renderFV(<FocusView onRequestSave={vi.fn()} />);
     expect(screen.getByTestId("draft-dirty-dot")).toBeInTheDocument();
   });
 
@@ -68,7 +89,7 @@ describe("FocusView Save affordance", () => {
       newStep({ address: "h:443", tls: false, service: "p.S", method: "GetX" }),
       { collectionId: "c1", requestId: "r1", collectionName: "Notes", requestName: "Create" },
     );
-    render(<FocusView onRequestSave={vi.fn()} />);
+    renderFV(<FocusView onRequestSave={vi.fn()} />);
     const crumb = screen.getByTestId("draft-breadcrumb");
     expect(crumb).toHaveTextContent("Notes › Create");
     // The separator before the last segment must be a non-breaking space — a
@@ -101,7 +122,37 @@ describe("FocusView Save affordance", () => {
       newStep({ address: "h:443", tls: false, service: "p.S", method: "GetX" }),
       { collectionId: "c1", requestId: "r1", collectionName: "Notes", requestName: "Create" },
     );
-    render(<FocusView onRequestSave={vi.fn()} />);
+    renderFV(<FocusView onRequestSave={vi.fn()} />);
     expect(screen.getByTestId("draft-breadcrumb")).toHaveTextContent("Notes › Staging › Create");
+  });
+
+  it("duplicates the bound request and opens the copy", async () => {
+    const copied: ItemIpc = {
+      type: "request", id: "r1-copy", name: "Get copy", address_template: "h:1",
+      service: "p.S", method: "Get", body_template: "{}", metadata: [],
+      auth: { kind: "none" }, tls_override: false, last_used_at: null, use_count: 0,
+    };
+    cat.duplicateItem.mockResolvedValue(copied);
+    mockPatchUiState.mockResolvedValue(undefined);
+    workflowStore.setDraft(
+      newStep({ address: "h:1", tls: false, service: "p.S", method: "Get" }),
+      { collectionId: "c1", requestId: "r1", requestName: "Get" },
+    );
+    const user = userEvent.setup();
+    renderFV();
+    await user.click(screen.getByRole("button", { name: "Duplicate request" }));
+    expect(cat.duplicateItem).toHaveBeenCalledWith("c1", "r1");
+    await waitFor(() => {
+      expect(mockOpenSavedRequest).toHaveBeenCalledWith("c1", copied);
+    });
+    expect(mockPatchUiState).toHaveBeenCalledWith(
+      expect.objectContaining({ active_request: { collection_id: "c1", item_id: "r1-copy" } }),
+    );
+  });
+
+  it("shows no duplicate button for an unbound draft", () => {
+    workflowStore.setDraft(newStep({ address: "h:1", tls: false, service: "p.S", method: "Get" }));
+    renderFV();
+    expect(screen.queryByRole("button", { name: "Duplicate request" })).toBeNull();
   });
 });

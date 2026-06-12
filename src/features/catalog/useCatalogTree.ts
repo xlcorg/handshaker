@@ -29,7 +29,7 @@ export interface UseCatalogTree {
   renameItem: (collectionId: string, itemId: string, name: string) => Promise<void>;
   updateItemContent: (collectionId: string, itemId: string, content: SavedRequestIpc) => Promise<void>;
   deleteItem: (collectionId: string, itemId: string) => Promise<void>;
-  duplicateItem: (collectionId: string, itemId: string) => Promise<void>;
+  duplicateItem: (collectionId: string, itemId: string) => Promise<ItemIpc | null>;
   moveItem: (collectionId: string, itemId: string, parentId: string | null, position: number) => Promise<void>;
   moveItemAcross: (
     sourceCollectionId: string,
@@ -242,15 +242,18 @@ export function useCatalogTree(): UseCatalogTree {
     [optimistic],
   );
 
-  // Backend assigns the new id and deep-copies; reload the affected collection.
+  // Backend assigns the new id and deep-copies; reload the affected collection
+  // and hand the caller the duplicated item (null if not found — race, or a folder
+  // the caller doesn't care about).
   const duplicateItem = useCallback(
-    async (collectionId: string, itemId: string) => {
+    async (collectionId: string, itemId: string): Promise<ItemIpc | null> => {
       const name = itemNameOf(treeRef.current, collectionId, itemId);
       try {
-        await ipc.collectionDuplicateItem(collectionId, itemId);
+        const newItemId = await ipc.collectionDuplicateItem(collectionId, itemId);
         const fresh = await ipc.collectionGet(collectionId);
         apply(treeRef.current.map((c) => (c.id === collectionId ? fresh : c)));
         // Duplicates are silent on success; only report failure.
+        return findItemById(fresh.items, newItemId) ?? null;
       } catch (e) {
         toast.error(`Couldn't duplicate "${name}"`);
         throw e;

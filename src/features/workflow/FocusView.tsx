@@ -1,8 +1,12 @@
-import { Save } from "lucide-react";
+import { Copy, Save } from "lucide-react";
+import { toast } from "sonner";
 import { CallPanel } from "./CallPanel";
 import { useDraft, useDraftDirty, useDraftOrigin, workflowStore } from "./store";
 import { draftBreadcrumb } from "./draftHeader";
 import { useCatalog } from "@/features/catalog/CatalogProvider";
+import { openSavedRequest } from "@/features/catalog/actions";
+import { patchUiState } from "@/features/catalog/uiState";
+import { Tooltip } from "@/components/ui/tooltip";
 import type { Step } from "./model";
 
 export interface FocusViewProps {
@@ -16,7 +20,17 @@ export function FocusView({ onRequestSave, onQuickAddMethod }: FocusViewProps = 
   const draft = useDraft();
   const origin = useDraftOrigin();
   const dirty = useDraftDirty();
-  const { tree } = useCatalog();
+  const { tree, duplicateItem } = useCatalog();
+
+  // Origin-bound drafts autosave, so duplicating never loses edits — no discard guard.
+  async function duplicate() {
+    if (!origin) return;
+    const item = await duplicateItem(origin.collectionId, origin.requestId);
+    if (!item || item.type !== "request") return;
+    openSavedRequest(origin.collectionId, item);
+    void patchUiState({ active_request: { collection_id: origin.collectionId, item_id: item.id } });
+    toast.success(`Duplicated as "${item.name}"`);
+  }
 
   const segments = draft ? draftBreadcrumb(draft, origin, tree) : [];
   const prefix = segments.slice(0, -1);
@@ -39,8 +53,20 @@ export function FocusView({ onRequestSave, onQuickAddMethod }: FocusViewProps = 
             <span className="flex-none">{last}</span>
           </span>
           {origin ? (
-            <span className="text-muted-foreground" data-testid="autosave-status">
-              Сохранено
+            <span className="flex items-center gap-2">
+              <Tooltip content="Duplicate request">
+                <button
+                  type="button"
+                  aria-label="Duplicate request"
+                  onClick={() => void duplicate()}
+                  className="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+                >
+                  <Copy className="size-3.5" />
+                </button>
+              </Tooltip>
+              <span className="text-muted-foreground" data-testid="autosave-status">
+                Сохранено
+              </span>
             </span>
           ) : (
             <button

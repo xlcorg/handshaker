@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
+import type { ItemIpc } from "@/ipc/bindings";
 
 vi.mock("@/ipc/client", () => ({
   ipc: {
@@ -94,14 +95,27 @@ describe("optimistic mutations + rollback", () => {
     expect(ipc.collectionUpsert).toHaveBeenCalledWith(expect.objectContaining({ id: "c1", pinned: true }));
   });
 
-  it("duplicateItem reloads the affected collection from the backend", async () => {
+  it("duplicateItem reloads the affected collection from the backend and returns the copied item", async () => {
     const { result } = await loaded();
     vi.mocked(ipc.collectionDuplicateItem).mockResolvedValue("r1-copy");
-    vi.mocked(ipc.collectionGet).mockResolvedValue({ ...col("c1"), name: "c1-reloaded" });
-    await act(async () => { await result.current.duplicateItem("c1", "r1"); });
+    vi.mocked(ipc.collectionGet).mockResolvedValue({
+      ...col("c1"),
+      name: "c1-reloaded",
+      items: [
+        {
+          type: "request", id: "r1-copy", name: "r1 copy", address_template: "h", service: "s",
+          method: "m", body_template: "{}", metadata: [], auth: { kind: "none" },
+          tls_override: null, last_used_at: null, use_count: 0,
+        },
+      ],
+    });
+    let item: ItemIpc | null = null;
+    await act(async () => { item = await result.current.duplicateItem("c1", "r1"); });
     expect(ipc.collectionDuplicateItem).toHaveBeenCalledWith("c1", "r1");
     expect(result.current.tree[0].name).toBe("c1-reloaded");
     expect(toast.success).not.toHaveBeenCalled();
+    // duplicateItem returns the copied item from the reloaded collection
+    expect(item).toMatchObject({ id: "r1-copy", type: "request" });
   });
 
   it("duplicateItem toasts the item name on failure", async () => {
