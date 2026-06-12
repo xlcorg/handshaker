@@ -2,8 +2,22 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Status:** 🚧 not started · branch `claude/loving-spence-d73a28` · spec
+**Status:** 🎉 DONE — all 12 tasks implemented, reviewed (spec+quality per task +
+final branch review), and green on `claude/loving-spence-d73a28` (commits
+`30311d4`…`436e447`). Gate: core 180 + lib 49 Rust tests, 789 vitest, tsc clean,
+bindings no-drift, `pnpm build` ok. Remaining: ff-merge to `main` + a live WebView2
+pass against a real OIDC endpoint (manual). · spec
 `docs/superpowers/specs/2026-06-12-oauth2-client-credentials-design.md`
+
+> **As-built correction (dependency):** Task 4 below literally specifies reqwest's
+> `rustls-no-provider` feature + a manual `rustls`/ring install. That feature is only on
+> reqwest's master, NOT published 0.12.x. The build instead uses
+> `reqwest = { default-features = false, features = ["rustls-tls"] }`, which (via feature
+> unification with tonic's `tls-ring`) resolves to **ring with NO aws-lc-rs** — verified
+> in `Cargo.lock`. The app installs the ring crypto provider at startup (`lib.rs::run`)
+> before the provider is constructed, so no manual install in `Oauth2TokenProvider::new`
+> is needed. Net goal (rustls+ring, no aws-lc-rs, no OpenSSL) is met. Also: the IPC
+> `OAuth2TokenInfoIpc.expires_in_secs` is `u32` (not `u64`) because specta rejects `u64`.
 
 **Goal:** Implement the deferred `SavedAuthConfig::OAuth2ClientCredentials` — fetch a
 Bearer token from an OIDC `client_credentials` endpoint, cache it per-collection
