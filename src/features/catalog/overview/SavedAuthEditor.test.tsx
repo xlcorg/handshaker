@@ -46,10 +46,10 @@ describe("SavedAuthEditor", () => {
     render(
       <SavedAuthEditor
         value={{
-          kind: "oauth_2_client_credentials",
+          kind: "oauth2_client_credentials",
           token_url: "https://t",
           client_id: "id",
-          client_secret_env_var: "SECRET",
+          client_secret: "SECRET",
           scopes: [],
         }}
         onChange={() => {}}

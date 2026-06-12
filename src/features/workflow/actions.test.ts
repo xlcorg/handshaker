@@ -258,7 +258,7 @@ describe("resolveAuthHeader", () => {
 
   it("returns kind 'error' when authResolve throws (OAuth2 NotImplemented)", async () => {
     vi.mocked(ipc.authResolve).mockRejectedValue({ type: "NotImplemented", message: "oauth2 token fetch" });
-    const auth = { kind: "oauth_2_client_credentials" as const, token_url: "u", client_id: "c", client_secret_env_var: "S", scopes: [] };
+    const auth = { kind: "oauth2_client_credentials" as const, token_url: "u", client_id: "c", client_secret: "S", scopes: [] };
     const r = await resolveAuthHeader(auth, ipc.authResolve);
     expect(r.kind).toBe("error");
     if (r.kind === "error") expect(r.message).toContain("oauth2");

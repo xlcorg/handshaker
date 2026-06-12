@@ -104,7 +104,7 @@ function AuthReadOnly({ auth }: { auth: SavedAuthConfigIpc }) {
             <div>prefix: {auth.prefix}</div>
           </>
         ) : null}
-        {auth.kind === "oauth_2_client_credentials" ? (
+        {auth.kind === "oauth2_client_credentials" ? (
           <div className="text-destructive">OAuth2 — не реализовано (master §5.4)</div>
         ) : null}
       </div>
