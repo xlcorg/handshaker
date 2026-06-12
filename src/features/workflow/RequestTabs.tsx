@@ -41,12 +41,12 @@ export function RequestTabs({ step, serviceAuth, onBody, onMetadata, onSubmit, o
         />
         {tab === "request" ? (
           <div className="ml-auto flex items-center gap-1">
-            <Tooltip content="Inline type hints">
+            <Tooltip content="Field hints">
               <Button
                 variant="ghost"
                 size="icon-xs"
                 onClick={() => setPref("bodyHints", !prefs.bodyHints)}
-                aria-label="Toggle inline type hints"
+                aria-label="Toggle field hints"
                 aria-pressed={prefs.bodyHints}
                 className={prefs.bodyHints ? "text-foreground" : "text-muted-foreground hover:text-foreground"}
               >

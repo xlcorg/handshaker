@@ -27,8 +27,8 @@
 > нет, Send безусловно переключает на Body (`userPickedTab`/`prevState` удалены —
 > заметки ревью про flash «Awaiting first call» и re-arm `userPickedTab` сняты
 > как неактуальные). Гейт после правок: tsc clean · vitest 784 (111 файлов) ·
-> build ок. Открытый минор: кнопка в Request-стрипе всё ещё подписана
-> «Inline type hints», хотя тоггл остался только у ghost'а.
+> build ок. Кнопка-тоггл в Request-стрипе переименована «Inline type hints» →
+> «Field hints» (тоггл остался только у ghost'а).
 > **Spec:** `docs/superpowers/specs/2026-06-11-contract-tab-proto-view-design.md` (approved 2026-06-11).
 > Supersedes the floating-overlay part of the contract-view feature
 > (`docs/superpowers/plans/2026-06-10-contract-view.md`, Phases A–E shipped).

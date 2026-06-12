@@ -117,7 +117,7 @@ describe("RequestTabs hints toggle", () => {
   it("toggles the bodyHints pref via the hints button", async () => {
     const user = userEvent.setup();
     renderTabs(<RequestTabs {...setup()} />);
-    const btn = screen.getByRole("button", { name: /inline type hints/i });
+    const btn = screen.getByRole("button", { name: /field hints/i });
     const initial = btn.getAttribute("aria-pressed");
     await user.click(btn);
     expect(btn).toHaveAttribute("aria-pressed", initial === "true" ? "false" : "true");
@@ -129,6 +129,6 @@ describe("RequestTabs hints toggle", () => {
     const user = userEvent.setup();
     renderTabs(<RequestTabs {...setup()} />);
     await user.click(screen.getByRole("tab", { name: /metadata/i }));
-    expect(screen.queryByRole("button", { name: /inline type hints/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /field hints/i })).toBeNull();
   });
 });

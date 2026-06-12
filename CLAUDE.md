@@ -21,8 +21,8 @@ rpc-строка `rpc M(In) returns (Out);` с кликабельными кор
 дефолт всегда Body, автодефолта на Contract нет, Send безусловно → Body);
 response-side inlay-тип-хинты удалены целиком (`4465d1f`+`78ffaa6`+`ed22d9b`:
 hints.ts/провайдер/schema-проброс в response; `pathTo` → validate.ts;
-`bodyHints` теперь управляет только ghost'ом запроса — кнопка всё ещё подписана
-«Inline type hints», переименование отложено). Гейт: tsc clean · vitest 784 ·
+`bodyHints` теперь управляет только ghost'ом запроса; кнопка-тоггл
+переименована в «Field hints»). Гейт: tsc clean · vitest 784 ·
 cargo core+app · build. **Остаётся:** повторная live-проверка в WebView2
 (чеклист Task 8 Step 5 плана, включая `scroll-margin-top`) и финиш ветки
 (Step 6: ff-merge в `main` — после merge `a5849a6` main снова ancestor HEAD;
