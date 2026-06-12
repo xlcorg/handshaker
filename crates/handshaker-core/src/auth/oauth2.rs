@@ -73,6 +73,62 @@ fn parse_token_response(status: u16, body: &str) -> Result<TokenResponse, CoreEr
     })
 }
 
+/// Skew subtracted from expiry — a token within this window of expiring is refetched.
+const EXPIRY_SKEW: Duration = Duration::from_secs(30);
+
+/// Cache identity = the resolved credentials that determine which token you get.
+/// `header_name`/`prefix` are deliberately excluded (they shape the header, not the token).
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct CacheKey {
+    token_url: String,
+    client_id: String,
+    client_secret: String,
+    scopes: Vec<String>,
+}
+
+impl From<&OAuth2ClientCredentialsConfig> for CacheKey {
+    fn from(c: &OAuth2ClientCredentialsConfig) -> Self {
+        Self {
+            token_url: c.token_url.clone(),
+            client_id: c.client_id.clone(),
+            client_secret: c.client_secret.clone(),
+            scopes: c.scopes.clone(),
+        }
+    }
+}
+
+pub struct CachedToken {
+    pub access_token: String,
+    pub expires_at: Instant,
+}
+
+/// In-memory token store. Pure: callers inject `now`; no wall clock here.
+#[derive(Default)]
+pub struct TokenCache {
+    entries: HashMap<CacheKey, CachedToken>,
+}
+
+impl TokenCache {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// The cached token for `key`, but only if it stays valid for more than the skew.
+    pub fn get_fresh(&self, key: &CacheKey, now: Instant) -> Option<&CachedToken> {
+        self.entries
+            .get(key)
+            .filter(|t| t.expires_at.saturating_duration_since(now) > EXPIRY_SKEW)
+    }
+
+    pub fn put(&mut self, key: CacheKey, token: CachedToken) {
+        self.entries.insert(key, token);
+    }
+
+    pub fn invalidate(&mut self, key: &CacheKey) {
+        self.entries.remove(key);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -153,5 +209,51 @@ mod tests {
             }
             other => panic!("expected Auth, got {other:?}"),
         }
+    }
+
+    fn key(secret: &str) -> CacheKey {
+        let mut c = cfg();
+        c.client_secret = secret.into();
+        CacheKey::from(&c)
+    }
+
+    #[test]
+    fn fresh_token_is_returned_when_far_from_expiry() {
+        let mut cache = TokenCache::new();
+        let base = Instant::now();
+        cache.put(key("s"), CachedToken { access_token: "tok".into(), expires_at: base + Duration::from_secs(100) });
+        // 100s out, well beyond the 30s skew.
+        assert_eq!(cache.get_fresh(&key("s"), base).map(|t| t.access_token.as_str()), Some("tok"));
+    }
+
+    #[test]
+    fn token_within_skew_is_treated_as_stale() {
+        let mut cache = TokenCache::new();
+        let base = Instant::now();
+        cache.put(key("s"), CachedToken { access_token: "tok".into(), expires_at: base + Duration::from_secs(100) });
+        // now = base + 80s ⇒ 20s remaining ⇒ < 30s skew ⇒ stale.
+        assert!(cache.get_fresh(&key("s"), base + Duration::from_secs(80)).is_none());
+    }
+
+    #[test]
+    fn cache_key_ignores_header_and_prefix() {
+        let mut a = cfg();
+        a.header_name = "x-auth".into();
+        a.prefix = "".into();
+        let b = cfg(); // default header/prefix, same url/id/secret/scopes
+        assert_eq!(CacheKey::from(&a), CacheKey::from(&b));
+        // ...but secret DOES change the key:
+        let mut c = cfg();
+        c.client_secret = "other".into();
+        assert_ne!(CacheKey::from(&a), CacheKey::from(&c));
+    }
+
+    #[test]
+    fn invalidate_removes_entry() {
+        let mut cache = TokenCache::new();
+        let base = Instant::now();
+        cache.put(key("s"), CachedToken { access_token: "tok".into(), expires_at: base + Duration::from_secs(100) });
+        cache.invalidate(&key("s"));
+        assert!(cache.get_fresh(&key("s"), base).is_none());
     }
 }
