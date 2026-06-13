@@ -6,6 +6,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { DropLine } from "@/features/catalog/DropLine";
@@ -63,18 +64,13 @@ export const EnvSwitcherMenu = forwardRef<HTMLButtonElement, EnvSwitcherMenuProp
             <DropdownMenuLabel className="text-[10px] uppercase tracking-wide text-muted-foreground">
               Environments
             </DropdownMenuLabel>
-            <div className="flex items-center gap-1.5">
-              <span aria-hidden className="text-[10px] text-muted-foreground/70">
-                {isMacOS ? "⌘E" : "Ctrl+E"}
-              </span>
-              <DropdownMenuItem
-                aria-label="New environment"
-                onSelect={onNewEnv}
-                className="mr-1 h-6 w-6 justify-center p-0"
-              >
-                <Plus />
-              </DropdownMenuItem>
-            </div>
+            <DropdownMenuItem
+              aria-label="New environment"
+              onSelect={onNewEnv}
+              className="mr-1 h-6 w-6 justify-center p-0"
+            >
+              <Plus />
+            </DropdownMenuItem>
           </div>
           {/* font-extralight = Inter 200, loaded in main.tsx. The weight's .css
               must be imported or the face falls back (300→400); 200 reads as
@@ -138,6 +134,14 @@ export const EnvSwitcherMenu = forwardRef<HTMLButtonElement, EnvSwitcherMenuProp
               </DropdownMenuItem>
             </div>
           ))}
+          <DropdownMenuSeparator />
+          {/* Non-interactive footer hint for the global Ctrl+E / ⌘E env-cycle
+              hotkey (wired in WorkflowEnvControl). The keycap glyph is aria-hidden;
+              the label carries the meaning for screen readers. */}
+          <div className="flex items-center justify-between px-2 py-1 text-[10px] text-muted-foreground/70">
+            <span>Cycle environment</span>
+            <span aria-hidden>{isMacOS ? "⌘E" : "Ctrl+E"}</span>
+          </div>
         </DropdownMenuContent>
       </DropdownMenu>
     );
