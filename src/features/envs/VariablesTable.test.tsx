@@ -41,4 +41,27 @@ describe("VariablesTable", () => {
     await user.type(screen.getByPlaceholderText("value"), "secret");
     expect(onChange).toHaveBeenLastCalledWith({ token: "secret" });
   });
+
+  it("shows a resolve preview row under a value with {{vars}}", async () => {
+    const resolveRow = vi.fn(async () => ({
+      resolved: "https://api.example.com",
+      unresolved_vars: [],
+      cycle_chain: null,
+    }));
+    render(
+      <VariablesTable
+        value={{ "uri-root": "{{notes-api-root}}" }}
+        onChange={() => {}}
+        resolveRow={resolveRow}
+        resolveKey="k"
+      />,
+    );
+    expect(await screen.findByText(/→ resolves: https:\/\/api\.example\.com/)).toBeInTheDocument();
+    expect(resolveRow).toHaveBeenCalledWith("{{notes-api-root}}");
+  });
+
+  it("renders no preview row without a resolveRow prop", () => {
+    render(<VariablesTable value={{ k: "{{x}}" }} onChange={() => {}} />);
+    expect(screen.queryByText(/resolves|Unresolved/)).toBeNull();
+  });
 });

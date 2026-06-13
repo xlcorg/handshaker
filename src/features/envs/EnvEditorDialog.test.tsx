@@ -3,7 +3,13 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 vi.mock("@/ipc/client", () => ({
-  ipc: { envUpsert: vi.fn(), envActiveSet: vi.fn(), envDelete: vi.fn(), envReorder: vi.fn() },
+  ipc: {
+    envUpsert: vi.fn(),
+    envActiveSet: vi.fn(),
+    envDelete: vi.fn(),
+    envReorder: vi.fn(),
+    varsResolve: vi.fn(async (t: string) => ({ resolved: t, unresolved_vars: [], cycle_chain: null })),
+  },
 }));
 
 import { EnvEditorDialog } from "./EnvEditorDialog";
@@ -49,6 +55,24 @@ describe("EnvEditorDialog name validation", () => {
     );
     expect(screen.getByDisplayValue("host")).toBeInTheDocument();
     expect(screen.getByDisplayValue("api:443")).toBeInTheDocument();
+  });
+
+  it("resolves a row preview against the edited (unsaved) rows", async () => {
+    render(
+      <EnvEditorDialog
+        open
+        originalName="prod"
+        activeEnv="prod"
+        envs={[{ name: "prod", variables: { url: "{{stage}}.example.com" }, color: null }]}
+        onOpenChange={() => {}}
+        onSaved={() => {}}
+      />,
+    );
+    expect(await screen.findByText(/→ resolves:|⚠ Unresolved/)).toBeInTheDocument();
+    expect(ipc.varsResolve).toHaveBeenCalledWith(
+      expect.stringContaining("{{"),
+      expect.objectContaining({ env_vars: expect.any(Object) }),
+    );
   });
 
   it("still blocks duplicate names", async () => {

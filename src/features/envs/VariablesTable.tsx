@@ -1,6 +1,8 @@
 import { Fragment, useLayoutEffect, useRef, useState } from "react";
 
 import { cn } from "@/lib/cn";
+import { VarResolveLine, hasVars } from "@/features/vars/VarResolveLine";
+import type { ResolutionReportIpc } from "@/ipc/bindings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -16,6 +18,9 @@ export interface VariablesTableProps {
   value: Record<string, string>;
   /** Called on every change with the next variables map. */
   onChange: (next: Record<string, string>) => void;
+  /** Optional per-row resolve preview (env editor passes an env_vars-overlay resolver). */
+  resolveRow?: (value: string) => Promise<ResolutionReportIpc>;
+  resolveKey?: string;
 }
 
 interface Row {
@@ -112,7 +117,7 @@ function ValueCell({
   );
 }
 
-export function VariablesTable({ value, onChange }: VariablesTableProps) {
+export function VariablesTable({ value, onChange, resolveRow, resolveKey }: VariablesTableProps) {
   const [rows, setRows] = useState<Row[]>(() => initialRows(value));
 
   function updateRow(idx: number, patch: Partial<Row>) {
@@ -200,6 +205,13 @@ export function VariablesTable({ value, onChange }: VariablesTableProps) {
                   <TableRow className="hover:bg-transparent border-b-0">
                     <TableCell colSpan={3} className="py-1 px-2 text-xs text-amber-500">
                       duplicate key — last value wins
+                    </TableCell>
+                  </TableRow>
+                )}
+                {!isTrailingEmpty && resolveRow && hasVars(r.value) && (
+                  <TableRow className="hover:bg-transparent border-b-0">
+                    <TableCell colSpan={3} className="px-2 py-1">
+                      <VarResolveLine value={r.value} resolver={resolveRow} resolveKey={resolveKey} />
                     </TableCell>
                   </TableRow>
                 )}

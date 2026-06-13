@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
 import {
   Dialog,
@@ -79,6 +79,13 @@ export function EnvEditorDialog({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [colorOpen, setColorOpen] = useState(false);
+
+  // Preview resolves against the EDITED rows (not the persisted env) — honest for
+  // unsaved changes and for a non-active environment. No collection ctx here.
+  const resolveRow = useCallback(
+    (t: string) => ipc.varsResolve(t, { collection_id: null, collection_vars: null, env_vars: vars }),
+    [vars],
+  );
 
   const trimmedName = name.trim();
   const nameEmpty = trimmedName.length === 0;
@@ -209,7 +216,12 @@ export function EnvEditorDialog({
         {/* Variables (scrolls internally) */}
         <div className="min-h-0 flex-1 space-y-1.5 overflow-auto">
           <Label>Variables</Label>
-          <VariablesTable value={vars} onChange={setVars} />
+          <VariablesTable
+            value={vars}
+            onChange={setVars}
+            resolveRow={resolveRow}
+            resolveKey={JSON.stringify(vars)}
+          />
         </div>
 
         {error && (
