@@ -57,7 +57,7 @@ export function DraftAddressBar({
   const resolved = report ? resolveDisplay(report) : null;
   return (
     <div className="flex h-14 items-center gap-2 border-b border-border px-4">
-      <div className="flex h-8 flex-none items-center gap-1.5 rounded-md border border-input bg-background pl-2 pr-2 focus-within:ring-1 focus-within:ring-ring">
+      <div className="flex h-8 w-[24rem] flex-none items-center gap-1.5 rounded-md border border-input bg-background pl-2 pr-2 focus-within:ring-1 focus-within:ring-ring">
         <Tooltip
           content={step.tls ? "TLS enabled — click to switch to plaintext" : "Plaintext — click to enable TLS"}
         >
@@ -75,14 +75,14 @@ export function DraftAddressBar({
           value={step.address}
           onChange={(e) => onAddress(e.target.value)}
           placeholder="host:port"
-          className="h-7 w-[22rem] border-0 bg-transparent px-1 font-mono text-xs focus-visible:ring-0"
+          className="h-7 min-w-0 flex-1 border-0 bg-transparent px-1 font-mono text-xs focus-visible:ring-0"
         />
         {resolved && (
           <>
             <span aria-hidden className="h-4 w-px flex-none bg-border" />
             <span
               className={cn(
-                "max-w-[13rem] shrink truncate font-mono text-xs",
+                "max-w-[11rem] flex-none truncate font-mono text-xs",
                 resolved.error ? "text-destructive" : "text-muted-foreground/80",
               )}
               title={resolved.title}
