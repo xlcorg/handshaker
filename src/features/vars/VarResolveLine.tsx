@@ -1,15 +1,9 @@
-import { useEffect, useRef, useState } from "react";
-
 import { cn } from "@/lib/cn";
 import type { ResolutionReportIpc } from "@/ipc/bindings";
 
-const DEBOUNCE_MS = 300;
+import { hasVars, useVarResolve } from "./useVarResolve";
 
-/** Detects a `{{name}}` placeholder. Same grammar the body preview used; names with
- *  spaces resolve in the core but are not detected here (pre-existing limitation). */
-export function hasVars(s: string): boolean {
-  return /\{\{[a-zA-Z_][a-zA-Z0-9_-]*\}\}/.test(s);
-}
+export { hasVars } from "./useVarResolve";
 
 export interface VarResolveLineProps {
   /** The template string being edited (one variable row's value). */
@@ -25,23 +19,7 @@ export interface VarResolveLineProps {
  *  `→ resolves: …` / `⚠ Unresolved: …` / `⚠ Cycle: …`.
  *  Renders nothing while the value has no `{{…}}` or before the first resolve. */
 export function VarResolveLine({ value, resolver, resolveKey, className }: VarResolveLineProps) {
-  const [report, setReport] = useState<ResolutionReportIpc | null>(null);
-  // Latest resolver in a ref so an inline-lambda prop doesn't refire the effect
-  // every render — re-resolution is driven by `value`/`resolveKey` only.
-  const resolverRef = useRef(resolver);
-  resolverRef.current = resolver;
-
-  useEffect(() => {
-    if (!hasVars(value)) {
-      setReport(null);
-      return;
-    }
-    const t = setTimeout(() => {
-      resolverRef.current(value).then(setReport).catch(() => setReport(null));
-    }, DEBOUNCE_MS);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, resolveKey]);
+  const report = useVarResolve(value, resolver, resolveKey);
 
   if (!hasVars(value) || report === null) return null;
 

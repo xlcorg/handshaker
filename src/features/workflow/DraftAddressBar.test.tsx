@@ -82,7 +82,7 @@ describe("DraftAddressBar", () => {
     expect(screen.queryByLabelText("refresh-reflection")).toBeNull();
   });
 
-  it("shows a resolve preview under the bar when the address has {{vars}}", async () => {
+  it("shows the resolved address inline in the field, truncated with a full-value title", async () => {
     const resolveAddress = vi.fn(async () => ({
       resolved: "https://api.example.com/v1/notes",
       unresolved_vars: [],
@@ -90,23 +90,35 @@ describe("DraftAddressBar", () => {
     }));
     r(
       <DraftAddressBar
-        {...props({
-          step: { ...base, address: "{{uri-root}}/v1/notes" },
-          resolveAddress,
-          resolveKey: "k",
-        })}
+        {...props({ step: { ...base, address: "{{host}}" }, resolveAddress, resolveKey: "k" })}
       />,
     );
-    expect(
-      await screen.findByText(/→ resolves: https:\/\/api\.example\.com\/v1\/notes/),
-    ).toBeInTheDocument();
-    expect(resolveAddress).toHaveBeenCalledWith("{{uri-root}}/v1/notes");
+    const el = await screen.findByText("https://api.example.com/v1/notes");
+    expect(el.className).toContain("truncate"); // ellipsis when it doesn't fit
+    expect(el).toHaveAttribute("title", "https://api.example.com/v1/notes"); // full value on hover
+    expect(resolveAddress).toHaveBeenCalledWith("{{host}}");
   });
 
-  it("renders no preview when the address has no {{vars}}", () => {
+  it("shows a compact unresolved indicator with the detail in the title", async () => {
+    const resolveAddress = vi.fn(async () => ({
+      resolved: "{{host}}",
+      unresolved_vars: ["host"],
+      cycle_chain: null,
+    }));
+    r(
+      <DraftAddressBar
+        {...props({ step: { ...base, address: "{{host}}" }, resolveAddress, resolveKey: "k" })}
+      />,
+    );
+    const el = await screen.findByText(/⚠ host/);
+    expect(el).toHaveAttribute("title", "Unresolved: host");
+    expect(el.className).toContain("text-destructive");
+  });
+
+  it("renders no inline resolve when the address has no {{vars}}", () => {
     const resolveAddress = vi.fn();
     r(<DraftAddressBar {...props({ resolveAddress })} />); // base.address = "h:443"
-    expect(screen.queryByText(/resolves|Unresolved/)).toBeNull();
+    expect(screen.queryByText(/⚠|api\.example/)).toBeNull();
     expect(resolveAddress).not.toHaveBeenCalled();
   });
 });
