@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import type { ReactElement } from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { COTabs } from "./COTabs";
 import { TlsBlock } from "./TlsBlock";
@@ -42,6 +42,26 @@ describe("overview sub-components (ports)", () => {
     r(<VariablesBlock rows={[{ id: "v0", k: "base", v: "x" }]} onChange={onChange} />);
     fireEvent.change(screen.getByDisplayValue("x"), { target: { value: "y" } });
     expect(onChange).toHaveBeenCalledWith([{ id: "v0", k: "base", v: "y" }]);
+  });
+
+  it("VariablesBlock highlights a resolved {{var}} inline in the value field", async () => {
+    const resolver = vi.fn(async () => ({
+      resolved: "https://api.example.com",
+      unresolved_vars: [],
+      cycle_chain: null,
+    }));
+    r(
+      <VariablesBlock
+        rows={[{ id: "v0", k: "uri", v: "{{root}}" }]}
+        onChange={vi.fn()}
+        resolveRow={resolver}
+        resolveKey="k"
+      />,
+    );
+    // The token is highlighted in place (no separate resolve line) and the resolved
+    // value rides inline — same affordance as the address bar.
+    await waitFor(() => expect(screen.getByText("{{root}}").className).toContain("vh-resolved"));
+    expect(screen.getByText("https://api.example.com")).toBeInTheDocument();
   });
 
   it("EnvVarField reports edits", () => {

@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tooltip } from "@/components/ui/tooltip";
 import { newId } from "@/lib/ids";
-import { VarResolveLine, hasVars } from "@/features/vars/VarResolveLine";
+import { VarHighlightInput } from "@/features/vars/VarHighlightInput";
 import type { ResolutionReportIpc } from "@/ipc/bindings";
 
 export interface VarRow {
@@ -64,11 +64,15 @@ export function VariablesBlock({ rows, onChange, resolveRow, resolveKey }: Varia
             placeholder="name"
             className="h-8 font-mono text-[12px]"
           />
-          <Input
+          <VarHighlightInput
             value={row.v}
-            onChange={(e) => upd(row.id, "v", e.target.value)}
+            onChange={(v) => upd(row.id, "v", v)}
+            resolver={resolveRow}
+            resolveKey={resolveKey}
             placeholder="value"
-            className="h-8 font-mono text-[12px]"
+            ariaLabel="variable value"
+            metrics="h-8 px-3 font-mono text-[12px] leading-8"
+            className="w-full rounded-md border border-input bg-transparent shadow-xs transition-[color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30"
           />
           <Tooltip content="Remove">
             <button
@@ -79,11 +83,6 @@ export function VariablesBlock({ rows, onChange, resolveRow, resolveKey }: Varia
               <Trash2 size={13} />
             </button>
           </Tooltip>
-          {resolveRow && hasVars(row.v) && (
-            <div className="col-start-2">
-              <VarResolveLine value={row.v} resolver={resolveRow} resolveKey={resolveKey} className="px-1 pb-0.5" />
-            </div>
-          )}
         </div>
       ))}
       <div className="pt-1">

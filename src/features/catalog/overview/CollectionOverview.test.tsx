@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { ReactElement } from "react";
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 import { bumpEnvRevision } from "@/features/envs/envRevision";
@@ -104,7 +104,7 @@ describe("CollectionOverview", () => {
     expect(ipc.collectionSetVariables).toHaveBeenCalledWith("c1", { base: "y" });
   });
 
-  it("shows a resolve preview under a variable row whose value has {{vars}}", async () => {
+  it("highlights a {{var}} value inline and shows its resolved value", async () => {
     vi.mocked(ipc.varsResolve).mockResolvedValue({
       resolved: "https://api.example.com",
       unresolved_vars: [],
@@ -113,9 +113,10 @@ describe("CollectionOverview", () => {
     const p = props({ collection: collection({ variables: { "uri-root": "{{notes-api-root}}" } }) });
     r(<CollectionOverview {...p} />);
     fireEvent.click(screen.getByText("Variables"));
-    expect(
-      await screen.findByText(/→ resolves: https:\/\/api\.example\.com/),
-    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByText("{{notes-api-root}}").className).toContain("vh-resolved"),
+    );
+    expect(screen.getByText("https://api.example.com")).toBeInTheDocument(); // inline resolved value
     expect(ipc.varsResolve).toHaveBeenCalledWith("{{notes-api-root}}", {
       collection_id: null,
       collection_vars: { "uri-root": "{{notes-api-root}}" },
@@ -123,8 +124,8 @@ describe("CollectionOverview", () => {
     });
   });
 
-  it("re-resolves the preview when the environment is edited (envRevision bump)", async () => {
-    // Active env initially lacks the referenced var → preview shows unresolved.
+  it("re-resolves the inline highlight when the environment is edited (envRevision bump)", async () => {
+    // Active env initially lacks the referenced var → token highlights as an error.
     vi.mocked(ipc.varsResolve).mockResolvedValue({
       resolved: "{{notes-api-root}}",
       unresolved_vars: ["notes-api-root"],
@@ -133,20 +134,22 @@ describe("CollectionOverview", () => {
     const p = props({ collection: collection({ variables: { "uri-root": "{{notes-api-root}}" } }) });
     r(<CollectionOverview {...p} />);
     fireEvent.click(screen.getByText("Variables"));
-    expect(await screen.findByText(/⚠ Unresolved: notes-api-root/)).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByText("{{notes-api-root}}").className).toContain("vh-error"),
+    );
 
     // User adds the missing variable in the env editor and saves. Neither the
     // collection rows nor the active env NAME changed, so without the envRevision
-    // signal the preview would stay stale. The backend now resolves it.
+    // signal the highlight would stay stale. The backend now resolves it.
     vi.mocked(ipc.varsResolve).mockResolvedValue({
       resolved: "https://api.example.com",
       unresolved_vars: [],
       cycle_chain: null,
     });
     act(() => bumpEnvRevision());
-    expect(
-      await screen.findByText(/→ resolves: https:\/\/api\.example\.com/),
-    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByText("{{notes-api-root}}").className).toContain("vh-resolved"),
+    );
   });
 
   it("the close button calls onClose", () => {

@@ -7,9 +7,11 @@ import type { ResolutionReportIpc } from "@/ipc/bindings";
 
 import { useVarResolve } from "./useVarResolve";
 
-// Shared font/box metrics so the (transparent-text) input and the highlight backdrop
-// lay out identically character-for-character. Any change here must apply to both.
-const METRICS = "h-7 px-1 font-mono text-xs leading-7";
+// Default font/box metrics so the (transparent-text) input and the highlight backdrop
+// lay out identically character-for-character. The address bar uses this; hosts with
+// taller rows (e.g. the collection variables editor) pass their own via `metrics`.
+// Whatever the value, it MUST apply identically to both the input and the backdrop.
+const DEFAULT_METRICS = "h-7 px-1 font-mono text-xs leading-7";
 // Breathing room kept between the typed address and the inline resolved chip before we
 // decide the chip "fits" (gap + the field's right inset). Px, matches the heuristic only.
 const FIT_SLACK = 16;
@@ -43,7 +45,12 @@ export interface VarHighlightInputProps {
   resolveKey?: string;
   placeholder?: string;
   ariaLabel?: string;
-  /** Sizing for the wrapper (e.g. "w-[22rem]"); the input/backdrop fill it. */
+  /** Font/box metrics applied identically to the transparent input and the backdrop so
+   *  they align char-for-char. Defaults to the address-bar sizing (h-7). Override to
+   *  match a host field (e.g. the collection variables editor's taller h-8 rows). */
+  metrics?: string;
+  /** Sizing/chrome for the wrapper (e.g. "w-[22rem]", or a border+focus-within ring to
+   *  frame it like an Input); the input/backdrop fill it. */
   className?: string;
 }
 
@@ -53,7 +60,8 @@ export interface VarHighlightInputProps {
  *  resolved value shows muted at the field's right edge when it fits, and is always
  *  available via a hover tooltip on the field (so long addresses still expose it). */
 export function VarHighlightInput({
-  value, onChange, resolver, resolveKey, placeholder, ariaLabel, className,
+  value, onChange, resolver, resolveKey, placeholder, ariaLabel,
+  metrics = DEFAULT_METRICS, className,
 }: VarHighlightInputProps) {
   const [prefs] = usePrefs();
   const report = useVarResolve(value, resolver, resolveKey);
@@ -111,7 +119,7 @@ export function VarHighlightInput({
       <div
         ref={backdropRef}
         aria-hidden
-        className={cn("pointer-events-none absolute inset-0 overflow-hidden whitespace-pre text-foreground", METRICS)}
+        className={cn("pointer-events-none absolute inset-0 overflow-hidden whitespace-pre text-foreground", metrics)}
       >
         <span ref={contentRef} className="inline-block">
         {segments.map((seg, i) =>
@@ -141,7 +149,7 @@ export function VarHighlightInput({
         spellCheck={false}
         className={cn(
           "relative w-full border-0 bg-transparent text-transparent caret-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-0",
-          METRICS,
+          metrics,
         )}
       />
       {/* Always mounted so its width can be measured; hidden until it actually fits. */}
@@ -150,7 +158,7 @@ export function VarHighlightInput({
           ref={chipRef}
           aria-hidden
           className={cn(
-            "pointer-events-none absolute right-1 top-0 whitespace-nowrap font-mono text-xs leading-7 text-muted-foreground",
+            "pointer-events-none absolute inset-y-0 right-1 flex items-center whitespace-nowrap font-mono text-xs text-muted-foreground",
             chipFits ? undefined : "invisible",
           )}
         >
