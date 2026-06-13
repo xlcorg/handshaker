@@ -4,7 +4,16 @@
 > (recommended) or superpowers:executing-plans to implement this plan task-by-task.
 > Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Status: 📋 READY — не запускать без команды пользователя.**
+**Status: 🎉 feature-complete (код) — 2026-06-13, ветка `claude/happy-solomon-58cc5c`,
+коммиты `63e9ee6`…`d3283cd`.** Все 7 задач выполнены subagent-driven (spec+quality
+ревью на каждой + финальное ревью ветки: READY TO MERGE). Гейт зелёный: tsc clean ·
+vitest 838 · `cargo test --workspace` (incl. 4 новых ctx-теста + core cross-layer) ·
+bindings no-drift · `pnpm build`. **Остаток вне гейта:** живая проверка в WebView2
+(репро баг-репорта + превью в обоих редакторах) и ff-merge в `main` — за пользователем.
+
+**Поправка при исполнении (2026-06-13):** `src/ipc/bindings.ts` в этом репозитории
+**трекается**, а не gitignored (как ошибочно сказано ниже в File map / Task 2/8). Реген
+коммитится вместе с IPC-изменением — так и сделано (bindings вошли в `13142a5`).
 
 **Goal:** Переменные коллекции участвуют в `{{var}}`-резолве на всех живых путях
 (Send, адрес/reflection, OAuth2), а редакторы переменных (коллекции и окружения)

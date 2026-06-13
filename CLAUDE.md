@@ -6,9 +6,25 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 
 ## Active work
 
-Сейчас активной фичи нет — предыдущая (OAuth2 client-credentials auth) влита
-в `main` 2026-06-12. Следующая фича начинается с брейншторма → спека → плана
-(см. процесс ниже).
+**Collection vars resolve + индикация резолва** — 🎉 feature-complete (код)
+2026-06-13, ветка `claude/happy-solomon-58cc5c` (коммиты `63e9ee6`…`d3283cd`),
+**ещё не влита в `main`**. Баг: переменные коллекции не участвовали в `{{var}}`-
+резолве (бэкенд клал пустую collection-мапу — TODO «Plan #6»), и не было индикации
+резолва в редакторах. Решение: IPC `vars_resolve(template, ctx?)` получил опциональный
+`VarsResolveCtxIpc` (`collection_id` — бэкенд читает vars из `collection_store`; оверлеи
+`collection_vars`/`env_vars` для несохранённых рядов редакторов; `ctx=None` ⇒ прежнее
+поведение); ядро (`resolve_template_with_diagnostics`, env > collection) не тронуто.
+`Step.collectionId` штампуется из `DraftOrigin` инвариантом в workflow store
+(`setDraft`/`setDraftOrigin`), хелперы `varsCtxFor`/`varsResolverFor` прокидывают
+контекст во все живые пути (Send, адрес/reflection, message-schema, OAuth2). Новый
+`src/features/vars/VarResolveLine.tsx` — однострочное превью под рядом переменной
+(дебаунс 300мс, три состояния `→ resolves` / `⚠ Unresolved` / `⚠ Cycle`), смонтировано
+в редакторе переменных коллекции (`VariablesBlock`, оверлей текущих рядов) и в
+Edit Environment (`VariablesTable`, оверлей редактируемых рядов). Мёртвый
+`ResolvesPreview` удалён. Subagent-driven, spec+quality ревью на каждой задаче +
+финальное ревью ветки (READY TO MERGE); гейт: tsc clean · vitest 838 ·
+`cargo test --workspace` · bindings no-drift · build. Остаток: живой WebView2-проход
+репро + ff-merge в `main`. План+спека: `2026-06-13-collection-vars-resolve*`.
 
 Интеграционная ветка — `main`; фичи ведутся в отдельных worktree-ветках
 (`claude/*`) и вливаются в `main` fast-forward.
