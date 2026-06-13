@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Layers, X, AlignLeft, Lock, KeyRound, Braces, Bookmark, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
+import { cn } from "@/lib/cn";
 import { newId } from "@/lib/ids";
 import { ipc } from "@/ipc/client";
 import type { CollectionIpc, ItemIpc, SavedAuthConfigIpc, SavedRequestIpc } from "@/ipc/bindings";
@@ -124,7 +125,15 @@ export function CollectionOverview({ collection, onChanged, onSelectRequest, onC
 
       {/* body */}
       <div className="scroll-thin min-h-0 flex-1 overflow-auto">
-        <div className="mx-auto max-w-[680px] px-5 py-6">
+        {/* Variables is a key/value table that benefits from width (long values, JWTs) —
+            same reasoning as the Edit Environment dialog (max-w 960px); Overview/Auth stay
+            a comfortable reading column at 680px. */}
+        <div
+          className={cn(
+            "mx-auto px-5 py-6",
+            tab === "variables" ? "max-w-[min(90vw,960px)]" : "max-w-[680px]",
+          )}
+        >
           {tab === "overview" && (
             <div className="flex flex-col gap-7">
               <COBlock
