@@ -3,7 +3,6 @@ import { SettingsGroup, SettingsRow } from "./SettingsDialog";
 
 const ROWS: Array<[string, string[]]> = [
   ["Send request", ["Ctrl", "Enter"]],
-  ["Switch environment", ["Ctrl", "E"]],
   ["Toggle sidebar", ["Ctrl", "B"]],
 ];
 

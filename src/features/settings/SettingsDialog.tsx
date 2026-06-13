@@ -1,21 +1,17 @@
 import { useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { AppearancePane } from "./AppearancePane";
-import { EditorPane } from "./EditorPane";
 import { NetworkPane } from "./NetworkPane";
 import { KeyboardPane } from "./KeyboardPane";
-import { DataPane } from "./DataPane";
 import { AboutPane } from "./AboutPane";
 import { cn } from "@/lib/cn";
 
-type Section = "appearance" | "editor" | "network" | "keyboard" | "data" | "about";
+type Section = "appearance" | "network" | "keyboard" | "about";
 
 const SECTIONS: Array<[Section, string]> = [
   ["appearance", "Appearance"],
-  ["editor", "Editor"],
   ["network", "Network"],
   ["keyboard", "Keyboard"],
-  ["data", "Data & sync"],
   ["about", "About"],
 ];
 
@@ -55,10 +51,8 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
           </div>
           <div className="p-5 overflow-auto scroll-thin flex flex-col gap-5">
             {section === "appearance" && <AppearancePane />}
-            {section === "editor" && <EditorPane />}
             {section === "network" && <NetworkPane />}
             {section === "keyboard" && <KeyboardPane />}
-            {section === "data" && <DataPane />}
             {section === "about" && <AboutPane />}
           </div>
         </div>

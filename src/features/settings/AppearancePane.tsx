@@ -45,17 +45,6 @@ export function AppearancePane() {
     <>
       <SettingsGroup title="Display">
         <SettingsRow
-          title="Density"
-          hint="Row height and padding across the app."
-          control={
-            <ToggleGroup
-              value={prefs.density}
-              onValueChange={(v) => setPref("density", v as "compact" | "regular" | "cozy")}
-              options={["compact", "regular", "cozy"]}
-            />
-          }
-        />
-        <SettingsRow
           title="gRPC icon"
           hint="Style of the gRPC method icon in the request list."
           control={
@@ -120,40 +109,6 @@ export function AppearancePane() {
               options={[
                 { value: "horizontal", label: "Top / Bottom" },
                 { value: "vertical", label: "Left / Right" },
-              ]}
-            />
-          }
-        />
-        <SettingsRow
-          title="Dotted background"
-          hint="Subtle grid that reacts to cursor."
-          control={<Switch checked={prefs.dots} onCheckedChange={(v) => setPref("dots", v)} />}
-        />
-      </SettingsGroup>
-
-      <SettingsGroup title="Typography">
-        <SettingsRow
-          title="Interface font"
-          hint="Used everywhere except code editors."
-          control={
-            <ToggleGroup
-              value={prefs.fontUi}
-              onValueChange={(v) => setPref("fontUi", v as "inter" | "geist" | "system")}
-              options={["inter", "geist", "system"]}
-            />
-          }
-        />
-        <SettingsRow
-          title="Mono font"
-          hint="Used in editors, code and metadata."
-          control={
-            <ToggleGroup
-              value={prefs.fontMono}
-              onValueChange={(v) => setPref("fontMono", v as "jetbrains" | "geist-mono" | "ibm")}
-              options={[
-                { value: "jetbrains", label: "JetBrains" },
-                { value: "geist-mono", label: "Geist" },
-                { value: "ibm", label: "IBM Plex" },
               ]}
             />
           }

@@ -1,9 +1,6 @@
 import { useEffect, useState } from "react";
 
-export type Density = "compact" | "regular" | "cozy";
 export type SplitDir = "horizontal" | "vertical";
-export type FontUi = "inter" | "geist" | "system";
-export type FontMono = "jetbrains" | "geist-mono" | "ibm";
 export type GrpcIconStyle = "solid" | "letter" | "outline" | "circle";
 /** How a service group header is visually separated from its methods in the MethodPicker dropdown. */
 export type MethodGroupStyle = "band" | "tree" | "weight" | "card" | "bar" | "chip" | "zebra";
@@ -12,7 +9,6 @@ export type MethodGroupStyle = "band" | "tree" | "weight" | "card" | "bar" | "ch
 export type VarHighlightScheme = "indigo" | "amber" | "mono" | "teal" | "slate" | "text";
 
 export interface Prefs {
-  density: Density;
   sidebar: boolean;
   /** Sidebar panel size as a percent of the window (resizable, persisted). Clamped to [12, 40]
    *  by the ResizablePanel. */
@@ -21,9 +17,6 @@ export interface Prefs {
    *  Clamped to [20, 80] by the ResizablePanel. Shared across split orientations. */
   bodyPanel: number;
   split: SplitDir;
-  fontUi: FontUi;
-  fontMono: FontMono;
-  dots: boolean;
   /** Webview zoom factor (1 = 100%). Persisted; applied via webview.setZoom. */
   zoom: number;
   /** Per-request deadline in ms, applied backend-side via tokio timeout. */
@@ -38,14 +31,10 @@ export interface Prefs {
 }
 
 export const PREFS_DEFAULTS: Prefs = {
-  density: "regular",
   sidebar: true,
   sidebarPanel: 18,
   bodyPanel: 50,
   split: "vertical",
-  fontUi: "inter",
-  fontMono: "jetbrains",
-  dots: true,
   zoom: 1,
   requestTimeoutMs: 30000,
   grpcIcon: "solid",
