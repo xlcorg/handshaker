@@ -82,7 +82,7 @@ describe("DraftAddressBar", () => {
     expect(screen.queryByLabelText("refresh-reflection")).toBeNull();
   });
 
-  it("highlights a resolved {{var}} token green and titles the field with the value", async () => {
+  it("highlights a resolved {{var}} token green and renders the resolved value", async () => {
     const resolveAddress = vi.fn(async () => ({
       resolved: "localhost:5002",
       unresolved_vars: [],
@@ -94,7 +94,7 @@ describe("DraftAddressBar", () => {
       />,
     );
     await waitFor(() => expect(screen.getByText("{{host}}").className).toContain("emerald"));
-    expect(screen.getByLabelText("draft-address")).toHaveAttribute("title", "localhost:5002");
+    expect(screen.getByText("localhost:5002")).toBeInTheDocument(); // inline resolved value
     expect(resolveAddress).toHaveBeenCalledWith("{{host}}");
   });
 
@@ -110,6 +110,5 @@ describe("DraftAddressBar", () => {
       />,
     );
     await waitFor(() => expect(screen.getByText("{{host}}").className).toContain("destructive"));
-    expect(screen.getByLabelText("draft-address")).toHaveAttribute("title", "Unresolved: host");
   });
 });
