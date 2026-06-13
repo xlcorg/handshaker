@@ -5,7 +5,7 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { usePrefs } from "@/lib/use-prefs";
 import type { ResolutionReportIpc } from "@/ipc/bindings";
 
-import { useVarResolve } from "./useVarResolve";
+import { useTokenResolveStates, useVarResolve } from "./useVarResolve";
 
 // Default font/box metrics so the (transparent-text) input and the highlight backdrop
 // lay out identically character-for-character. The address bar uses this; hosts with
@@ -64,16 +64,17 @@ export function VarHighlightInput({
   metrics = DEFAULT_METRICS, className,
 }: VarHighlightInputProps) {
   const [prefs] = usePrefs();
+  // Whole-template report drives the field-level resolved-value chip + tooltip + `ok`.
   const report = useVarResolve(value, resolver, resolveKey);
-  const errorNames = useMemo(() => {
-    const s = new Set<string>();
-    if (report) {
-      for (const v of report.unresolved_vars) s.add(v);
-      if (report.cycle_chain) for (const v of report.cycle_chain) s.add(v);
-    }
-    return s;
-  }, [report]);
   const segments = useMemo(() => parseSegments(value), [value]);
+  // Per-token coloring resolves each surface token on its own — the whole-template
+  // report's unresolved_vars are LEAF names, so a chained-but-defined token (uri-root →
+  // {{missing}}) would mis-color as resolved if keyed off them. See useTokenResolveStates.
+  const tokenNames = useMemo(
+    () => [...new Set(segments.flatMap((s) => (s.varName == null ? [] : [s.varName])))],
+    [segments],
+  );
+  const tokenStates = useTokenResolveStates(tokenNames, resolver, resolveKey);
 
   const ok = report != null && report.cycle_chain == null && report.unresolved_vars.length === 0;
   const resolvedValue = ok ? report.resolved : "";
@@ -130,7 +131,11 @@ export function VarHighlightInput({
               key={i}
               className={cn(
                 "rounded-[3px]",
-                report == null ? undefined : errorNames.has(seg.varName) ? "vh-error" : "vh-resolved",
+                tokenStates[seg.varName] == null
+                  ? undefined
+                  : tokenStates[seg.varName] === "error"
+                    ? "vh-error"
+                    : "vh-resolved",
               )}
             >
               {seg.text}

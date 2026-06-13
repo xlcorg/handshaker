@@ -44,6 +44,23 @@ describe("VarHighlightInput", () => {
     expect(screen.queryByText("localhost:5002")).toBeNull();
   });
 
+  it("marks a chained token whose value references a missing var as an error", async () => {
+    // {{uri-root}} is defined (in the collection) but its value is {{notes-api-root}},
+    // which the active env lacks. The whole-template report lists the LEAF name
+    // (notes-api-root) in unresolved_vars — not the surface token uri-root — so coloring
+    // by name-membership would wrongly mark {{uri-root}} resolved. Per-token resolve of
+    // {{uri-root}} alone reports the missing leaf, so the token must show as an error.
+    const resolver = vi.fn(async () => ({
+      resolved: "{{notes-api-root}}/v1",
+      unresolved_vars: ["notes-api-root"],
+      cycle_chain: null,
+    }));
+    r(<VarHighlightInput value="{{uri-root}}/v1" onChange={() => {}} resolver={resolver} ariaLabel="addr" />);
+    await waitFor(() => expect(screen.getByText("{{uri-root}}").className).toContain("vh-error"));
+    expect(screen.getByText("{{uri-root}}").className).not.toContain("vh-resolved");
+    expect(resolver).toHaveBeenCalledWith("{{uri-root}}");
+  });
+
   it("does not resolve when the value has no variables", () => {
     const resolver = vi.fn(ok("x"));
     r(<VarHighlightInput value="host:443" onChange={() => {}} resolver={resolver} ariaLabel="addr" />);
