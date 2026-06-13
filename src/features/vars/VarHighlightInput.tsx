@@ -77,6 +77,7 @@ export function VarHighlightInput({
 
   const wrapperRef = useRef<HTMLDivElement>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLSpanElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const chipRef = useRef<HTMLSpanElement>(null);
 
@@ -90,14 +91,16 @@ export function VarHighlightInput({
   const [chipFits, setChipFits] = useState(false);
   useLayoutEffect(() => {
     const wrap = wrapperRef.current;
-    const back = backdropRef.current;
+    const content = contentRef.current;
     const chip = chipRef.current;
-    if (!wrap || !back || !chip || !resolvedValue) {
+    if (!wrap || !content || !chip || !resolvedValue) {
       setChipFits(false);
       return;
     }
+    // `content` is an inline-block span hugging the typed text, so offsetWidth is the
+    // real text width (the backdrop box itself is stretched full-width and would not be).
     const avail = wrap.clientWidth;
-    setChipFits(avail > 0 && back.scrollWidth + chip.scrollWidth + FIT_SLACK <= avail);
+    setChipFits(avail > 0 && content.offsetWidth + chip.scrollWidth + FIT_SLACK <= avail);
   }, [value, resolvedValue, resolveKey]);
 
   const field = (
@@ -107,6 +110,7 @@ export function VarHighlightInput({
         aria-hidden
         className={cn("pointer-events-none absolute inset-0 overflow-hidden whitespace-pre text-foreground", METRICS)}
       >
+        <span ref={contentRef} className="inline-block">
         {segments.map((seg, i) =>
           seg.varName == null ? (
             <span key={i}>{seg.text}</span>
@@ -126,6 +130,7 @@ export function VarHighlightInput({
             </span>
           ),
         )}
+        </span>
       </div>
       <input
         ref={inputRef}
