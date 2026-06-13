@@ -22,7 +22,8 @@ interface Segment {
 function parseSegments(value: string): Segment[] {
   const out: Segment[] = [];
   let last = 0;
-  for (const m of value.matchAll(/\{\{([a-zA-Z_][a-zA-Z0-9_-]*)\}\}/g)) {
+  // Mirror the core VAR_RE (`\{\{([^{}]+)\}\}`): the name is any non-empty non-brace run.
+  for (const m of value.matchAll(/\{\{([^{}]+)\}\}/g)) {
     const start = m.index ?? 0;
     if (start > last) out.push({ text: value.slice(last, start), varName: null });
     out.push({ text: m[0], varName: m[1] });

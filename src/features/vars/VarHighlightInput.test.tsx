@@ -29,6 +29,15 @@ describe("VarHighlightInput", () => {
     expect(resolver).toHaveBeenCalledWith("{{host}}");
   });
 
+  it("recognizes names with non-word chars (dots, slashes, hyphens) like the core grammar", async () => {
+    const resolver = vi.fn(ok("https://api.example.com"));
+    r(<VarHighlightInput value="{{contracts-info/uri-root}}" onChange={() => {}} resolver={resolver} ariaLabel="addr" />);
+    await waitFor(() =>
+      expect(screen.getByText("{{contracts-info/uri-root}}").className).toContain("emerald"),
+    );
+    expect(resolver).toHaveBeenCalledWith("{{contracts-info/uri-root}}");
+  });
+
   it("marks an unresolved variable as an error and shows no resolved value", async () => {
     r(<VarHighlightInput value="{{host}}" onChange={() => {}} resolver={vi.fn(unresolved(["host"]))} ariaLabel="addr" />);
     await waitFor(() => expect(screen.getByText("{{host}}").className).toContain("destructive"));

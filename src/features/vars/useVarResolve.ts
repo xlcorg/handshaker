@@ -4,10 +4,10 @@ import type { ResolutionReportIpc } from "@/ipc/bindings";
 
 const DEBOUNCE_MS = 300;
 
-/** Detects a `{{name}}` placeholder. Same grammar the body preview used; names with
- *  spaces resolve in the core but are not detected here (pre-existing limitation). */
+/** Detects a `{{name}}` placeholder. Mirrors the core `VAR_RE` (`\{\{([^{}]+)\}\}`):
+ *  the name is any non-empty run of non-brace chars, so dots/slashes/hyphens count. */
 export function hasVars(s: string): boolean {
-  return /\{\{[a-zA-Z_][a-zA-Z0-9_-]*\}\}/.test(s);
+  return /\{\{[^{}]+\}\}/.test(s);
 }
 
 /** Debounced resolve of `value` via `resolver`. Returns the latest report, or null
