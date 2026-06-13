@@ -19,6 +19,7 @@ import {
   varsResolverFor,
 } from "./actions";
 import { workflowStore } from "./store";
+import { useEnvRevision } from "@/features/envs/envRevision";
 import { newId } from "@/lib/ids";
 import { useEffect, useRef } from "react";
 import type { SavedAuthConfigIpc } from "@/ipc/bindings";
@@ -45,6 +46,10 @@ interface CallPanelProps {
 export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMethod, originAuth }: CallPanelProps) {
   const [prefs, setPref] = usePrefs();
   const activeWf = useActiveWorkflow();
+  // Re-resolve the address preview when the active env's identity or contents change
+  // (the preview resolves against the active env via the backend — see envRevision).
+  const envRevision = useEnvRevision();
+  const addressResolveKey = `${step.collectionId ?? ""}|${activeWf.envName ?? ""}|${envRevision}`;
   // prefs.split is our own convention ("horizontal" = a horizontal divider = Top/Bottom);
   // react-resizable-panels uses the inverse ("horizontal" = side-by-side), so flip it.
   const orientation = prefs.split === "horizontal" ? "vertical" : "horizontal";
@@ -147,6 +152,8 @@ export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMetho
       onSend={onSend}
       onCancel={onCancel}
       onQuickAdd={onQuickAddMethod}
+      resolveAddress={varsResolverFor(step.collectionId)}
+      resolveKey={addressResolveKey}
     />
   ) : (
     <AddressBar step={step} onSend={onSend} onCancel={onCancel} />

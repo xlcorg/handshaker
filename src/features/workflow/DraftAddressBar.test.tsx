@@ -81,4 +81,32 @@ describe("DraftAddressBar", () => {
     r(<DraftAddressBar {...props({ catalog: cat })} />);
     expect(screen.queryByLabelText("refresh-reflection")).toBeNull();
   });
+
+  it("shows a resolve preview under the bar when the address has {{vars}}", async () => {
+    const resolveAddress = vi.fn(async () => ({
+      resolved: "https://api.example.com/v1/notes",
+      unresolved_vars: [],
+      cycle_chain: null,
+    }));
+    r(
+      <DraftAddressBar
+        {...props({
+          step: { ...base, address: "{{uri-root}}/v1/notes" },
+          resolveAddress,
+          resolveKey: "k",
+        })}
+      />,
+    );
+    expect(
+      await screen.findByText(/→ resolves: https:\/\/api\.example\.com\/v1\/notes/),
+    ).toBeInTheDocument();
+    expect(resolveAddress).toHaveBeenCalledWith("{{uri-root}}/v1/notes");
+  });
+
+  it("renders no preview when the address has no {{vars}}", () => {
+    const resolveAddress = vi.fn();
+    r(<DraftAddressBar {...props({ resolveAddress })} />); // base.address = "h:443"
+    expect(screen.queryByText(/resolves|Unresolved/)).toBeNull();
+    expect(resolveAddress).not.toHaveBeenCalled();
+  });
 });
