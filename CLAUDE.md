@@ -6,31 +6,36 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 
 ## Active work
 
-**Collection vars resolve + индикация резолва** — 🎉 feature-complete (код)
-2026-06-13, ветка `claude/happy-solomon-58cc5c` (коммиты `63e9ee6`…`d3283cd`),
-**ещё не влита в `main`**. Баг: переменные коллекции не участвовали в `{{var}}`-
-резолве (бэкенд клал пустую collection-мапу — TODO «Plan #6»), и не было индикации
-резолва в редакторах. Решение: IPC `vars_resolve(template, ctx?)` получил опциональный
-`VarsResolveCtxIpc` (`collection_id` — бэкенд читает vars из `collection_store`; оверлеи
-`collection_vars`/`env_vars` для несохранённых рядов редакторов; `ctx=None` ⇒ прежнее
-поведение); ядро (`resolve_template_with_diagnostics`, env > collection) не тронуто.
-`Step.collectionId` штампуется из `DraftOrigin` инвариантом в workflow store
-(`setDraft`/`setDraftOrigin`), хелперы `varsCtxFor`/`varsResolverFor` прокидывают
-контекст во все живые пути (Send, адрес/reflection, message-schema, OAuth2). Новый
-`src/features/vars/VarResolveLine.tsx` — однострочное превью под рядом переменной
-(дебаунс 300мс, три состояния `→ resolves` / `⚠ Unresolved` / `⚠ Cycle`), смонтировано
-в редакторе переменных коллекции (`VariablesBlock`, оверлей текущих рядов) и в
-Edit Environment (`VariablesTable`, оверлей редактируемых рядов). Мёртвый
-`ResolvesPreview` удалён. Subagent-driven, spec+quality ревью на каждой задаче +
-финальное ревью ветки (READY TO MERGE); гейт: tsc clean · vitest 838 ·
-`cargo test --workspace` · bindings no-drift · build. Остаток: живой WebView2-проход
-репро + ff-merge в `main`. План+спека: `2026-06-13-collection-vars-resolve*`.
+Нет активной фичи в работе. Последняя влитая — **Collection vars resolve +
+индикация резолва** (🎉 DONE 2026-06-13, ребейз+ff в `main` `675f1fe`; см. ниже).
 
 Интеграционная ветка — `main`; фичи ведутся в отдельных worktree-ветках
 (`claude/*`) и вливаются в `main` fast-forward.
 
 ### Завершённые фичи (всё в `archive/`)
 
+- **Collection vars resolve + индикация резолва** (🎉 DONE 2026-06-13,
+  ребейз+ff в `main` `675f1fe`; план+спека `2026-06-13-collection-vars-resolve*`
+  в `archive/`) — переменные коллекции теперь участвуют в `{{var}}`-резолве (был
+  баг: бэкенд клал пустую collection-мапу). IPC `vars_resolve(template, ctx?)`
+  получил опциональный `VarsResolveCtxIpc` (`collection_id` → бэкенд читает vars из
+  `collection_store`; оверлеи `collection_vars`/`env_vars` для несохранённых рядов
+  редакторов; `ctx=None` ⇒ прежнее поведение); ядро (`resolve_template_with_
+  diagnostics`, env > collection) не тронуто. `Step.collectionId` штампуется из
+  `DraftOrigin` инвариантом в workflow store; `varsCtxFor`/`varsResolverFor`
+  прокидывают контекст во все живые пути (Send, адрес/reflection, message-schema,
+  OAuth2). Индикация: инлайн-подсветка `{{var}}` в адресной строке и в редакторе
+  переменных коллекции (`VarHighlightInput` — токен красится по resolve-state,
+  резолв-значение едет инлайном/в тултипе; палитра — pref в Settings); Edit
+  Environment оставлен на однострочном `VarResolveLine` (его многострочный
+  `ValueCell` под длинные JWT инлайн не ложится). Мёртвый `ResolvesPreview` удалён.
+  При ребейзе на `main` разрешён 1 конфликт в `CallPanel.tsx`: взяты оба —
+  `effectiveAuth` (фикс 16 UNAUTHENTICATED из main) + `varsResolverFor(step.
+  collectionId)` (collection-ctx этой ветки). Заодно влита **чистка Settings**
+  (коммит `675f1fe`): удалены нереализованные пункты (панели Editor/Data целиком,
+  мёртвые строки Appearance/Network, Keyboard Ctrl+E) + мёртвые prefs/CSS. Гейт:
+  tsc clean · vitest 863 · `cargo test --workspace` · bindings no-drift. Остаток:
+  живой WebView2-проход.
 - **OAuth2 client-credentials auth per-collection** (🎉 DONE 2026-06-12,
   ребейз+ff в `main`; план+спека `2026-06-12-oauth2-client-credentials*` в
   `archive/`) — 4-й вид auth «OAuth2» у коллекции: все поля (`token_url`,
