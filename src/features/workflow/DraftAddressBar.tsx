@@ -40,7 +40,7 @@ export function DraftAddressBar({
   const sending = step.status === "sending";
   return (
     <div className="flex h-14 items-center gap-2 border-b border-border px-4">
-      <div className="flex h-8 flex-none items-center gap-1.5 rounded-md border border-input bg-background pl-2 pr-1 focus-within:ring-1 focus-within:ring-ring">
+      <div className="flex h-8 flex-1 min-w-[16rem] items-center gap-1.5 rounded-md border border-input bg-background pl-2 pr-1 focus-within:ring-1 focus-within:ring-ring">
         <Tooltip
           content={step.tls ? "TLS enabled — click to switch to plaintext" : "Plaintext — click to enable TLS"}
         >
@@ -60,7 +60,7 @@ export function DraftAddressBar({
           placeholder="host:port"
           resolver={resolveAddress}
           resolveKey={resolveKey}
-          className="w-[22rem]"
+          className="min-w-0 flex-1"
         />
       </div>
       <MethodPicker
@@ -70,7 +70,7 @@ export function DraftAddressBar({
         reflection={
           step.address.trim() ? { loading: reflecting, error: reflectError, onRefresh } : undefined
         }
-        className="flex-1"
+        className="flex-1 min-w-0"
         onQuickAdd={onQuickAdd}
       />
       {sending ? (

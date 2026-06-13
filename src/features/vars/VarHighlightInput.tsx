@@ -103,16 +103,28 @@ export function VarHighlightInput({
   const [chipFits, setChipFits] = useState(false);
   useLayoutEffect(() => {
     const wrap = wrapperRef.current;
-    const content = contentRef.current;
-    const chip = chipRef.current;
-    if (!wrap || !content || !chip || !resolvedValue) {
-      setChipFits(false);
-      return;
+    const measure = () => {
+      const content = contentRef.current;
+      const chip = chipRef.current;
+      if (!wrap || !content || !chip || !resolvedValue) {
+        setChipFits(false);
+        return;
+      }
+      // `content` is an inline-block span hugging the typed text, so offsetWidth is the
+      // real text width (the backdrop box itself is stretched full-width and would not be).
+      const avail = wrap.clientWidth;
+      setChipFits(avail > 0 && content.offsetWidth + chip.scrollWidth + FIT_SLACK <= avail);
+    };
+    measure();
+    // The field is flex-sized, so a window/pane resize changes clientWidth with no prop
+    // change — without re-measuring, a wide-window "fits" verdict goes stale and the chip
+    // overlaps the typed address.
+    let ro: ResizeObserver | undefined;
+    if (wrap && typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(measure);
+      ro.observe(wrap);
     }
-    // `content` is an inline-block span hugging the typed text, so offsetWidth is the
-    // real text width (the backdrop box itself is stretched full-width and would not be).
-    const avail = wrap.clientWidth;
-    setChipFits(avail > 0 && content.offsetWidth + chip.scrollWidth + FIT_SLACK <= avail);
+    return () => ro?.disconnect();
   }, [value, resolvedValue, resolveKey]);
 
   const field = (
