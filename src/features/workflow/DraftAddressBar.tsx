@@ -30,17 +30,22 @@ export interface DraftAddressBarProps {
   resolveKey?: string;
 }
 
-/** Compact display for the in-field resolve preview: the resolved value (truncated,
- *  full value in the title) or a short error marker (detail in the title). */
-function resolveDisplay(report: ResolutionReportIpc): { text: string; title: string; error: boolean } {
+/** Below this address length we assume the field has free space for the inline
+ *  resolved value (monospace ⇒ char count tracks width). Longer ⇒ inline is dropped
+ *  and the marker's tooltip carries the value. Heuristic; tune against the live field. */
+const INLINE_RESOLVE_MAX_CHARS = 28;
+
+/** Resolve state for the field marker + (optional) inline value. `value` is the
+ *  resolved string on success (shown inline when there's room), null on error;
+ *  `title` is the always-available tooltip text (value or error detail). */
+function resolveInfo(report: ResolutionReportIpc): { value: string | null; title: string; error: boolean } {
   if (report.cycle_chain) {
-    return { text: "⚠ cycle", title: `Cycle: ${report.cycle_chain.join(" → ")}`, error: true };
+    return { value: null, title: `Cycle: ${report.cycle_chain.join(" → ")}`, error: true };
   }
   if (report.unresolved_vars.length > 0) {
-    const list = report.unresolved_vars.join(", ");
-    return { text: `⚠ ${list}`, title: `Unresolved: ${list}`, error: true };
+    return { value: null, title: `Unresolved: ${report.unresolved_vars.join(", ")}`, error: true };
   }
-  return { text: report.resolved, title: report.resolved, error: false };
+  return { value: report.resolved, title: report.resolved, error: false };
 }
 
 /** Editable Focus header for a draft: TLS lock + host → full-width MethodPicker → Send.
@@ -54,7 +59,9 @@ export function DraftAddressBar({
 }: DraftAddressBarProps) {
   const sending = step.status === "sending";
   const report = useVarResolve(step.address, resolveAddress, resolveKey);
-  const resolved = report ? resolveDisplay(report) : null;
+  const resolve = report ? resolveInfo(report) : null;
+  // Inline value only when it's a success AND the address is short enough to leave room.
+  const showInline = resolve?.value != null && step.address.length <= INLINE_RESOLVE_MAX_CHARS;
   return (
     <div className="flex h-14 items-center gap-2 border-b border-border px-4">
       <div className="flex h-8 w-[24rem] flex-none items-center gap-1.5 rounded-md border border-input bg-background pl-2 pr-2 focus-within:ring-1 focus-within:ring-ring">
@@ -77,19 +84,27 @@ export function DraftAddressBar({
           placeholder="host:port"
           className="h-7 min-w-0 flex-1 border-0 bg-transparent px-1 font-mono text-xs focus-visible:ring-0"
         />
-        {resolved && (
+        {showInline && (
           <>
             <span aria-hidden className="h-4 w-px flex-none bg-border" />
             <span
-              className={cn(
-                "max-w-[11rem] flex-none truncate font-mono text-xs",
-                resolved.error ? "text-destructive" : "text-muted-foreground/80",
-              )}
-              title={resolved.title}
+              className="max-w-[11rem] flex-none truncate font-mono text-xs text-muted-foreground/80"
+              title={resolve!.title}
             >
-              {resolved.text}
+              {resolve!.value}
             </span>
           </>
+        )}
+        {resolve && (
+          <span
+            role="img"
+            aria-label={resolve.error ? "address resolve error" : "address resolved"}
+            title={resolve.title}
+            className={cn(
+              "size-2 flex-none rounded-full",
+              resolve.error ? "bg-destructive" : "bg-emerald-500",
+            )}
+          />
         )}
       </div>
       <MethodPicker

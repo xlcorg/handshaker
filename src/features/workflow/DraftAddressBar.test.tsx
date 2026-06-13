@@ -82,7 +82,7 @@ describe("DraftAddressBar", () => {
     expect(screen.queryByLabelText("refresh-reflection")).toBeNull();
   });
 
-  it("shows the resolved address inline in the field, truncated with a full-value title", async () => {
+  it("marks a successful resolve and shows the value inline (with room) plus a full-value tooltip", async () => {
     const resolveAddress = vi.fn(async () => ({
       resolved: "https://api.example.com/v1/notes",
       unresolved_vars: [],
@@ -93,13 +93,36 @@ describe("DraftAddressBar", () => {
         {...props({ step: { ...base, address: "{{host}}" }, resolveAddress, resolveKey: "k" })}
       />,
     );
-    const el = await screen.findByText("https://api.example.com/v1/notes");
-    expect(el.className).toContain("truncate"); // ellipsis when it doesn't fit
-    expect(el).toHaveAttribute("title", "https://api.example.com/v1/notes"); // full value on hover
+    // Short address ⇒ inline value is shown, truncated, with the full value in the title.
+    const inline = await screen.findByText("https://api.example.com/v1/notes");
+    expect(inline.className).toContain("truncate");
+    expect(inline).toHaveAttribute("title", "https://api.example.com/v1/notes");
+    // Success marker is present and carries the always-available tooltip.
+    const marker = screen.getByLabelText("address resolved");
+    expect(marker).toHaveAttribute("title", "https://api.example.com/v1/notes");
+    expect(marker.className).toContain("bg-emerald-500");
     expect(resolveAddress).toHaveBeenCalledWith("{{host}}");
   });
 
-  it("shows a compact unresolved indicator with the detail in the title", async () => {
+  it("drops the inline value for a long address but keeps the marker + tooltip", async () => {
+    const longAddr = "{{host}}/api/v1/resources/items/search"; // > INLINE_RESOLVE_MAX_CHARS
+    const resolveAddress = vi.fn(async () => ({
+      resolved: "https://api.example.com/api/v1/resources/items/search",
+      unresolved_vars: [],
+      cycle_chain: null,
+    }));
+    r(
+      <DraftAddressBar
+        {...props({ step: { ...base, address: longAddr }, resolveAddress, resolveKey: "k" })}
+      />,
+    );
+    const marker = await screen.findByLabelText("address resolved");
+    expect(marker).toHaveAttribute("title", "https://api.example.com/api/v1/resources/items/search");
+    // No inline value rendered (no room) — only the marker carries it.
+    expect(screen.queryByText("https://api.example.com/api/v1/resources/items/search")).toBeNull();
+  });
+
+  it("marks an unresolved address with an error marker; detail is in the tooltip", async () => {
     const resolveAddress = vi.fn(async () => ({
       resolved: "{{host}}",
       unresolved_vars: ["host"],
@@ -110,15 +133,17 @@ describe("DraftAddressBar", () => {
         {...props({ step: { ...base, address: "{{host}}" }, resolveAddress, resolveKey: "k" })}
       />,
     );
-    const el = await screen.findByText(/⚠ host/);
-    expect(el).toHaveAttribute("title", "Unresolved: host");
-    expect(el.className).toContain("text-destructive");
+    const marker = await screen.findByLabelText("address resolve error");
+    expect(marker).toHaveAttribute("title", "Unresolved: host");
+    expect(marker.className).toContain("bg-destructive");
+    // No success marker, no inline value for an error.
+    expect(screen.queryByLabelText("address resolved")).toBeNull();
   });
 
-  it("renders no inline resolve when the address has no {{vars}}", () => {
+  it("renders no resolve marker when the address has no {{vars}}", () => {
     const resolveAddress = vi.fn();
     r(<DraftAddressBar {...props({ resolveAddress })} />); // base.address = "h:443"
-    expect(screen.queryByText(/⚠|api\.example/)).toBeNull();
+    expect(screen.queryByLabelText(/address resolve/)).toBeNull();
     expect(resolveAddress).not.toHaveBeenCalled();
   });
 });
