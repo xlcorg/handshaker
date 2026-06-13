@@ -6,6 +6,7 @@ import { EnvEditorDialog } from "@/features/envs/EnvEditorDialog";
 import { EnvSwitcherMenu } from "@/features/envs/EnvSwitcherMenu";
 import { bumpEnvRevision } from "@/features/envs/envRevision";
 import { colorHex, resolveColorKey } from "@/features/envs/colors";
+import { isEnvCycleHotkey, nextEnvName } from "@/features/envs/cycle";
 import { envList, envReorder } from "@/ipc/client";
 import type { EnvironmentIpc } from "@/ipc/bindings";
 
@@ -61,6 +62,21 @@ export function WorkflowEnvControl() {
   const activeEnv = wf.envName;
   const label = activeEnv ?? "No environment";
   const activeEnvObj = envs.find((e) => e.name === activeEnv) ?? null;
+
+  // Глобальный Ctrl+E / Cmd+E циклит env активного воркфлоу (исключая «No
+  // environment»). Capture-фаза — чтобы сфокусированный Monaco не перехватил.
+  // Перепривязка на [envs, activeEnv] держит замыкание свежим.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.repeat || !isEnvCycleHotkey(e)) return;
+      const next = nextEnvName(envs.map((x) => x.name), activeEnv);
+      if (next === null) return; // ноль env — не глотаем клавишу
+      e.preventDefault();
+      workflowStore.setWorkflowEnv(next);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [envs, activeEnv]);
 
   return (
     <>

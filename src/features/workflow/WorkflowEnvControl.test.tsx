@@ -91,4 +91,40 @@ describe("WorkflowEnvControl", () => {
     // mount call + snap-back refetch = at least 2 envList calls
     expect(vi.mocked(envList).mock.calls.length).toBeGreaterThanOrEqual(2);
   });
+
+  it("Ctrl+E cycles the active workflow env, excluding 'No environment'", async () => {
+    render(<WorkflowEnvControl />);
+    await screen.findByText("No environment");
+    // Flush the on-mount envList() resolution so `envs` state is populated and
+    // the hotkey effect has re-bound with the real env list.
+    await act(async () => {});
+
+    const pressCtrlE = () =>
+      act(() => {
+        window.dispatchEvent(
+          new KeyboardEvent("keydown", { code: "KeyE", ctrlKey: true, bubbles: true }),
+        );
+      });
+
+    pressCtrlE(); // null → first
+    expect(workflowStore.activeWorkflow().envName).toBe("staging");
+    pressCtrlE(); // staging → prod
+    expect(workflowStore.activeWorkflow().envName).toBe("prod");
+    pressCtrlE(); // prod → wrap → staging
+    expect(workflowStore.activeWorkflow().envName).toBe("staging");
+  });
+
+  it("ignores AltGr+E (Ctrl+Alt = symbol on EU layouts) — env unchanged", async () => {
+    render(<WorkflowEnvControl />);
+    await screen.findByText("No environment");
+    await act(async () => {});
+
+    act(() => {
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", { code: "KeyE", ctrlKey: true, altKey: true, bubbles: true }),
+      );
+    });
+
+    expect(workflowStore.activeWorkflow().envName).toBeNull();
+  });
 });
