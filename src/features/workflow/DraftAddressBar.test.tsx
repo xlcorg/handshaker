@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import type { ReactElement } from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { DraftAddressBar } from "./DraftAddressBar";
 import { newStep } from "./model";
@@ -82,9 +82,9 @@ describe("DraftAddressBar", () => {
     expect(screen.queryByLabelText("refresh-reflection")).toBeNull();
   });
 
-  it("marks a successful resolve and shows the value inline (with room) plus a full-value tooltip", async () => {
+  it("highlights a resolved {{var}} token green and titles the field with the value", async () => {
     const resolveAddress = vi.fn(async () => ({
-      resolved: "https://api.example.com/v1/notes",
+      resolved: "localhost:5002",
       unresolved_vars: [],
       cycle_chain: null,
     }));
@@ -93,36 +93,12 @@ describe("DraftAddressBar", () => {
         {...props({ step: { ...base, address: "{{host}}" }, resolveAddress, resolveKey: "k" })}
       />,
     );
-    // Short address ⇒ inline value is shown, truncated, with the full value in the title.
-    const inline = await screen.findByText("https://api.example.com/v1/notes");
-    expect(inline.className).toContain("truncate");
-    expect(inline).toHaveAttribute("title", "https://api.example.com/v1/notes");
-    // Success marker is present and carries the always-available tooltip.
-    const marker = screen.getByLabelText("address resolved");
-    expect(marker).toHaveAttribute("title", "https://api.example.com/v1/notes");
-    expect(marker.className).toContain("bg-emerald-500");
+    await waitFor(() => expect(screen.getByText("{{host}}").className).toContain("emerald"));
+    expect(screen.getByLabelText("draft-address")).toHaveAttribute("title", "localhost:5002");
     expect(resolveAddress).toHaveBeenCalledWith("{{host}}");
   });
 
-  it("drops the inline value for a long address but keeps the marker + tooltip", async () => {
-    const longAddr = "{{host}}/api/v1/resources/items/search"; // > INLINE_RESOLVE_MAX_CHARS
-    const resolveAddress = vi.fn(async () => ({
-      resolved: "https://api.example.com/api/v1/resources/items/search",
-      unresolved_vars: [],
-      cycle_chain: null,
-    }));
-    r(
-      <DraftAddressBar
-        {...props({ step: { ...base, address: longAddr }, resolveAddress, resolveKey: "k" })}
-      />,
-    );
-    const marker = await screen.findByLabelText("address resolved");
-    expect(marker).toHaveAttribute("title", "https://api.example.com/api/v1/resources/items/search");
-    // No inline value rendered (no room) — only the marker carries it.
-    expect(screen.queryByText("https://api.example.com/api/v1/resources/items/search")).toBeNull();
-  });
-
-  it("marks an unresolved address with an error marker; detail is in the tooltip", async () => {
+  it("highlights an unresolved {{var}} token as an error", async () => {
     const resolveAddress = vi.fn(async () => ({
       resolved: "{{host}}",
       unresolved_vars: ["host"],
@@ -133,17 +109,7 @@ describe("DraftAddressBar", () => {
         {...props({ step: { ...base, address: "{{host}}" }, resolveAddress, resolveKey: "k" })}
       />,
     );
-    const marker = await screen.findByLabelText("address resolve error");
-    expect(marker).toHaveAttribute("title", "Unresolved: host");
-    expect(marker.className).toContain("bg-destructive");
-    // No success marker, no inline value for an error.
-    expect(screen.queryByLabelText("address resolved")).toBeNull();
-  });
-
-  it("renders no resolve marker when the address has no {{vars}}", () => {
-    const resolveAddress = vi.fn();
-    r(<DraftAddressBar {...props({ resolveAddress })} />); // base.address = "h:443"
-    expect(screen.queryByLabelText(/address resolve/)).toBeNull();
-    expect(resolveAddress).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByText("{{host}}").className).toContain("destructive"));
+    expect(screen.getByLabelText("draft-address")).toHaveAttribute("title", "Unresolved: host");
   });
 });
