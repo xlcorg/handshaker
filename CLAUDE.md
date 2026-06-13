@@ -6,28 +6,30 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 
 ## Active work
 
-**Ctrl+E — циклическое переключение окружения** (✅ code-complete + влита в
-`main` ff `62b5ee0` 2026-06-13, ветка `claude/modest-sinoussi-a20e6e`, commits
-`b238377`…`d171fec`; план+спека `2026-06-13-env-cycle-hotkey*` пока в
-`plans/`/`specs/` — НЕ в `archive/`, т.к. фича ещё не 🎉 DONE). Глобальный
-Ctrl+E / Cmd+E циклит env активного воркфлоу на следующий по кругу (исключая «No
-environment»; нет активного → первый; ноль env → no-op). Матч по физической
-клавише `e.code === "KeyE"` (раскладко-независимо — на ЙЦУКЕН `key` был бы «у»);
-AltGr/Shift/repeat-гарды; capture-фаза (как `useUiZoom`). Чистый модуль
-`src/features/envs/cycle.ts` (`isEnvCycleHotkey` + `nextEnvName`) + тонкий
-`useEffect` в `WorkflowEnvControl` (переиспользует `workflowStore.setWorkflowEnv`,
-бэкенд/IPC не тронуты) + хинт `Ctrl+E`/`⌘E` в шапке `EnvSwitcherMenu`. Гейт:
-vitest 880 · tsc clean. Остаток — live WebView2-проход; после него баннер плана →
-🎉 DONE, а план+спека переезжают в `archive/`.
-
-Предыдущая влитая — **Collection vars resolve + индикация резолва**
-(🎉 DONE 2026-06-13, ребейз+ff в `main` `675f1fe`; см. ниже).
+Нет активной фичи в работе. Последняя влитая — **Ctrl+E — циклическое
+переключение окружения** (🎉 DONE 2026-06-13, влита в `main` ff `d6f36b3`;
+план+спека `2026-06-13-env-cycle-hotkey*` в `archive/`; см. ниже).
 
 Интеграционная ветка — `main`; фичи ведутся в отдельных worktree-ветках
 (`claude/*`) и вливаются в `main` fast-forward.
 
 ### Завершённые фичи (всё в `archive/`)
 
+- **Ctrl+E — циклическое переключение окружения** (🎉 DONE 2026-06-13, влита в
+  `main` ff `d6f36b3`; план+спека `2026-06-13-env-cycle-hotkey*` в `archive/`) —
+  глобальный Ctrl+E / Cmd+E циклит env активного воркфлоу на следующий по кругу
+  (исключая «No environment»; нет активного → первый; ноль env → no-op). Матч по
+  **физической** клавише `e.code === "KeyE"` (раскладко-независимо — на ЙЦУКЕН
+  `e.key` был бы «у», и хоткей бы не сработал); AltGr (`altKey`)/Shift/repeat-
+  гарды; capture-фаза `window`-листенера (как `useUiZoom`), `preventDefault`
+  только при реальном срабатывании. Чистый модуль `src/features/envs/cycle.ts`
+  (`isEnvCycleHotkey` + `nextEnvName`) + тонкий `useEffect` в `WorkflowEnvControl`
+  (переиспользует `workflowStore.setWorkflowEnv`; **бэкенд/IPC/bindings не
+  тронуты**) + некликабельный футер-хинт «Cycle environment · Ctrl+E/⌘E» в
+  `EnvSwitcherMenu` (изначально стоял в шапке у `+`, перенесён вниз по live-
+  фидбеку). Subagent-driven (3 задачи, spec+quality ревью на каждой + финальное
+  ревью ветки: конфликтов хоткеев нет — Monaco биндит только Ctrl+Enter); гейт:
+  vitest 880 · tsc clean; live-verified в WebView2 (в т.ч. русская раскладка).
 - **Collection vars resolve + индикация резолва** (🎉 DONE 2026-06-13,
   ребейз+ff в `main` `675f1fe`; план+спека `2026-06-13-collection-vars-resolve*`
   в `archive/`) — переменные коллекции теперь участвуют в `{{var}}`-резолве (был

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Статус:** ✅ code-complete (2026-06-13; ветка `claude/modest-sinoussi-a20e6e`; commits `b238377`…`d171fec`). Гейт зелёный: vitest **880** · tsc clean · бэкенд/bindings не тронуты. Остаток — live WebView2-проход (Task 4 Step 4).
+**Статус:** 🎉 DONE (2026-06-13; влита в `main` ff `d6f36b3`; commits `b238377`…`d6f36b3`). Гейт: vitest **880** · tsc clean · бэкенд/bindings не тронуты. Live-verified в WebView2 (в т.ч. русская раскладка). Live-фидбек: keycap-хинт перенесён из шапки в некликабельный футер дропдауна («Cycle environment · Ctrl+E/⌘E»). План+спека в `archive/`.
 **Спека:** `docs/superpowers/specs/2026-06-13-env-cycle-hotkey-design.md`
 
 **Goal:** Глобальный хоткей **Ctrl+E / Cmd+E** переключает окружение активного воркфлоу на следующее по кругу (исключая «No environment»), плюс подсказка `Ctrl+E`/`⌘E` в шапке env-меню.
