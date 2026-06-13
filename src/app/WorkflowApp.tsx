@@ -255,6 +255,7 @@ export function WorkflowApp() {
               onOpenRequest={openRequest}
               onAddRequest={addRequest}
               activeItemId={activeItemId}
+              activeCollectionId={panelCollectionId}
             />
           </ResizablePanel>
           <ResizableHandle />

@@ -5,6 +5,8 @@ import type { DragData, DropTarget, DropZone } from "./dnd";
 export interface TreeCallbacks {
   open: Set<string>;
   activeItemId: string | null;
+  /** id of the collection whose overview is the active main panel ("in focus"), or null. */
+  activeCollectionId: string | null;
   focusedId: string | null;
   editingId: string | null;
   onToggle: (id: string) => void;

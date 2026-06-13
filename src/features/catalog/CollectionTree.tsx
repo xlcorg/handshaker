@@ -12,6 +12,8 @@ export interface CollectionTreeProps {
   collections: CollectionIpc[]; // already sorted + filtered by SidebarShell
   filterActive: boolean;
   activeItemId: string | null;
+  /** Collection whose overview is the active main panel ("in focus"), or null. */
+  activeCollectionId: string | null;
   editingId: string | null;
   onEditingChange: (id: string | null) => void;
   onOpenRequest: (collectionId: string, req: SavedRequestIpc) => void;
@@ -214,6 +216,7 @@ export function CollectionTree(props: CollectionTreeProps) {
   const cb: TreeCallbacks = {
     open: effectiveOpen,
     activeItemId: props.activeItemId,
+    activeCollectionId: props.activeCollectionId,
     focusedId,
     editingId,
     onToggle: toggle,

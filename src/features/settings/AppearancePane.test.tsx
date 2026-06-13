@@ -34,7 +34,7 @@ function req(name: string): Extract<ItemIpc, { type: "request" }> {
 
 function makeCb(over: Partial<TreeCallbacks> = {}): TreeCallbacks {
   return {
-    open: new Set(), activeItemId: null, focusedId: null, editingId: null,
+    open: new Set(), activeItemId: null, activeCollectionId: null, focusedId: null, editingId: null,
     onToggle: vi.fn(), onEditingChange: vi.fn(), onOpenRequest: vi.fn(),
     onOpenCollection: vi.fn(), onRenameItem: vi.fn(), onRenameCollection: vi.fn(),
     onDuplicateItem: vi.fn(), onRequestDeleteItem: vi.fn(), onRequestDeleteCollection: vi.fn(),

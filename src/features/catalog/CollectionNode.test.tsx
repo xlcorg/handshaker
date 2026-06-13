@@ -25,7 +25,7 @@ function col(over: Partial<CollectionIpc> = {}): CollectionIpc {
 }
 function makeCb(over: Partial<TreeCallbacks> = {}): TreeCallbacks {
   return {
-    open: new Set(), activeItemId: null, focusedId: null, editingId: null,
+    open: new Set(), activeItemId: null, activeCollectionId: null, focusedId: null, editingId: null,
     onToggle: vi.fn(), onEditingChange: vi.fn(), onOpenRequest: vi.fn(),
     onOpenCollection: vi.fn(), onRenameItem: vi.fn(), onRenameCollection: vi.fn(),
     onDuplicateItem: vi.fn(), onRequestDeleteItem: vi.fn(), onRequestDeleteCollection: vi.fn(),
@@ -36,22 +36,46 @@ function makeCb(over: Partial<TreeCallbacks> = {}): TreeCallbacks {
 }
 
 describe("CollectionNode", () => {
-  it("name click opens the collection overview AND toggles", () => {
+  it("name click on a collapsed collection opens the overview and expands it", () => {
     const onOpenCollection = vi.fn();
     const onToggle = vi.fn();
     renderWithSidebar(<CollectionNode col={col()} cb={makeCb({ onOpenCollection, onToggle })} />);
-    fireEvent.click(screen.getByText("My Collection"));
+    fireEvent.click(screen.getByLabelText("open-collection"));
     expect(onOpenCollection).toHaveBeenCalledWith("c1");
-    expect(onToggle).toHaveBeenCalledWith("c1");
+    expect(onToggle).toHaveBeenCalledWith("c1"); // collapsed → expands alongside the overview
   });
 
-  it("repeat name click toggles (collapses)", () => {
+  it("name click on an open, non-focused collection focuses the overview WITHOUT collapsing", () => {
+    // A request is selected (the overview is NOT the active panel) but the collection is
+    // expanded. Clicking the collection should bring up its overview — and must NOT collapse
+    // the tree. That stray collapse was the bug this change fixes.
+    const onOpenCollection = vi.fn();
     const onToggle = vi.fn();
-    renderWithSidebar(<CollectionNode col={col()} cb={makeCb({ onToggle })} />);
-    const nameBtn = screen.getByLabelText("open-collection");
-    fireEvent.click(nameBtn);
-    fireEvent.click(nameBtn);
-    expect(onToggle).toHaveBeenCalledTimes(2);
+    renderWithSidebar(
+      <CollectionNode
+        col={col()}
+        cb={makeCb({ open: new Set(["c1"]), activeCollectionId: null, onOpenCollection, onToggle })}
+      />,
+    );
+    fireEvent.click(screen.getByLabelText("open-collection"));
+    expect(onOpenCollection).toHaveBeenCalledWith("c1");
+    expect(onToggle).not.toHaveBeenCalled();
+  });
+
+  it("name click on the focused, open collection just collapses it (no re-open)", () => {
+    // The collection's overview is already the active panel (in focus). A repeat click
+    // collapses the node; it does not re-open the overview.
+    const onOpenCollection = vi.fn();
+    const onToggle = vi.fn();
+    renderWithSidebar(
+      <CollectionNode
+        col={col()}
+        cb={makeCb({ open: new Set(["c1"]), activeCollectionId: "c1", onOpenCollection, onToggle })}
+      />,
+    );
+    fireEvent.click(screen.getByLabelText("open-collection"));
+    expect(onToggle).toHaveBeenCalledWith("c1");
+    expect(onOpenCollection).not.toHaveBeenCalled();
   });
 
   it("chevron click toggles expand", () => {

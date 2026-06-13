@@ -27,6 +27,8 @@ export interface SidebarShellProps {
   onAddRequest?: () => void;
   /** Id of the currently-open saved request, highlighted in the tree. */
   activeItemId?: string | null;
+  /** Id of the collection whose overview is the active main panel ("in focus"), or null. */
+  activeCollectionId?: string | null;
 }
 
 export function SidebarShell({
@@ -34,6 +36,7 @@ export function SidebarShell({
   onOpenRequest,
   onAddRequest,
   activeItemId = null,
+  activeCollectionId = null,
 }: SidebarShellProps) {
   const openRequest = onOpenRequest ?? openSavedRequest;
   const addRequest = onAddRequest ?? newRequestDraft;
@@ -109,6 +112,7 @@ export function SidebarShell({
           collections={visible}
           filterActive={filterActive}
           activeItemId={activeItemId ?? null}
+          activeCollectionId={activeCollectionId ?? null}
           editingId={editingId}
           onEditingChange={setEditingId}
           onOpenRequest={(collectionId, req) => openRequest(collectionId, req)}

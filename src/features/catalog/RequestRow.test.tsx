@@ -27,6 +27,7 @@ function makeCb(over: Partial<TreeCallbacks> = {}): TreeCallbacks {
   return {
     open: new Set(),
     activeItemId: null,
+    activeCollectionId: null,
     focusedId: null,
     editingId: null,
     onToggle: vi.fn(),

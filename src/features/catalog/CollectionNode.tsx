@@ -19,6 +19,8 @@ export function CollectionNode({ col, cb }: CollectionNodeProps) {
   const open = cb.open.has(col.id);
   const editing = cb.editingId === col.id;
   const focused = cb.focusedId === col.id;
+  // Whether this collection's overview is the active main panel (in focus).
+  const overviewActive = cb.activeCollectionId === col.id;
   const hint = cb.dropHint?.id === col.id ? cb.dropHint.zone : null;
 
   const items: RowMenuItem[] = [
@@ -91,8 +93,14 @@ export function CollectionNode({ col, cb }: CollectionNodeProps) {
                 type="button"
                 aria-label="open-collection"
                 onClick={() => {
-                  cb.onOpenCollection(col.id);
-                  cb.onToggle(col.id);
+                  // Focused (overview is the active panel) → a repeat click just collapses the
+                  // node. Otherwise bring the overview into focus, expanding a collapsed node but
+                  // never collapsing an open one (so focusing from a selected request keeps it open).
+                  if (overviewActive) cb.onToggle(col.id);
+                  else {
+                    cb.onOpenCollection(col.id);
+                    if (!open) cb.onToggle(col.id);
+                  }
                 }}
                 onDoubleClick={() => cb.onEditingChange(col.id)}
                 // Defer the highlight to the row's full-bleed ::before. `px-0` strips the

@@ -28,6 +28,7 @@ function setup(over: Partial<CollectionTreeProps> = {}) {
     collections: [col("c1", [req("r1")]), col("c2", [])],
     filterActive: false,
     activeItemId: null,
+    activeCollectionId: null,
     editingId: null,
     onEditingChange: vi.fn(),
     onOpenRequest: vi.fn(),
@@ -82,6 +83,7 @@ describe("CollectionTree arrow navigation", () => {
       collections: [col("c1", [req("r1")])],
       filterActive: true, // expands all, so r1 is a visible (focusable) row
       activeItemId: null,
+      activeCollectionId: null,
       editingId: null,
       onEditingChange,
       onOpenRequest: vi.fn(),
