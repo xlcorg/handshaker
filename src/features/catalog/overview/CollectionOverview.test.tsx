@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { ReactElement } from "react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import { TooltipProvider } from "@/components/ui/tooltip";
+
+import { bumpEnvRevision } from "@/features/envs/envRevision";
 
 vi.mock("@/ipc/client", () => ({
   ipc: {
@@ -119,6 +121,32 @@ describe("CollectionOverview", () => {
       collection_vars: { "uri-root": "{{notes-api-root}}" },
       env_vars: null,
     });
+  });
+
+  it("re-resolves the preview when the environment is edited (envRevision bump)", async () => {
+    // Active env initially lacks the referenced var → preview shows unresolved.
+    vi.mocked(ipc.varsResolve).mockResolvedValue({
+      resolved: "{{notes-api-root}}",
+      unresolved_vars: ["notes-api-root"],
+      cycle_chain: null,
+    });
+    const p = props({ collection: collection({ variables: { "uri-root": "{{notes-api-root}}" } }) });
+    r(<CollectionOverview {...p} />);
+    fireEvent.click(screen.getByText("Variables"));
+    expect(await screen.findByText(/⚠ Unresolved: notes-api-root/)).toBeInTheDocument();
+
+    // User adds the missing variable in the env editor and saves. Neither the
+    // collection rows nor the active env NAME changed, so without the envRevision
+    // signal the preview would stay stale. The backend now resolves it.
+    vi.mocked(ipc.varsResolve).mockResolvedValue({
+      resolved: "https://api.example.com",
+      unresolved_vars: [],
+      cycle_chain: null,
+    });
+    act(() => bumpEnvRevision());
+    expect(
+      await screen.findByText(/→ resolves: https:\/\/api\.example\.com/),
+    ).toBeInTheDocument();
   });
 
   it("the close button calls onClose", () => {

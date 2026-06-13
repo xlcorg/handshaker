@@ -14,6 +14,7 @@ import { VariablesBlock, type VarRow } from "./VariablesBlock";
 import { TlsBlock } from "./TlsBlock";
 import { SavedAuthEditor } from "./SavedAuthEditor";
 import { useActiveWorkflow } from "@/features/workflow/store";
+import { useEnvRevision } from "@/features/envs/envRevision";
 
 function countFolders(items: ItemIpc[]): number {
   return items.reduce((n, it) => (it.type === "folder" ? n + 1 + countFolders(it.items) : n), 0);
@@ -87,6 +88,10 @@ export function CollectionOverview({ collection, onChanged, onSelectRequest, onC
   };
 
   const activeWf = useActiveWorkflow();
+  // Bumped when an env is saved — the preview resolves against the active env via the
+  // backend (env_vars: null), so editing the active env's vars (without renaming it)
+  // is otherwise invisible to resolveKey and the preview would go stale.
+  const envRevision = useEnvRevision();
   const varsRecord = useMemo(() => rowsToRecord(varRows), [varRows]);
   // Unsaved editor rows overlay the stored collection vars; env = active env (backend resolves it).
   const resolveRow = useCallback(
@@ -94,7 +99,7 @@ export function CollectionOverview({ collection, onChanged, onSelectRequest, onC
       ipc.varsResolve(t, { collection_id: null, collection_vars: varsRecord, env_vars: null }),
     [varsRecord],
   );
-  const resolveKey = `${JSON.stringify(varsRecord)}|${activeWf.envName ?? ""}`;
+  const resolveKey = `${JSON.stringify(varsRecord)}|${activeWf.envName ?? ""}|${envRevision}`;
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-background">

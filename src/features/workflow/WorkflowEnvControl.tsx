@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ConfirmDeleteEnvDialog } from "@/features/envs/ConfirmDeleteEnvDialog";
 import { EnvEditorDialog } from "@/features/envs/EnvEditorDialog";
 import { EnvSwitcherMenu } from "@/features/envs/EnvSwitcherMenu";
+import { bumpEnvRevision } from "@/features/envs/envRevision";
 import { colorHex, resolveColorKey } from "@/features/envs/colors";
 import { envList, envReorder } from "@/ipc/client";
 import type { EnvironmentIpc } from "@/ipc/bindings";
@@ -97,6 +98,9 @@ export function WorkflowEnvControl() {
           }}
           onSaved={async (savedName, becameActive) => {
             await refreshEnvs();
+            // Env contents changed — re-resolve any preview bound to the active env
+            // (e.g. the collection-variables editor, which resolves via the backend).
+            bumpEnvRevision();
             if (becameActive) workflowStore.setWorkflowEnv(savedName);
           }}
           onRequestDelete={(name) => {
