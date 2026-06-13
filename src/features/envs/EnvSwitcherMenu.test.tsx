@@ -82,6 +82,14 @@ describe("EnvSwitcherMenu", () => {
     expect(className).toContain("font-extralight");
   });
 
+  it("shows the Ctrl+E shortcut hint in the header (non-mac UA)", async () => {
+    const user = userEvent.setup();
+    setup();
+    await user.click(screen.getByText("env-trigger"));
+    // jsdom's default UA is not macOS, so isMacOS === false → "Ctrl+E".
+    expect(await screen.findByText("Ctrl+E")).toBeInTheDocument();
+  });
+
   it("header has a + button that calls onNewEnv; no bottom 'New env…' item", async () => {
     const user = userEvent.setup();
     const { onNewEnv } = setup();
