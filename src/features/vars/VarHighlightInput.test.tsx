@@ -21,10 +21,10 @@ describe("VarHighlightInput", () => {
     expect(screen.getByText("/v1")).toBeInTheDocument(); // the literal segment
   });
 
-  it("marks a resolved variable green and renders the resolved value", async () => {
+  it("marks a resolved variable as resolved and renders the resolved value", async () => {
     const resolver = vi.fn(ok("localhost:5002"));
     r(<VarHighlightInput value="{{host}}" onChange={() => {}} resolver={resolver} ariaLabel="addr" />);
-    await waitFor(() => expect(screen.getByText("{{host}}").className).toContain("emerald"));
+    await waitFor(() => expect(screen.getByText("{{host}}").className).toContain("vh-resolved"));
     expect(screen.getByText("localhost:5002")).toBeInTheDocument(); // inline resolved chip
     expect(resolver).toHaveBeenCalledWith("{{host}}");
   });
@@ -33,14 +33,14 @@ describe("VarHighlightInput", () => {
     const resolver = vi.fn(ok("https://api.example.com"));
     r(<VarHighlightInput value="{{contracts-info/uri-root}}" onChange={() => {}} resolver={resolver} ariaLabel="addr" />);
     await waitFor(() =>
-      expect(screen.getByText("{{contracts-info/uri-root}}").className).toContain("emerald"),
+      expect(screen.getByText("{{contracts-info/uri-root}}").className).toContain("vh-resolved"),
     );
     expect(resolver).toHaveBeenCalledWith("{{contracts-info/uri-root}}");
   });
 
   it("marks an unresolved variable as an error and shows no resolved value", async () => {
     r(<VarHighlightInput value="{{host}}" onChange={() => {}} resolver={vi.fn(unresolved(["host"]))} ariaLabel="addr" />);
-    await waitFor(() => expect(screen.getByText("{{host}}").className).toContain("destructive"));
+    await waitFor(() => expect(screen.getByText("{{host}}").className).toContain("vh-error"));
     expect(screen.queryByText("localhost:5002")).toBeNull();
   });
 

@@ -65,6 +65,21 @@ describe("methodGroupStyle pref", () => {
   });
 });
 
+describe("varHighlight pref", () => {
+  beforeEach(() => localStorage.clear());
+
+  it("defaults varHighlight to 'indigo'", () => {
+    expect(PREFS_DEFAULTS.varHighlight).toBe("indigo");
+  });
+
+  it("merges a persisted varHighlight over defaults", () => {
+    const merged = { ...PREFS_DEFAULTS, varHighlight: "amber" as const };
+    expect(merged.sidebar).toBe(true);
+    expect(merged.varHighlight).toBe("amber");
+    expect(typeof readPrefs().varHighlight).toBe("string");
+  });
+});
+
 describe("prefs bodyPanel", () => {
   beforeEach(() => localStorage.clear());
 

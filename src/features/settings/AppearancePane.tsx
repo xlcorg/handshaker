@@ -10,7 +10,14 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { usePrefs, type GrpcIconStyle, type MethodGroupStyle, ZOOM_MIN, ZOOM_MAX } from "@/lib/use-prefs";
+import {
+  usePrefs,
+  type GrpcIconStyle,
+  type MethodGroupStyle,
+  type VarHighlightScheme,
+  ZOOM_MIN,
+  ZOOM_MAX,
+} from "@/lib/use-prefs";
 import { nextZoom } from "@/features/shell/zoom";
 
 const METHOD_GROUP_STYLES: { key: MethodGroupStyle; label: string; hint: string }[] = [
@@ -21,6 +28,15 @@ const METHOD_GROUP_STYLES: { key: MethodGroupStyle; label: string; hint: string 
   { key: "bar", label: "Bar", hint: "Left accent bar" },
   { key: "chip", label: "Chip", hint: "Service name as a pill" },
   { key: "zebra", label: "Zebra", hint: "Header strip + striped rows" },
+];
+
+const VAR_HIGHLIGHT_SCHEMES: { key: VarHighlightScheme; label: string; hint: string }[] = [
+  { key: "indigo", label: "Indigo", hint: "Editor identifier · red error" },
+  { key: "amber", label: "Amber", hint: "Postman warm token · red error" },
+  { key: "mono", label: "Mono", hint: "Neutral token · amber error" },
+  { key: "teal", label: "Teal", hint: "Soft teal · rose error" },
+  { key: "slate", label: "Slate", hint: "Slate token · amber error" },
+  { key: "text", label: "Text only", hint: "No fill · colored text" },
 ];
 
 export function AppearancePane() {
@@ -169,6 +185,52 @@ export function AppearancePane() {
                 >
                   {METHOD_GROUP_STYLES.map((o) => (
                     <DropdownMenuRadioItem key={o.key} value={o.key} className="gap-2">
+                      <span className="font-medium">{o.label}</span>
+                      <span className="text-muted-foreground text-[11px]">{o.hint}</span>
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          }
+        />
+      </SettingsGroup>
+
+      <SettingsGroup title="Variables">
+        <SettingsRow
+          title="Highlight colors"
+          hint="Palette for {{var}} tokens in the address bar and variable editors — resolved vs unresolved."
+          control={
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="xs"
+                  aria-label="var-highlight-scheme"
+                  className="min-w-24 justify-between font-normal"
+                >
+                  <span className="flex items-center gap-2" data-vh-scheme={prefs.varHighlight}>
+                    <span className="flex gap-1" aria-hidden>
+                      <span className="vh-dot-resolved inline-block size-2.5 rounded-full" />
+                      <span className="vh-dot-error inline-block size-2.5 rounded-full" />
+                    </span>
+                    {VAR_HIGHLIGHT_SCHEMES.find((s) => s.key === prefs.varHighlight)?.label ?? "Indigo"}
+                  </span>
+                  <ChevronDown className="opacity-60" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuRadioGroup
+                  value={prefs.varHighlight}
+                  onValueChange={(v) => setPref("varHighlight", v as VarHighlightScheme)}
+                >
+                  {VAR_HIGHLIGHT_SCHEMES.map((o) => (
+                    <DropdownMenuRadioItem key={o.key} value={o.key} data-vh-scheme={o.key} className="gap-2">
+                      <span className="flex gap-1" aria-hidden>
+                        <span className="vh-dot-resolved inline-block size-2.5 rounded-full" />
+                        <span className="vh-dot-error inline-block size-2.5 rounded-full" />
+                      </span>
                       <span className="font-medium">{o.label}</span>
                       <span className="text-muted-foreground text-[11px]">{o.hint}</span>
                     </DropdownMenuRadioItem>

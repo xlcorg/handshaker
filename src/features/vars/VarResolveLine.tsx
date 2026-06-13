@@ -1,4 +1,5 @@
 import { cn } from "@/lib/cn";
+import { usePrefs } from "@/lib/use-prefs";
 import type { ResolutionReportIpc } from "@/ipc/bindings";
 
 import { hasVars, useVarResolve } from "./useVarResolve";
@@ -19,6 +20,7 @@ export interface VarResolveLineProps {
  *  `→ resolves: …` / `⚠ Unresolved: …` / `⚠ Cycle: …`.
  *  Renders nothing while the value has no `{{…}}` or before the first resolve. */
 export function VarResolveLine({ value, resolver, resolveKey, className }: VarResolveLineProps) {
+  const [prefs] = usePrefs();
   const report = useVarResolve(value, resolver, resolveKey);
 
   if (!hasVars(value) || report === null) return null;
@@ -37,9 +39,10 @@ export function VarResolveLine({ value, resolver, resolveKey, className }: VarRe
 
   return (
     <div
+      data-vh-scheme={prefs.varHighlight}
       className={cn(
         "text-xs font-mono overflow-hidden text-ellipsis whitespace-nowrap",
-        destructive ? "text-destructive" : "text-muted-foreground",
+        destructive ? "vh-error-text" : "text-muted-foreground",
         className,
       )}
       title={text}

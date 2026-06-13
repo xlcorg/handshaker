@@ -7,6 +7,9 @@ export type FontMono = "jetbrains" | "geist-mono" | "ibm";
 export type GrpcIconStyle = "solid" | "letter" | "outline" | "circle";
 /** How a service group header is visually separated from its methods in the MethodPicker dropdown. */
 export type MethodGroupStyle = "band" | "tree" | "weight" | "card" | "bar" | "chip" | "zebra";
+/** Color palette for `{{var}}` token highlighting (resolved vs unresolved/cycle).
+ *  See the `[data-vh-scheme]` blocks in globals.css for the actual colors. */
+export type VarHighlightScheme = "indigo" | "amber" | "mono" | "teal" | "slate" | "text";
 
 export interface Prefs {
   density: Density;
@@ -28,6 +31,8 @@ export interface Prefs {
   grpcIcon: GrpcIconStyle;
   /** Service-group header style in the MethodPicker dropdown. */
   methodGroupStyle: MethodGroupStyle;
+  /** Color palette for `{{var}}` token highlighting in editors. */
+  varHighlight: VarHighlightScheme;
   /** Inline contract hints in the request body editor: the ghost skeleton. */
   bodyHints: boolean;
 }
@@ -45,6 +50,7 @@ export const PREFS_DEFAULTS: Prefs = {
   requestTimeoutMs: 30000,
   grpcIcon: "solid",
   methodGroupStyle: "zebra",
+  varHighlight: "indigo",
   bodyHints: true,
 };
 

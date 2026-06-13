@@ -375,6 +375,63 @@ body {
   box-shadow: inset 2px 0 0 hsl(var(--primary));
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+   {{var}} highlight palette (pref `varHighlight`). The token spans in
+   VarHighlightInput and the ⚠ line in VarResolveLine carry .vh-resolved /
+   .vh-error / .vh-error-text and read these vars; the scheme is selected by
+   data-vh-scheme on the component root (and on each option row in Settings,
+   where .vh-dot-* render the swatches). Dark-only app, so values are fixed —
+   only the `mono` scheme rides --foreground. The bare [data-vh-scheme] block
+   is the fallback (= indigo) for any unknown value; ordered first so the
+   named blocks below win at equal specificity. */
+[data-vh-scheme] {
+  --vh-resolved-bg: rgb(143 168 230 / .12);
+  --vh-resolved-fg: #8fa8e6;
+  --vh-error-bg: rgb(223 126 126 / .13);
+  --vh-error-fg: #df7e7e;
+}
+[data-vh-scheme="indigo"] {
+  --vh-resolved-bg: rgb(143 168 230 / .12);
+  --vh-resolved-fg: #8fa8e6;
+  --vh-error-bg: rgb(223 126 126 / .13);
+  --vh-error-fg: #df7e7e;
+}
+[data-vh-scheme="amber"] {
+  --vh-resolved-bg: rgb(217 160 90 / .13);
+  --vh-resolved-fg: #d9a05a;
+  --vh-error-bg: rgb(223 126 126 / .13);
+  --vh-error-fg: #df7e7e;
+}
+[data-vh-scheme="mono"] {
+  --vh-resolved-bg: hsl(var(--foreground) / .07);
+  --vh-resolved-fg: hsl(var(--foreground));
+  --vh-error-bg: rgb(217 160 90 / .14);
+  --vh-error-fg: #d9a05a;
+}
+[data-vh-scheme="teal"] {
+  --vh-resolved-bg: rgb(95 178 164 / .13);
+  --vh-resolved-fg: #5fb2a4;
+  --vh-error-bg: rgb(214 143 143 / .12);
+  --vh-error-fg: #d68f8f;
+}
+[data-vh-scheme="slate"] {
+  --vh-resolved-bg: rgb(147 163 196 / .12);
+  --vh-resolved-fg: #93a3c4;
+  --vh-error-bg: rgb(217 160 90 / .14);
+  --vh-error-fg: #d9a05a;
+}
+[data-vh-scheme="text"] {
+  --vh-resolved-bg: transparent;
+  --vh-resolved-fg: #d9a05a;
+  --vh-error-bg: transparent;
+  --vh-error-fg: #df7e7e;
+}
+.vh-resolved   { background: var(--vh-resolved-bg); color: var(--vh-resolved-fg); }
+.vh-error      { background: var(--vh-error-bg);    color: var(--vh-error-fg); }
+.vh-error-text { color: var(--vh-error-fg); }
+.vh-dot-resolved { background: var(--vh-resolved-fg); }
+.vh-dot-error    { background: var(--vh-error-fg); }
+
 /* Accessibility: honour the OS "reduce motion" setting (WCAG 2.3.3). Neutralise
    all transitions/animations, but keep essential status feedback (loading spinner,
    streaming pulse) animated — they convey state, not decoration. */

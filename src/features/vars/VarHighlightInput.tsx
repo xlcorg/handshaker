@@ -2,6 +2,7 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { cn } from "@/lib/cn";
 import { Tooltip } from "@/components/ui/tooltip";
+import { usePrefs } from "@/lib/use-prefs";
 import type { ResolutionReportIpc } from "@/ipc/bindings";
 
 import { useVarResolve } from "./useVarResolve";
@@ -54,6 +55,7 @@ export interface VarHighlightInputProps {
 export function VarHighlightInput({
   value, onChange, resolver, resolveKey, placeholder, ariaLabel, className,
 }: VarHighlightInputProps) {
+  const [prefs] = usePrefs();
   const report = useVarResolve(value, resolver, resolveKey);
   const errorNames = useMemo(() => {
     const s = new Set<string>();
@@ -105,7 +107,7 @@ export function VarHighlightInput({
   }, [value, resolvedValue, resolveKey]);
 
   const field = (
-    <div ref={wrapperRef} className={cn("relative", className)}>
+    <div ref={wrapperRef} data-vh-scheme={prefs.varHighlight} className={cn("relative", className)}>
       <div
         ref={backdropRef}
         aria-hidden
@@ -120,11 +122,7 @@ export function VarHighlightInput({
               key={i}
               className={cn(
                 "rounded-[3px]",
-                report == null
-                  ? undefined
-                  : errorNames.has(seg.varName)
-                    ? "bg-destructive/15 text-destructive"
-                    : "bg-emerald-500/15 text-emerald-400",
+                report == null ? undefined : errorNames.has(seg.varName) ? "vh-error" : "vh-resolved",
               )}
             >
               {seg.text}

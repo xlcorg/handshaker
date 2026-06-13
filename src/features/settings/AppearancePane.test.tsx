@@ -85,6 +85,14 @@ describe("AppearancePane", () => {
     expect(readPrefs().methodGroupStyle).toBe("tree");
   });
 
+  it("variable highlight scheme dropdown updates the pref", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(<AppearancePane />);
+    await user.click(screen.getByLabelText("var-highlight-scheme"));
+    await user.click(screen.getByText("Amber"));
+    expect(readPrefs().varHighlight).toBe("amber");
+  });
+
   it("switching the toggle re-renders the request row icon live", () => {
     render(
       <SidebarProvider>

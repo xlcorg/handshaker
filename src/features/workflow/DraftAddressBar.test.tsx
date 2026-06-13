@@ -82,7 +82,7 @@ describe("DraftAddressBar", () => {
     expect(screen.queryByLabelText("refresh-reflection")).toBeNull();
   });
 
-  it("highlights a resolved {{var}} token green and renders the resolved value", async () => {
+  it("highlights a resolved {{var}} token and renders the resolved value", async () => {
     const resolveAddress = vi.fn(async () => ({
       resolved: "localhost:5002",
       unresolved_vars: [],
@@ -93,7 +93,7 @@ describe("DraftAddressBar", () => {
         {...props({ step: { ...base, address: "{{host}}" }, resolveAddress, resolveKey: "k" })}
       />,
     );
-    await waitFor(() => expect(screen.getByText("{{host}}").className).toContain("emerald"));
+    await waitFor(() => expect(screen.getByText("{{host}}").className).toContain("vh-resolved"));
     expect(screen.getByText("localhost:5002")).toBeInTheDocument(); // inline resolved value
     expect(resolveAddress).toHaveBeenCalledWith("{{host}}");
   });
@@ -109,6 +109,6 @@ describe("DraftAddressBar", () => {
         {...props({ step: { ...base, address: "{{host}}" }, resolveAddress, resolveKey: "k" })}
       />,
     );
-    await waitFor(() => expect(screen.getByText("{{host}}").className).toContain("destructive"));
+    await waitFor(() => expect(screen.getByText("{{host}}").className).toContain("vh-error"));
   });
 });
