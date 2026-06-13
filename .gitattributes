@@ -1,0 +1,5 @@
+# Generated IPC bindings are emitted with LF by tauri-specta. With core.autocrlf=true
+# on Windows (which expects CRLF in the working tree), git flags this file as modified
+# after every checkout/regen even though the content is unchanged. Pin it to LF so git
+# and the generator agree and the spurious "modified" status goes away.
+src/ipc/bindings.ts text eol=lf
