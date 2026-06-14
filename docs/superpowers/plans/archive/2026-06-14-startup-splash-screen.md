@@ -8,9 +8,9 @@
 
 **Tech Stack:** Tauri 2.11 (window config), React 18 (`useEffect`-дисмисс), Vite (`index.html`), Vitest (jsdom-юниты).
 
-**Статус:** 📝 PLAN (готов к исполнению; брейншторм-апрув + спека-ревизия получены 2026-06-14)
+**Статус:** 🎉 DONE 2026-06-14 — реализовано subagent-driven, влито в `main` ff `f9629d5`, live-verified в WebView2. План+спека в `archive/`.
 **Ветка:** `claude/zealous-bardeen-f306e5`
-**Спека:** `docs/superpowers/specs/2026-06-14-startup-splash-screen-design.md`
+**Спека:** `docs/superpowers/specs/archive/2026-06-14-startup-splash-screen-design.md`
 
 ---
 
