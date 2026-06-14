@@ -109,13 +109,13 @@ Expected: FAIL — `backgroundColor` ещё нет (`expected undefined to be "#
 В `src-tauri/tauri.macos.conf.json` в объекте окна заменить:
 
 ```json
-        "dragDropEnabled": true,
+        "dragDropEnabled": false,
 ```
 
 на:
 
 ```json
-        "dragDropEnabled": true,
+        "dragDropEnabled": false,
         "backgroundColor": "#0A0A0A",
 ```
 
@@ -239,7 +239,7 @@ export function dismissSplash(): void {
   window.setTimeout(() => {
     el.parentNode?.removeChild(el);
     const kill = (window as Window & { __splashKill?: number }).__splashKill;
-    if (kill) window.clearTimeout(kill);
+    if (kill !== undefined) window.clearTimeout(kill);
   }, fade);
 }
 ```

@@ -107,7 +107,7 @@ export function dismissSplash(): void {
   window.setTimeout(() => {
     el.parentNode?.removeChild(el);
     const kill = (window as Window & { __splashKill?: number }).__splashKill;
-    if (kill) window.clearTimeout(kill);
+    if (kill !== undefined) window.clearTimeout(kill);
   }, fade);
 }
 ```
