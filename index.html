@@ -4,9 +4,65 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Handshaker</title>
+    <style>
+      #splash {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        background: #0A0A0A;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        opacity: 1;
+        transition: opacity 200ms ease;
+      }
+      #splash.is-hiding {
+        opacity: 0;
+      }
+      #splash svg {
+        animation: hs-breathe 1.8s ease-in-out infinite;
+      }
+      #splash .splash-word {
+        margin-top: 18px;
+        font: 600 21px system-ui, -apple-system, "Segoe UI", sans-serif;
+        letter-spacing: -0.02em;
+        color: #FAFAFA;
+      }
+      @keyframes hs-breathe {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.4; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #splash { transition: none; }
+      }
+    </style>
   </head>
   <body class="bg-background text-foreground antialiased">
     <div id="root"></div>
+    <div id="splash" aria-hidden="true">
+      <svg width="92" height="92" viewBox="40 40 120 120" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="hs-mono" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#FFFFFF" />
+            <stop offset="1" stop-color="#C9CFD9" />
+          </linearGradient>
+        </defs>
+        <g fill="url(#hs-mono)">
+          <rect x="51" y="50" width="26" height="100" rx="13" />
+          <rect x="123" y="50" width="26" height="100" rx="13" />
+          <rect x="64" y="88" width="34" height="24" rx="7" />
+          <rect x="102" y="88" width="34" height="24" rx="7" />
+        </g>
+      </svg>
+      <div class="splash-word">Handshaker</div>
+    </div>
+    <script>
+      window.__splashKill = setTimeout(function () {
+        var el = document.getElementById("splash");
+        if (el && el.parentNode) el.parentNode.removeChild(el);
+      }, 8000);
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
