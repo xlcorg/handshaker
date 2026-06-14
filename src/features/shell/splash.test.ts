@@ -51,12 +51,22 @@ describe("dismissSplash", () => {
     expect(() => dismissSplash()).not.toThrow();
   });
 
-  it("clears the safety timeout once the overlay is removed", () => {
+  it("double-call while splash is present is safe (StrictMode)", () => {
+    vi.useFakeTimers();
+    mountSplash();
+    dismissSplash();
+    dismissSplash();
+    vi.advanceTimersByTime(200);
+    expect(document.getElementById("splash")).toBeNull();
+  });
+
+  it("clears the safety timeout only after the overlay is removed", () => {
     vi.useFakeTimers();
     const clearSpy = vi.spyOn(window, "clearTimeout");
     (window as unknown as { __splashKill?: number }).__splashKill = 123;
     mountSplash();
     dismissSplash();
+    expect(clearSpy).not.toHaveBeenCalled();
     vi.advanceTimersByTime(200);
     expect(clearSpy).toHaveBeenCalledWith(123);
   });
