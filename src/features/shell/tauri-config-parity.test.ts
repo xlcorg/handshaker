@@ -21,9 +21,19 @@ describe("tauri.macos.conf.json", () => {
     const keys = [
       "label", "title", "width", "height", "minWidth",
       "minHeight", "resizable", "fullscreen", "dragDropEnabled",
+      "backgroundColor",
     ];
     for (const k of keys) {
       expect(macWin[k]).toEqual(baseWin[k]);
     }
+  });
+});
+
+describe("tauri.conf.json window background", () => {
+  // A dark window+webview background kills the white startup flash before the
+  // dark frontend paints (Tauri backgroundColor covers both layers).
+  it("sets a dark window background on both configs", () => {
+    expect(baseWin.backgroundColor).toBe("#0A0A0A");
+    expect(macWin.backgroundColor).toBe("#0A0A0A");
   });
 });

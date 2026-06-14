@@ -20,7 +20,8 @@
         "resizable": true,
         "decorations": false,
         "fullscreen": false,
-        "dragDropEnabled": false
+        "dragDropEnabled": false,
+        "backgroundColor": "#0A0A0A"
       }
     ],
     "security": {

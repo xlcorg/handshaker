@@ -11,6 +11,7 @@
         "resizable": true,
         "fullscreen": false,
         "dragDropEnabled": false,
+        "backgroundColor": "#0A0A0A",
         "decorations": true,
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
