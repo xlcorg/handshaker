@@ -34,8 +34,10 @@ uuid = { workspace = true }
 
 # OAuth2 client-credentials token fetch
 reqwest.workspace = true
-base64 = "0.22.1"
-infer = "0.19.0"
+
+# Base64 decoder
+base64.workspace = true
+infer.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

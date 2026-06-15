@@ -87,7 +87,6 @@ pub fn suggested_extension(c: &Classified) -> String {
 mod tests {
     use super::*;
     use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
-    use base64::Engine as _;
 
     #[test]
     fn decodes_standard_with_padding() {
