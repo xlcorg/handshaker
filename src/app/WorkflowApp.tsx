@@ -34,6 +34,7 @@ import { useUpdateCheck } from "@/features/updater/useUpdateCheck";
 import { UpdateToast } from "@/features/updater/UpdateToast";
 import { UpdaterProvider } from "@/features/updater/updaterContext";
 import { useUiZoom } from "@/features/shell/zoom";
+import { useWordWrapHotkey } from "@/features/shell/wordWrap";
 import { dismissSplash } from "@/features/shell/splash";
 
 function renderView(
@@ -74,6 +75,8 @@ export function WorkflowApp() {
 
   // Зум UI: персистентный prefs.zoom → webview.setZoom + хоткеи Ctrl+=/-/0.
   useUiZoom();
+  // Глобальный Alt+Z → переключает prefs.wordWrap (перенос строк в редакторах тела).
+  useWordWrapHotkey();
 
   // Снять стартовый оверлей #splash, как только оболочка смонтирована (маунт корня
   // = первый осмысленный кадр). Дисмисс через CSS-fade; идемпотентно (см. splash.ts).
