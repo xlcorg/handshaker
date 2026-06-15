@@ -194,7 +194,10 @@ export function WorkflowApp() {
   async function quickAddMethod(service: string, method: string) {
     const current = workflowStore.getState().draft;
     const address = current?.address ?? "";
-    const plan = planQuickAdd(cat.tree, service, method, address);
+    // Save into the collection of the request the user is editing (origin); a brand-new
+    // unbound draft has no origin → planQuickAdd falls back to the first collection.
+    const originCollectionId = workflowStore.getState().draftOrigin?.collectionId ?? null;
+    const plan = planQuickAdd(cat.tree, service, method, address, originCollectionId);
     if (plan.kind === "exists") {
       const req = findSavedRequest(cat.tree, plan.location.collectionId, plan.location.requestId);
       if (req) {

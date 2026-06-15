@@ -15,18 +15,24 @@ export type QuickAddPlan =
     };
 
 /** Where the quick «+» puts a method: dedupe by service+method+address, otherwise
- *  the first collection + a root folder named after the service (suggestSaveTarget). */
+ *  the collection the user is working in (`preferredCollectionId`, the open request's
+ *  origin) + a root folder named after the service (suggestSaveTarget). Falls back to
+ *  the first collection when there is no origin (a brand-new unbound draft) or the
+ *  preferred id no longer exists. */
 export function planQuickAdd(
   tree: CollectionIpc[],
   service: string,
   method: string,
   address: string,
+  preferredCollectionId?: string | null,
 ): QuickAddPlan {
   const existing = findSavedLocations(tree, { service, method, address });
   if (existing.length > 0) return { kind: "exists", location: existing[0] };
 
   const reco = suggestSaveTarget(service, method);
-  const col = tree[0] ?? null;
+  const preferred =
+    preferredCollectionId != null ? tree.find((c) => c.id === preferredCollectionId) : undefined;
+  const col = preferred ?? tree[0] ?? null;
   const folderHit = col?.items.find((it) => it.type === "folder" && it.name === reco.folderName);
   return {
     kind: "create",

@@ -5,10 +5,19 @@ import type { CollectionIpc, ItemIpc } from "@/ipc/bindings";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 vi.mock("./CallPanel", () => ({
-  CallPanel: ({ step, originAuth }: { step: { method: string }; originAuth?: { kind: string } }) => (
+  CallPanel: ({
+    step,
+    originAuth,
+    onQuickAddMethod,
+  }: {
+    step: { method: string };
+    originAuth?: { kind: string };
+    onQuickAddMethod?: (service: string, method: string) => void;
+  }) => (
     <div>
       <div>CALL:{step.method}</div>
       <div data-testid="origin-auth">{originAuth?.kind ?? ""}</div>
+      <div data-testid="quickadd-wired">{onQuickAddMethod ? "yes" : "no"}</div>
     </div>
   ),
 }));
@@ -183,5 +192,20 @@ describe("FocusView Save affordance", () => {
     workflowStore.setDraft(newStep({ address: "h:1", tls: false, service: "p.S", method: "Get" }));
     renderFV();
     expect(screen.queryByRole("button", { name: "Duplicate request" })).toBeNull();
+  });
+
+  it("wires quick-add to CallPanel only for a bound draft (has a target collection)", () => {
+    workflowStore.setDraft(
+      newStep({ address: "h:1", tls: false, service: "p.S", method: "Get" }),
+      { collectionId: "c1", requestId: "r1" },
+    );
+    renderFV(<FocusView onQuickAddMethod={vi.fn()} />);
+    expect(screen.getByTestId("quickadd-wired")).toHaveTextContent("yes");
+  });
+
+  it("does NOT wire quick-add for an unbound draft (no collection to save into)", () => {
+    workflowStore.setDraft(newStep({ address: "h:1", tls: false, service: "p.S", method: "Get" }));
+    renderFV(<FocusView onQuickAddMethod={vi.fn()} />);
+    expect(screen.getByTestId("quickadd-wired")).toHaveTextContent("no");
   });
 });

@@ -106,7 +106,10 @@ export function FocusView({ onRequestSave, onQuickAddMethod }: FocusViewProps = 
             onPatch={(patch: Partial<Step>) => workflowStore.updateDraft(patch)}
             onExecuted={(executed: Step) => workflowStore.commitExecutedStep(executed)}
             editable
-            onQuickAddMethod={onQuickAddMethod}
+            // Quick-add «+» saves into the open request's collection (origin). An unbound
+            // draft has no target collection, so the «+» is hidden rather than silently
+            // landing the method in some arbitrary collection.
+            onQuickAddMethod={origin ? onQuickAddMethod : undefined}
             originAuth={originAuth}
           />
         ) : (

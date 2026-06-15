@@ -83,4 +83,31 @@ describe("planQuickAdd", () => {
     const plan = planQuickAdd(tree, "n.NotesService", "Get", "h:1");
     expect(plan).toMatchObject({ kind: "create", collectionId: "c1", folderId: null });
   });
+
+  it("targets the preferred (origin) collection, not the first one", () => {
+    const tree = [col("c1", "Main"), col("c2", "Other")];
+    const plan = planQuickAdd(tree, "n.NotesService", "Get", "h:1", "c2");
+    expect(plan).toMatchObject({ kind: "create", collectionId: "c2", collectionName: "Other" });
+  });
+
+  it("reuses a root folder inside the preferred collection", () => {
+    const tree = [
+      col("c1", "Main", [folder("f1", "Notes")]),
+      col("c2", "Other", [folder("f2", "Notes")]),
+    ];
+    const plan = planQuickAdd(tree, "n.NotesService", "Get", "h:1", "c2");
+    expect(plan).toMatchObject({ kind: "create", collectionId: "c2", folderId: "f2" });
+  });
+
+  it("unknown preferred collection id → falls back to the first collection", () => {
+    const tree = [col("c1", "Main"), col("c2", "Other")];
+    const plan = planQuickAdd(tree, "n.NotesService", "Get", "h:1", "missing");
+    expect(plan).toMatchObject({ kind: "create", collectionId: "c1" });
+  });
+
+  it("null preferred id (new unbound draft) → first collection", () => {
+    const tree = [col("c1", "Main"), col("c2", "Other")];
+    const plan = planQuickAdd(tree, "n.NotesService", "Get", "h:1", null);
+    expect(plan).toMatchObject({ kind: "create", collectionId: "c1" });
+  });
 });
