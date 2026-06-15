@@ -24,6 +24,7 @@ vi.mock("@/lib/monaco", () => ({
         captured.handler = handler;
       },
       getModel: () => null,
+      updateOptions: () => {},
       getLayoutInfo: () => ({ contentLeft: 0 }),
       // Request mode subscribes to keyup to force-open the suggest widget on `"`.
       onKeyUp: () => ({ dispose: () => {} }),

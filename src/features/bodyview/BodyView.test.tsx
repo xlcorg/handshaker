@@ -1,22 +1,23 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 
-// Mock the heavy Monaco module: render a textarea-ish stub, expose value/readOnly.
+// Mock the heavy Monaco module: render a textarea-ish stub, expose value/readOnly/wordWrap.
 vi.mock("@/lib/monaco", () => ({
   MonacoEditor: ({ value, options }: {
     value: string;
-    options?: { readOnly?: boolean };
+    options?: { readOnly?: boolean; wordWrap?: string };
   }) => (
     <pre
       data-testid="monaco"
       data-readonly={String(!!options?.readOnly)}
+      data-wordwrap={String(options?.wordWrap)}
     >{value}</pre>
   ),
   BODY_EDIT_OPTIONS: { readOnly: false },
   BODY_READONLY_OPTIONS: { readOnly: true },
   MONACO_THEME: "handshaker-dark",
 }));
-const prefs = { bodyHints: false };
+const prefs = { bodyHints: false, wordWrap: false };
 vi.mock("@/lib/use-prefs", () => ({
   usePrefs: () => [prefs],
   readPrefs: () => prefs,
@@ -40,5 +41,18 @@ describe("BodyView", () => {
   it("response mode is read-only", () => {
     render(<BodyView mode="response" value={`{"a":1}`} />);
     expect(screen.getByTestId("monaco").getAttribute("data-readonly")).toBe("true");
+  });
+
+  it("passes wordWrap 'off' when the pref is off (default)", () => {
+    prefs.wordWrap = false;
+    render(<BodyView mode="request" value={`{"a":1}`} onChange={vi.fn()} />);
+    expect(screen.getByTestId("monaco").getAttribute("data-wordwrap")).toBe("off");
+  });
+
+  it("passes wordWrap 'on' when the pref is on", () => {
+    prefs.wordWrap = true;
+    render(<BodyView mode="response" value={`{"a":1}`} />);
+    expect(screen.getByTestId("monaco").getAttribute("data-wordwrap")).toBe("on");
+    prefs.wordWrap = false; // restore — shared module-level mock object
   });
 });

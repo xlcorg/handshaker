@@ -271,6 +271,13 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
   // No mode guard needed: applyGhost no-ops when ghost is null (response mode).
   useEffect(() => { applyGhost(); }, [prefs.bodyHints, applyGhost]);
 
+  // Живое переключение переноса: controlled `options` покрывает маунт; этот эффект
+  // гарантирует in-place обновление при смене pref независимо от поведения обёртки.
+  // No-op до маунта редактора (live.current === null).
+  useEffect(() => {
+    live.current?.editor.updateOptions({ wordWrap: prefs.wordWrap ? "on" : "off" });
+  }, [prefs.wordWrap]);
+
   // External (non-user) updates to the controlled value — e.g. Reset-to-template —
   // are applied to the Monaco model programmatically by the wrapper and do NOT
   // fire onChange. Catch the divergence between value and the last text seen by
@@ -325,7 +332,14 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
     [mode, onChange, applyGhost, scheduleGhost],
   );
 
-  const options = mode === "response" ? BODY_READONLY_OPTIONS : BODY_EDIT_OPTIONS;
+  // wordWrap — источник истины prefs.wordWrap (общий для запроса и ответа), поэтому
+  // переопределяем базовую опцию здесь; base-консты в monaco.ts остаются как есть.
+  // Default off → длинное значение не уходит «башней» под ключ (см. spec 2026-06-16).
+  const base = mode === "response" ? BODY_READONLY_OPTIONS : BODY_EDIT_OPTIONS;
+  const options = useMemo(
+    () => ({ ...base, wordWrap: prefs.wordWrap ? "on" : "off" }),
+    [base, prefs.wordWrap],
+  );
   // Response model text is derived (pretty/elided) and set imperatively in onMount;
   // pass the raw value only as the initial Monaco value, then never via React again
   // for response (so prop-sync doesn't clobber the rendered text). Keyed remount on
