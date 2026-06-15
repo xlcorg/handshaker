@@ -20,17 +20,26 @@ wiring `612e128` · **gate-timing fix `6bfe1a3`**.
 **правой** кнопке (mousedown раньше события `contextmenu`), значение клика
 стэшится и переиспользуется в `run`. Это **главный пункт live-проверки**.
 
+**Пост-имплементация — изменения по live-фидбеку (2026-06-16):**
+- `d6354cd` — гейт `looksLikeBase64` доп. исключает строки из hex+дефис
+  (UUID/хэши/hex-id больше не показывают Decode); `3a850f4` — убран пункт
+  «Command Palette» из ПКМ-меню Monaco (`contextMenuCleanup`, F1 жив);
+  `6bfe1a3` — timing-фикс гейта (onMouseDown по правой кнопке).
+- **`f2450fe` — диалог УБРАН.** «Decode base64» теперь декодирует на бэкенде и
+  **копирует декодированный текст в буфер** (бинарь → тост→Save); полное значение
+  берётся из JSON-дерева (`node.value`), не из элидированного текста редактора.
+  `DecodeDialog` удалён, `BodyView.onDecode`-проп удалён, новый чистый
+  `copyDecoded.ts`. (Спека: см. амендмент в `## UX`.)
+
 **Live-проход (punch-list, в WebView2 через `pnpm tauri dev`):**
-- Decode/Save появляются в контекстном меню с **ПЕРВОГО** ПКМ по base64-значению
-  (проверка timing-фикса); на не-base64 строке их нет, на числе — нет.
-- Decode → диалог: вложенный JSON pretty-print; Copy; Save to file… пишет
-  валидный `decoded.json`; отмена Save — без ошибки-тоста.
-- URL-safe base64 декодится; бинарь (PNG) → метка типа + Save пишет валидный файл.
-- drill-down: ПКМ→Decode по вложенному base64 внутри диалога.
-- Минорные (можно отложить): (1) сбой decode **вложенного** значения закрывает
-  весь диалог, а не откатывает к родителю (`DecodeDialog` `.catch`→`onClose`);
-  (2) ПКМ ровно по бейджу-эллипсису (injected-text) даёт нативное меню — убедиться,
-  что юзер попадает на текст-превью, а не на пилюлю размера.
+- Decode/Copy value/Save появляются в ПКМ-меню с **ПЕРВОГО** ПКМ по base64
+  (timing-фикс); на не-base64/UUID/числе пункта Decode нет; «Command Palette» в
+  меню нет (F1 палитру открывает).
+- **Decode base64 → декодированный текст в буфере** (вставить и проверить), тост
+  «Decoded base64 copied»; на длинном/элидированном значении копируется **полный**
+  декод (а не из обрезанного превью) — ключевая проверка.
+- Save to file… пишет валидный файл (`.json`/бинарь); отмена Save — без ошибки.
+- URL-safe base64 декодится; бинарь → тост «binary … use Save to file».
 
 **Goal:** Decode any whole base64 string value in the gRPC response Body — view it (JSON pretty-printed / text / binary type+size), copy it, or save the decoded bytes to a file.
 
