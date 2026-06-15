@@ -22,7 +22,10 @@ describe("isWordWrapHotkey", () => {
   it("only the physical Z key → false for KeyY", () => {
     expect(isWordWrapHotkey({ ...base, code: "KeyY" })).toBe(false);
   });
-  it("layout-independent: matches by code, not key (ЙЦУКЕН 'я')", () => {
-    expect(isWordWrapHotkey({ ...base, code: "KeyZ" })).toBe(true);
+  it("matches by physical code, so any keyboard layout works", () => {
+    // On a Cyrillic layout the Z key yields e.key='я' while e.code stays 'KeyZ'.
+    // The predicate consults only e.code (its Pick omits e.key), so it matches regardless.
+    const ev = new KeyboardEvent("keydown", { code: "KeyZ", altKey: true });
+    expect(isWordWrapHotkey(ev)).toBe(true);
   });
 });
