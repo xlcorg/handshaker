@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import { AddressBar } from "./AddressBar";
 import { newStep } from "./model";
 
@@ -13,12 +12,20 @@ describe("AddressBar cancel", () => {
     expect(screen.queryByRole("button", { name: /cancel/i })).not.toBeInTheDocument();
   });
 
-  it("shows Cancel (not Send) while sending and calls onCancel when clicked", async () => {
-    const onCancel = vi.fn();
-    const user = userEvent.setup();
-    render(<AddressBar step={{ ...base, status: "sending" }} onSend={() => {}} onCancel={onCancel} />);
-    expect(screen.queryByRole("button", { name: /send/i })).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /cancel/i }));
-    expect(onCancel).toHaveBeenCalledOnce();
+  it("keeps Send during the busy gate, then swaps to Cancel and calls onCancel", () => {
+    vi.useFakeTimers();
+    try {
+      const onCancel = vi.fn();
+      render(<AddressBar step={{ ...base, status: "sending" }} onSend={() => {}} onCancel={onCancel} />);
+      // Gated: a sub-250ms call never flips to Cancel.
+      expect(screen.getByRole("button", { name: /send/i })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /cancel/i })).not.toBeInTheDocument();
+      act(() => vi.advanceTimersByTime(250));
+      expect(screen.queryByRole("button", { name: /send/i })).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
+      expect(onCancel).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

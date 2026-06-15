@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { useBusyDelay } from "@/lib/use-busy-delay";
 import type { Step } from "./model";
 
 export function AddressBar({
@@ -11,6 +12,7 @@ export function AddressBar({
   onCancel: () => void;
 }) {
   const sending = step.status === "sending";
+  const showCancel = useBusyDelay(sending, 250); // mirror the draft bar + comet gate
   return (
     <div className="flex h-14 items-center gap-3 border-b border-border px-4">
       <span className="text-ok" aria-hidden>
@@ -31,12 +33,12 @@ export function AddressBar({
       {step.status === "error" ? (
         <span className="text-xs text-destructive">✕ error</span>
       ) : null}
-      {sending ? (
-        <Button size="sm" variant="ghost" onClick={onCancel} className="text-muted-foreground">
+      {showCancel ? (
+        <Button size="sm" variant="ghost" onClick={onCancel} className="min-w-[5rem] text-muted-foreground">
           Cancel
         </Button>
       ) : (
-        <Button size="sm" onClick={onSend}>
+        <Button size="sm" onClick={onSend} className="min-w-[5rem] active:scale-[.97]">
           ▶ Send
         </Button>
       )}
