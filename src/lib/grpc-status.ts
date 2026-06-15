@@ -54,13 +54,18 @@ export function statusDescription(code: number): string {
   return DESCRIPTIONS[code] ?? "Non-standard status code returned by the server.";
 }
 
+/** Raw byte count formatted as `123B` / `1.2KB` / `3.4MB`. */
+export function formatByteCount(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return "0B";
+  if (bytes < 1024) return `${bytes}B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+}
+
 /**
  * JSON byte size formatted as `123B` / `1.2KB` / `3.4MB` (UTF-8 byte length).
  */
 export function formatBytes(s: string | null | undefined): string {
   if (s == null) return "0B";
-  const bytes = new TextEncoder().encode(s).length;
-  if (bytes < 1024) return `${bytes}B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+  return formatByteCount(new TextEncoder().encode(s).length);
 }

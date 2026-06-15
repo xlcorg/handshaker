@@ -18,6 +18,7 @@ import type {
   UiStateIpc,
   MessageSchemaIpc,
   MessageSideIpc,
+  Base64InspectIpc,
 } from "./bindings";
 
 /**
@@ -254,6 +255,18 @@ export async function appSettingsGet(): Promise<UiStateIpc> {
 export async function appSettingsSet(patch: UiStateIpc): Promise<void> {
   const r = await commands.appSettingsSet(patch);
   if (r.status === "error") throw r.error;
+}
+
+export async function base64Inspect(input: string): Promise<Base64InspectIpc> {
+  const r = await commands.base64Inspect(input);
+  if (r.status === "error") throw r.error;
+  return r.data;
+}
+
+export async function base64Save(input: string): Promise<string | null> {
+  const r = await commands.base64Save(input);
+  if (r.status === "error") throw r.error;
+  return r.data;
 }
 
 export const ipc = {

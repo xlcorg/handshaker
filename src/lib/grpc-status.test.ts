@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { statusName, statusDescription } from "./grpc-status";
+import { statusName, statusDescription, formatByteCount } from "./grpc-status";
 
 describe("statusName", () => {
   it("maps canonical codes", () => {
@@ -20,5 +20,14 @@ describe("statusDescription", () => {
   });
   it("falls back for non-standard codes", () => {
     expect(statusDescription(99)).toMatch(/non-standard/i);
+  });
+});
+
+describe("formatByteCount", () => {
+  it("formats raw byte counts", () => {
+    expect(formatByteCount(512)).toBe("512B");
+    expect(formatByteCount(2048)).toBe("2.0KB");
+    expect(formatByteCount(3 * 1024 * 1024)).toBe("3.0MB");
+    expect(formatByteCount(-1)).toBe("0B");
   });
 });
