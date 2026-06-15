@@ -107,12 +107,22 @@ export function ResponsePanel({ state, outcome, error, contract }: ResponsePanel
         </div>
       )}
       {state === "success" && outcome && tab === "body" && outcome.response_json !== null && (
-        <ResponseBody json={outcome.response_json} />
+        <div className="hs-fade-in flex min-h-0 flex-1 flex-col">
+          <ResponseBody json={outcome.response_json} />
+        </div>
       )}
       {state === "success" && outcome && tab === "trailers" && <KVTable rows={trailers} />}
       {state === "success" && outcome && tab === "headers" && <KVTable rows={headers} />}
-      {isError && outcome && tab === "body" && <ErrorView outcome={outcome} />}
-      {isError && !outcome && error && tab === "body" && <ClientErrorView message={error} />}
+      {isError && outcome && tab === "body" && (
+        <div className="hs-fade-in flex min-h-0 flex-1 flex-col">
+          <ErrorView outcome={outcome} />
+        </div>
+      )}
+      {isError && !outcome && error && tab === "body" && (
+        <div className="hs-fade-in flex min-h-0 flex-1 flex-col">
+          <ClientErrorView message={error} />
+        </div>
+      )}
       {isError && outcome && tab === "trailers" && <KVTable rows={trailers} />}
       {isError && outcome && tab === "headers" && <KVTable rows={headers} />}
     </div>

@@ -469,3 +469,9 @@ body, .font-sans {
   to { background-color: transparent; }
 }
 .hs-proto-flash { animation: hs-proto-flash 800ms var(--ease-out); }
+
+/* response arrival: a gentle fade so a fast body doesn't hard-snap in. NN/g — a
+   ~120ms fade masks the mechanical jump between states. Decorative, so the global
+   prefers-reduced-motion reset collapses it to instant. */
+.hs-fade-in { animation: hs-fade-in var(--motion-fast) var(--ease-out); }
+@keyframes hs-fade-in { from { opacity: 0; } to { opacity: 1; } }
