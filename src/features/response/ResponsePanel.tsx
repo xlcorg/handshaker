@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { useBusyDelay } from "@/lib/use-busy-delay";
 import { Activity } from "lucide-react";
 import { ResponseBody } from "./ResponseBody";
 import { EmptyState } from "./EmptyState";
@@ -40,17 +41,9 @@ export function ResponsePanel({ state, outcome, error, contract }: ResponsePanel
   const sending = state === "sending";
 
   // Delay the in-flight progress indicator: fast responses shouldn't flash it
-  // (a sub-threshold loader reads as a twitch). Gates both the comet and the
-  // tab-underline fade so they stay in lockstep.
-  const [showProgress, setShowProgress] = useState(false);
-  useEffect(() => {
-    if (!sending) {
-      setShowProgress(false);
-      return;
-    }
-    const t = setTimeout(() => setShowProgress(true), 250);
-    return () => clearTimeout(t);
-  }, [sending]);
+  // (a sub-threshold loader reads as a twitch). Same gate as the Send→Cancel
+  // button swap (250ms) ⇒ comet and Cancel appear together.
+  const showProgress = useBusyDelay(sending, 250);
 
   // Anchor the progress comet's first pass under the active tab. Measure the tab's
   // left relative to the header via bounding rects (NOT offsetLeft — the tab strip is
