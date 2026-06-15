@@ -54,3 +54,26 @@ export function rankRequests(query: string, hits: RequestHit[]): RequestHit[] {
     .sort((a, b) => b.score - a.score || a.hit.request.name.localeCompare(b.hit.request.name))
     .map((r) => r.hit);
 }
+
+export interface CollectionHit {
+  collection: CollectionIpc;
+  indices: number[];
+}
+
+/**
+ * Rank collections by fuzzy match against their name. Empty query returns every
+ * collection in tree order; otherwise non-matching collections are dropped and
+ * matches sort by descending score (name as the tie-break).
+ */
+export function rankCollections(query: string, collections: CollectionIpc[]): CollectionHit[] {
+  const q = query.trim();
+  if (!q) return collections.map((c) => ({ collection: c, indices: [] }));
+  const ranked: { hit: CollectionHit; score: number }[] = [];
+  for (const c of collections) {
+    const m = fuzzyMatch(q, c.name);
+    if (m.matched) ranked.push({ hit: { collection: c, indices: m.indices }, score: m.score });
+  }
+  return ranked
+    .sort((a, b) => b.score - a.score || a.hit.collection.name.localeCompare(b.hit.collection.name))
+    .map((r) => r.hit);
+}

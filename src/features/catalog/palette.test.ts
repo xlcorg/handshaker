@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { CollectionIpc, ItemIpc, SavedRequestIpc } from "@/ipc/bindings";
-import { flattenRequests, rankRequests } from "./palette";
+import { flattenRequests, rankRequests, rankCollections } from "./palette";
 
 function req(id: string, name: string, over: Partial<SavedRequestIpc> = {}): ItemIpc {
   return {
@@ -73,5 +73,29 @@ describe("rankRequests", () => {
   it("matches on the address", () => {
     const out = rankRequests("inv:443", hits);
     expect(out.map((h) => h.request.id)).toEqual(["r2"]);
+  });
+});
+
+describe("rankCollections", () => {
+  const tree = [
+    col("c1", "edo-attorney-letters", []),
+    col("c2", "edo-billing", []),
+    col("c3", "orders", []),
+  ];
+
+  it("returns all collections when the query is empty", () => {
+    const out = rankCollections("  ", tree);
+    expect(out.map((h) => h.collection.id)).toEqual(["c1", "c2", "c3"]);
+  });
+
+  it("keeps only fuzzy-matching collections", () => {
+    const out = rankCollections("edo", tree);
+    expect(out.map((h) => h.collection.id).sort()).toEqual(["c1", "c2"]);
+  });
+
+  it("ranks a tighter prefix match first and exposes match indices", () => {
+    const out = rankCollections("orders", tree);
+    expect(out[0].collection.id).toBe("c3");
+    expect(out[0].indices.length).toBe(6);
   });
 });
