@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useEffect, useMemo, useState } from "react";
 import { ChevronRight } from "lucide-react";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import {
   Command,
   CommandInput,
@@ -160,6 +160,9 @@ export function CommandPalette({
     >
       <DialogContent showCloseButton={false} className="overflow-hidden gap-0 p-0 sm:max-w-xl">
         <DialogTitle className="sr-only">Command palette</DialogTitle>
+        <DialogDescription className="sr-only">
+          Search collections and saved requests by name, then open one.
+        </DialogDescription>
         <Command shouldFilter={false} onValueChange={setHighlighted} onKeyDown={onKeyDown}>
           <CommandInput
             value={query}
