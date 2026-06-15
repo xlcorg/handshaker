@@ -4,6 +4,7 @@
 //! auth (plan 5), collections (plan 6).
 
 pub mod auth;
+pub mod base64;
 pub mod collections;
 pub mod env;
 pub mod error;
