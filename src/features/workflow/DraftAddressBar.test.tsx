@@ -20,7 +20,7 @@ function r(ui: ReactElement) {
 function props(over = {}) {
   return {
     step: base, catalog: null, reflecting: false, reflectError: null,
-    onAddress: vi.fn(), onTls: vi.fn(), onRefresh: vi.fn(), onSelectMethod: vi.fn(),
+    onAddress: vi.fn(), onTls: vi.fn(), onRefresh: vi.fn(), onReflectCancel: vi.fn(), onSelectMethod: vi.fn(),
     onSend: vi.fn(), onCancel: vi.fn(), ...over,
   };
 }

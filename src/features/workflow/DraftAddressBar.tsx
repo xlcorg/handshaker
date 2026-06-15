@@ -16,6 +16,8 @@ export interface DraftAddressBarProps {
   onAddress: (address: string) => void;
   onTls: (tls: boolean) => void;
   onRefresh: () => void;
+  /** Abort the in-flight reflection (distinct from `onCancel`, which cancels a Send). */
+  onReflectCancel: () => void;
   onSelectMethod: (m: SelectedMethod) => void;
   onSend: () => void;
   onCancel: () => void;
@@ -34,7 +36,7 @@ export interface DraftAddressBarProps {
  *  resolved, red = unresolved/cycle); the full resolved value is in the field tooltip. */
 export function DraftAddressBar({
   step, catalog, reflecting, reflectError,
-  onAddress, onTls, onRefresh, onSelectMethod, onSend, onCancel, onQuickAdd,
+  onAddress, onTls, onRefresh, onReflectCancel, onSelectMethod, onSend, onCancel, onQuickAdd,
   resolveAddress, resolveKey,
 }: DraftAddressBarProps) {
   const sending = step.status === "sending";
@@ -68,7 +70,9 @@ export function DraftAddressBar({
         catalog={catalog}
         onSelect={onSelectMethod}
         reflection={
-          step.address.trim() ? { loading: reflecting, error: reflectError, onRefresh } : undefined
+          step.address.trim()
+            ? { loading: reflecting, error: reflectError, onRefresh, onCancel: onReflectCancel }
+            : undefined
         }
         className="flex-1 min-w-0"
         onQuickAdd={onQuickAdd}

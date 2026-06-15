@@ -30,14 +30,26 @@ export async function appVersion(): Promise<string> {
   return r.version;
 }
 
-export async function grpcDescribe(target: GrpcTargetIpc): Promise<ServiceCatalogIpc> {
-  const r = await commands.grpcDescribe(target);
+// Reflection carries the same (requestId, deadline) surface as invoke, so a slow/hung
+// describe times out and can be aborted via `grpcCancel(requestId)`. Defaults serve any
+// caller without a cancel/timeout surface: a fresh id keeps registry entries unique,
+// 30_000ms mirrors the deadline pref default.
+export async function grpcDescribe(
+  target: GrpcTargetIpc,
+  requestId = newId(),
+  timeoutMs = 30_000,
+): Promise<ServiceCatalogIpc> {
+  const r = await commands.grpcDescribe(target, requestId, timeoutMs);
   if (r.status === "error") throw r.error;
   return r.data;
 }
 
-export async function grpcRefreshContract(target: GrpcTargetIpc): Promise<ServiceCatalogIpc> {
-  const r = await commands.grpcRefreshContract(target);
+export async function grpcRefreshContract(
+  target: GrpcTargetIpc,
+  requestId = newId(),
+  timeoutMs = 30_000,
+): Promise<ServiceCatalogIpc> {
+  const r = await commands.grpcRefreshContract(target, requestId, timeoutMs);
   if (r.status === "error") throw r.error;
   return r.data;
 }

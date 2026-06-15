@@ -33,12 +33,18 @@ fn target_key(t: &GrpcTarget) -> String {
 /// Cache-first contract describe. On a cache hit, returns the cached catalog
 /// WITHOUT opening a channel (auto-reflect-on-blur fires often). On a miss,
 /// `activate()` reflects + populates the cache, then the connection is dropped.
+///
+/// The reflecting path (miss only — a hit returns instantly with nothing to abort)
+/// runs under `race_cancel_timeout`, so it honors the caller's deadline and can be
+/// cancelled by `grpc_cancel(request_id)`, exactly like `grpc_invoke_oneshot`.
 #[tauri::command]
 #[specta::specta]
 pub async fn grpc_describe(
     app: AppHandle,
     state: State<'_, AppState>,
     target: GrpcTargetIpc,
+    request_id: String,
+    timeout_ms: u32,
 ) -> Result<ServiceCatalogIpc, IpcError> {
     let target = target.into_core()?;
     let key = ContractKey::from_target(&target);
@@ -47,35 +53,46 @@ pub async fn grpc_describe(
         return Ok(cached.catalog.into());
     }
 
-    let transport = Arc::new(TonicTransport::new());
-    let conn = activate(target, transport, state.contract_cache.as_ref()).await?;
-    let catalog: ServiceCatalogIpc = conn.catalog.clone().into();
-    ContractUpdated { target_key: target_key(&conn.target) }
-        .emit(&app)
-        .ok();
-    Ok(catalog)
-    // conn dropped here.
+    let cache = state.contract_cache.clone();
+    let work = async move {
+        let transport = Arc::new(TonicTransport::new());
+        let conn = activate(target, transport, cache.as_ref()).await?;
+        let catalog: ServiceCatalogIpc = conn.catalog.clone().into();
+        ContractUpdated { target_key: target_key(&conn.target) }
+            .emit(&app)
+            .ok();
+        Ok::<ServiceCatalogIpc, IpcError>(catalog)
+        // conn dropped here.
+    };
+    race_cancel_timeout(&state.in_flight, request_id, timeout_ms, work).await
 }
 
-/// Manual refresh: invalidate the cache entry then re-reflect.
+/// Manual refresh: invalidate the cache entry then re-reflect. Like `grpc_describe`,
+/// the re-reflection runs under `race_cancel_timeout` (deadline + `grpc_cancel`).
 #[tauri::command]
 #[specta::specta]
 pub async fn grpc_refresh_contract(
     app: AppHandle,
     state: State<'_, AppState>,
     target: GrpcTargetIpc,
+    request_id: String,
+    timeout_ms: u32,
 ) -> Result<ServiceCatalogIpc, IpcError> {
     let target = target.into_core()?;
     state
         .contract_cache
         .invalidate(&ContractKey::from_target(&target));
-    let transport = Arc::new(TonicTransport::new());
-    let conn = activate(target, transport, state.contract_cache.as_ref()).await?;
-    let catalog: ServiceCatalogIpc = conn.catalog.clone().into();
-    ContractUpdated { target_key: target_key(&conn.target) }
-        .emit(&app)
-        .ok();
-    Ok(catalog)
+    let cache = state.contract_cache.clone();
+    let work = async move {
+        let transport = Arc::new(TonicTransport::new());
+        let conn = activate(target, transport, cache.as_ref()).await?;
+        let catalog: ServiceCatalogIpc = conn.catalog.clone().into();
+        ContractUpdated { target_key: target_key(&conn.target) }
+            .emit(&app)
+            .ok();
+        Ok::<ServiceCatalogIpc, IpcError>(catalog)
+    };
+    race_cancel_timeout(&state.in_flight, request_id, timeout_ms, work).await
 }
 
 /// Build a JSON skeleton from the cached pool. On a cache miss, activate first.

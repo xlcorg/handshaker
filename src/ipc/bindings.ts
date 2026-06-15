@@ -17,21 +17,26 @@ async appVersion() : Promise<AppVersion> {
  * Cache-first contract describe. On a cache hit, returns the cached catalog
  * WITHOUT opening a channel (auto-reflect-on-blur fires often). On a miss,
  * `activate()` reflects + populates the cache, then the connection is dropped.
+ * 
+ * The reflecting path (miss only — a hit returns instantly with nothing to abort)
+ * runs under `race_cancel_timeout`, so it honors the caller's deadline and can be
+ * cancelled by `grpc_cancel(request_id)`, exactly like `grpc_invoke_oneshot`.
  */
-async grpcDescribe(target: GrpcTargetIpc) : Promise<Result<ServiceCatalogIpc, IpcError>> {
+async grpcDescribe(target: GrpcTargetIpc, requestId: string, timeoutMs: number) : Promise<Result<ServiceCatalogIpc, IpcError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("grpc_describe", { target }) };
+    return { status: "ok", data: await TAURI_INVOKE("grpc_describe", { target, requestId, timeoutMs }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
 },
 /**
- * Manual refresh: invalidate the cache entry then re-reflect.
+ * Manual refresh: invalidate the cache entry then re-reflect. Like `grpc_describe`,
+ * the re-reflection runs under `race_cancel_timeout` (deadline + `grpc_cancel`).
  */
-async grpcRefreshContract(target: GrpcTargetIpc) : Promise<Result<ServiceCatalogIpc, IpcError>> {
+async grpcRefreshContract(target: GrpcTargetIpc, requestId: string, timeoutMs: number) : Promise<Result<ServiceCatalogIpc, IpcError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("grpc_refresh_contract", { target }) };
+    return { status: "ok", data: await TAURI_INVOKE("grpc_refresh_contract", { target, requestId, timeoutMs }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };

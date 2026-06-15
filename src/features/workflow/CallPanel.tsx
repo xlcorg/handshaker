@@ -150,6 +150,7 @@ export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMetho
       onAddress={(address) => onPatch({ address })}
       onTls={(tls) => onPatch({ tls })}
       onRefresh={refreshContract}
+      onReflectCancel={reflection.cancel}
       onSelectMethod={(m) =>
         void applyMethodSelection(
           onPatch,

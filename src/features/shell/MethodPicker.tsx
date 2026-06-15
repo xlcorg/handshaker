@@ -180,6 +180,7 @@ export function MethodPicker({ selected, catalog, onSelect, className, reflectio
             loading={reflection.loading}
             error={reflection.error}
             onRefresh={reflection.onRefresh}
+            onCancel={reflection.onCancel}
           />
         )}
       </DropdownMenuContent>
