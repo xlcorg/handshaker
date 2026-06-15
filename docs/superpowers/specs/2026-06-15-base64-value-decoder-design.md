@@ -1,6 +1,8 @@
 # Декодирование base64-значений в ответе
 
-**Статус:** 📝 SPEC (брейншторм-апрув получен 2026-06-15; план ещё не написан)
+**Статус:** ✅ РЕАЛИЗОВАНА (code-complete 2026-06-16, ветка `claude/busy-sinoussi-ab48fe`,
+не влита — под live WebView2-проход). План + статус исполнения:
+`docs/superpowers/plans/2026-06-15-base64-value-decoder.md`.
 **Ветка:** `claude/busy-sinoussi-ab48fe`
 **Дата:** 2026-06-15
 

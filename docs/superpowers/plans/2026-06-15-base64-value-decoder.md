@@ -2,9 +2,35 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Status:** 📋 PLAN (готов к исполнению; брейншторм-апрув 2026-06-15)
+**Status:** ✅ CODE-COMPLETE (2026-06-16) — все 7 задач + final-review fix влиты в
+ветку, subagent-driven (spec+quality ревью на каждой + финальное ревью ветки).
+Гейты зелёные: `cargo test --workspace` · `pnpm test` 913 · `tsc` · `vite build` ·
+bindings no-drift. **Не влито в `main`** — ветка оставлена под живой WebView2-проход.
 **Ветка:** `claude/busy-sinoussi-ab48fe`
 **Спека:** `docs/superpowers/specs/2026-06-15-base64-value-decoder-design.md`
+
+**Коммиты:** core `4dba3e2`+`4e4d6dd` · IPC `8255c12` · FE-helpers `e282ed7` ·
+client `9e310c5`+`3aadbae` · DecodeDialog `a6248ff` · decodeActions `b4aeaa9` ·
+wiring `612e128` · **gate-timing fix `6bfe1a3`**.
+
+**Финальное ревью поймало 1 important баг** (его юнит-тесты структурно не видели):
+гейт `hsValueIsB64` ставился в `onContextMenu`, но Monaco-контроллер строит меню
+из своего, более раннего `onContextMenu` → первый ПКМ не показывал Decode/Save
+(off-by-one на последующих). Фикс `6bfe1a3`: гейт считается в `onMouseDown` по
+**правой** кнопке (mousedown раньше события `contextmenu`), значение клика
+стэшится и переиспользуется в `run`. Это **главный пункт live-проверки**.
+
+**Live-проход (punch-list, в WebView2 через `pnpm tauri dev`):**
+- Decode/Save появляются в контекстном меню с **ПЕРВОГО** ПКМ по base64-значению
+  (проверка timing-фикса); на не-base64 строке их нет, на числе — нет.
+- Decode → диалог: вложенный JSON pretty-print; Copy; Save to file… пишет
+  валидный `decoded.json`; отмена Save — без ошибки-тоста.
+- URL-safe base64 декодится; бинарь (PNG) → метка типа + Save пишет валидный файл.
+- drill-down: ПКМ→Decode по вложенному base64 внутри диалога.
+- Минорные (можно отложить): (1) сбой decode **вложенного** значения закрывает
+  весь диалог, а не откатывает к родителю (`DecodeDialog` `.catch`→`onClose`);
+  (2) ПКМ ровно по бейджу-эллипсису (injected-text) даёт нативное меню — убедиться,
+  что юзер попадает на текст-превью, а не на пилюлю размера.
 
 **Goal:** Decode any whole base64 string value in the gRPC response Body — view it (JSON pretty-printed / text / binary type+size), copy it, or save the decoded bytes to a file.
 
