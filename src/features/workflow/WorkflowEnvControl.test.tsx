@@ -127,4 +127,50 @@ describe("WorkflowEnvControl", () => {
 
     expect(workflowStore.activeWorkflow().envName).toBeNull();
   });
+
+  it("stops propagation on a handled Cmd+E so focused Monaco never opens its find widget", async () => {
+    // macOS: Monaco binds Cmd+E → actions.findWithSelection (opens the find
+    // widget). Our window-capture listener must STOP PROPAGATION, not merely
+    // preventDefault — otherwise the event keeps descending to Monaco's editor
+    // node and the find widget pops up on top of the env cycle.
+    render(<WorkflowEnvControl />);
+    await screen.findByText("No environment");
+    await act(async () => {});
+
+    const ev = new KeyboardEvent("keydown", {
+      code: "KeyE",
+      metaKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    const stopProp = vi.spyOn(ev, "stopPropagation");
+    act(() => {
+      window.dispatchEvent(ev);
+    });
+
+    expect(workflowStore.activeWorkflow().envName).toBe("staging"); // handled (cycled)
+    expect(stopProp).toHaveBeenCalled(); // Monaco never sees the key
+    expect(ev.defaultPrevented).toBe(true);
+  });
+
+  it("does NOT swallow Cmd+E when there are no envs — lets Monaco handle it", async () => {
+    vi.mocked(envList).mockResolvedValueOnce([]); // zero envs → no-op cycle
+    render(<WorkflowEnvControl />);
+    await screen.findByText("No environment");
+    await act(async () => {});
+
+    const ev = new KeyboardEvent("keydown", {
+      code: "KeyE",
+      metaKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    const stopProp = vi.spyOn(ev, "stopPropagation");
+    act(() => {
+      window.dispatchEvent(ev);
+    });
+
+    expect(stopProp).not.toHaveBeenCalled();
+    expect(ev.defaultPrevented).toBe(false);
+  });
 });
