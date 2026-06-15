@@ -6,6 +6,7 @@ import { MethodPicker } from "@/features/shell/MethodPicker";
 import type { SelectedMethod } from "@/features/shell/SelectedMethod";
 import type { ResolutionReportIpc, ServiceCatalogIpc } from "@/ipc/bindings";
 import { VarHighlightInput } from "@/features/vars/VarHighlightInput";
+import { useBusyDelay } from "@/lib/use-busy-delay";
 import type { Step } from "./model";
 
 export interface DraftAddressBarProps {
@@ -40,6 +41,9 @@ export function DraftAddressBar({
   resolveAddress, resolveKey,
 }: DraftAddressBarProps) {
   const sending = step.status === "sending";
+  // Delay the Send→Cancel swap so a sub-250ms call never twitches the button.
+  // Same 250ms as the response comet (ResponsePanel) ⇒ they appear in lockstep.
+  const showCancel = useBusyDelay(sending, 250);
   return (
     <div className="flex h-14 items-center gap-2 border-b border-border px-4">
       <div className="flex h-8 flex-1 min-w-[16rem] items-center gap-1.5 rounded-md border border-input bg-background pl-2 pr-1 focus-within:ring-1 focus-within:ring-ring">
@@ -77,13 +81,18 @@ export function DraftAddressBar({
         className="flex-1 min-w-0"
         onQuickAdd={onQuickAdd}
       />
-      {sending ? (
-        <Button size="sm" variant="ghost" onClick={onCancel} className="text-muted-foreground">
+      {showCancel ? (
+        <Button size="sm" variant="ghost" onClick={onCancel} className="min-w-[5rem] text-muted-foreground">
           Cancel
         </Button>
       ) : (
-        <Tooltip content={<span>Send <Kbd>Ctrl</Kbd> <Kbd>Enter</Kbd></span>}>
-          <Button size="sm" onClick={onSend} disabled={step.method.trim().length === 0}>
+        <Tooltip content={<span><Kbd>Ctrl</Kbd> <Kbd>Enter</Kbd></span>}>
+          <Button
+            size="sm"
+            onClick={onSend}
+            disabled={step.method.trim().length === 0}
+            className="min-w-[5rem] active:scale-[.97]"
+          >
             ▶ Send
           </Button>
         </Tooltip>

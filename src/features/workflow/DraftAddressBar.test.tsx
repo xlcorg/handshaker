@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import type { ReactElement } from "react";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { DraftAddressBar } from "./DraftAddressBar";
 import { newStep } from "./model";
@@ -69,12 +69,20 @@ describe("DraftAddressBar", () => {
     expect(p.onSend).toHaveBeenCalledTimes(1);
   });
 
-  it("shows Cancel (not Send) while sending and calls onCancel when clicked", () => {
-    const p = props({ step: { ...base, status: "sending" } });
-    r(<DraftAddressBar {...p} />);
-    expect(screen.queryByRole("button", { name: /send/i })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
-    expect(p.onCancel).toHaveBeenCalledTimes(1);
+  it("keeps Send during the busy gate, then swaps to Cancel and calls onCancel", () => {
+    vi.useFakeTimers();
+    try {
+      const p = props({ step: { ...base, status: "sending" } });
+      r(<DraftAddressBar {...p} />);
+      // Sub-250ms calls never flip to Cancel — the button doesn't twitch.
+      expect(screen.getByRole("button", { name: /send/i })).toBeInTheDocument();
+      act(() => vi.advanceTimersByTime(250));
+      expect(screen.queryByRole("button", { name: /send/i })).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
+      expect(p.onCancel).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("has no standalone refresh button in the bar (refresh lives in the dropdown)", () => {
