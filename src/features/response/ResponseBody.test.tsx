@@ -2,7 +2,9 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 
 vi.mock("@/lib/monaco", () => ({
-  MonacoEditor: ({ value }: { value: string }) => <pre data-testid="monaco">{value}</pre>,
+  MonacoEditor: ({ value, options }: { value: string; options?: { readOnly?: boolean } }) => (
+    <pre data-testid="monaco" data-readonly={String(!!options?.readOnly)}>{value}</pre>
+  ),
   BODY_EDIT_OPTIONS: { readOnly: false },
   BODY_READONLY_OPTIONS: { readOnly: true },
   MONACO_THEME: "handshaker-dark",
@@ -13,9 +15,10 @@ vi.mock("@/ipc/client", () => ({ base64Inspect: vi.fn(), base64Save: vi.fn() }))
 import { ResponseBody } from "./ResponseBody";
 
 describe("ResponseBody", () => {
-  it("renders the body and no decode dialog initially", () => {
+  it("renders the read-only body", () => {
     render(<ResponseBody json={`{"a":1}`} />);
-    expect(screen.getByTestId("monaco").textContent).toContain(`{"a":1}`);
-    expect(screen.queryByText("Decoded")).not.toBeInTheDocument();
+    const el = screen.getByTestId("monaco");
+    expect(el.textContent).toContain(`{"a":1}`);
+    expect(el.getAttribute("data-readonly")).toBe("true");
   });
 });

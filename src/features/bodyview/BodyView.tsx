@@ -20,6 +20,7 @@ import { toastSnippet } from "./copyValue";
 import { base64Save } from "@/ipc/client";
 import { toast } from "sonner";
 import { installContextMenuCleanup } from "./contextMenuCleanup";
+import { copyDecodedBase64 } from "./copyDecoded";
 
 type Mode = "request" | "response";
 
@@ -29,8 +30,6 @@ export interface BodyViewProps {
   onChange?: (next: string) => void;
   /** Ctrl/Cmd+Enter inside the editor (Monaco swallows it, so we bind a command). */
   onSubmit?: () => void;
-  /** Response mode only: open the base64 decode dialog for a value. */
-  onDecode?: (value: string) => void;
   /** Flat field-schema attached to the model — request mode only: autocomplete,
    *  ghost skeleton, unknown-field markers. Response mode receives none (the
    *  Contract tab carries the contract). */
@@ -56,14 +55,12 @@ interface Live {
   lastText: string;
 }
 
-export function BodyView({ mode, value, onChange, onSubmit, onDecode, schema }: BodyViewProps) {
+export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewProps) {
   const [prefs] = usePrefs();
   const live = useRef<Live | null>(null);
   // Ref so the Monaco command (bound once in onMount) always calls the freshest handler.
   const onSubmitRef = useRef(onSubmit);
   onSubmitRef.current = onSubmit;
-  const onDecodeRef = useRef(onDecode);
-  onDecodeRef.current = onDecode;
   const schemaRef = useRef(schema);
   schemaRef.current = schema;
 
@@ -238,7 +235,11 @@ export function BodyView({ mode, value, onChange, onSubmit, onDecode, schema }: 
         live.current.decode = attachDecodeActions(editor as unknown as DecodeEditorLike, {
           getTree: () => live.current?.tree ?? null,
           getSpans: () => live.current?.spans ?? [],
-          onDecode: (v) => onDecodeRef.current?.(v),
+          // `v` is the FULL value from the JSON tree (the editor display may be
+          // elided); decode it on the backend and copy the decoded text.
+          onDecode: (v) => {
+            void copyDecodedBase64(v);
+          },
           onCopy: (v) => {
             void copyToClipboard(v, `Copied: ${toastSnippet(v)}`);
           },
