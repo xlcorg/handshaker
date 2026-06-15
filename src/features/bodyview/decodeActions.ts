@@ -17,13 +17,18 @@ export interface DecodeActionDescriptor {
   run(editor: DecodeEditorLike): void;
 }
 
+/** Mouse event slice — we only need the right-button flag and the click position. */
+export interface DecodeMouseEventLike {
+  event: { rightButton: boolean };
+  target: { position: PositionLike | null };
+}
+
 /** Structural slice of Monaco's IStandaloneCodeEditor used by the decode actions. */
 export interface DecodeEditorLike {
   getModel(): ModelLike | null;
-  getPosition(): PositionLike | null;
   createContextKey<T>(key: string, defaultValue: T): ContextKeyLike;
   addAction(descriptor: DecodeActionDescriptor): DisposableLike;
-  onContextMenu(listener: (e: { target: { position: PositionLike | null } }) => void): DisposableLike;
+  onMouseDown(listener: (e: DecodeMouseEventLike) => void): DisposableLike;
 }
 
 export interface DecodeActionDeps {
@@ -40,33 +45,34 @@ export interface DecodeActionDeps {
 const GROUP = "9_cutcopypaste";
 const KEY = "hsValueIsB64";
 
-function valueAtCursor(editor: DecodeEditorLike, deps: DecodeActionDeps): string | null {
-  const model = editor.getModel();
-  const pos = editor.getPosition();
-  const tree = deps.getTree();
-  if (!model || !pos || !tree) return null;
-  return stringValueAtOffset(tree, deps.getSpans(), model.getOffsetAt(pos));
-}
-
 /**
  * Register the response-body context-menu actions (Decode / Copy value / Save
  * decoded to file…). Actions carry NO keybinding — only `contextMenuGroupId` —
- * so Monaco's global (last-wins) keybinding registry is never touched. Decode and
- * Save are gated by the `hsValueIsB64` context key, recomputed on each right-click.
+ * so Monaco's global (last-wins) keybinding registry is never touched.
+ *
+ * The `hsValueIsB64` gate (controls Decode/Save visibility) is computed on
+ * `onMouseDown` for the RIGHT button: mousedown fires before the `contextmenu`
+ * event Monaco's context-menu controller uses to build the menu, so the
+ * precondition is already correct when the menu is assembled. (A listener added
+ * via onContextMenu would run AFTER the menu is built — first-click-misses /
+ * off-by-one.) The value at the clicked position is stashed and reused by the
+ * action `run`s, so the menu and the action always operate on the same value.
  */
 export function attachDecodeActions(editor: DecodeEditorLike, deps: DecodeActionDeps): DisposableLike {
   const gate = editor.createContextKey<boolean>(KEY, false);
+  // Value under the most recent right-click — what the menu was built for.
+  let clicked: string | null = null;
 
-  const ctxSub = editor.onContextMenu((e) => {
+  const mouseSub = editor.onMouseDown((e) => {
+    if (!e.event.rightButton) return;
     const model = editor.getModel();
     const pos = e.target.position;
     const tree = deps.getTree();
-    if (!model || !pos || !tree) {
-      gate.set(false);
-      return;
-    }
-    const v = stringValueAtOffset(tree, deps.getSpans(), model.getOffsetAt(pos));
-    gate.set(!!v && looksLikeBase64(v));
+    clicked =
+      model && pos && tree
+        ? stringValueAtOffset(tree, deps.getSpans(), model.getOffsetAt(pos))
+        : null;
+    gate.set(!!clicked && looksLikeBase64(clicked));
   });
 
   const decode = editor.addAction({
@@ -75,9 +81,8 @@ export function attachDecodeActions(editor: DecodeEditorLike, deps: DecodeAction
     contextMenuGroupId: GROUP,
     contextMenuOrder: 3,
     precondition: KEY,
-    run: (ed) => {
-      const v = valueAtCursor(ed, deps);
-      if (v) deps.onDecode(v);
+    run: () => {
+      if (clicked) deps.onDecode(clicked);
     },
   });
 
@@ -86,9 +91,8 @@ export function attachDecodeActions(editor: DecodeEditorLike, deps: DecodeAction
     label: "Copy value",
     contextMenuGroupId: GROUP,
     contextMenuOrder: 3.1,
-    run: (ed) => {
-      const v = valueAtCursor(ed, deps);
-      if (v) deps.onCopy(v);
+    run: () => {
+      if (clicked) deps.onCopy(clicked);
     },
   });
 
@@ -98,9 +102,8 @@ export function attachDecodeActions(editor: DecodeEditorLike, deps: DecodeAction
     contextMenuGroupId: GROUP,
     contextMenuOrder: 3.2,
     precondition: KEY,
-    run: (ed) => {
-      const v = valueAtCursor(ed, deps);
-      if (v) deps.onSave(v);
+    run: () => {
+      if (clicked) deps.onSave(clicked);
     },
   });
 
@@ -109,7 +112,7 @@ export function attachDecodeActions(editor: DecodeEditorLike, deps: DecodeAction
       decode.dispose();
       copy.dispose();
       save.dispose();
-      ctxSub.dispose();
+      mouseSub.dispose();
     },
   };
 }

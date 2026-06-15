@@ -30,7 +30,7 @@ vi.mock("@/lib/monaco", () => ({
       // Response mode attaches the base64 decode context-menu actions.
       createContextKey: () => ({ set: () => {} }),
       addAction: () => ({ dispose: () => {} }),
-      onContextMenu: () => ({ dispose: () => {} }),
+      onMouseDown: () => ({ dispose: () => {} }),
       changeViewZones: (cb: (acc: { addZone: () => string; removeZone: () => void }) => void) => {
         cb({ addZone: () => "z1", removeZone: () => {} });
       },
