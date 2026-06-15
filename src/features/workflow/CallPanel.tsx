@@ -64,6 +64,7 @@ export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMetho
   const effectiveAuth = pickEffectiveAuth(step.auth, originAuth ?? null, activeWf.envName);
 
   const onSend = async () => {
+    if (step.status === "sending") return; // idempotent: the button stays "Send" during the pre-gate window
     const requestId = newId();
     onPatch({ status: "sending", error: null, requestId });
     // Merge of both lines: main's `effectiveAuth` (inherit the collection's auth when the

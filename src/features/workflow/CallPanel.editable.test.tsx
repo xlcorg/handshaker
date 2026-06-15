@@ -74,6 +74,19 @@ describe("CallPanel editable", () => {
     expect(onPatch).toHaveBeenCalledWith(expect.objectContaining({ status: "sending" }));
   });
 
+  it("does not start a second send when already sending (button stays Send pre-gate)", () => {
+    const onPatch = vi.fn();
+    const sendingStep = { ...draft, status: "sending" as const };
+    render(
+      <TooltipProvider>
+        <CallPanel step={sendingStep} onPatch={onPatch} editable />
+      </TooltipProvider>
+    );
+    // Pre-gate the action button still reads "Send"; clicking it must be a no-op.
+    fireEvent.click(screen.getByRole("button", { name: /send/i }));
+    expect(onPatch).not.toHaveBeenCalled();
+  });
+
   it("does not bind the send shortcut when not editable", () => {
     const onPatch = vi.fn();
     render(
