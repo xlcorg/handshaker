@@ -14,6 +14,11 @@ import type { MessageSchemaIpc } from "@/ipc/bindings";
 import { setModelSchema, computeSuggestions, collectPresentKeys } from "./completion";
 import { GhostZone, computeGhostLines } from "./ghost";
 import { computeUnknownFieldMarkers } from "./validate";
+import { attachDecodeActions, type DecodeEditorLike } from "./decodeActions";
+import { copyToClipboard } from "@/lib/clipboard";
+import { toastSnippet } from "./copyValue";
+import { base64Save } from "@/ipc/client";
+import { toast } from "sonner";
 
 type Mode = "request" | "response";
 
@@ -23,6 +28,8 @@ export interface BodyViewProps {
   onChange?: (next: string) => void;
   /** Ctrl/Cmd+Enter inside the editor (Monaco swallows it, so we bind a command). */
   onSubmit?: () => void;
+  /** Response mode only: open the base64 decode dialog for a value. */
+  onDecode?: (value: string) => void;
   /** Flat field-schema attached to the model — request mode only: autocomplete,
    *  ghost skeleton, unknown-field markers. Response mode receives none (the
    *  Contract tab carries the contract). */
@@ -38,6 +45,7 @@ interface Live {
   decorations: Monaco.editor.IEditorDecorationsCollection | null;
   expanded: Set<string>;
   controller: DisposableLike | null;
+  decode: DisposableLike | null;
   typeSub: DisposableLike | null;
   ghost: GhostZone | null;
   ghostTimer: number | null;
@@ -47,12 +55,14 @@ interface Live {
   lastText: string;
 }
 
-export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewProps) {
+export function BodyView({ mode, value, onChange, onSubmit, onDecode, schema }: BodyViewProps) {
   const [prefs] = usePrefs();
   const live = useRef<Live | null>(null);
   // Ref so the Monaco command (bound once in onMount) always calls the freshest handler.
   const onSubmitRef = useRef(onSubmit);
   onSubmitRef.current = onSubmit;
+  const onDecodeRef = useRef(onDecode);
+  onDecodeRef.current = onDecode;
   const schemaRef = useRef(schema);
   schemaRef.current = schema;
 
@@ -177,10 +187,11 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
       if (live.current?.ghostTimer != null) window.clearTimeout(live.current.ghostTimer);
       live.current?.ghost?.dispose();
       live.current?.controller?.dispose();
+      live.current?.decode?.dispose();
       live.current?.typeSub?.dispose();
       live.current = {
         editor, monaco, tree: null, spans: [], badges: [],
-        decorations: null, expanded: new Set(), controller: null, typeSub: null,
+        decorations: null, expanded: new Set(), controller: null, decode: null, typeSub: null,
         ghost: null, ghostTimer: null,
         lineCount: editor.getModel()?.getLineCount() ?? 1,
         lastText: editor.getValue(),
@@ -220,6 +231,21 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
       }
       if (mode === "response") {
         renderResponse(editor.getValue());
+        live.current.decode = attachDecodeActions(editor as unknown as DecodeEditorLike, {
+          getTree: () => live.current?.tree ?? null,
+          getSpans: () => live.current?.spans ?? [],
+          onDecode: (v) => onDecodeRef.current?.(v),
+          onCopy: (v) => {
+            void copyToClipboard(v, `Copied: ${toastSnippet(v)}`);
+          },
+          onSave: (v) => {
+            void base64Save(v)
+              .then((p) => {
+                if (p) toast.success(`Saved to ${p}`);
+              })
+              .catch((e) => toast.error(typeof e === "string" ? e : "Couldn't save"));
+          },
+        });
       } else {
         const parsed = parseWithSpans(editor.getValue());
         live.current.tree = parsed?.tree ?? null;
@@ -252,6 +278,7 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
   // Dispose the controller + type subscriptions when BodyView itself unmounts.
   useEffect(() => () => {
     live.current?.controller?.dispose();
+    live.current?.decode?.dispose();
     live.current?.typeSub?.dispose();
     if (live.current?.ghostTimer != null) window.clearTimeout(live.current.ghostTimer);
     live.current?.ghost?.dispose();

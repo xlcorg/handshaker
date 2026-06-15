@@ -27,6 +27,10 @@ vi.mock("@/lib/monaco", () => ({
       getLayoutInfo: () => ({ contentLeft: 0 }),
       // Request mode subscribes to keyup to force-open the suggest widget on `"`.
       onKeyUp: () => ({ dispose: () => {} }),
+      // Response mode attaches the base64 decode context-menu actions.
+      createContextKey: () => ({ set: () => {} }),
+      addAction: () => ({ dispose: () => {} }),
+      onContextMenu: () => ({ dispose: () => {} }),
       changeViewZones: (cb: (acc: { addZone: () => string; removeZone: () => void }) => void) => {
         cb({ addZone: () => "z1", removeZone: () => {} });
       },
