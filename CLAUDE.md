@@ -6,10 +6,28 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 
 ## Active work
 
-Нет активной фичи в работе. Последняя влитая — **Word Wrap — настройка + хоткей
-Alt+Z** (✅ DONE 2026-06-16, влита в `main` fast-forward; план+спека
-`2026-06-16-word-wrap-setting*` в `archive/`; остаток — live-проход в WebView2;
-см. ниже).
+**Send button + response polish — тултип · фикс дёрганья · анимация прихода**
+(✅ code-complete на ветке `claude/jolly-wright-9523f9`, не влита; план+спека
+`2026-06-16-send-response-ui-polish*` в `plans/`/`specs/`). Три пункта: (1) тултип
+кнопки Send показывает только хоткей `Ctrl Enter` (слово «Send» убрано — дублирует
+подпись `▶ Send`); (2) фикс дёрганья Send↔Cancel на быстрых (<5 мс) ответах —
+общий хук `useBusyDelay(active, delayMs)` (delay-половина паттерна spin-delay)
+гейтит свап на 250 мс в обоих барах (`DraftAddressBar`+`AddressBar`), так что
+суб-250 мс вызов кнопку не дёргает; `min-w-[5rem]` против рефлоу; `onSend`
+идемпотентен (гард `status==="sending"`) против двойной отправки в пред-гейт окне;
+`ResponsePanel` переведён на тот же хук (единый источник 250 мс ⇒ комета и Cancel
+синхронны). `minDuration` у хука сознательно нет — гейтится actionable-кнопка
+Cancel, а не спиннер; (3) анимация: press-отклик `active:scale-[.97]` на Send +
+fade-in тела ответа `.hs-fade-in` (120 мс, `--ease-out`) на success-body/ErrorView/
+ClientErrorView; reduced-motion гасит глобальным ресетом. Бэкенд/IPC/bindings не
+тронуты (только FE+CSS). Subagent-driven (6 задач + финальное ревью ветки:
+APPROVED, 0 находок); гейт: vitest 903 · tsc · vite build · `cargo check`.
+**Остаток:** живой WebView2-проход (нужен реальный быстрый gRPC-эндпойнт) → merge
+ff в `main` → архивирование плана+спеки.
+
+Последняя влитая — **Word Wrap — настройка + хоткей Alt+Z** (✅ DONE 2026-06-16,
+влита в `main` fast-forward; план+спека `2026-06-16-word-wrap-setting*` в
+`archive/`; см. ниже).
 
 Интеграционная ветка — `main`; фичи ведутся в отдельных worktree-ветках
 (`claude/*`) и вливаются в `main` fast-forward.

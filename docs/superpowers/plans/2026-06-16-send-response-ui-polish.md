@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Status:** 🚧 in progress — not started. **Branch:** `claude/jolly-wright-9523f9`.
+**Status:** ✅ code-complete on `claude/jolly-wright-9523f9` — all 6 impl tasks done (commits `9729294`…`c9af51c`); gate green (vitest **903** · tsc clean · vite build · `cargo check`); final branch review **APPROVED, zero findings**. Remaining: live WebView2 pass (motion + sub-5ms jitter; needs a real fast gRPC endpoint) + merge ff to `main` + archive.
 **Spec:** [../specs/2026-06-16-send-response-ui-polish-design.md](../specs/2026-06-16-send-response-ui-polish-design.md).
 **Gate:** `pnpm vitest run` · `pnpm tsc -p tsconfig.json --noEmit` · `pnpm build` · `cargo check` (no backend change). Live WebView2 pass for motion + jitter; macOS deferred.
 
