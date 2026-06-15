@@ -28,6 +28,8 @@ export interface Prefs {
   varHighlight: VarHighlightScheme;
   /** Inline contract hints in the request body editor: the ghost skeleton. */
   bodyHints: boolean;
+  /** Перенос длинных строк в редакторах тела запроса/ответа. Off → гориз. скролл. */
+  wordWrap: boolean;
 }
 
 export const PREFS_DEFAULTS: Prefs = {
@@ -41,6 +43,7 @@ export const PREFS_DEFAULTS: Prefs = {
   methodGroupStyle: "zebra",
   varHighlight: "indigo",
   bodyHints: true,
+  wordWrap: false,
 };
 
 export const ZOOM_MIN = 0.5;

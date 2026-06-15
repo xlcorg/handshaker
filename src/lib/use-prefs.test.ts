@@ -115,3 +115,18 @@ describe("bodyHints pref", () => {
     expect(typeof readPrefs().bodyHints).toBe("boolean");
   });
 });
+
+describe("wordWrap pref", () => {
+  beforeEach(() => localStorage.clear());
+
+  it("defaults wordWrap to false", () => {
+    expect(PREFS_DEFAULTS.wordWrap).toBe(false);
+  });
+
+  it("merges a persisted wordWrap:true over defaults", () => {
+    localStorage.setItem("handshaker.prefs.v1", JSON.stringify({ wordWrap: true }));
+    const merged = { ...PREFS_DEFAULTS, wordWrap: true };
+    expect(merged.wordWrap).toBe(true);
+    expect(typeof readPrefs().wordWrap).toBe("boolean");
+  });
+});
