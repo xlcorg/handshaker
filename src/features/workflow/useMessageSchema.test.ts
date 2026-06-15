@@ -49,4 +49,24 @@ describe("useMessageSchema", () => {
       { address: "sides-host", tls: false, collectionId: null }, "S", "M", "output",
     );
   });
+
+  it("refetches the same target when the revision bumps (manual reflection refresh)", async () => {
+    const FIRST: MessageSchemaIpc = { root: "t.First", messages: [], enums: [] };
+    const SECOND: MessageSchemaIpc = { root: "t.Second", messages: [], enums: [] };
+    fetchMock.mockResolvedValueOnce(FIRST).mockResolvedValueOnce(SECOND);
+    const target = { address: "revision-host", tls: false, service: "S", method: "M" };
+
+    const { result, rerender } = renderHook(
+      ({ rev }: { rev: number }) => useMessageSchema(target, "input", rev),
+      { initialProps: { rev: 0 } },
+    );
+    await waitFor(() => expect(result.current).toEqual(FIRST));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // Refresh: a bumped revision must bypass the process-wide cache and refetch —
+    // otherwise the contract/hints freeze on the first result ("one-time action").
+    rerender({ rev: 1 });
+    await waitFor(() => expect(result.current).toEqual(SECOND));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 });

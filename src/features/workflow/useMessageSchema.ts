@@ -16,13 +16,20 @@ export interface SchemaTarget {
 
 /** Returns the flat field-schema for the given call target and side, or null while
  *  loading / when unavailable / when no method is selected. Input and output sides are
- *  cached independently. Refetches when the key changes. */
+ *  cached independently. Refetches when the key changes.
+ *
+ *  `revision` is a manual-refresh signal: bump it (in lockstep with re-reflecting the
+ *  backend pool — see `useDraftReflection.refresh`) to force a refetch of an otherwise
+ *  unchanged target. It is part of the cache key, so a bump is a cache miss → refetch;
+ *  without it the process-wide cache would freeze the schema on its first result, and
+ *  the contract/hints would never pick up a server-side change ("one-time action"). */
 export function useMessageSchema(
   target: SchemaTarget,
   side: MessageSideIpc = "input",
+  revision = 0,
 ): MessageSchemaIpc | null {
   const { address, tls, service, method, collectionId = null } = target;
-  const key = `${address}|${tls}|${service}|${method}|${side}|${collectionId ?? ""}`;
+  const key = `${address}|${tls}|${service}|${method}|${side}|${collectionId ?? ""}|${revision}`;
   const [schema, setSchema] = useState<MessageSchemaIpc | null>(() => cache.get(key) ?? null);
 
   useEffect(() => {

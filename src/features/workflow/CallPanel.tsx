@@ -21,7 +21,7 @@ import {
 import { workflowStore } from "./store";
 import { useEnvRevision } from "@/features/envs/envRevision";
 import { newId } from "@/lib/ids";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { SavedAuthConfigIpc } from "@/ipc/bindings";
 import type { MetadataRow, Step } from "./model";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
@@ -122,14 +122,24 @@ export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMetho
 
   const reflection = useDraftReflection(step.address, step.tls, !!editable, step.collectionId);
 
+  // Manual "Refresh server reflection": re-reflect the backend pool AND force the schema
+  // hooks to refetch. The schema feeds the Contract tab + body hints from a cache that's
+  // otherwise keyed only by the (unchanged) target, so without bumping this revision it
+  // would freeze on its first result — the "one-time action" bug.
+  const [schemaRevision, setSchemaRevision] = useState(0);
+  const refreshContract = () => {
+    reflection.refresh();
+    setSchemaRevision((r) => r + 1);
+  };
+
   // Schema for the draft's method — input side for request autocomplete + ghost,
   // output side for the Contract tab.
   // History panels pass an empty target so no fetch fires.
   const schemaTarget = editable
     ? { address: step.address, tls: step.tls, service: step.service, method: step.method, collectionId: step.collectionId }
     : { address: "", tls: false, service: "", method: "", collectionId: null };
-  const schema = useMessageSchema(schemaTarget, "input");
-  const outputSchema = useMessageSchema(schemaTarget, "output");
+  const schema = useMessageSchema(schemaTarget, "input", schemaRevision);
+  const outputSchema = useMessageSchema(schemaTarget, "output", schemaRevision);
 
   const header = editable ? (
     <DraftAddressBar
@@ -139,7 +149,7 @@ export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMetho
       reflectError={reflection.error}
       onAddress={(address) => onPatch({ address })}
       onTls={(tls) => onPatch({ tls })}
-      onRefresh={reflection.refresh}
+      onRefresh={refreshContract}
       onSelectMethod={(m) =>
         void applyMethodSelection(
           onPatch,

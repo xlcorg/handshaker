@@ -23,7 +23,7 @@ vi.mock("@/ipc/client", () => ({
 import { CallPanel } from "./CallPanel";
 import { newStep } from "./model";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { grpcMessageSchema, authInvalidate, authResolve, varsResolve, grpcInvokeOneshot } from "@/ipc/client";
+import { grpcMessageSchema, grpcRefreshContract, authInvalidate, authResolve, varsResolve, grpcInvokeOneshot } from "@/ipc/client";
 import type { MessageSchemaIpc, InvokeOutcomeIpc, ResolutionReportIpc } from "@/ipc/bindings";
 
 const draft = newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "GetX" });
@@ -143,6 +143,36 @@ describe("CallPanel contract tab", () => {
       .map((el) => el.closest("div.whitespace-pre"))
       .find((d) => d !== null);
     expect(rpcLine?.textContent).toBe("rpc GetSides(Req) returns (Resp);");
+  });
+});
+
+describe("CallPanel reflection refresh", () => {
+  it("refetches the contract schema when 'Refresh server reflection' is clicked", async () => {
+    // A fresh target so the process-wide useMessageSchema cache (and its null entries
+    // from other tests) doesn't shadow this fetch.
+    const wireSchema: MessageSchemaIpc = { root: "t.Wire", messages: [], enums: [] };
+    vi.mocked(grpcMessageSchema).mockResolvedValue(wireSchema);
+    const wireDraft = newStep({ address: "wire-host:443", tls: true, service: "p.v1.S", method: "WireRefresh" });
+    render(
+      <TooltipProvider>
+        <CallPanel step={wireDraft} onPatch={() => {}} editable />
+      </TooltipProvider>,
+    );
+    // Initial input+output schema fetch for this fresh target lands.
+    await waitFor(() => expect(grpcMessageSchema).toHaveBeenCalled());
+    const before = vi.mocked(grpcMessageSchema).mock.calls.length;
+
+    // Open the MethodPicker dropdown (Radix opens on Enter, not plain click), then fire
+    // the reflection refresh that lives in its footer.
+    fireEvent.keyDown(screen.getByRole("button", { name: /WireRefresh/ }), { key: "Enter" });
+    fireEvent.click(await screen.findByLabelText("Refresh server reflection"));
+
+    // Refresh must re-reflect the backend AND refetch the schema. The bug: it only did the
+    // former, so the contract tab + body hints froze on the first result ("one-time action").
+    await waitFor(() => expect(grpcRefreshContract).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(vi.mocked(grpcMessageSchema).mock.calls.length).toBeGreaterThan(before),
+    );
   });
 });
 
