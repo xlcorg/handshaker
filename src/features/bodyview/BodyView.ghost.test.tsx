@@ -24,6 +24,7 @@ vi.mock("@/lib/monaco", () => ({
         getValue: () => captured.value,
         getModel: () => null, // маркеры/схема скипаются, ghost-ветка работает
         addCommand: () => {},
+        getContribution: () => null, // onMount strips the "Command Palette" item; no-ops here
         onKeyUp: () => ({ dispose: () => {} }),
         changeViewZones: (
           cb: (acc: { addZone: (z: unknown) => string; removeZone: (id: string) => void }) => void,

@@ -19,6 +19,7 @@ import { copyToClipboard } from "@/lib/clipboard";
 import { toastSnippet } from "./copyValue";
 import { base64Save } from "@/ipc/client";
 import { toast } from "sonner";
+import { installContextMenuCleanup } from "./contextMenuCleanup";
 
 type Mode = "request" | "response";
 
@@ -196,6 +197,9 @@ export function BodyView({ mode, value, onChange, onSubmit, onDecode, schema }: 
         lineCount: editor.getModel()?.getLineCount() ?? 1,
         lastText: editor.getValue(),
       };
+      // Drop Monaco's default "Command Palette" entry from the right-click menu
+      // (F1 still opens it). Mode-independent — it's noise in both editors.
+      installContextMenuCleanup(editor);
       // Attach schema to the model (request mode is the only consumer:
       // autocomplete + ghost + unknown-field markers; response passes none).
       setModelSchema(editor.getModel(), schemaRef.current ?? null);
