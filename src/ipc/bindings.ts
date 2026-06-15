@@ -150,6 +150,29 @@ async varsResolve(template: string, ctx: VarsResolveCtxIpc | null) : Promise<Res
     else return { status: "error", error: e  as any };
 }
 },
+/**
+ * Decode a base64 string and report its kind/size/text (view-only).
+ */
+async base64Inspect(input: string) : Promise<Result<Base64InspectIpc, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("base64_inspect", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Decode a base64 string and write the bytes to a user-picked file.
+ * Ok(Some(path)) = saved; Ok(None) = cancelled; Err = decode/write failure.
+ */
+async base64Save(input: string) : Promise<Result<string | null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("base64_save", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async authResolve(config: SavedAuthConfigIpc) : Promise<Result<AuthCredentialsIpc | null, IpcError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("auth_resolve", { config }) };
@@ -333,6 +356,24 @@ contractUpdated: "contract-updated"
 export type ActiveRequestRefIpc = { collection_id: string; item_id: string }
 export type AppVersion = { version: string }
 export type AuthCredentialsIpc = { header_name: string; header_value: string }
+export type Base64InspectIpc = { kind: Base64KindIpc; 
+/**
+ * Decoded byte length. specta rejects u64 in DTOs → u32 (responses ≪ 4 GB; saturating).
+ */
+size_bytes: number; 
+/**
+ * Decoded UTF-8 text for Json/Text; None for Binary.
+ */
+text: string | null; 
+/**
+ * MIME for Binary (magic bytes); None otherwise.
+ */
+mime: string | null; 
+/**
+ * Suggested extension for Binary; None otherwise.
+ */
+extension: string | null }
+export type Base64KindIpc = "json" | "text" | "binary"
 export type CollectionIpc = { id: string; name: string; items: ItemIpc[]; variables: Partial<{ [key in string]: string }>; auth: SavedAuthConfigIpc; default_tls: boolean; skip_tls_verify: boolean; pinned: boolean; description: string | null; created_at: number; expanded: boolean }
 /**
  * Lightweight list entry (id + name only) for `collection_list`.

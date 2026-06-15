@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod base64;
 pub mod collection;
 pub mod env;
 pub mod events;

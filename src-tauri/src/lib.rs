@@ -5,6 +5,7 @@ pub mod ipc;
 mod state;
 
 use commands::auth::{auth_invalidate, auth_oauth2_fetch_token, auth_resolve};
+use commands::base64::{base64_inspect, base64_save};
 use commands::collection::{
     collection_add_item, collection_bump_usage, collection_delete, collection_delete_item,
     collection_duplicate_item, collection_get, collection_list, collection_move_item,
@@ -44,6 +45,8 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             env_delete,
             env_reorder,
             vars_resolve,
+            base64_inspect,
+            base64_save,
             auth_resolve,
             auth_oauth2_fetch_token,
             auth_invalidate,
@@ -104,6 +107,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_decorum::init())
         .setup(move |app| {
             specta_builder.mount_events(app);
