@@ -29,5 +29,7 @@ describe("formatByteCount", () => {
     expect(formatByteCount(2048)).toBe("2.0KB");
     expect(formatByteCount(3 * 1024 * 1024)).toBe("3.0MB");
     expect(formatByteCount(-1)).toBe("0B");
+    expect(formatByteCount(NaN)).toBe("0B");
+    expect(formatByteCount(Infinity)).toBe("0B");
   });
 });

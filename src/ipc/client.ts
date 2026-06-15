@@ -303,4 +303,6 @@ export const ipc = {
   collectionSetExpanded,
   appSettingsGet,
   appSettingsSet,
+  base64Inspect,
+  base64Save,
 };
