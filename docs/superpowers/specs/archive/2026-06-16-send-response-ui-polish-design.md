@@ -1,8 +1,8 @@
 # Send button + response polish: tooltip · jitter fix · arrival motion — design
 
 **Date:** 2026-06-16
-**Status:** 📝 design approved — implementation pending.
-**Branch:** `claude/jolly-wright-9523f9`
+**Status:** 🎉 DONE 2026-06-16 — implemented, rebased onto `main` and merged fast-forward; archived. Plan: [../../plans/archive/2026-06-16-send-response-ui-polish.md](../../plans/archive/2026-06-16-send-response-ui-polish.md).
+**Branch:** `claude/jolly-wright-9523f9` (merged)
 
 ## Problem
 

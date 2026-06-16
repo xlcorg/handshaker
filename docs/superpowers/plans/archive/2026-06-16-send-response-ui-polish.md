@@ -2,8 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Status:** ✅ code-complete on `claude/jolly-wright-9523f9` — all 6 impl tasks done (commits `9729294`…`c9af51c`); gate green (vitest **903** · tsc clean · vite build · `cargo check`); final branch review **APPROVED, zero findings**. Remaining: live WebView2 pass (motion + sub-5ms jitter; needs a real fast gRPC endpoint) + merge ff to `main` + archive.
-**Spec:** [../specs/2026-06-16-send-response-ui-polish-design.md](../specs/2026-06-16-send-response-ui-polish-design.md).
+**Status:** 🎉 DONE 2026-06-16 — rebased onto `main` (over the word-wrap merge) and merged **fast-forward**; plan+spec archived. All 6 impl tasks done; final branch review **APPROVED, zero findings**; post-rebase gate green (vitest **925** · tsc clean · vite build; backend untouched → `cargo check` carries from main). Only one conflict on rebase (`CLAUDE.md` Active-work block) — resolved. **Remaining:** live WebView2 pass (motion + sub-5ms jitter; needs a real fast gRPC endpoint).
+**Spec:** [../../specs/archive/2026-06-16-send-response-ui-polish-design.md](../../specs/archive/2026-06-16-send-response-ui-polish-design.md).
 **Gate:** `pnpm vitest run` · `pnpm tsc -p tsconfig.json --noEmit` · `pnpm build` · `cargo check` (no backend change). Live WebView2 pass for motion + jitter; macOS deferred.
 
 **Goal:** Remove the redundant word from the Send tooltip, stop the Send↔Cancel button twitch on sub-threshold responses, and add a gentle arrival fade to the response body plus an instant press acknowledgement on Send.
