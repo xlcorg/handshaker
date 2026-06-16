@@ -164,7 +164,9 @@ describe("SaveRequestDialog — contextual New", () => {
 
   it("offers 'New collection' even when collections already exist", () => {
     render(<SaveRequestDialog {...props()} />);
+    // Both affordances must co-exist when a collection is already selected.
     expect(screen.getByRole("button", { name: /New collection/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /New folder in/ })).toBeTruthy();
   });
 
   it("creates a new collection while one is already selected, and saves into the new collection", async () => {

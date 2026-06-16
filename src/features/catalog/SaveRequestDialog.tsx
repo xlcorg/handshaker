@@ -127,13 +127,16 @@ export function SaveRequestDialog(props: SaveRequestDialogProps) {
       const tempId = newId();
       setPendingCollections((prev) => [...prev, { tempId, name: trimmed }]);
       setTarget({ collectionId: tempId, parentId: null });
-    } else if (addingKind === "folder" && target) {
+    } else if (addingKind === "folder") {
+      if (!target) return; // structural invariant: the folder button only renders when target != null
       const tempId = newId();
       setPendingFolders((prev) => [
         ...prev,
         { tempId, collectionId: target.collectionId, parentId: target.parentId, name: trimmed },
       ]);
       setTarget({ collectionId: target.collectionId, parentId: tempId });
+    } else {
+      return; // addingKind === null: nothing to commit
     }
     setAddingKind(null);
     setNewName("");
