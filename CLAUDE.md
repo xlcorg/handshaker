@@ -6,16 +6,37 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 
 ## Active work
 
-Нет активной фичи в работе. Последняя влитая — **Well-known types — честный тип
-в Contract/hints, голый proto3-JSON скаляр во вставке** (🎉 DONE 2026-06-16, влита
-в `main` fast-forward, fix-коммиты `5da3db6` + `cfd85e9`; багфикс + доработка по
-живому фидбеку; остаток — live-проход в WebView2; см. ниже).
+Нет активной фичи в работе. Последняя влитая — **Save request — создание коллекции
+из диалога** (🎉 DONE 2026-06-16, влита в `main` fast-forward, коммиты `d473744`
+(feat) + `6bd0545` (refactor по код-ревью); чистый фронт, один компонент; остаток —
+live WebView2-проход; см. ниже).
 
 Интеграционная ветка — `main`; фичи ведутся в отдельных worktree-ветках
 (`claude/*`) и вливаются в `main` fast-forward.
 
 ### Завершённые фичи (всё в `archive/`)
 
+- **Save request — создание коллекции из диалога** (🎉 DONE 2026-06-16, влита в
+  `main` fast-forward, коммиты `d473744` (feat) + `6bd0545` (refactor по код-ревью);
+  план+спека `2026-06-16-save-request-create-collection*` в `archive/`) — щель в UX:
+  в диалоге Save request кнопка «＋ New collection» показывалась только при нуле
+  коллекций (`!target`), а на открытии `target` авто-ставился на первую коллекцию →
+  при ≥1 коллекции единственная affordance — «＋ New folder in …», и новую коллекцию
+  из сохранения создать было нельзя (снять выделение в пикере тоже нельзя). Фикс —
+  чистый фронт, один компонент (`src/features/catalog/SaveRequestDialog.tsx` + тест):
+  под деревом-пикером две affordance — «＋ New collection» (всегда) + «＋ New folder
+  in "X"» (только при выбранном `target`); неявный признак «что создаём» (`!target`)
+  заменён явным состоянием `addingKind: "collection" | "folder" | null`, `commitNew`
+  ветвится по нему (collection → pending-коллекция, target → её корень; folder →
+  pending-папка под target; явные early-return — «закрывать инпут только при
+  успешном коммите»). Граница: ноль коллекций → видна только «New collection».
+  `applyReco`/reco-чип/`originBound`/`CollectionPicker`/`treeNav`/`savePicker` и
+  бэкенд/IPC/bindings НЕ тронуты (`onCreateCollection` уже был проброшен из
+  `WorkflowApp` = `cat.createCollection`). Subagent-driven в worktree (имплементер
+  TDD + spec-ревью ✅ + quality-ревью APPROVED + полиш по ревью); ветка ответвилась
+  от `origin/main`, на финале ребейзнута на локальный `main` (бесконфликтно — пути
+  не пересекаются) и влита ff. Гейт: vitest 938 (935 + 3) · `pnpm build` (tsc +
+  vite). Остаток — live WebView2-проход.
 - **Well-known types — честный тип в Contract/hints, голый proto3-JSON скаляр во
   вставке** (🎉 DONE 2026-06-16, влита в `main` fast-forward; fix-коммиты `5da3db6`
   + `cfd85e9`; багфикс + доработка по живому фидбеку, отдельного план-дока нет) —

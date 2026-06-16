@@ -8,7 +8,7 @@
 
 **Tech Stack:** React 18 + TypeScript, Vitest + @testing-library/react, shadcn UI (`Button`/`Input`).
 
-**Status banner:** 📐 PLAN (готов к исполнению) · 2026-06-16 · ветка — отдельный `claude/*` worktree (создаётся при исполнении), вливается в `main` ff. Спек: [`docs/superpowers/specs/2026-06-16-save-request-create-collection-design.md`](../specs/2026-06-16-save-request-create-collection-design.md).
+**Status banner:** 🎉 DONE 2026-06-16 · влита в `main` fast-forward, коммиты `d473744` (feat) + `6bd0545` (refactor по код-ревью) · subagent-driven (имплементер + spec-ревью + quality-ревью APPROVED + полиш). Гейт: vitest 938 (935 + 3) · `pnpm build` (tsc + vite). Остаток — live WebView2-проход (открыть Save request при ≥1 коллекции → видны обе кнопки; «New collection» → ввод имени → Add → коллекция выбрана → Save кладёт запрос в новую коллекцию). Спек: [`2026-06-16-save-request-create-collection-design.md`](../../specs/archive/2026-06-16-save-request-create-collection-design.md).
 
 ---
 
