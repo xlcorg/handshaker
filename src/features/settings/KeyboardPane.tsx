@@ -4,6 +4,7 @@ import { SettingsGroup, SettingsRow } from "./SettingsDialog";
 const ROWS: Array<[string, string[]]> = [
   ["Send request", ["Ctrl", "Enter"]],
   ["Toggle sidebar", ["Ctrl", "B"]],
+  ["Word wrap", ["Alt", "Z"]],
 ];
 
 export function KeyboardPane() {
