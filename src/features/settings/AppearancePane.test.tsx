@@ -95,10 +95,11 @@ describe("AppearancePane", () => {
 
   it("word wrap switch toggles the pref", () => {
     render(<AppearancePane />);
-    const start = readPrefs().wordWrap;
+    // default is false (PREFS_DEFAULTS); resetPrefs() / no prior test touches wordWrap.
+    expect(readPrefs().wordWrap).toBe(false);
     const row = screen.getByText("Word wrap").closest("div.flex") as HTMLElement;
     fireEvent.click(within(row).getByRole("switch"));
-    expect(readPrefs().wordWrap).toBe(!start);
+    expect(readPrefs().wordWrap).toBe(true);
   });
 
   it("switching the toggle re-renders the request row icon live", () => {
