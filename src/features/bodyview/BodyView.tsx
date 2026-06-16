@@ -337,7 +337,7 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
   // Default off → длинное значение не уходит «башней» под ключ (см. spec 2026-06-16).
   const base = mode === "response" ? BODY_READONLY_OPTIONS : BODY_EDIT_OPTIONS;
   const options = useMemo(
-    () => ({ ...base, wordWrap: prefs.wordWrap ? "on" : "off" }),
+    () => ({ ...base, wordWrap: (prefs.wordWrap ? "on" : "off") as "on" | "off" }),
     [base, prefs.wordWrap],
   );
   // Response model text is derived (pretty/elided) and set imperatively in onMount;
