@@ -17,7 +17,7 @@ import { computeUnknownFieldMarkers } from "./validate";
 import { attachDecodeActions, type DecodeEditorLike } from "./decodeActions";
 import { copyToClipboard } from "@/lib/clipboard";
 import { toastSnippet } from "./copyValue";
-import { base64Save } from "@/ipc/client";
+import { base64Save, base64SaveEncoded } from "@/ipc/client";
 import { toast } from "sonner";
 import { installContextMenuCleanup } from "./contextMenuCleanup";
 import { copyDecodedBase64 } from "./copyDecoded";
@@ -195,8 +195,9 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
         lastText: editor.getValue(),
       };
       // Drop Monaco's default "Command Palette" entry from the right-click menu
-      // (F1 still opens it). Mode-independent — it's noise in both editors.
-      installContextMenuCleanup(editor);
+      // (F1 still opens it). In the read-only response viewer, also drop the
+      // built-in "Copy" — our "Copy value" replaces it (Ctrl+C still copies).
+      installContextMenuCleanup(editor, { stripCopy: mode === "response" });
       // Attach schema to the model (request mode is the only consumer:
       // autocomplete + ghost + unknown-field markers; response passes none).
       setModelSchema(editor.getModel(), schemaRef.current ?? null);
@@ -232,24 +233,25 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
       }
       if (mode === "response") {
         renderResponse(editor.getValue());
+        // `v` is the FULL value from the JSON tree (the editor display may be
+        // elided), so decode/save always operate on the complete value.
+        const reportSave = (run: Promise<string | null>) =>
+          void run
+            .then((p) => {
+              if (p) toast.success(`Saved to ${p}`);
+            })
+            .catch((e) => toast.error(typeof e === "string" ? e : "Couldn't save"));
         live.current.decode = attachDecodeActions(editor as unknown as DecodeEditorLike, {
           getTree: () => live.current?.tree ?? null,
           getSpans: () => live.current?.spans ?? [],
-          // `v` is the FULL value from the JSON tree (the editor display may be
-          // elided); decode it on the backend and copy the decoded text.
-          onDecode: (v) => {
+          onCopyDecoded: (v) => {
             void copyDecodedBase64(v);
           },
-          onCopy: (v) => {
+          onCopyValue: (v) => {
             void copyToClipboard(v, `Copied: ${toastSnippet(v)}`);
           },
-          onSave: (v) => {
-            void base64Save(v)
-              .then((p) => {
-                if (p) toast.success(`Saved to ${p}`);
-              })
-              .catch((e) => toast.error(typeof e === "string" ? e : "Couldn't save"));
-          },
+          onSaveDecoded: (v) => reportSave(base64Save(v)),
+          onSaveBase64: (v) => reportSave(base64SaveEncoded(v)),
         });
       } else {
         const parsed = parseWithSpans(editor.getValue());

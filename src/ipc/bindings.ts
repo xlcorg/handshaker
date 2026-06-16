@@ -162,12 +162,24 @@ async base64Inspect(input: string) : Promise<Result<Base64InspectIpc, string>> {
 }
 },
 /**
- * Decode a base64 string and write the bytes to a user-picked file.
+ * Decode a base64 string and write the DECODED bytes to a user-picked file.
  * Ok(Some(path)) = saved; Ok(None) = cancelled; Err = decode/write failure.
  */
 async base64Save(input: string) : Promise<Result<string | null, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("base64_save", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Write the RAW base64 text (verbatim, no decode) to a user-picked file.
+ * Ok(Some(path)) = saved; Ok(None) = cancelled; Err = dialog/write failure.
+ */
+async base64SaveEncoded(input: string) : Promise<Result<string | null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("base64_save_encoded", { input }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };

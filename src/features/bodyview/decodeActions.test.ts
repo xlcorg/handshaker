@@ -3,10 +3,11 @@ import { parseWithSpans } from "./parse";
 import { attachDecodeActions, type DecodeEditorLike } from "./decodeActions";
 
 // Minimal fake editor: single-line, offset = column - 1 (mirrors controller.test).
-// The gate is now computed on a right-button mousedown (before Monaco builds its menu).
+// The gates are now computed on a right-button mousedown (before Monaco builds its
+// menu); context keys are tracked by name so we can assert each independently.
 function fakeEditor() {
   const runs: Record<string, (ed: DecodeEditorLike) => void> = {};
-  let ctxValue = false;
+  const keys: Record<string, boolean> = {};
   let mouseListener:
     | ((e: { event: { rightButton: boolean }; target: { position: { lineNumber: number; column: number } | null } }) => void)
     | null = null;
@@ -19,7 +20,10 @@ function fakeEditor() {
       setValue: () => {},
       getValueInRange: () => "",
     }),
-    createContextKey: <T,>(_k: string, def: T) => { ctxValue = def as unknown as boolean; return { set: (v: boolean) => { ctxValue = v; } }; },
+    createContextKey: <T,>(k: string, def: T) => {
+      keys[k] = def as unknown as boolean;
+      return { set: (v: boolean) => { keys[k] = v; } };
+    },
     addAction: (a) => { runs[a.id] = a.run; return mkDisp(); },
     onMouseDown: (cb) => { mouseListener = cb; return mkDisp(); },
   };
@@ -29,7 +33,7 @@ function fakeEditor() {
     actionIds: () => Object.keys(runs),
     rightClickAt: (offset: number) => mouseListener?.({ event: { rightButton: true }, target: { position: { lineNumber: 1, column: offset + 1 } } }),
     leftClickAt: (offset: number) => mouseListener?.({ event: { rightButton: false }, target: { position: { lineNumber: 1, column: offset + 1 } } }),
-    ctx: () => ctxValue,
+    key: (k: string) => keys[k],
     disposeCount: () => disposeCount,
   };
 }
@@ -43,63 +47,75 @@ describe("attachDecodeActions", () => {
     return {
       getTree: () => p.tree,
       getSpans: () => p.spans,
-      onDecode: vi.fn(),
-      onCopy: vi.fn(),
-      onSave: vi.fn(),
+      onCopyDecoded: vi.fn(),
+      onCopyValue: vi.fn(),
+      onSaveDecoded: vi.fn(),
+      onSaveBase64: vi.fn(),
       ...extra,
     };
   }
 
-  it("registers the three actions", () => {
+  it("registers the four actions", () => {
     const f = fakeEditor();
     attachDecodeActions(f.editor, deps());
     expect(f.actionIds()).toEqual(
-      expect.arrayContaining(["hs.decodeBase64", "hs.copyValue", "hs.saveDecoded"]),
+      expect.arrayContaining([
+        "hs.copyDecodedBase64",
+        "hs.copyValue",
+        "hs.saveDecodedBase64",
+        "hs.saveBase64",
+      ]),
     );
   });
 
-  it("Decode/Copy/Save run with the right-clicked value", () => {
+  it("each action runs with the right-clicked value", () => {
     const f = fakeEditor();
     const d = deps();
     attachDecodeActions(f.editor, d);
-    f.rightClickAt(off); // populates the clicked value + gate before the menu would build
-    f.run("hs.decodeBase64");
+    f.rightClickAt(off); // populates the clicked value + gates before the menu would build
+    f.run("hs.copyDecodedBase64");
     f.run("hs.copyValue");
-    f.run("hs.saveDecoded");
-    expect(d.onDecode).toHaveBeenCalledWith("aGVsbG8=");
-    expect(d.onCopy).toHaveBeenCalledWith("aGVsbG8=");
-    expect(d.onSave).toHaveBeenCalledWith("aGVsbG8=");
+    f.run("hs.saveDecodedBase64");
+    f.run("hs.saveBase64");
+    expect(d.onCopyDecoded).toHaveBeenCalledWith("aGVsbG8=");
+    expect(d.onCopyValue).toHaveBeenCalledWith("aGVsbG8=");
+    expect(d.onSaveDecoded).toHaveBeenCalledWith("aGVsbG8=");
+    expect(d.onSaveBase64).toHaveBeenCalledWith("aGVsbG8=");
   });
 
-  it("sets the gate key true over a base64 value, false elsewhere", () => {
+  it("gates the base64 actions on a base64 value, off elsewhere", () => {
     const f = fakeEditor();
     attachDecodeActions(f.editor, deps());
     f.rightClickAt(off);
-    expect(f.ctx()).toBe(true);
+    expect(f.key("hsValueIsB64")).toBe(true);
+    expect(f.key("hsValueIsString")).toBe(true);
     f.rightClickAt(text.indexOf('"k"')); // the key, not a string-value span
-    expect(f.ctx()).toBe(false);
+    expect(f.key("hsValueIsB64")).toBe(false);
+    expect(f.key("hsValueIsString")).toBe(false);
   });
 
-  it("sets the gate key false over a non-base64 string", () => {
-    const t2 = `{"k":"hi"}`; // "hi" is < 4 chars
+  it("over a non-base64 string: Copy value gate on, base64 gate off", () => {
+    const t2 = `{"k":"hello world"}`; // a string, but not base64 (space)
     const p2 = parseWithSpans(t2)!;
     const f = fakeEditor();
-    attachDecodeActions(f.editor, { getTree: () => p2.tree, getSpans: () => p2.spans, onDecode: vi.fn(), onCopy: vi.fn(), onSave: vi.fn() });
-    f.rightClickAt(t2.indexOf("hi"));
-    expect(f.ctx()).toBe(false);
+    attachDecodeActions(f.editor, { ...deps(), getTree: () => p2.tree, getSpans: () => p2.spans });
+    f.rightClickAt(t2.indexOf("hello"));
+    expect(f.key("hsValueIsString")).toBe(true);
+    expect(f.key("hsValueIsB64")).toBe(false);
   });
 
   it("ignores a non-right-button mousedown for gating", () => {
     const f = fakeEditor();
     attachDecodeActions(f.editor, deps());
     f.leftClickAt(off);
-    expect(f.ctx()).toBe(false);
+    expect(f.key("hsValueIsB64")).toBe(false);
+    expect(f.key("hsValueIsString")).toBe(false);
   });
 
   it("disposes every registration", () => {
     const f = fakeEditor();
     const handle = attachDecodeActions(f.editor, deps());
     handle.dispose();
-    expect(f.disposeCount()).toBe(4); // 3 actions + 1 mousedown listener
+    expect(f.disposeCount()).toBe(5); // 4 actions + 1 mousedown listener
   });
 });

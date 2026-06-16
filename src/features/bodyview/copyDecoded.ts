@@ -8,7 +8,8 @@ import { toast } from "sonner";
  * Decoding happens on the BACKEND (`base64Inspect`): the string can be elided in
  * the editor's display, so the caller passes the FULL value from the JSON tree and
  * the backend returns the decoded text. Binary payloads have no text form — the
- * user is pointed at "Save decoded to file…" instead. Invalid base64 → error toast.
+ * user is pointed at "Save decoded base64 to file…" instead. Invalid base64 →
+ * error toast.
  */
 export async function copyDecodedBase64(value: string): Promise<void> {
   try {
@@ -17,7 +18,7 @@ export async function copyDecodedBase64(value: string): Promise<void> {
       await copyToClipboard(info.text, "Decoded base64 copied to clipboard");
     } else {
       toast.message(
-        `Decoded data is binary (${info.mime ?? "unknown type"}) — use "Save decoded to file…"`,
+        `Decoded data is binary (${info.mime ?? "unknown type"}) — use "Save decoded base64 to file…"`,
       );
     }
   } catch (e) {

@@ -269,6 +269,12 @@ export async function base64Save(input: string): Promise<string | null> {
   return r.data;
 }
 
+export async function base64SaveEncoded(input: string): Promise<string | null> {
+  const r = await commands.base64SaveEncoded(input);
+  if (r.status === "error") throw r.error;
+  return r.data;
+}
+
 export const ipc = {
   appVersion,
   grpcDescribe,
@@ -305,4 +311,5 @@ export const ipc = {
   appSettingsSet,
   base64Inspect,
   base64Save,
+  base64SaveEncoded,
 };

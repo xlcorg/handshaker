@@ -19,23 +19,25 @@ pub async fn base64_inspect(input: String) -> Result<Base64InspectIpc, String> {
     inspect_impl(&input)
 }
 
-/// Decode a base64 string and write the bytes to a user-picked file.
-/// Ok(Some(path)) = saved; Ok(None) = cancelled; Err = decode/write failure.
-#[tauri::command]
-#[specta::specta]
-pub async fn base64_save(app: tauri::AppHandle, input: String) -> Result<Option<String>, String> {
+/// Open a native Save-As dialog and write `bytes` to the chosen file.
+/// Ok(Some(path)) = saved; Ok(None) = cancelled; Err = dialog/write failure.
+///
+/// Async-command-safe: a non-blocking dialog (callback + oneshot) rather than
+/// `blocking_save_file`, which must NOT run on the main thread.
+async fn save_bytes_via_dialog(
+    app: &tauri::AppHandle,
+    default_name: &str,
+    filter_label: &str,
+    filter_exts: &[&str],
+    bytes: &[u8],
+) -> Result<Option<String>, String> {
     use tauri_plugin_dialog::DialogExt;
 
-    let bytes = decode_lenient(&input)?;
-    let ext = suggested_extension(&classify(&bytes));
-
-    // Non-blocking save dialog from an async command: callback + oneshot.
-    // (blocking_save_file must NOT run on the main thread.)
     let (tx, rx) = tokio::sync::oneshot::channel();
     app.dialog()
         .file()
-        .set_file_name(format!("decoded.{ext}"))
-        .add_filter(ext.to_uppercase(), &[ext.as_str()])
+        .set_file_name(default_name)
+        .add_filter(filter_label, filter_exts)
         .save_file(move |path| {
             let _ = tx.send(path);
         });
@@ -43,11 +45,39 @@ pub async fn base64_save(app: tauri::AppHandle, input: String) -> Result<Option<
     match rx.await.map_err(|e| e.to_string())? {
         Some(file_path) => {
             let path = file_path.into_path().map_err(|e| e.to_string())?;
-            std::fs::write(&path, &bytes).map_err(|e| e.to_string())?;
+            std::fs::write(&path, bytes).map_err(|e| e.to_string())?;
             Ok(Some(path.to_string_lossy().into_owned()))
         }
         None => Ok(None),
     }
+}
+
+/// Decode a base64 string and write the DECODED bytes to a user-picked file.
+/// Ok(Some(path)) = saved; Ok(None) = cancelled; Err = decode/write failure.
+#[tauri::command]
+#[specta::specta]
+pub async fn base64_save(app: tauri::AppHandle, input: String) -> Result<Option<String>, String> {
+    let bytes = decode_lenient(&input)?;
+    let ext = suggested_extension(&classify(&bytes));
+    save_bytes_via_dialog(
+        &app,
+        &format!("decoded.{ext}"),
+        &ext.to_uppercase(),
+        &[ext.as_str()],
+        &bytes,
+    )
+    .await
+}
+
+/// Write the RAW base64 text (verbatim, no decode) to a user-picked file.
+/// Ok(Some(path)) = saved; Ok(None) = cancelled; Err = dialog/write failure.
+#[tauri::command]
+#[specta::specta]
+pub async fn base64_save_encoded(
+    app: tauri::AppHandle,
+    input: String,
+) -> Result<Option<String>, String> {
+    save_bytes_via_dialog(&app, "base64.txt", "Text", &["txt"], input.as_bytes()).await
 }
 
 #[cfg(test)]

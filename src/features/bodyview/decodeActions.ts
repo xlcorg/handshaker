@@ -34,32 +34,48 @@ export interface DecodeEditorLike {
 export interface DecodeActionDeps {
   getTree(): JsonTree | null;
   getSpans(): readonly ValueSpan[];
-  /** Open the decode dialog for this whole value. */
-  onDecode(value: string): void;
-  /** Copy the raw string value. */
-  onCopy(value: string): void;
-  /** Decode + native Save-As of this whole value. */
-  onSave(value: string): void;
+  /** Decode this value on the backend and copy the decoded text to the clipboard. */
+  onCopyDecoded(value: string): void;
+  /** Copy the raw string value to the clipboard. */
+  onCopyValue(value: string): void;
+  /** Decode + native Save-As of the DECODED bytes. */
+  onSaveDecoded(value: string): void;
+  /** Native Save-As of the RAW base64 text (verbatim, no decode). */
+  onSaveBase64(value: string): void;
 }
 
-const GROUP = "9_cutcopypaste";
-const KEY = "hsValueIsB64";
+// Two menu groups, lexically ordered so the clipboard group renders above the
+// file group with a divider between them (Monaco sorts groups by `localeCompare`,
+// and "9_cutcopypaste" is a prefix of "9_cutcopypaste_file" ⇒ sorts first).
+const GROUP_CLIPBOARD = "9_cutcopypaste";
+const GROUP_FILE = "9_cutcopypaste_file";
+// Gate keys: a string value is present / that string looks like base64.
+const KEY_STRING = "hsValueIsString";
+const KEY_B64 = "hsValueIsB64";
 
 /**
- * Register the response-body context-menu actions (Decode / Copy value / Save
- * decoded to file…). Actions carry NO keybinding — only `contextMenuGroupId` —
- * so Monaco's global (last-wins) keybinding registry is never touched.
+ * Register the response-body context-menu actions:
  *
- * The `hsValueIsB64` gate (controls Decode/Save visibility) is computed on
- * `onMouseDown` for the RIGHT button: mousedown fires before the `contextmenu`
- * event Monaco's context-menu controller uses to build the menu, so the
- * precondition is already correct when the menu is assembled. (A listener added
- * via onContextMenu would run AFTER the menu is built — first-click-misses /
- * off-by-one.) The value at the clicked position is stashed and reused by the
- * action `run`s, so the menu and the action always operate on the same value.
+ *   Copy decoded base64        (base64 only)   ┐ clipboard group
+ *   Copy value                 (any string)    ┘
+ *   ─────────
+ *   Save decoded base64 to file…  (base64 only) ┐ file group
+ *   Save base64 to file…          (base64 only) ┘
+ *
+ * Actions carry NO keybinding — only `contextMenuGroupId` — so Monaco's global
+ * (last-wins) keybinding registry is never touched.
+ *
+ * The gate keys are computed on `onMouseDown` for the RIGHT button: mousedown
+ * fires before the `contextmenu` event Monaco's context-menu controller uses to
+ * build the menu, so the preconditions are already correct when the menu is
+ * assembled. (A listener added via onContextMenu would run AFTER the menu is
+ * built — first-click-misses / off-by-one.) The value at the clicked position is
+ * stashed and reused by the action `run`s, so the menu and the actions always
+ * operate on the same value.
  */
 export function attachDecodeActions(editor: DecodeEditorLike, deps: DecodeActionDeps): DisposableLike {
-  const gate = editor.createContextKey<boolean>(KEY, false);
+  const isString = editor.createContextKey<boolean>(KEY_STRING, false);
+  const isB64 = editor.createContextKey<boolean>(KEY_B64, false);
   // Value under the most recent right-click — what the menu was built for.
   let clicked: string | null = null;
 
@@ -72,46 +88,60 @@ export function attachDecodeActions(editor: DecodeEditorLike, deps: DecodeAction
       model && pos && tree
         ? stringValueAtOffset(tree, deps.getSpans(), model.getOffsetAt(pos))
         : null;
-    gate.set(!!clicked && looksLikeBase64(clicked));
+    isString.set(!!clicked);
+    isB64.set(!!clicked && looksLikeBase64(clicked));
   });
 
-  const decode = editor.addAction({
-    id: "hs.decodeBase64",
-    label: "Decode base64",
-    contextMenuGroupId: GROUP,
-    contextMenuOrder: 3,
-    precondition: KEY,
+  const copyDecoded = editor.addAction({
+    id: "hs.copyDecodedBase64",
+    label: "Copy decoded base64",
+    contextMenuGroupId: GROUP_CLIPBOARD,
+    contextMenuOrder: 1,
+    precondition: KEY_B64,
     run: () => {
-      if (clicked) deps.onDecode(clicked);
+      if (clicked) deps.onCopyDecoded(clicked);
     },
   });
 
-  const copy = editor.addAction({
+  const copyValue = editor.addAction({
     id: "hs.copyValue",
     label: "Copy value",
-    contextMenuGroupId: GROUP,
-    contextMenuOrder: 3.1,
+    contextMenuGroupId: GROUP_CLIPBOARD,
+    contextMenuOrder: 2,
+    precondition: KEY_STRING,
     run: () => {
-      if (clicked) deps.onCopy(clicked);
+      if (clicked) deps.onCopyValue(clicked);
     },
   });
 
-  const save = editor.addAction({
-    id: "hs.saveDecoded",
-    label: "Save decoded to file…",
-    contextMenuGroupId: GROUP,
-    contextMenuOrder: 3.2,
-    precondition: KEY,
+  const saveDecoded = editor.addAction({
+    id: "hs.saveDecodedBase64",
+    label: "Save decoded base64 to file…",
+    contextMenuGroupId: GROUP_FILE,
+    contextMenuOrder: 1,
+    precondition: KEY_B64,
     run: () => {
-      if (clicked) deps.onSave(clicked);
+      if (clicked) deps.onSaveDecoded(clicked);
+    },
+  });
+
+  const saveBase64 = editor.addAction({
+    id: "hs.saveBase64",
+    label: "Save base64 to file…",
+    contextMenuGroupId: GROUP_FILE,
+    contextMenuOrder: 2,
+    precondition: KEY_B64,
+    run: () => {
+      if (clicked) deps.onSaveBase64(clicked);
     },
   });
 
   return {
     dispose() {
-      decode.dispose();
-      copy.dispose();
-      save.dispose();
+      copyDecoded.dispose();
+      copyValue.dispose();
+      saveDecoded.dispose();
+      saveBase64.dispose();
       mouseSub.dispose();
     },
   };
