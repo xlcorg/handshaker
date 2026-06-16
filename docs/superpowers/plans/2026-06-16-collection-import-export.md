@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Status:** 📝 NOT STARTED. Spec: [../specs/2026-06-16-collection-import-export-design.md](../specs/2026-06-16-collection-import-export-design.md). Branch: `claude/inspiring-gates-48a9bf`.
+**Status:** ✅ CODE-COMPLETE 2026-06-17 — all 12 tasks implemented + final review APPROVED. Branch `claude/inspiring-gates-48a9bf`, commits `382fce4..13da975` (off fork base `070304b`). Gate green: `cargo test --workspace` · `pnpm test` (936) · `pnpm build` · bindings no-drift. Subagent-driven (impl per task + review on Task 4 merge logic + final whole-feature review). Extra over plan: env-list refresh also wired into `SavedAuthEditor` (review nit, `13da975`). Remaining: rebase onto local `main` (which advanced past the fork point) + ff-merge; live WebView2 pass against real save/open dialogs. Spec: [../specs/2026-06-16-collection-import-export-design.md](../specs/2026-06-16-collection-import-export-design.md).
 
 **Goal:** Let the user export collections (one, or all + all environments) to a JSON file and import such a file back with a **non-destructive merge** (update on key match, add otherwise, never delete).
 
