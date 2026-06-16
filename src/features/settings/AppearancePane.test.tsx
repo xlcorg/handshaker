@@ -93,6 +93,14 @@ describe("AppearancePane", () => {
     expect(readPrefs().varHighlight).toBe("amber");
   });
 
+  it("word wrap switch toggles the pref", () => {
+    render(<AppearancePane />);
+    const start = readPrefs().wordWrap;
+    const row = screen.getByText("Word wrap").closest("div.flex") as HTMLElement;
+    fireEvent.click(within(row).getByRole("switch"));
+    expect(readPrefs().wordWrap).toBe(!start);
+  });
+
   it("switching the toggle re-renders the request row icon live", () => {
     render(
       <SidebarProvider>

@@ -115,6 +115,16 @@ export function AppearancePane() {
         />
       </SettingsGroup>
 
+      <SettingsGroup title="Editor">
+        <SettingsRow
+          title="Word wrap"
+          hint="Wrap long lines in the request and response editors. Alt+Z toggles."
+          control={
+            <Switch checked={prefs.wordWrap} onCheckedChange={(v) => setPref("wordWrap", v)} />
+          }
+        />
+      </SettingsGroup>
+
       <SettingsGroup title="Method picker">
         <SettingsRow
           title="Group style"
