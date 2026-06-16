@@ -30,16 +30,30 @@ wiring `612e128` · **gate-timing fix `6bfe1a3`**.
   берётся из JSON-дерева (`node.value`), не из элидированного текста редактора.
   `DecodeDialog` удалён, `BodyView.onDecode`-проп удалён, новый чистый
   `copyDecoded.ts`. (Спека: см. амендмент в `## UX`.)
+- **`aa939c9` — перекомпоновка меню + убран built-in Copy.** Итоговые 4 пункта:
+  **Copy decoded base64** (быв. Decode base64) · **Copy value** — над разделителем;
+  **Save decoded base64 to file…** · **Save base64 to file…** (НОВОЕ — сырой base64
+  verbatim, IPC `base64_save_encoded`) — под ним. Две группы
+  `9_cutcopypaste`/`_file` дают разделитель. **Copy value** теперь гейтится на
+  `hsValueIsString` (а не base64). **Built-in «Copy» Monaco убран** из response-
+  редактора (дублировал Copy value; Ctrl+C жив). `contextMenuCleanup` →
+  `stripMenuItems`/`installContextMenuCleanup(editor,{stripCopy})`. Гейты: `cargo
+  test --workspace` · `pnpm test` **924** · `tsc` · `vite build` · bindings regen.
+  (Спека: амендмент #2 в `## UX`.)
 
 **Live-проход (punch-list, в WebView2 через `pnpm tauri dev`):**
-- Decode/Copy value/Save появляются в ПКМ-меню с **ПЕРВОГО** ПКМ по base64
-  (timing-фикс); на не-base64/UUID/числе пункта Decode нет; «Command Palette» в
-  меню нет (F1 палитру открывает).
-- **Decode base64 → декодированный текст в буфере** (вставить и проверить), тост
-  «Decoded base64 copied»; на длинном/элидированном значении копируется **полный**
-  декод (а не из обрезанного превью) — ключевая проверка.
-- Save to file… пишет валидный файл (`.json`/бинарь); отмена Save — без ошибки.
-- URL-safe base64 декодится; бинарь → тост «binary … use Save to file».
+- На base64-значении ПКМ показывает **4 пункта** двумя группами (Copy decoded
+  base64 / Copy value — разделитель — Save decoded base64 to file… / Save base64
+  to file…) с **ПЕРВОГО** ПКМ (timing-фикс).
+- На **не-base64 строке** — только **Copy value** (остальные скрыты); built-in
+  «Copy» Monaco в меню **нет**; на UUID/числе/ключе пунктов нет. «Command Palette»
+  в меню нет (F1 палитру открывает). Ctrl+C по-прежнему копирует выделение.
+- **Copy decoded base64 → декодированный текст в буфере** (вставить и проверить),
+  тост «Decoded base64 copied»; на длинном/элидированном значении копируется
+  **полный** декод (не из обрезанного превью) — ключевая проверка.
+- **Save base64 to file… → сырой** base64 verbatim (`base64.txt`); **Save decoded
+  base64 to file… → декод** (`.json`/бинарь); отмена Save — без ошибки.
+- URL-safe base64 декодится; бинарь → Copy decoded даёт тост «binary … use Save».
 
 **Goal:** Decode any whole base64 string value in the gRPC response Body — view it (JSON pretty-printed / text / binary type+size), copy it, or save the decoded bytes to a file.
 

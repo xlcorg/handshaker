@@ -67,6 +67,26 @@ preview + бейдж размера, см. `elide.ts`) и **никак не мо
 > `DecodeDialog` **удалён** (вместе с drill-down и бинарь-сводкой). Описание
 > диалога ниже — **историческое** (как было задумано изначально), оставлено для
 > контекста.
+>
+> **АМЕНДМЕНТ #2 (2026-06-16, live-фидбек): перекомпоновка меню + убран built-in
+> Copy.** Итоговое ПКМ-меню (best practice — клипборд-группа над файл-группой,
+> «декод» перед «сырым» в каждой, лёгкое перед открывающим диалог, с разделителем):
+> - **Copy decoded base64** (быв. «Decode base64») — декод на бэкенде → буфер
+>   (бинарь → тост→Save). Гейт `hsValueIsB64`.
+> - **Copy value** — сырая строка → буфер. Гейт **`hsValueIsString`** (а не base64),
+>   чтобы у не-base64 строки оставался копир в меню после удаления built-in Copy.
+> - *(разделитель)*
+> - **Save decoded base64 to file…** — декод → нативный Save As. Гейт `hsValueIsB64`.
+> - **Save base64 to file…** (НОВОЕ) — **сырой** base64 verbatim в файл (IPC
+>   `base64_save_encoded` → `base64.txt`; общий хелпер `save_bytes_via_dialog`).
+>   Гейт `hsValueIsB64`.
+>
+> Две Monaco-группы `9_cutcopypaste` / `9_cutcopypaste_file` (Monaco сортирует
+> группы по `localeCompare`, префикс — раньше) дают разделитель между клипбордом и
+> файлами. **Built-in «Copy» Monaco** убран из **read-only** (response) редактора —
+> он дублировал «Copy value» (Ctrl+C-биндинг жив; в request-редакторе нативные
+> Cut/Copy/Paste нетронуты). `contextMenuCleanup` обобщён до
+> `stripMenuItems(set)` + `installContextMenuCleanup(editor,{stripCopy})`.
 
 Полный визуал согласован на брейншторме (макет `base64_decode_response_flow`).
 Три состояния:
