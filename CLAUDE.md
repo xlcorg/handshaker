@@ -6,48 +6,47 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 
 ## Active work
 
-Нет активной фичи в работе. Последняя влитая — **Well-known types — скалярный
-proto3-JSON для обёрток · Timestamp · Duration · FieldMask** (🎉 DONE 2026-06-16,
-влита в `main` fast-forward, fix-коммит `5da3db6`; багфикс без отдельного
-план-дока; остаток — live-проход в WebView2; см. ниже).
+Нет активной фичи в работе. Последняя влитая — **Well-known types — честный тип
+в Contract/hints, голый proto3-JSON скаляр во вставке** (🎉 DONE 2026-06-16, влита
+в `main` fast-forward, fix-коммиты `5da3db6` + `cfd85e9`; багфикс + доработка по
+живому фидбеку; остаток — live-проход в WebView2; см. ниже).
 
 Интеграционная ветка — `main`; фичи ведутся в отдельных worktree-ветках
 (`claude/*`) и вливаются в `main` fast-forward.
 
 ### Завершённые фичи (всё в `archive/`)
 
-- **Well-known types — скалярный proto3-JSON для обёрток · Timestamp · Duration ·
-  FieldMask** (🎉 DONE 2026-06-16, влита в `main` fast-forward, fix-коммит
-  `5da3db6`; багфикс, отдельного план-дока нет) — баг: автокомплит/скелет
-  подставляли `google.protobuf.Int64Value` (и любой well-known-тип) как вложенное
-  сообщение `{"value": 0}`, а десериализатор отправки (`prost_reflect::
-  DynamicMessage::deserialize`, `crates/handshaker-core/src/grpc/invoke/mod.rs`)
-  следует каноническому proto3 JSON и отвергает map: `invalid type: map, expected
-  a 64-bit signed integer or decimal string`. Причина — оба генератора в core
-  (`grpc/invoke/skeleton.rs` скелет тела · `grpc/invoke/schema.rs` flat-схема
-  автокомплита) спускались в обёртку как в обычное сообщение и предлагали её поле
-  `value`. Фикс: новый общий хелпер `grpc/invoke/well_known.rs`
-  (`classify(full_name) -> Option<ScalarWellKnown>` + `label()` + `skeleton_
-  default()`, единый источник правды); оба генератора отдают каноническую
-  скалярную форму. Объём — «скалярные WKT»: 9 обёрток (`*Value`) → голый скаляр
-  (`0`/`""`/`false`/`0.0`) + `Timestamp` → `"1970-01-01T00:00:00Z"` · `Duration`
-  → `"0s"` · `FieldMask` → `""`. `Struct`/`Value`/`ListValue`/`Any`/`Empty` НЕ
-  трогаются (прежний message-путь; `Empty` и так `{}`). **Фронт/IPC/DTO/bindings
-  не тронуты** — обёртка классифицируется как `Scalar` с меткой wrapped-типа,
-  существующий `scaffold()` (`completion.ts`) уже выдаёт верное (`int64`∈
-  NUMBER_LABELS → `0`; `bool` → `false`; строковые → `"$0"`). Сознательный
-  трейд-офф: в Contract-табе обёртка показывается как wrapped-тип (`int64 limit`,
-  не `Int64Value limit`); Timestamp/Duration/FieldMask сохраняют имя. Маппинг
-  сверен с protobuf.dev (ProtoJSON) + исходниками prost-reflect 0.14 (`de/kind.rs`/
-  `de/wkt.rs`: матч WKT по full_name, голый `0` принимается, `FieldMask ""` →
-  пустая маска). Subagent-driven TDD (red→green; репро-тест строит скелет с
-  Int64Value и гоняет через `DynamicMessage::deserialize` = Ok, до фикса падал с
-  тем самым `invalid type: map`) + финальное ревью ветки (APPROVED; nits применены
-  — убран двойной `classify()`+`unwrap`, добавлен тест Duration/FieldMask). Гейт:
-  `cargo test --workspace` (core 176 · src-tauri 52 · интеграция; 0 failed, 0
-  warnings) · vitest 925 · tsc · vite build · bindings no-drift. Остаток — live
-  WebView2-проход против эндпойнта с `Int64Value`-полем (автокомплит → `"limit":
-  0`, Send проходит).
+- **Well-known types — честный тип в Contract/hints, голый proto3-JSON скаляр во
+  вставке** (🎉 DONE 2026-06-16, влита в `main` fast-forward; fix-коммиты `5da3db6`
+  + `cfd85e9`; багфикс + доработка по живому фидбеку, отдельного план-дока нет) —
+  баг: автокомплит/скелет подставляли `google.protobuf.Int64Value` (и любой
+  well-known-тип) как вложенное сообщение `{"value": 0}`, а десериализатор отправки
+  (`prost_reflect::DynamicMessage::deserialize`, `grpc/invoke/mod.rs`) следует
+  каноническому proto3 JSON и отвергает map: `invalid type: map, expected a 64-bit
+  signed integer or decimal string`. Объём — «скалярные WKT»: 9 обёрток (`*Value`)
+  → голый скаляр (`0`/`""`/`false`/`0.0`) + `Timestamp` → `"1970-01-01T00:00:00Z"`
+  · `Duration` → `"0s"` · `FieldMask` → `""`. `Struct`/`Value`/`ListValue`/`Any`/
+  `Empty` НЕ трогаются (`Empty` и так `{}`). **Финальный дизайн — разделение
+  «отображение vs вставка»:** схема (`grpc/invoke/schema.rs`) отдаёт WKT честным
+  `Message` с реальным именем, поэтому Contract-таб и ghost-хинты показывают
+  `Int64Value`/`Timestamp` как в reflection (НЕ схлопнутый `int64`). Голый скаляр —
+  только во вставке: скелет тела (`grpc/invoke/skeleton.rs` + ядро `well_known.rs`:
+  `classify` + `skeleton_default`) и автокомплит (`completion.ts` через новый общий
+  `src/lib/wellKnown.ts` — `SCALAR_WKT` full_name → number/string/bool; `scaffold`
+  вставляет скаляр, `descendSchema` не лезет в `value`). Contract рисует обёртку
+  именем без избыточного блока `{ value }` (`proto.ts` фильтрует WKT-блоки + рисует
+  имя не-кликабельным токеном). **DTO/bindings/IPC не тронуты.** Путь к финалу:
+  первый заход (`5da3db6`) схлопывал WKT прямо в схеме → `int64` тёк в Contract/
+  hints; доработка (`cfd85e9`, по фидбену) откатила схему к честному `Message` и
+  перенесла скалярную форму во фронт-вставку; ядровый `label()` убран как мёртвый.
+  Маппинг сверен с protobuf.dev (ProtoJSON) + исходниками prost-reflect 0.14
+  (`de/kind.rs`/`de/wkt.rs`: матч WKT по full_name, голый `0` принят, `FieldMask
+  ""` → пустая маска). TDD red→green; репро-тест: скелет с Int64Value через
+  `DynamicMessage::deserialize` = Ok (до фикса падал `invalid type: map`). Гейт
+  (после доработки): `cargo test --workspace` (core 171 · src-tauri 52; 0 failed,
+  0 warnings) · vitest 935 · tsc · vite build · bindings no-drift. Остаток — live
+  WebView2-проход (автокомплит → `"limit": 0`, Send проходит; Contract/ghost
+  показывают `Int64Value`).
 - **Send button + response polish — тултип · фикс дёрганья · анимация прихода**
   (🎉 DONE 2026-06-16, влита в `main` fast-forward; план+спека
   `2026-06-16-send-response-ui-polish*` в `archive/`) — три полиш-пункта вокруг
