@@ -162,6 +162,31 @@ describe("SaveRequestDialog — contextual New", () => {
     );
   });
 
+  it("offers 'New collection' even when collections already exist", () => {
+    render(<SaveRequestDialog {...props()} />);
+    expect(screen.getByRole("button", { name: /New collection/ })).toBeTruthy();
+  });
+
+  it("creates a new collection while one is already selected, and saves into the new collection", async () => {
+    const p = props(); // collections present, c1 selected by default
+    render(<SaveRequestDialog {...p} />);
+    fireEvent.click(screen.getByRole("button", { name: /New collection/ }));
+    fireEvent.change(screen.getByLabelText("New node name"), { target: { value: "Fresh" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(p.onCreateCollection).toHaveBeenCalledWith("Fresh"));
+    await waitFor(() =>
+      expect(p.onSave).toHaveBeenCalledWith({ collectionId: "c-new", parentId: null, name: "Create" }),
+    );
+    expect(p.onCreateFolder).not.toHaveBeenCalled();
+  });
+
+  it("hides 'New folder' but keeps 'New collection' when there are no collections", () => {
+    render(<SaveRequestDialog {...props({ collections: [] })} />);
+    expect(screen.queryByRole("button", { name: /New folder/ })).toBeNull();
+    expect(screen.getByRole("button", { name: /New collection/ })).toBeTruthy();
+  });
+
   it("does NOT persist a pending folder the user navigated away from (no orphan)", async () => {
     const p = props();
     render(<SaveRequestDialog {...p} />);

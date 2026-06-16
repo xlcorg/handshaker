@@ -58,7 +58,7 @@ export function SaveRequestDialog(props: SaveRequestDialogProps) {
   const [busy, setBusy] = useState(false);
   const [pendingFolders, setPendingFolders] = useState<PendingFolder[]>([]);
   const [pendingCollections, setPendingCollections] = useState<PendingCollection[]>([]);
-  const [adding, setAdding] = useState(false);
+  const [addingKind, setAddingKind] = useState<"collection" | "folder" | null>(null);
   const [newName, setNewName] = useState("");
 
   const prevOpenRef = useRef(false);
@@ -68,7 +68,7 @@ export function SaveRequestDialog(props: SaveRequestDialogProps) {
       setQuery("");
       setPendingFolders([]);
       setPendingCollections([]);
-      setAdding(false);
+      setAddingKind(null);
       setNewName("");
       setTarget(collections.length > 0 ? { collectionId: collections[0].id, parentId: null } : null);
     }
@@ -87,10 +87,6 @@ export function SaveRequestDialog(props: SaveRequestDialogProps) {
     }
     return selectedCollection?.name ?? "";
   })();
-
-  const newLabel = !target
-    ? "＋ New collection"
-    : `＋ New folder in "${selectedNodeName}"`;
 
   function applyReco() {
     if (!reco) return;
@@ -127,11 +123,11 @@ export function SaveRequestDialog(props: SaveRequestDialogProps) {
   function commitNew() {
     const trimmed = newName.trim();
     if (!trimmed) return;
-    if (!target) {
+    if (addingKind === "collection") {
       const tempId = newId();
       setPendingCollections((prev) => [...prev, { tempId, name: trimmed }]);
       setTarget({ collectionId: tempId, parentId: null });
-    } else {
+    } else if (addingKind === "folder" && target) {
       const tempId = newId();
       setPendingFolders((prev) => [
         ...prev,
@@ -139,7 +135,7 @@ export function SaveRequestDialog(props: SaveRequestDialogProps) {
       ]);
       setTarget({ collectionId: target.collectionId, parentId: tempId });
     }
-    setAdding(false);
+    setAddingKind(null);
     setNewName("");
   }
 
@@ -262,7 +258,7 @@ export function SaveRequestDialog(props: SaveRequestDialogProps) {
             <CollectionPicker collections={augmented} query={query} value={target} onChange={setTarget} />
 
             <div className="flex items-center gap-2">
-              {adding ? (
+              {addingKind !== null ? (
                 <>
                   <Input
                     aria-label="New node name"
@@ -271,22 +267,33 @@ export function SaveRequestDialog(props: SaveRequestDialogProps) {
                     onChange={(e) => setNewName(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") commitNew();
-                      if (e.key === "Escape") { setAdding(false); setNewName(""); }
+                      if (e.key === "Escape") { setAddingKind(null); setNewName(""); }
                     }}
                     placeholder="Name"
                     className="h-7 text-xs"
                   />
                   <Button size="sm" onClick={commitNew}>Add</Button>
-                  <Button size="sm" variant="ghost" onClick={() => { setAdding(false); setNewName(""); }}>Cancel</Button>
+                  <Button size="sm" variant="ghost" onClick={() => { setAddingKind(null); setNewName(""); }}>Cancel</Button>
                 </>
               ) : (
-                <button
-                  type="button"
-                  className="text-[11px] text-muted-foreground hover:text-foreground"
-                  onClick={() => setAdding(true)}
-                >
-                  {newLabel}
-                </button>
+                <>
+                  <button
+                    type="button"
+                    className="text-[11px] text-muted-foreground hover:text-foreground"
+                    onClick={() => setAddingKind("collection")}
+                  >
+                    ＋ New collection
+                  </button>
+                  {target && (
+                    <button
+                      type="button"
+                      className="text-[11px] text-muted-foreground hover:text-foreground"
+                      onClick={() => setAddingKind("folder")}
+                    >
+                      {`＋ New folder in "${selectedNodeName}"`}
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </>
