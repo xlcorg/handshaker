@@ -19,6 +19,7 @@ use commands::grpc::{
     grpc_message_schema, grpc_refresh_contract,
 };
 use commands::meta::app_version;
+use commands::bundle::{bundle_export, bundle_import_apply, bundle_import_inspect};
 use commands::ui_state::{app_settings_get, app_settings_set};
 use commands::vars::vars_resolve;
 use specta_typescript::Typescript;
@@ -68,6 +69,9 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             collection_bump_usage,
             app_settings_get,
             app_settings_set,
+            bundle_export,
+            bundle_import_inspect,
+            bundle_import_apply,
         ])
         .events(collect_events![ContractUpdated])
 }
@@ -110,6 +114,7 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_decorum::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(move |app| {
             specta_builder.mount_events(app);
             let data_dir = app
