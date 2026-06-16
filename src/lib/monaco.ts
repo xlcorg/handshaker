@@ -134,7 +134,9 @@ export const EDITOR_OPTIONS = {
   automaticLayout: true,
   tabSize: 2,
   insertSpaces: true,
-  wordWrap: "on",
+  // Effective wordWrap is pref-driven: BodyView overrides this per prefs.wordWrap
+  // (default off). This base value only matters to any non-BodyView consumer.
+  wordWrap: "off",
   lineNumbersMinChars: 3,
   glyphMargin: false,
   folding: false,
