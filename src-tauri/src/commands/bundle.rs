@@ -39,6 +39,54 @@ impl AppState {
         })
     }
 
+    /// Apply an export file as a NON-DESTRUCTIVE merge. Collections keyed by id,
+    /// environments by name. On match → update (env variables merged, imported
+    /// wins on shared keys); otherwise → add. Nothing is ever deleted; the active
+    /// environment is untouched. Validation happens up front, so a foreign/corrupt
+    /// file changes nothing.
+    pub fn bundle_import_apply_impl(&self, path: String) -> Result<ImportResultIpc, CoreError> {
+        let bundle = bundle::read_bundle(Path::new(&path))?;
+
+        let mut collections_added = 0u32;
+        let mut collections_updated = 0u32;
+        for c in bundle.collections {
+            if self.collection_store.get(c.id).is_some() {
+                collections_updated += 1;
+            } else {
+                collections_added += 1;
+            }
+            self.collection_store.upsert(c)?;
+        }
+
+        let mut environments_added = 0u32;
+        let mut environments_updated = 0u32;
+        for imported in bundle.environments {
+            match self.env_store.get(&imported.name) {
+                Some(mut existing) => {
+                    for (k, v) in imported.variables {
+                        existing.variables.insert(k, v);
+                    }
+                    if imported.color.is_some() {
+                        existing.color = imported.color;
+                    }
+                    self.env_store.upsert(existing)?;
+                    environments_updated += 1;
+                }
+                None => {
+                    self.env_store.upsert(imported)?;
+                    environments_added += 1;
+                }
+            }
+        }
+
+        Ok(ImportResultIpc {
+            collections_added,
+            collections_updated,
+            environments_added,
+            environments_updated,
+        })
+    }
+
     /// Gather collections (+ environments when `collection_id` is None) and write
     /// the bundle to `path`. `Some(id)` exports just that collection, no envs.
     pub fn bundle_export_impl(&self, path: String, collection_id: Option<String>) -> Result<(), CoreError> {
@@ -74,6 +122,15 @@ pub async fn bundle_import_inspect(
     path: String,
 ) -> Result<ImportSummaryIpc, IpcError> {
     state.bundle_import_inspect_impl(path).map_err(IpcError::from)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn bundle_import_apply(
+    state: State<'_, AppState>,
+    path: String,
+) -> Result<ImportResultIpc, IpcError> {
+    state.bundle_import_apply_impl(path).map_err(IpcError::from)
 }
 
 #[cfg(test)]
@@ -175,5 +232,65 @@ mod tests {
         assert_eq!(bundle.collections.len(), 1);
         assert_eq!(bundle.collections[0].name, "c1");
         assert!(bundle.environments.is_empty());
+    }
+
+    fn env(name: &str, kv: &[(&str, &str)]) -> handshaker_core::env::Environment {
+        handshaker_core::env::Environment {
+            name: name.into(),
+            variables: kv.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect(),
+            color: None,
+        }
+    }
+
+    #[test]
+    fn apply_merges_updates_adds_and_never_deletes() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("src.json");
+
+        // Source export: c1 (renamed), c2 (new) + env prod {b:2}, staging.
+        let source = AppState::default();
+        source.collection_upsert_impl(empty_collection_ipc(1, "c1-from-file")).unwrap();
+        source.collection_upsert_impl(empty_collection_ipc(2, "c2")).unwrap();
+        source.env_upsert_impl(env("prod", &[("b", "2")])).unwrap();
+        source.env_upsert_impl(env("staging", &[])).unwrap();
+        source.bundle_export_impl(src.to_string_lossy().into_owned(), None).unwrap();
+
+        // Target: c1 (local name), c9 (NOT in file), env prod {a:1}, keep {x:1}.
+        let target = AppState::default();
+        target.collection_upsert_impl(empty_collection_ipc(1, "c1-local")).unwrap();
+        target.collection_upsert_impl(empty_collection_ipc(9, "c9-local")).unwrap();
+        target.env_upsert_impl(env("prod", &[("a", "1")])).unwrap();
+        target.env_upsert_impl(env("keep", &[("x", "1")])).unwrap();
+
+        let result = target.bundle_import_apply_impl(src.to_string_lossy().into_owned()).unwrap();
+        assert_eq!(result.collections_added, 1); // c2
+        assert_eq!(result.collections_updated, 1); // c1
+        assert_eq!(result.environments_added, 1); // staging
+        assert_eq!(result.environments_updated, 1); // prod
+
+        // c1 updated to the file's name; c9 untouched; c2 added.
+        let one = Uuid::from_u128(1).to_string();
+        assert_eq!(target.collection_get_impl(&one).unwrap().name, "c1-from-file");
+        assert!(target.collection_get_impl(&Uuid::from_u128(9).to_string()).is_ok());
+        assert_eq!(target.collection_list_impl().len(), 3);
+
+        // prod merged: a kept, b added. keep untouched. staging added.
+        let prod = target.env_store.get("prod").unwrap();
+        assert_eq!(prod.variables.get("a").map(String::as_str), Some("1"));
+        assert_eq!(prod.variables.get("b").map(String::as_str), Some("2"));
+        assert!(target.env_store.get("keep").is_some());
+        assert!(target.env_store.get("staging").is_some());
+    }
+
+    #[test]
+    fn apply_rejects_foreign_file_and_leaves_data_intact() {
+        let dir = tempfile::tempdir().unwrap();
+        let bad = dir.path().join("bad.json");
+        std::fs::write(&bad, b"{ not a bundle").unwrap();
+        let target = AppState::default();
+        target.collection_upsert_impl(empty_collection_ipc(1, "keep")).unwrap();
+
+        assert!(target.bundle_import_apply_impl(bad.to_string_lossy().into_owned()).is_err());
+        assert_eq!(target.collection_list_impl().len(), 1); // untouched
     }
 }
