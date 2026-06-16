@@ -8,8 +8,8 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 
 Нет активной фичи в работе. Последняя влитая — **Save request — создание коллекции
 из диалога** (🎉 DONE 2026-06-16, влита в `main` fast-forward, коммиты `d473744`
-(feat) + `6bd0545` (refactor по код-ревью); чистый фронт, один компонент; остаток —
-live WebView2-проход; см. ниже).
+(feat) + `6bd0545` (refactor по код-ревью); чистый фронт, один компонент;
+live-verified в WebView2; см. ниже).
 
 Интеграционная ветка — `main`; фичи ведутся в отдельных worktree-ветках
 (`claude/*`) и вливаются в `main` fast-forward.
@@ -36,7 +36,7 @@ live WebView2-проход; см. ниже).
   TDD + spec-ревью ✅ + quality-ревью APPROVED + полиш по ревью); ветка ответвилась
   от `origin/main`, на финале ребейзнута на локальный `main` (бесконфликтно — пути
   не пересекаются) и влита ff. Гейт: vitest 938 (935 + 3) · `pnpm build` (tsc +
-  vite). Остаток — live WebView2-проход.
+  vite). Live-verified в WebView2 (2026-06-16).
 - **Well-known types — честный тип в Contract/hints, голый proto3-JSON скаляр во
   вставке** (🎉 DONE 2026-06-16, влита в `main` fast-forward; fix-коммиты `5da3db6`
   + `cfd85e9`; багфикс + доработка по живому фидбеку, отдельного план-дока нет) —
