@@ -150,10 +150,15 @@ fn build_field(
         let key_label = scalar_label(&entry.map_entry_key_field().kind());
         let value_field = entry.map_entry_value_field();
         let (value_label, message_type, enum_type) = match value_field.kind() {
-            Kind::Message(m) => {
-                enqueue_message(&m, queue, visited_msgs);
-                (short_name(m.full_name()), Some(m.full_name().to_string()), None)
-            }
+            Kind::Message(m) => match super::well_known::classify(m.full_name()) {
+                // Scalar well-known value → `map<string, int64>`-style label, no
+                // descent (proto3 JSON encodes the value as a bare scalar).
+                Some(wkt) => (wkt.label().to_string(), None, None),
+                None => {
+                    enqueue_message(&m, queue, visited_msgs);
+                    (short_name(m.full_name()), Some(m.full_name().to_string()), None)
+                }
+            },
             Kind::Enum(e) => {
                 record_enum(&e, enums, visited_enums);
                 (short_name(e.full_name()), None, Some(e.full_name().to_string()))
@@ -176,15 +181,20 @@ fn build_field(
 
     let repeated = field.is_list();
     let (value_kind, base_label, message_type, enum_type) = match field.kind() {
-        Kind::Message(m) => {
-            enqueue_message(&m, queue, visited_msgs);
-            (
-                FieldValueKind::Message,
-                short_name(m.full_name()),
-                Some(m.full_name().to_string()),
-                None,
-            )
-        }
+        Kind::Message(m) => match super::well_known::classify(m.full_name()) {
+            // Scalar well-known types (9 wrappers + Timestamp/Duration/FieldMask)
+            // are bare scalars in proto3 JSON — surface as Scalar, do NOT descend.
+            Some(wkt) => (FieldValueKind::Scalar, wkt.label().to_string(), None, None),
+            None => {
+                enqueue_message(&m, queue, visited_msgs);
+                (
+                    FieldValueKind::Message,
+                    short_name(m.full_name()),
+                    Some(m.full_name().to_string()),
+                    None,
+                )
+            }
+        },
         Kind::Enum(e) => {
             record_enum(&e, enums, visited_enums);
             (
@@ -330,6 +340,58 @@ mod tests {
             enum_type: enums,
             ..Default::default()
         }
+    }
+
+    /// A hand-built `google.protobuf` file with the well-known types this fix
+    /// touches, so a field can reference e.g. `.google.protobuf.Int64Value`.
+    fn well_known_file() -> FileDescriptorProto {
+        let wrapper = |name: &str, ty: Ty| DescriptorProto {
+            name: Some(name.into()),
+            field: vec![field("value", 1, ty)],
+            ..Default::default()
+        };
+        FileDescriptorProto {
+            name: Some("google/protobuf/wrappers.proto".into()),
+            package: Some("google.protobuf".into()),
+            syntax: Some("proto3".into()),
+            message_type: vec![
+                wrapper("Int64Value", Ty::Int64),
+                wrapper("StringValue", Ty::String),
+                wrapper("BoolValue", Ty::Bool),
+                wrapper("DoubleValue", Ty::Double),
+                DescriptorProto {
+                    name: Some("Timestamp".into()),
+                    field: vec![field("seconds", 1, Ty::Int64), field("nanos", 2, Ty::Int32)],
+                    ..Default::default()
+                },
+                DescriptorProto {
+                    name: Some("Empty".into()),
+                    field: vec![],
+                    ..Default::default()
+                },
+                DescriptorProto {
+                    name: Some("Duration".into()),
+                    field: vec![field("seconds", 1, Ty::Int64), field("nanos", 2, Ty::Int32)],
+                    ..Default::default()
+                },
+                DescriptorProto {
+                    name: Some("FieldMask".into()),
+                    field: vec![field("paths", 1, Ty::String)],
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        }
+    }
+
+    fn pool_with_files(files: Vec<FileDescriptorProto>) -> DescriptorPool {
+        let set = FileDescriptorSet { file: files };
+        let mut pool = DescriptorPool::new();
+        let mut buf = Vec::new();
+        set.encode(&mut buf).expect("encode");
+        let decoded = FileDescriptorSet::decode(&buf[..]).expect("roundtrip");
+        pool.add_file_descriptor_set(decoded).expect("add");
+        pool
     }
 
     fn msg_node<'a>(s: &'a MessageSchema, full: &str) -> &'a MessageNode {
@@ -648,5 +710,198 @@ mod tests {
         let output = build_message_schema_from_pool(&pool, "t.Svc", "Call", MessageSide::Output).unwrap();
         assert_eq!(output.root, "t.Out");
         assert!(output.messages.iter().any(|m| m.full_name == "t.Out"));
+    }
+
+    #[test]
+    fn scalar_wkt_field_is_scalar_and_not_expanded() {
+        let mut f = field("limit", 1, Ty::Message);
+        f.type_name = Some(".google.protobuf.Int64Value".into());
+        let m = DescriptorProto {
+            name: Some("M".into()),
+            field: vec![f],
+            ..Default::default()
+        };
+        let user = FileDescriptorProto {
+            name: Some("t.proto".into()),
+            package: Some("t".into()),
+            syntax: Some("proto3".into()),
+            dependency: vec!["google/protobuf/wrappers.proto".into()],
+            message_type: vec![m],
+            ..Default::default()
+        };
+        let pool = pool_with_files(vec![well_known_file(), user]);
+        let schema = build_schema(&pool.get_message_by_name("t.M").unwrap());
+
+        let n = field_node(msg_node(&schema, "t.M"), "limit");
+        assert_eq!(n.value_kind, FieldValueKind::Scalar);
+        assert_eq!(n.type_label, "int64");
+        assert_eq!(n.message_type, None);
+        assert!(!n.repeated);
+        // The wrapper message must NOT appear as a node — it was not descended into.
+        assert!(
+            !schema.messages.iter().any(|m| m.full_name == "google.protobuf.Int64Value"),
+            "Int64Value must not be expanded into a message node"
+        );
+    }
+
+    #[test]
+    fn timestamp_wkt_field_is_scalar_labeled_timestamp() {
+        let mut f = field("at", 1, Ty::Message);
+        f.type_name = Some(".google.protobuf.Timestamp".into());
+        let m = DescriptorProto {
+            name: Some("M".into()),
+            field: vec![f],
+            ..Default::default()
+        };
+        let user = FileDescriptorProto {
+            name: Some("t.proto".into()),
+            package: Some("t".into()),
+            syntax: Some("proto3".into()),
+            dependency: vec!["google/protobuf/wrappers.proto".into()],
+            message_type: vec![m],
+            ..Default::default()
+        };
+        let pool = pool_with_files(vec![well_known_file(), user]);
+        let schema = build_schema(&pool.get_message_by_name("t.M").unwrap());
+
+        let n = field_node(msg_node(&schema, "t.M"), "at");
+        assert_eq!(n.value_kind, FieldValueKind::Scalar);
+        assert_eq!(n.type_label, "Timestamp");
+        assert_eq!(n.message_type, None);
+        assert!(!schema.messages.iter().any(|m| m.full_name == "google.protobuf.Timestamp"));
+    }
+
+    #[test]
+    fn repeated_scalar_wkt_field_is_repeated_scalar() {
+        let mut f = field("limits", 1, Ty::Message);
+        f.type_name = Some(".google.protobuf.Int64Value".into());
+        f.label = Some(Label::Repeated as i32);
+        let m = DescriptorProto {
+            name: Some("M".into()),
+            field: vec![f],
+            ..Default::default()
+        };
+        let user = FileDescriptorProto {
+            name: Some("t.proto".into()),
+            package: Some("t".into()),
+            syntax: Some("proto3".into()),
+            dependency: vec!["google/protobuf/wrappers.proto".into()],
+            message_type: vec![m],
+            ..Default::default()
+        };
+        let pool = pool_with_files(vec![well_known_file(), user]);
+        let schema = build_schema(&pool.get_message_by_name("t.M").unwrap());
+
+        let n = field_node(msg_node(&schema, "t.M"), "limits");
+        assert_eq!(n.value_kind, FieldValueKind::Scalar);
+        assert!(n.repeated);
+        assert_eq!(n.type_label, "repeated int64");
+        assert_eq!(n.message_type, None);
+    }
+
+    #[test]
+    fn map_with_scalar_wkt_value_is_scalar_valued() {
+        // map<string, google.protobuf.Int64Value> → label map<string, int64>,
+        // no message descent.
+        let entry = DescriptorProto {
+            name: Some("LimitsEntry".into()),
+            field: vec![field("key", 1, Ty::String), {
+                let mut v = field("value", 2, Ty::Message);
+                v.type_name = Some(".google.protobuf.Int64Value".into());
+                v
+            }],
+            options: Some(MessageOptions { map_entry: Some(true), ..Default::default() }),
+            ..Default::default()
+        };
+        let mut f = field("limits", 1, Ty::Message);
+        f.type_name = Some(".t.M.LimitsEntry".into());
+        f.label = Some(Label::Repeated as i32);
+        let m = DescriptorProto {
+            name: Some("M".into()),
+            field: vec![f],
+            nested_type: vec![entry],
+            ..Default::default()
+        };
+        let user = FileDescriptorProto {
+            name: Some("t.proto".into()),
+            package: Some("t".into()),
+            syntax: Some("proto3".into()),
+            dependency: vec!["google/protobuf/wrappers.proto".into()],
+            message_type: vec![m],
+            ..Default::default()
+        };
+        let pool = pool_with_files(vec![well_known_file(), user]);
+        let schema = build_schema(&pool.get_message_by_name("t.M").unwrap());
+
+        let n = field_node(msg_node(&schema, "t.M"), "limits");
+        assert_eq!(n.value_kind, FieldValueKind::Map);
+        assert_eq!(n.type_label, "map<string, int64>");
+        assert_eq!(n.message_type, None);
+        assert_eq!(n.enum_type, None);
+        assert!(!schema.messages.iter().any(|m| m.full_name == "google.protobuf.Int64Value"));
+    }
+
+    #[test]
+    fn non_scalar_wkt_message_still_expands() {
+        // google.protobuf.Empty is NOT a scalar WKT — it stays a Message node.
+        let mut f = field("e", 1, Ty::Message);
+        f.type_name = Some(".google.protobuf.Empty".into());
+        let m = DescriptorProto {
+            name: Some("M".into()),
+            field: vec![f],
+            ..Default::default()
+        };
+        let user = FileDescriptorProto {
+            name: Some("t.proto".into()),
+            package: Some("t".into()),
+            syntax: Some("proto3".into()),
+            dependency: vec!["google/protobuf/wrappers.proto".into()],
+            message_type: vec![m],
+            ..Default::default()
+        };
+        let pool = pool_with_files(vec![well_known_file(), user]);
+        let schema = build_schema(&pool.get_message_by_name("t.M").unwrap());
+
+        let n = field_node(msg_node(&schema, "t.M"), "e");
+        assert_eq!(n.value_kind, FieldValueKind::Message);
+        assert_eq!(n.message_type.as_deref(), Some("google.protobuf.Empty"));
+        assert!(schema.messages.iter().any(|m| m.full_name == "google.protobuf.Empty"));
+    }
+
+    #[test]
+    fn duration_and_fieldmask_wkt_fields_are_scalar_labeled() {
+        let mut d = field("ttl", 1, Ty::Message);
+        d.type_name = Some(".google.protobuf.Duration".into());
+        let mut fm = field("mask", 2, Ty::Message);
+        fm.type_name = Some(".google.protobuf.FieldMask".into());
+        let m = DescriptorProto {
+            name: Some("M".into()),
+            field: vec![d, fm],
+            ..Default::default()
+        };
+        let user = FileDescriptorProto {
+            name: Some("t.proto".into()),
+            package: Some("t".into()),
+            syntax: Some("proto3".into()),
+            dependency: vec!["google/protobuf/wrappers.proto".into()],
+            message_type: vec![m],
+            ..Default::default()
+        };
+        let pool = pool_with_files(vec![well_known_file(), user]);
+        let schema = build_schema(&pool.get_message_by_name("t.M").unwrap());
+        let root = msg_node(&schema, "t.M");
+
+        let ttl = field_node(root, "ttl");
+        assert_eq!(ttl.value_kind, FieldValueKind::Scalar);
+        assert_eq!(ttl.type_label, "Duration");
+        assert_eq!(ttl.message_type, None);
+
+        let mask = field_node(root, "mask");
+        assert_eq!(mask.value_kind, FieldValueKind::Scalar);
+        assert_eq!(mask.type_label, "FieldMask");
+        assert_eq!(mask.message_type, None);
+
+        assert!(!schema.messages.iter().any(|m| m.full_name == "google.protobuf.Duration"));
+        assert!(!schema.messages.iter().any(|m| m.full_name == "google.protobuf.FieldMask"));
     }
 }
