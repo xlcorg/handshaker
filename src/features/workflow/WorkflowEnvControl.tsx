@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ConfirmDeleteEnvDialog } from "@/features/envs/ConfirmDeleteEnvDialog";
 import { EnvEditorDialog } from "@/features/envs/EnvEditorDialog";
 import { EnvSwitcherMenu } from "@/features/envs/EnvSwitcherMenu";
-import { bumpEnvRevision } from "@/features/envs/envRevision";
+import { bumpEnvRevision, useEnvRevision } from "@/features/envs/envRevision";
 import { colorHex, resolveColorKey } from "@/features/envs/colors";
 import { isEnvCycleHotkey, nextEnvName } from "@/features/envs/cycle";
 import { envList, envReorder } from "@/ipc/client";
@@ -22,6 +22,9 @@ import { useActiveWorkflow, workflowStore } from "./store";
  */
 export function WorkflowEnvControl() {
   const wf = useActiveWorkflow();
+  // A bump (e.g. applyImport merging environments) re-runs the fetch effect below
+  // so imported envs surface without a remount.
+  const envRevision = useEnvRevision();
   const [envs, setEnvs] = useState<EnvironmentIpc[]>([]);
   const [editor, setEditor] = useState<{ originalName: string | null } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
@@ -57,7 +60,7 @@ export function WorkflowEnvControl() {
 
   useEffect(() => {
     void refreshEnvs();
-  }, [refreshEnvs]);
+  }, [refreshEnvs, envRevision]);
 
   const activeEnv = wf.envName;
   const label = activeEnv ?? "No environment";

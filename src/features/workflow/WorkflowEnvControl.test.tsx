@@ -15,6 +15,9 @@ vi.mock("@/ipc/client", () => ({
 import { WorkflowEnvControl } from "./WorkflowEnvControl";
 import { workflowStore } from "./store";
 import { envList, envReorder } from "@/ipc/client";
+// REAL module (not mocked): the monotonic counter must actually advance to drive
+// the refetch the component subscribes to via useEnvRevision().
+import { bumpEnvRevision } from "@/features/envs/envRevision";
 
 beforeEach(() => {
   workflowStore.reset();
@@ -151,6 +154,22 @@ describe("WorkflowEnvControl", () => {
     expect(workflowStore.activeWorkflow().envName).toBe("staging"); // handled (cycled)
     expect(stopProp).toHaveBeenCalled(); // Monaco never sees the key
     expect(ev.defaultPrevented).toBe(true);
+  });
+
+  it("re-fetches environments when the env revision bumps (post-import)", async () => {
+    // Isolate the mount fetch from this assertion (other tests share the mock).
+    vi.mocked(envList).mockClear();
+    render(<WorkflowEnvControl />);
+    // Mount effect runs refreshEnvs() once.
+    await waitFor(() => expect(envList).toHaveBeenCalledTimes(1));
+
+    // applyImport() calls bumpEnvRevision() after a merge. The control subscribes
+    // to useEnvRevision() and folds it into the fetch effect's deps, so a bump
+    // must re-run refreshEnvs() — imported envs appear without a remount.
+    act(() => {
+      bumpEnvRevision();
+    });
+    await waitFor(() => expect(envList).toHaveBeenCalledTimes(2));
   });
 
   it("does NOT swallow Cmd+E when there are no envs — lets Monaco handle it", async () => {
