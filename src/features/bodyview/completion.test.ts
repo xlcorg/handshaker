@@ -279,3 +279,60 @@ describe("insertionColumns (quote-aware range)", () => {
     expect(insertionColumns('"a": "AC', 7, 9)).toEqual({ startColumn: 6, endColumn: 9 });
   });
 });
+
+describe("scalar well-known types (atomic in schema, bare scalar on insert)", () => {
+  // The schema reports a WKT field as an ordinary Message (real type name for the
+  // contract/ghost) + the wrapper block. Completion must still insert a bare scalar
+  // and never descend into the wrapper's `value` field.
+  const WKT: MessageSchemaIpc = {
+    root: "t.M",
+    enums: [],
+    messages: [
+      {
+        full_name: "t.M",
+        fields: [
+          f("limit", "Int64Value", "message", { message_type: "google.protobuf.Int64Value" }),
+          f("nick", "StringValue", "message", { message_type: "google.protobuf.StringValue" }),
+          f("flag", "BoolValue", "message", { message_type: "google.protobuf.BoolValue" }),
+          f("addr", "Address", "message", { message_type: "t.Address" }),
+        ],
+      },
+      { full_name: "google.protobuf.Int64Value", fields: [f("value", "int64", "scalar")] },
+      { full_name: "google.protobuf.StringValue", fields: [f("value", "string", "scalar")] },
+      { full_name: "google.protobuf.BoolValue", fields: [f("value", "bool", "scalar")] },
+      { full_name: "t.Address", fields: [f("city", "string", "scalar")] },
+    ],
+  };
+  const key = (field: string) => computeSuggestions(WKT, "{\n  ").find((x) => x.label === field);
+
+  it("inserts a bare number for an Int64Value field, not an object", () => {
+    const s = key("limit")!;
+    // bare number snippet, not the `{ "value": … }` wrapper object
+    expect(s.insertText).toBe('"limit": ${1:0}');
+    expect(s.triggerNext).toBeFalsy();
+  });
+
+  it("inserts a quoted empty string for a StringValue field", () => {
+    expect(key("nick")!.insertText).toBe('"nick": "$0"');
+  });
+
+  it("inserts a bare bool for a BoolValue field", () => {
+    expect(key("flag")!.insertText).toBe('"flag": ${1:false}');
+  });
+
+  it("offers true/false as values for a BoolValue field", () => {
+    expect(computeSuggestions(WKT, '{ "flag": ').map((x) => x.label)).toEqual(["true", "false"]);
+  });
+
+  it("never descends into a wrapper — no `value` suggestion inside the object form", () => {
+    expect(descendSchema(WKT, ["limit"])).toBeNull();
+    expect(computeSuggestions(WKT, '{ "limit": {\n  ')).toEqual([]);
+  });
+
+  it("still expands a normal (non-WKT) message field", () => {
+    const s = key("addr")!;
+    expect(s.insertText).toContain("{");
+    expect(s.triggerNext).toBe(true);
+    expect(descendSchema(WKT, ["addr"])?.kind).toBe("message");
+  });
+});

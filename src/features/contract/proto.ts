@@ -1,4 +1,5 @@
 import type { MessageSchemaIpc, MessageNodeIpc, EnumNodeIpc, FieldNodeIpc } from "@/ipc/bindings";
+import { isScalarWkt } from "@/lib/wellKnown";
 
 export type ProtoToken =
   | { kind: "keyword"; text: string }
@@ -42,13 +43,20 @@ function fieldLine(fl: FieldNodeIpc, names: Map<string, string>, indent: string)
   if (fl.optional) out.push({ kind: "keyword", text: "optional " });
   if (fl.repeated) out.push({ kind: "keyword", text: "repeated " });
   const target = fl.message_type ?? fl.enum_type;
+  // A scalar well-known type prints as its atomic name (no clickable block — the
+  // wrapper definition is omitted as redundant). Applies to a singular/repeated
+  // WKT field and to a map whose value is a WKT.
+  const wkt = fl.message_type && isScalarWkt(fl.message_type) ? shortName(fl.message_type) : null;
   if (fl.value_kind === "map") {
     // Our own builder format `map<key, Value>` — recover the key label from it.
     const key = fl.type_label.slice("map<".length, fl.type_label.indexOf(","));
     out.push({ kind: "keyword", text: "map<" }, { kind: "scalar", text: key }, { kind: "punct", text: ", " });
-    if (target) out.push(typeRef(target, names));
+    if (wkt) out.push({ kind: "scalar", text: wkt });
+    else if (target) out.push(typeRef(target, names));
     else out.push({ kind: "scalar", text: fl.type_label.slice(fl.type_label.indexOf(",") + 2, -1) });
     out.push({ kind: "punct", text: "> " });
+  } else if (wkt) {
+    out.push({ kind: "scalar", text: wkt }, { kind: "punct", text: " " });
   } else if (target) {
     out.push(typeRef(target, names), { kind: "punct", text: " " });
   } else {
@@ -120,7 +128,10 @@ function enumBlock(e: EnumNodeIpc, names: Map<string, string>): ProtoBlock {
 export function renderProtoDoc(schema: MessageSchemaIpc): ProtoDoc {
   const names = displayNames(schema);
   const root = schema.messages.filter((m) => m.full_name === schema.root);
-  const rest = schema.messages.filter((m) => m.full_name !== schema.root);
+  // Scalar well-known types render atomically by name — omit their wrapper blocks.
+  const rest = schema.messages.filter(
+    (m) => m.full_name !== schema.root && !isScalarWkt(m.full_name),
+  );
   return {
     blocks: [
       ...[...root, ...rest].map((m) => messageBlock(m, names)),
@@ -172,7 +183,9 @@ export function renderContractDoc(
   const roots = rootNames
     .map((r) => messages.find((m) => m.full_name === r))
     .filter((m): m is MessageNodeIpc => m !== undefined);
-  const rest = messages.filter((m) => !rootNames.includes(m.full_name));
+  const rest = messages.filter(
+    (m) => !rootNames.includes(m.full_name) && !isScalarWkt(m.full_name),
+  );
 
   return {
     blocks: [

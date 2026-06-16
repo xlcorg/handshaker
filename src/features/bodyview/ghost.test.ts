@@ -91,6 +91,24 @@ describe("computeGhostLines", () => {
     expect(computeGhostLines("[1]", SCHEMA)).toBeNull();
     expect(computeGhostLines("{}", { root: "t.Nope", messages: [], enums: [] })).toBeNull();
   });
+
+  it("shows a well-known wrapper field by its real type name, not the wrapped scalar", () => {
+    const schema: MessageSchemaIpc = {
+      root: "t.Req",
+      messages: [
+        {
+          full_name: "t.Req",
+          fields: [f("limit", "Int64Value", "message", { message_type: "google.protobuf.Int64Value" })],
+        },
+        { full_name: "google.protobuf.Int64Value", fields: [f("value", "int64", "scalar")] },
+      ],
+      enums: [],
+    };
+    expect(computeGhostLines("{\n}", schema)).toEqual({
+      afterLine: 1,
+      lines: ['  "limit": Int64Value'],
+    });
+  });
 });
 
 describe("GhostZone", () => {

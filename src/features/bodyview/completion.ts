@@ -1,5 +1,6 @@
 import type { MessageSchemaIpc, MessageNodeIpc, FieldNodeIpc } from "@/ipc/bindings";
 import type * as Monaco from "monaco-editor";
+import { scalarWktShape } from "@/lib/wellKnown";
 
 // ---------------------------------------------------------------------------
 // Cursor context — a schema-blind scanner over the text before the cursor.
@@ -218,12 +219,16 @@ export function descendSchema(schema: MessageSchemaIpc, path: string[]): Descent
     if (!field) return null;
     if (field.value_kind === "map") {
       if (i + 1 >= path.length) return { kind: "map", field };
+      // A map whose value is a scalar WKT has no descendable structure.
+      if (scalarWktShape(field.message_type)) return null;
       if (!field.message_type) return null; // scalar/enum-valued map → nothing to descend
       const next = byName(field.message_type);
       if (!next) return null;
       node = next;
       i += 2; // consume the map field AND the arbitrary map key
     } else {
+      // Scalar well-known types are leaves — never descend into the wrapper.
+      if (scalarWktShape(field.message_type)) return null;
       if (!field.message_type) return null; // scalar/enum field → can't descend
       const next = byName(field.message_type);
       if (!next) return null;
@@ -262,6 +267,9 @@ const NUMBER_LABELS = new Set([
 /** snippet body inserted after `"jsonName": ` for a key suggestion. */
 function scaffold(field: FieldNodeIpc): string {
   if (field.repeated) return "[$0]";
+  // Scalar well-known types insert a bare proto3-JSON scalar, not a `{…}` message.
+  const wkt = scalarWktShape(field.message_type);
+  if (wkt) return wkt === "bool" ? "${1:false}" : wkt === "number" ? "${1:0}" : '"$0"';
   switch (field.value_kind) {
     case "message":
     case "map":
@@ -277,6 +285,7 @@ function scaffold(field: FieldNodeIpc): string {
 }
 
 function keyKind(field: FieldNodeIpc): Suggestion["kind"] {
+  if (scalarWktShape(field.message_type)) return "field";
   switch (field.value_kind) {
     case "message":
     case "map":
@@ -313,7 +322,10 @@ export function buildKeySuggestions(
       insertText: `"${field.json_name}": ${scaffold(field)}`,
       kind: keyKind(field),
       isSnippet: true,
-      triggerNext: field.value_kind === "message" || field.value_kind === "enum",
+      // A scalar WKT inserts a complete scalar — no nested level to re-trigger into.
+      triggerNext:
+        !scalarWktShape(field.message_type) &&
+        (field.value_kind === "message" || field.value_kind === "enum"),
       sortText: sortKey(i),
     }));
 }
@@ -342,7 +354,12 @@ export function buildValueSuggestions(schema: MessageSchemaIpc, ctx: CompletionC
     }));
   }
   // Bool suggestions only for non-map singular/repeated bool (map-value bool is niche).
-  if (d.kind === "message" && (field.type_label === "bool" || field.type_label === "repeated bool")) {
+  if (
+    d.kind === "message" &&
+    (field.type_label === "bool" ||
+      field.type_label === "repeated bool" ||
+      scalarWktShape(field.message_type) === "bool")
+  ) {
     return [
       { label: "true", insertText: "true", kind: "value" },
       { label: "false", insertText: "false", kind: "value" },

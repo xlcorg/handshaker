@@ -59,26 +59,6 @@ pub(crate) fn classify(full_name: &str) -> Option<ScalarWellKnown> {
 }
 
 impl ScalarWellKnown {
-    /// Human/type label used by the message-schema and skeleton surfaces, e.g.
-    /// `int64`, `string`, `Timestamp`. Mirrors the scalar labels in `schema`.
-    pub(crate) fn label(self) -> &'static str {
-        use ScalarWellKnown::*;
-        match self {
-            DoubleValue => "double",
-            FloatValue => "float",
-            Int64Value => "int64",
-            UInt64Value => "uint64",
-            Int32Value => "int32",
-            UInt32Value => "uint32",
-            BoolValue => "bool",
-            StringValue => "string",
-            BytesValue => "bytes",
-            Timestamp => "Timestamp",
-            Duration => "Duration",
-            FieldMask => "FieldMask",
-        }
-    }
-
     /// Default skeleton value in the bare proto3-JSON scalar form.
     pub(crate) fn skeleton_default(self) -> Value {
         use ScalarWellKnown::*;
@@ -133,18 +113,6 @@ mod tests {
         ] {
             assert_eq!(classify(name), None, "classify({name}) must be None");
         }
-    }
-
-    #[test]
-    fn labels_match_scalar_forms() {
-        assert_eq!(classify("google.protobuf.Int64Value").unwrap().label(), "int64");
-        assert_eq!(classify("google.protobuf.UInt32Value").unwrap().label(), "uint32");
-        assert_eq!(classify("google.protobuf.StringValue").unwrap().label(), "string");
-        assert_eq!(classify("google.protobuf.BoolValue").unwrap().label(), "bool");
-        assert_eq!(classify("google.protobuf.DoubleValue").unwrap().label(), "double");
-        assert_eq!(classify("google.protobuf.Timestamp").unwrap().label(), "Timestamp");
-        assert_eq!(classify("google.protobuf.Duration").unwrap().label(), "Duration");
-        assert_eq!(classify("google.protobuf.FieldMask").unwrap().label(), "FieldMask");
     }
 
     #[test]

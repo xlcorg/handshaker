@@ -235,3 +235,44 @@ describe("renderContractDoc", () => {
     expect(lineText(doc.blocks[0].lines[0])).toBe("rpc F(a.Filter) returns (b.Filter);");
   });
 });
+
+describe("scalar well-known types render atomically (name only, no wrapper block)", () => {
+  const WKT: MessageSchemaIpc = {
+    root: "t.Req",
+    messages: [
+      {
+        full_name: "t.Req",
+        fields: [
+          f("limit", 1, "Int64Value", "message", { message_type: "google.protobuf.Int64Value" }),
+          f("created_at", 2, "Timestamp", "message", { message_type: "google.protobuf.Timestamp" }),
+        ],
+      },
+      { full_name: "google.protobuf.Int64Value", fields: [f("value", 1, "int64", "scalar")] },
+      {
+        full_name: "google.protobuf.Timestamp",
+        fields: [f("seconds", 1, "int64", "scalar"), f("nanos", 2, "int32", "scalar")],
+      },
+    ],
+    enums: [],
+  };
+
+  it("prints the WKT type name on the field but emits no wrapper block", () => {
+    const doc = renderProtoDoc(WKT);
+    expect(doc.blocks.map((b) => b.fullName)).toEqual(["t.Req"]);
+    expect(blockText(doc.blocks[0])).toBe(
+      ["message Req {", "  Int64Value limit = 1;", "  Timestamp created_at = 2;", "}"].join("\n"),
+    );
+  });
+
+  it("the WKT type token is plain text, not a dangling clickable typeRef", () => {
+    const toks = allTokens(renderProtoDoc(WKT).blocks[0]);
+    expect(toks.some((t) => t.kind === "typeRef")).toBe(false);
+    expect(toks.some((t) => t.text === "Int64Value")).toBe(true);
+  });
+
+  it("renderContractDoc also omits wrapper blocks", () => {
+    const names = renderContractDoc("Call", WKT, null).blocks.map((b) => b.fullName);
+    expect(names).not.toContain("google.protobuf.Int64Value");
+    expect(names).not.toContain("google.protobuf.Timestamp");
+  });
+});
