@@ -19,6 +19,8 @@ import type {
   MessageSchemaIpc,
   MessageSideIpc,
   Base64InspectIpc,
+  ImportSummaryIpc,
+  ImportResultIpc,
 } from "./bindings";
 
 /**
@@ -207,6 +209,23 @@ export async function collectionRestoreItem(collectionId: string, snapshot: Item
   if (r.status === "error") throw r.error;
 }
 
+export async function bundleExport(path: string, collectionId: string | null): Promise<void> {
+  const r = await commands.bundleExport(path, collectionId);
+  if (r.status === "error") throw r.error;
+}
+
+export async function bundleImportInspect(path: string): Promise<ImportSummaryIpc> {
+  const r = await commands.bundleImportInspect(path);
+  if (r.status === "error") throw r.error;
+  return r.data;
+}
+
+export async function bundleImportApply(path: string): Promise<ImportResultIpc> {
+  const r = await commands.bundleImportApply(path);
+  if (r.status === "error") throw r.error;
+  return r.data;
+}
+
 export async function authResolve(
   config: SavedAuthConfigIpc,
 ): Promise<AuthCredentialsIpc | null> {
@@ -302,6 +321,9 @@ export const ipc = {
   collectionDuplicateItem,
   collectionDeleteItem,
   collectionRestoreItem,
+  bundleExport,
+  bundleImportInspect,
+  bundleImportApply,
   authResolve,
   authOauth2FetchToken,
   authInvalidate,

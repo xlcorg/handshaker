@@ -347,6 +347,30 @@ async appSettingsSet(patch: UiStateIpc) : Promise<Result<null, IpcError>> {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+async bundleExport(path: string, collectionId: string | null) : Promise<Result<null, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("bundle_export", { path, collectionId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async bundleImportInspect(path: string) : Promise<Result<ImportSummaryIpc, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("bundle_import_inspect", { path }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async bundleImportApply(path: string) : Promise<Result<ImportResultIpc, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("bundle_import_apply", { path }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -406,6 +430,14 @@ export type FieldNodeIpc = { json_name: string; proto_name: string; type_label: 
 export type FieldValueKindIpc = "scalar" | "message" | "enum" | "map"
 export type FolderIpc = { id: string; name: string; items: ItemIpc[]; expanded: boolean }
 export type GrpcTargetIpc = { address: string; tls: boolean; skip_verify: boolean }
+/**
+ * Result of applying an import (merge).
+ */
+export type ImportResultIpc = { collections_added: number; collections_updated: number; environments_added: number; environments_updated: number }
+/**
+ * Result of inspecting an export file before applying it (no mutation).
+ */
+export type ImportSummaryIpc = { collections_total: number; collections_existing: number; environments_total: number; environments_existing: number }
 export type InvokeOutcomeIpc = { status_code: number; status_message: string; response_json: string | null; trailing_metadata: Partial<{ [key in string]: string }>; 
 /**
  * Elapsed time in milliseconds. Capped at u32::MAX (~49 days) for
