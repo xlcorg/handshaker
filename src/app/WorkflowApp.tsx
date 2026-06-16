@@ -23,6 +23,8 @@ import { saveNewRequest } from "@/features/catalog/save";
 import { useAutosaveDraft } from "@/features/catalog/useAutosaveDraft";
 import { findSavedLocations } from "@/features/catalog/grouping";
 import { planQuickAdd } from "@/features/catalog/quickAdd";
+import { CommandPalette } from "@/features/catalog/CommandPalette";
+import { isPaletteHotkey } from "@/features/catalog/paletteHotkey";
 import { EMPTY_BODY_TEMPLATE } from "@/features/workflow/actions";
 import { toast } from "sonner";
 import { newId } from "@/lib/ids";
@@ -62,6 +64,7 @@ export function WorkflowApp() {
   const [panelCollectionId, setPanelCollectionId] = useState<string | null>(null);
   const [saveOpen, setSaveOpen] = useState(false);
   const [discardOpen, setDiscardOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const [prefs, setPref] = usePrefs();
   const update = useUpdateCheck();
   const sidebarPanelRef = useRef<PanelImperativeHandle>(null);
@@ -127,6 +130,24 @@ export function WorkflowApp() {
     return () => window.removeEventListener("keydown", onKey);
     // guardedRun reads fresh store state and only calls stable setters; bind once.
   }, []);
+
+  // Командная палитра: Ctrl/Cmd+K|P. CAPTURE-фаза + stopPropagation — иначе Monaco
+  // перехватывает Ctrl+K как префикс чорда и палитра не откроется из редактора тела.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!isPaletteHotkey(e)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setPaletteOpen(true);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, []);
+
+  // На открытии палитры освежаем дерево каталога (дёшево; гарантирует актуальные коллекции).
+  useEffect(() => {
+    if (paletteOpen) void cat.reload();
+  }, [paletteOpen, cat.reload]);
 
   // Drive the imperative panel from prefs.sidebar (toggled by Ctrl/Cmd+B).
   useEffect(() => {
@@ -336,6 +357,20 @@ export function WorkflowApp() {
       />
 
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        collections={cat.tree}
+        onOpenRequest={(cid, req) => {
+          setPaletteOpen(false);
+          openRequest(cid, req);
+        }}
+        onOpenCollection={(cid) => {
+          setPaletteOpen(false);
+          setPanelCollectionId(cid);
+        }}
+      />
 
       <UpdateToast
         phase={update.phase}
