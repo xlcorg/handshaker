@@ -6,7 +6,17 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 
 ## Active work
 
-Нет активной фичи в работе. Последняя влитая — **Стартовый сплэш — убрать
+В работе — **Word Wrap — настройка + хоткей Alt+Z** (✅ CODE-COMPLETE 2026-06-16,
+ветка `claude/sharp-antonelli-2e0d2d`; план
+`docs/superpowers/plans/2026-06-16-word-wrap-setting.md`, спека
+`docs/superpowers/specs/2026-06-16-word-wrap-setting-design.md`; финальное ревью
+ветки = READY TO MERGE, гейт зелёный: vitest 920 · tsc · build). Pref `wordWrap`
+(off по умолчанию) рулит `wordWrap` Monaco в обоих редакторах тела; тумблер в
+Settings → Appearance + глобальный Alt+Z (capture + `stopPropagation`, подавляет
+встроенный Alt+Z Monaco). Бэкенд/IPC/bindings не тронуты. Ждёт live-проход в
+WebView2, затем ff в `main` и архивацию.
+
+Последняя влитая — **Стартовый сплэш — убрать
 белую вспышку при старте** (🎉 DONE 2026-06-14, влита в `main` ff `f9629d5`;
 план+спека `2026-06-14-startup-splash-screen*` в `archive/`; см. ниже).
 

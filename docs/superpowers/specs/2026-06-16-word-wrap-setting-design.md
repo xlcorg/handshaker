@@ -1,6 +1,8 @@
 # Word Wrap — настройка + хоткей Alt+Z
 
-**Статус:** 📝 SPEC (брейншторм-апрув получен 2026-06-16; план ещё не написан)
+**Статус:** ✅ CODE-COMPLETE (2026-06-16; subagent-driven, spec+quality ревью на
+каждом юните + финальное ревью ветки = READY TO MERGE; гейт зелёный: vitest 920 ·
+tsc · vite build). Остаток — live-проход в WebView2 (см. «Live-проход»).
 **Ветка:** `claude/sharp-antonelli-2e0d2d`
 **Дата:** 2026-06-16
 
@@ -101,12 +103,12 @@ export const PREFS_DEFAULTS: Prefs = {
 
 ### 2. Monaco — `src/features/bodyview/BodyView.tsx` (только)
 
-`src/lib/monaco.ts` **не трогаем.** Жёсткое `wordWrap: "on"` остаётся в
-`EDITOR_OPTIONS`, но `BodyView` **переопределяет** опцию из pref, поэтому базовое
-значение для тела не важно. Это безопаснее удаления: `READ_ONLY_OPTIONS` оказался
-**нигде не используемым** (grep по всей кодовой базе), а `EDITOR_OPTIONS` собирает
-только `READ_ONLY_OPTIONS`/`BODY_*`; ContractView эти консты не импортирует. Минус
-один изменённый файл и один риск.
+`BodyView` **переопределяет** `wordWrap` из pref, поэтому базовое значение в
+`monaco.ts` для тела не важно. `READ_ONLY_OPTIONS` оказался **нигде не используемым**
+(grep по всей кодовой базе), а `EDITOR_OPTIONS` собирает только `READ_ONLY_OPTIONS`/
+`BODY_*`; ContractView эти консты не импортирует. (Как построено: по итогу ревью
+base `EDITOR_OPTIONS.wordWrap` причёсан с `"on"` на `"off"` + комментарий — чисто
+косметика, т.к. эффективное значение всё равно задаёт оверрайд в `BodyView`.)
 
 - В `BodyView` уже есть `const [prefs] = usePrefs();`. Прокидываем перенос,
   **переопределяя** базовую опцию (spread → последнее поле выигрывает):
@@ -119,22 +121,17 @@ const options = useMemo(() => ({ ...base, wordWrap: wrap }), [base, wrap]);
 
   Начальное значение берётся из текущего pref (через `usePrefs`-стейт,
   сидированный `readPrefs()` при инициализации) → **нет мигания** на маунте.
-- Живое переключение — явным эффектом (не полагаемся на то, как
-  `@monaco-editor/react` реагирует на смену `options`-пропа: его поведение я не
-  смог подтвердить из-за pnpm-раскладки node_modules, поэтому делаю надёжно):
+- Живое переключение — **через controlled `options`-проп**, без отдельного эффекта.
+  При смене `prefs.wordWrap` `useMemo` отдаёт новый объект (новая идентичность), а
+  `@monaco-editor/react@4.7.0` на смену идентичности `options` вызывает
+  `editor.updateOptions(options)` на смонтированном редакторе (`useEffect(…,[options])`
+  в обёртке — подтверждено чтением `dist/index.mjs` на код-ревью). Без ремаунта.
 
-```ts
-useEffect(() => {
-  live.current?.editor.updateOptions({ wordWrap: prefs.wordWrap ? "on" : "off" });
-}, [prefs.wordWrap]);
-```
-
-  Эффект no-op до маунта (`live.current` ещё null); `onMount` берёт начальное
-  значение из `options`. Срабатывает для обоих режимов (общий pref).
-
-  > Примечание: т.к. опция переопределяется здесь, base-консты в `monaco.ts`
-  > остаются как есть. Короткий комментарий в `BodyView` фиксирует, что источник
-  > истины по `wordWrap` — pref, а не `BODY_*`.
+  > Как построено: в раннем черновике был добавлен **явный** `useEffect` с
+  > `updateOptions` (защитно, пока поведение обёртки не было подтверждено). На
+  > code-review он удалён как избыточный (двойной вызов) — обёртка покрывает
+  > живое переключение, а unit-тест проверяет нашу ответственность: что `options`
+  > несёт верный `wordWrap` (request→off / response→on).
 
 ### 3. Новый модуль `src/features/shell/wordWrap.ts`
 
