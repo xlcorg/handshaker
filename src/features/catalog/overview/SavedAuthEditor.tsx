@@ -12,6 +12,7 @@ import { ipc } from "@/ipc/client";
 import { EnvVarField } from "./EnvVarField";
 import { configToForm, formToConfig, type AuthForm } from "./authConfigMap";
 import { resolveOauthConfig } from "@/features/workflow/actions";
+import { useEnvRevision } from "@/features/envs/envRevision";
 
 export interface SavedAuthEditorProps {
   value: SavedAuthConfigIpc;
@@ -47,9 +48,12 @@ export function SavedAuthEditor({ value, onChange }: SavedAuthEditorProps) {
   const patch = (next: Partial<AuthForm>) => onChange(formToConfig({ ...form, ...next }));
 
   const [envNames, setEnvNames] = useState<string[]>([]);
+  // Re-fetch when env contents change (e.g. an import adds environments) so the
+  // "Apply in environments" list stays fresh while the editor is open.
+  const envRevision = useEnvRevision();
   useEffect(() => {
     void ipc.envList().then((envs) => setEnvNames(envs.map((e) => e.name))).catch(() => {});
-  }, []);
+  }, [envRevision]);
 
   const [token, setToken] = useState<TokenStatus>({ kind: "idle" });
   const onGetToken = async () => {
