@@ -23,6 +23,7 @@ export interface CollectionTreeProps {
   onDuplicateItem: (collectionId: string, itemId: string) => void;
   onDeleteItem: (collectionId: string, itemId: string) => void;
   onDeleteCollection: (collectionId: string) => void;
+  onExportCollection: (collectionId: string) => void;
   onAddRequest: (collectionId: string, parentId: string | null) => void;
   onAddFolder: (collectionId: string, parentId: string | null) => void;
   onSetPinned: (collectionId: string, pinned: boolean) => void;
@@ -228,6 +229,7 @@ export function CollectionTree(props: CollectionTreeProps) {
     onDuplicateItem: props.onDuplicateItem,
     onRequestDeleteItem: (collectionId, itemId) => setDelTarget({ kind: "item", collectionId, itemId }),
     onRequestDeleteCollection: (collectionId) => setDelTarget({ kind: "collection", collectionId }),
+    onExportCollection: props.onExportCollection,
     onAddRequest: props.onAddRequest,
     onAddFolder: props.onAddFolder,
     onSetPinned: props.onSetPinned,

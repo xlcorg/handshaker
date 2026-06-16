@@ -29,6 +29,7 @@ function makeCb(over: Partial<TreeCallbacks> = {}): TreeCallbacks {
     onToggle: vi.fn(), onEditingChange: vi.fn(), onOpenRequest: vi.fn(),
     onOpenCollection: vi.fn(), onRenameItem: vi.fn(), onRenameCollection: vi.fn(),
     onDuplicateItem: vi.fn(), onRequestDeleteItem: vi.fn(), onRequestDeleteCollection: vi.fn(),
+    onExportCollection: vi.fn(),
     onAddRequest: vi.fn(), onAddFolder: vi.fn(), onSetPinned: vi.fn(),
     dragId: null, dropHint: null, onDragStartItem: vi.fn(), onDragOverRow: vi.fn(),
     onDropRow: vi.fn(), onDragEndItem: vi.fn(), ...over,
@@ -114,6 +115,15 @@ describe("CollectionNode", () => {
     await user.click(screen.getByLabelText("More options"));
     await user.click(screen.getByText("Delete"));
     expect(onRequestDeleteCollection).toHaveBeenCalledWith("c1");
+  });
+
+  it("calls onExportCollection from the row menu Export item", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onExportCollection = vi.fn();
+    renderWithSidebar(<CollectionNode col={col()} cb={makeCb({ onExportCollection })} />);
+    await user.click(screen.getByLabelText("More options"));
+    await user.click(screen.getByText("Export"));
+    expect(onExportCollection).toHaveBeenCalledWith("c1");
   });
 
   it("shows an empty hint for a collection with no items when open", () => {

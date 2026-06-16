@@ -39,6 +39,7 @@ function makeCb(over: Partial<TreeCallbacks> = {}): TreeCallbacks {
     onDuplicateItem: vi.fn(),
     onRequestDeleteItem: vi.fn(),
     onRequestDeleteCollection: vi.fn(),
+    onExportCollection: vi.fn(),
     onAddRequest: vi.fn(),
     onAddFolder: vi.fn(),
     onSetPinned: vi.fn(),

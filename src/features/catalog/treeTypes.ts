@@ -20,6 +20,8 @@ export interface TreeCallbacks {
   onRequestDeleteItem: (collectionId: string, itemId: string) => void;
   /** Request deletion of a collection (CollectionTree opens the confirm dialog). */
   onRequestDeleteCollection: (collectionId: string) => void;
+  /** Export a single collection to a file (opens a save dialog). */
+  onExportCollection: (collectionId: string) => void;
   onAddRequest: (collectionId: string, parentId: string | null) => void;
   onAddFolder: (collectionId: string, parentId: string | null) => void;
   onSetPinned: (collectionId: string, pinned: boolean) => void;

@@ -1,4 +1,4 @@
-import { ChevronRight, FilePlus, FolderPlus, Pencil, Trash2 } from "lucide-react";
+import { ChevronRight, Download, FilePlus, FolderPlus, Pencil, Trash2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type { CollectionIpc } from "@/ipc/bindings";
 import { SidebarMenuItem, SidebarMenuButton, SidebarMenuSub } from "@/components/ui/sidebar";
@@ -27,6 +27,7 @@ export function CollectionNode({ col, cb }: CollectionNodeProps) {
     { icon: <FilePlus />, label: "Add request", onClick: () => cb.onAddRequest(col.id, null) },
     { icon: <FolderPlus />, label: "Add folder", onClick: () => cb.onAddFolder(col.id, null) },
     { icon: <Pencil />, label: "Rename", onClick: () => cb.onEditingChange(col.id) },
+    { icon: <Download />, label: "Export", onClick: () => cb.onExportCollection(col.id) },
     { sep: true },
     { icon: <Trash2 />, label: "Delete", danger: true, onClick: () => cb.onRequestDeleteCollection(col.id) },
   ];

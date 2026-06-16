@@ -16,6 +16,7 @@ import { newRequestDraft, openSavedRequest } from "./actions";
 import { filterCollections, sortCollections, type SortKey } from "./sort";
 import { SortControl } from "./SortControl";
 import { CollectionTree } from "./CollectionTree";
+import { exportBundle } from "./transfer";
 import { loadUiState, patchUiState } from "./uiState";
 
 export interface SidebarShellProps {
@@ -122,6 +123,10 @@ export function SidebarShell({
           onDuplicateItem={cat.duplicateItem}
           onDeleteItem={cat.deleteItem}
           onDeleteCollection={cat.deleteCollection}
+          onExportCollection={(id) => {
+            const c = cat.tree.find((x) => x.id === id);
+            void exportBundle(id, `${c?.name ?? "collection"}.json`);
+          }}
           onAddRequest={() => addRequest()}
           onAddFolder={onAddFolder}
           onSetPinned={cat.setPinned}
