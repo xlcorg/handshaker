@@ -17,6 +17,30 @@ use crate::state::AppState;
 impl AppState {
     /// Gather collections (+ environments when `collection_id` is None) and write
     /// the bundle to `path`. `Some(id)` exports just that collection, no envs.
+    /// Read + validate an export file and count how many of its collections /
+    /// environments already exist locally. Does NOT mutate anything.
+    pub fn bundle_import_inspect_impl(&self, path: String) -> Result<ImportSummaryIpc, CoreError> {
+        let bundle = bundle::read_bundle(Path::new(&path))?;
+        let collections_existing = bundle
+            .collections
+            .iter()
+            .filter(|c| self.collection_store.get(c.id).is_some())
+            .count() as u32;
+        let environments_existing = bundle
+            .environments
+            .iter()
+            .filter(|e| self.env_store.get(&e.name).is_some())
+            .count() as u32;
+        Ok(ImportSummaryIpc {
+            collections_total: bundle.collections.len() as u32,
+            collections_existing,
+            environments_total: bundle.environments.len() as u32,
+            environments_existing,
+        })
+    }
+
+    /// Gather collections (+ environments when `collection_id` is None) and write
+    /// the bundle to `path`. `Some(id)` exports just that collection, no envs.
     pub fn bundle_export_impl(&self, path: String, collection_id: Option<String>) -> Result<(), CoreError> {
         let bundle = match collection_id {
             None => Bundle::new(self.collection_store.list(), self.env_store.list()),
@@ -41,6 +65,15 @@ pub async fn bundle_export(
     collection_id: Option<String>,
 ) -> Result<(), IpcError> {
     state.bundle_export_impl(path, collection_id).map_err(IpcError::from)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn bundle_import_inspect(
+    state: State<'_, AppState>,
+    path: String,
+) -> Result<ImportSummaryIpc, IpcError> {
+    state.bundle_import_inspect_impl(path).map_err(IpcError::from)
 }
 
 #[cfg(test)]
@@ -68,6 +101,34 @@ mod tests {
             created_at: 0.0,
             expanded: false,
         }
+    }
+
+    #[test]
+    fn inspect_counts_existing_vs_new_without_mutating() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("src.json");
+
+        // Source state → export file with c1, c2 + env prod, staging.
+        let source = AppState::default();
+        source.collection_upsert_impl(empty_collection_ipc(1, "c1")).unwrap();
+        source.collection_upsert_impl(empty_collection_ipc(2, "c2")).unwrap();
+        source.env_upsert_impl(handshaker_core::env::Environment { name: "prod".into(), variables: HashMap::new(), color: None }).unwrap();
+        source.env_upsert_impl(handshaker_core::env::Environment { name: "staging".into(), variables: HashMap::new(), color: None }).unwrap();
+        source.bundle_export_impl(src.to_string_lossy().into_owned(), None).unwrap();
+
+        // Target already has c1 (id collision) + env prod (name collision).
+        let target = AppState::default();
+        target.collection_upsert_impl(empty_collection_ipc(1, "c1-local")).unwrap();
+        target.env_upsert_impl(handshaker_core::env::Environment { name: "prod".into(), variables: HashMap::new(), color: None }).unwrap();
+
+        let summary = target.bundle_import_inspect_impl(src.to_string_lossy().into_owned()).unwrap();
+        assert_eq!(summary.collections_total, 2);
+        assert_eq!(summary.collections_existing, 1); // c1
+        assert_eq!(summary.environments_total, 2);
+        assert_eq!(summary.environments_existing, 1); // prod
+
+        // Inspect must NOT mutate.
+        assert_eq!(target.collection_list_impl().len(), 1);
     }
 
     #[test]
