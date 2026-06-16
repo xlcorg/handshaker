@@ -4,14 +4,16 @@ import { AppearancePane } from "./AppearancePane";
 import { NetworkPane } from "./NetworkPane";
 import { KeyboardPane } from "./KeyboardPane";
 import { AboutPane } from "./AboutPane";
+import { ImportExportPane } from "./ImportExportPane";
 import { cn } from "@/lib/cn";
 
-type Section = "appearance" | "network" | "keyboard" | "about";
+type Section = "appearance" | "network" | "keyboard" | "import-export" | "about";
 
 const SECTIONS: Array<[Section, string]> = [
   ["appearance", "Appearance"],
   ["network", "Network"],
   ["keyboard", "Keyboard"],
+  ["import-export", "Import / Export"],
   ["about", "About"],
 ];
 
@@ -53,6 +55,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
             {section === "appearance" && <AppearancePane />}
             {section === "network" && <NetworkPane />}
             {section === "keyboard" && <KeyboardPane />}
+            {section === "import-export" && <ImportExportPane />}
             {section === "about" && <AboutPane />}
           </div>
         </div>
