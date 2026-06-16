@@ -5,6 +5,7 @@
 
 pub mod auth;
 pub mod base64;
+pub mod bundle;
 pub mod collections;
 pub mod env;
 pub mod error;
