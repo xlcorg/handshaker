@@ -15,8 +15,6 @@ use crate::ipc::error::IpcError;
 use crate::state::AppState;
 
 impl AppState {
-    /// Gather collections (+ environments when `collection_id` is None) and write
-    /// the bundle to `path`. `Some(id)` exports just that collection, no envs.
     /// Read + validate an export file and count how many of its collections /
     /// environments already exist locally. Does NOT mutate anything.
     pub fn bundle_import_inspect_impl(&self, path: String) -> Result<ImportSummaryIpc, CoreError> {
@@ -292,5 +290,31 @@ mod tests {
 
         assert!(target.bundle_import_apply_impl(bad.to_string_lossy().into_owned()).is_err());
         assert_eq!(target.collection_list_impl().len(), 1); // untouched
+    }
+
+    #[test]
+    fn apply_updates_env_color_only_when_imported_sets_one() {
+        use handshaker_core::env::Environment;
+        let dir = tempfile::tempdir().unwrap();
+
+        // Imported color Some(..) overwrites the existing color.
+        let a = dir.path().join("a.json");
+        let src_a = AppState::default();
+        src_a.env_upsert_impl(Environment { name: "e".into(), variables: HashMap::new(), color: Some("blue".into()) }).unwrap();
+        src_a.bundle_export_impl(a.to_string_lossy().into_owned(), None).unwrap();
+        let tgt_a = AppState::default();
+        tgt_a.env_upsert_impl(Environment { name: "e".into(), variables: HashMap::new(), color: Some("red".into()) }).unwrap();
+        tgt_a.bundle_import_apply_impl(a.to_string_lossy().into_owned()).unwrap();
+        assert_eq!(tgt_a.env_store.get("e").unwrap().color.as_deref(), Some("blue"));
+
+        // Imported color None preserves the existing color.
+        let b = dir.path().join("b.json");
+        let src_b = AppState::default();
+        src_b.env_upsert_impl(Environment { name: "e".into(), variables: HashMap::new(), color: None }).unwrap();
+        src_b.bundle_export_impl(b.to_string_lossy().into_owned(), None).unwrap();
+        let tgt_b = AppState::default();
+        tgt_b.env_upsert_impl(Environment { name: "e".into(), variables: HashMap::new(), color: Some("red".into()) }).unwrap();
+        tgt_b.bundle_import_apply_impl(b.to_string_lossy().into_owned()).unwrap();
+        assert_eq!(tgt_b.env_store.get("e").unwrap().color.as_deref(), Some("red"));
     }
 }
