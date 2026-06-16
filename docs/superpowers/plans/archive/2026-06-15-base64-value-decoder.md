@@ -2,12 +2,14 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Status:** ✅ CODE-COMPLETE (2026-06-16) — все 7 задач + final-review fix влиты в
-ветку, subagent-driven (spec+quality ревью на каждой + финальное ревью ветки).
-Гейты зелёные: `cargo test --workspace` · `pnpm test` 913 · `tsc` · `vite build` ·
-bindings no-drift. **Не влито в `main`** — ветка оставлена под живой WebView2-проход.
-**Ветка:** `claude/busy-sinoussi-ab48fe`
-**Спека:** `docs/superpowers/specs/2026-06-15-base64-value-decoder-design.md`
+**Status:** 🎉 DONE (2026-06-16) — live-verified в WebView2 («проверил, ок»),
+ребейзнута на `main` (21 коммит; конфликтовал только `CLAUDE.md` — разрешён
+взятием main-стороны, доки переписаны начисто) и **влита в `main` fast-forward**.
+Пост-ребейз гейты зелёные: `cargo test --workspace` · `pnpm test` **964** · `tsc` ·
+`vite build` · bindings no-drift. План+спека — в `archive/`.
+**Ветка:** `claude/busy-sinoussi-ab48fe` (ребейзнута; backup-реф
+`backup/base64-pre-rebase` = пред-ребейз `c034d50`)
+**Спека:** `docs/superpowers/specs/archive/2026-06-15-base64-value-decoder-design.md`
 
 **Коммиты:** core `4dba3e2`+`4e4d6dd` · IPC `8255c12` · FE-helpers `e282ed7` ·
 client `9e310c5`+`3aadbae` · DecodeDialog `a6248ff` · decodeActions `b4aeaa9` ·

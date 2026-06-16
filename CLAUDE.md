@@ -6,16 +6,33 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 
 ## Active work
 
-Нет активной фичи в работе. Последняя влитая — **Save request — создание коллекции
-из диалога** (🎉 DONE 2026-06-16, влита в `main` fast-forward, коммиты `d473744`
-(feat) + `6bd0545` (refactor по код-ревью); чистый фронт, один компонент;
-live-verified в WebView2; см. ниже).
+Нет активной фичи в работе. Последняя влитая — **Декодирование base64-значений в
+ответе** (🎉 DONE 2026-06-16, ребейз+ff в `main`; план+спека
+`2026-06-15-base64-value-decoder*` в `archive/`; live-verified в WebView2; см. ниже).
 
 Интеграционная ветка — `main`; фичи ведутся в отдельных worktree-ветках
 (`claude/*`) и вливаются в `main` fast-forward.
 
 ### Завершённые фичи (всё в `archive/`)
 
+- **Декодирование base64-значений в ответе** (🎉 DONE 2026-06-16, ребейз+ff в
+  `main`; план+спека `2026-06-15-base64-value-decoder*` в `archive/`) — ПКМ по
+  строковому значению в Body ответа → меню (best practice, 2 группы с разделителем):
+  **Copy decoded base64** (декод на бэкенде → буфер; бинарь → тост→Save) · **Copy
+  value** (сырая строка → буфер) над разделителем; **Save decoded base64 to file…**
+  (декод → нативный Save As) · **Save base64 to file…** (сырой base64 verbatim →
+  файл) под ним. Диалога нет (убран по live-фидбеку); полное значение берётся из
+  JSON-дерева (`node.value`), т.к. в редакторе строка может быть элидирована.
+  **Copy value** гейтится на `hsValueIsString` (остальные на `hsValueIsB64`);
+  **built-in «Copy» Monaco убран** из response-редактора (дублировал Copy value;
+  Ctrl+C жив). Бэкенд: core `base64`-модуль (lenient decode + classify + `infer`) +
+  IPC `base64_inspect`/`base64_save`/`base64_save_encoded` (`tauri-plugin-dialog`).
+  Subagent-driven (7 задач) + live-pass амендменты: timing-фикс гейта ПКМ-меню
+  (`onMouseDown` по правой кнопке — mousedown раньше Monaco-`contextmenu`),
+  исключение UUID/hex из гейта, убран «Command Palette» из Monaco-меню
+  (`contextMenuCleanup`, F1 жив), decode→буфер вместо диалога, перекомпоновка меню +
+  убран built-in Copy. Гейт (пост-ребейз): `cargo test --workspace` · `pnpm test`
+  964 · `tsc` · `vite build` · bindings no-drift. Live-verified в WebView2.
 - **Save request — создание коллекции из диалога** (🎉 DONE 2026-06-16, влита в
   `main` fast-forward, коммиты `d473744` (feat) + `6bd0545` (refactor по код-ревью);
   план+спека `2026-06-16-save-request-create-collection*` в `archive/`) — щель в UX:
