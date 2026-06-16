@@ -6,25 +6,36 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 
 ## Active work
 
-В работе — **Word Wrap — настройка + хоткей Alt+Z** (✅ CODE-COMPLETE 2026-06-16,
-ветка `claude/sharp-antonelli-2e0d2d`; план
-`docs/superpowers/plans/2026-06-16-word-wrap-setting.md`, спека
-`docs/superpowers/specs/2026-06-16-word-wrap-setting-design.md`; финальное ревью
-ветки = READY TO MERGE, гейт зелёный: vitest 920 · tsc · build). Pref `wordWrap`
-(off по умолчанию) рулит `wordWrap` Monaco в обоих редакторах тела; тумблер в
-Settings → Appearance + глобальный Alt+Z (capture + `stopPropagation`, подавляет
-встроенный Alt+Z Monaco). Бэкенд/IPC/bindings не тронуты. Ждёт live-проход в
-WebView2, затем ff в `main` и архивацию.
-
-Последняя влитая — **Стартовый сплэш — убрать
-белую вспышку при старте** (🎉 DONE 2026-06-14, влита в `main` ff `f9629d5`;
-план+спека `2026-06-14-startup-splash-screen*` в `archive/`; см. ниже).
+Нет активной фичи в работе. Последняя влитая — **Word Wrap — настройка + хоткей
+Alt+Z** (✅ DONE 2026-06-16, влита в `main` fast-forward; план+спека
+`2026-06-16-word-wrap-setting*` в `archive/`; остаток — live-проход в WebView2;
+см. ниже).
 
 Интеграционная ветка — `main`; фичи ведутся в отдельных worktree-ветках
 (`claude/*`) и вливаются в `main` fast-forward.
 
 ### Завершённые фичи (всё в `archive/`)
 
+- **Word Wrap — настройка + хоткей Alt+Z** (✅ DONE 2026-06-16, влита в `main`
+  fast-forward; план+спека `2026-06-16-word-wrap-setting*` в `archive/`) — перенос
+  длинных строк в обоих редакторах тела стал управляемым pref'ом `wordWrap`,
+  **выключен по умолчанию** (как в VS Code: длинное base64-значение уезжает вправо
+  горизонтальным скроллом, а не «башней» под ключом — это было следствие Monaco
+  `wordWrap: "on"`, а не `renderJsonTree`). Управление: тумблер **Settings →
+  Appearance → Word wrap** + глобальный **Alt+Z**. Чистый `src/features/shell/
+  wordWrap.ts` (`isWordWrapHotkey` — физ. `code === "KeyZ"`, AltGr/Shift-гарды,
+  раскладко-независимо; `useWordWrapHotkey` — capture-фаза + `stopPropagation`,
+  подавляет встроенный Alt+Z Monaco `editor.action.toggleWordWrap`, иначе
+  рассинхрон с pref). `BodyView` **переопределяет** `wordWrap` из pref в `useMemo`;
+  живое переключение — через controlled `options`-проп (обёртка `@monaco-editor/
+  react@4.7.0` сама зовёт `updateOptions` на смену идентичности options — явный
+  эффект убран на ревью как избыточный; см. память). `monaco.ts` base причёсан на
+  `"off"` (косметика, оверрайд всё равно решает). Поверхности — `Switch` в
+  `AppearancePane` + строка `Alt Z` в `KeyboardPane`. Бэкенд/IPC/bindings не
+  тронуты. Subagent-driven (3 юнита, spec+quality ревью на каждом + финальное
+  ревью ветки = READY TO MERGE); гейт: vitest 920 · tsc · vite build. Остаток —
+  live-проход в WebView2 (длинное base64 при off скроллится; Alt+Z вкл/выкл;
+  тумблер синхронен; русская раскладка; AltGr+Z не трогает; переживает рестарт).
 - **Стартовый сплэш — убрать белую вспышку при старте** (🎉 DONE 2026-06-14,
   влита в `main` ff `f9629d5`; план+спека `2026-06-14-startup-splash-screen*` в
   `archive/`) — холодный старт больше не мигает белым. **Два слоя:** (1)

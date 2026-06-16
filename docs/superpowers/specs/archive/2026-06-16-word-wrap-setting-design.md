@@ -1,8 +1,9 @@
 # Word Wrap — настройка + хоткей Alt+Z
 
-**Статус:** ✅ CODE-COMPLETE (2026-06-16; subagent-driven, spec+quality ревью на
-каждом юните + финальное ревью ветки = READY TO MERGE; гейт зелёный: vitest 920 ·
-tsc · vite build). Остаток — live-проход в WebView2 (см. «Live-проход»).
+**Статус:** ✅ DONE — влита в `main` fast-forward (2026-06-16; subagent-driven,
+spec+quality ревью на каждом юните + финальное ревью ветки = READY TO MERGE; гейт
+зелёный: vitest 920 · tsc · vite build). Остаток — live-проход в WebView2 (см.
+«Live-проход»).
 **Ветка:** `claude/sharp-antonelli-2e0d2d`
 **Дата:** 2026-06-16
 
