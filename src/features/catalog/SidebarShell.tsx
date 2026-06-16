@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FilePlus, FolderPlus, Plus } from "lucide-react";
+import { Download, FilePlus, FolderPlus, MoreHorizontal, Plus, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -17,6 +17,8 @@ import { filterCollections, sortCollections, type SortKey } from "./sort";
 import { SortControl } from "./SortControl";
 import { CollectionTree } from "./CollectionTree";
 import { exportBundle } from "./transfer";
+import { useImportFlow } from "./useImportFlow";
+import { ImportSummaryDialog } from "./ImportSummaryDialog";
 import { loadUiState, patchUiState } from "./uiState";
 
 export interface SidebarShellProps {
@@ -42,6 +44,7 @@ export function SidebarShell({
   const openRequest = onOpenRequest ?? openSavedRequest;
   const addRequest = onAddRequest ?? newRequestDraft;
   const cat = useCatalog();
+  const importFlow = useImportFlow();
   const [filter, setFilter] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("alpha");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -104,7 +107,26 @@ export function SidebarShell({
 
         <div className="flex items-center justify-between border-b border-border px-2 py-1">
           <SidebarGroupLabel className="h-auto text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Collections</SidebarGroupLabel>
-          <SortControl value={sortKey} onChange={onChangeSort} />
+          <div className="flex items-center gap-1">
+            <SortControl value={sortKey} onChange={onChangeSort} />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="icon-sm" variant="ghost" aria-label="collection actions" className="size-6">
+                  <MoreHorizontal className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem aria-label="export" onClick={() => void exportBundle(null, "handshaker-export.json")}>
+                  <Download />
+                  Export
+                </DropdownMenuItem>
+                <DropdownMenuItem aria-label="import" onClick={() => void importFlow.start()}>
+                  <Upload />
+                  Import
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </SidebarHeader>
 
@@ -135,6 +157,12 @@ export function SidebarShell({
           onSetExpanded={cat.setExpanded}
         />
       </SidebarContent>
+      <ImportSummaryDialog
+        open={importFlow.pending !== null}
+        summary={importFlow.pending?.summary ?? null}
+        onConfirm={() => void importFlow.confirm()}
+        onCancel={importFlow.cancel}
+      />
     </Sidebar>
   );
 }

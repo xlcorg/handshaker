@@ -22,6 +22,7 @@ function makeTreeHook() {
 }
 vi.mock("./CatalogProvider", () => ({ useCatalog: () => tree.current }));
 vi.mock("./actions", () => ({ openSavedRequest: vi.fn(), newRequestDraft: vi.fn() }));
+vi.mock("@tauri-apps/plugin-dialog", () => ({ save: vi.fn(), open: vi.fn().mockResolvedValue(null) }));
 vi.mock("./uiState", () => ({
   loadUiState: vi.fn().mockResolvedValue({ sort_key: null, active_request: null }),
   patchUiState: vi.fn().mockResolvedValue(undefined),
@@ -98,6 +99,14 @@ describe("SidebarShell", () => {
     await user.click(screen.getByLabelText("new-item"));
     await user.click(await screen.findByText("New collection"));
     expect(tree.current.createCollection).toHaveBeenCalledWith("New collection");
+  });
+
+  it("offers Export and Import in the collections-panel actions menu", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    renderShell();
+    await user.click(screen.getByRole("button", { name: /collection actions/i }));
+    expect(await screen.findByRole("menuitem", { name: /^export$/i })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /^import$/i })).toBeInTheDocument();
   });
 
   it("filters the visible collections by name", () => {
