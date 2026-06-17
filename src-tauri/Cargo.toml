@@ -47,7 +47,6 @@ async-trait.workspace = true
 uuid = { workspace = true }
 rustls = { version = "0.23", default-features = false, features = ["ring"] }
 tauri-plugin-clipboard-manager = "2.3.2"
-tauri-plugin-dialog = "2.7.1"
 
 [dev-dependencies]
 tempfile = { workspace = true }

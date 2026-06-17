@@ -114,7 +114,6 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_decorum::init())
-        .plugin(tauri_plugin_dialog::init())
         .setup(move |app| {
             specta_builder.mount_events(app);
             let data_dir = app
