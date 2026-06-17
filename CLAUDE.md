@@ -6,15 +6,40 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 
 ## Active work
 
-Нет активной фичи в работе. Последняя влитая — **Декодирование base64-значений в
-ответе** (🎉 DONE 2026-06-16, ребейз+ff в `main`; план+спека
-`2026-06-15-base64-value-decoder*` в `archive/`; live-verified в WebView2; см. ниже).
+Нет активной фичи в работе. Последняя влитая — **Импорт/экспорт коллекций**
+(🎉 DONE 2026-06-17, ребейз+ff в `main`; план+спека
+`2026-06-16-collection-import-export*` в `archive/`; остаток — live WebView2-проход
+против реальных save/open-диалогов; см. ниже).
 
 Интеграционная ветка — `main`; фичи ведутся в отдельных worktree-ветках
 (`claude/*`) и вливаются в `main` fast-forward.
 
 ### Завершённые фичи (всё в `archive/`)
 
+- **Импорт/экспорт коллекций** (🎉 DONE 2026-06-17, ребейз+ff в `main`; план+спека
+  `2026-06-16-collection-import-export*` в `archive/`) — неразрушающий import/export
+  (не backup): один формат файла `Envelope{ kind:"handshaker-export", collections[],
+  environments[] }` (нативные serde-шейпы ядра; активное окружение не хранится).
+  **Import = merge**: коллекции по `id` (есть → обновить, нет → добавить), окружения
+  по `name` (переменные сливаются, импорт побеждает на общих ключах, цвет — только
+  если задан); ничего не удаляется, активное окружение не трогается; валидация
+  (`kind`) до любой мутации (битый/чужой файл → ошибка, данные целы). **Три точки
+  входа**, один модуль `transfer.ts` + хук `useImportFlow` + нейтральный
+  `ImportSummaryDialog` (сводка adds/updates, без разрушительного confirm): Export
+  одной коллекции из меню строки; Export(всё)/Import из ⋯-меню панели коллекций и из
+  Settings → Import / Export. Ядро `handshaker-core/src/bundle.rs`
+  (`write_bundle`/`read_bundle` поверх `Envelope`/atomic-write) + 3 IPC-команды
+  (`bundle_export(path, collection_id?)` · `bundle_import_inspect` · `bundle_import_apply`)
+  поверх `collection_store`/`env_store`; `tauri-plugin-dialog` (нативные save/open;
+  файловый I/O в Rust). После импорта — `catalog.reload()` + рефетч списка окружений
+  по `bumpEnvRevision()` (в `WorkflowEnvControl` и `SavedAuthEditor`), без перезагрузки
+  страницы. **Секреты — lossless** (в файле открытым текстом, осознанный выбор для
+  личного переноса; «без секретов» — отмеченная точка расширения). Subagent-driven
+  (12 задач TDD + ревью merge-логики на Task 4 + финальное ревью ветки = APPROVED).
+  При вливании — ребейз на `main` (который независимо добавил `tauri-plugin-dialog`):
+  конфликты mod-списков/capability/импортов разрешены, dialog dep+плагин
+  дедуплицированы. Пост-ребейз гейт: `cargo test --workspace` · `pnpm test` 975 · `tsc`
+  · `vite build` · bindings no-drift. Остаток — live WebView2-проход.
 - **Декодирование base64-значений в ответе** (🎉 DONE 2026-06-16, ребейз+ff в
   `main`; план+спека `2026-06-15-base64-value-decoder*` в `archive/`) — ПКМ по
   строковому значению в Body ответа → меню (best practice, 2 группы с разделителем):

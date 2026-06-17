@@ -1,8 +1,8 @@
 # Collection import / export — design
 
 **Date:** 2026-06-16
-**Status:** 📝 DRAFT — spec under review; no implementation yet.
-**Branch:** `claude/inspiring-gates-48a9bf`
+**Status:** 🎉 DONE 2026-06-17 — implemented, rebased onto `main` + ff-merged; archived. Plan: [../../plans/archive/2026-06-16-collection-import-export.md](../../plans/archive/2026-06-16-collection-import-export.md).
+**Branch:** `claude/inspiring-gates-48a9bf` (merged)
 
 ## Problem
 
