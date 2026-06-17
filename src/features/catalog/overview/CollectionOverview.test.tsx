@@ -60,6 +60,16 @@ describe("CollectionOverview", () => {
     expect(screen.getByText(/1 request/)).toBeInTheDocument();
   });
 
+  it("shows a request's use_count in the Overview request list", () => {
+    const used: ItemIpc = {
+      type: "request", id: "r2", name: "Used", address_template: "h:443", service: "p.v1.S",
+      method: "GetX", body_template: "{}", metadata: [], auth: { kind: "none" }, tls_override: null,
+      last_used_at: 1_700_000_000_000, use_count: 5,
+    };
+    r(<CollectionOverview {...props({ collection: collection({ items: [used] }) })} />);
+    expect(screen.getByText(/5×/)).toBeInTheDocument();
+  });
+
   it("clicking a request row calls onSelectRequest", () => {
     const p = props();
     r(<CollectionOverview {...p} />);

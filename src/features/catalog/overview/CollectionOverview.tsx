@@ -14,6 +14,7 @@ import { DescriptionBlock } from "./DescriptionBlock";
 import { VariablesBlock, type VarRow } from "./VariablesBlock";
 import { TlsBlock } from "./TlsBlock";
 import { SavedAuthEditor } from "./SavedAuthEditor";
+import { usageLabel } from "./usage";
 import { useActiveWorkflow } from "@/features/workflow/store";
 import { useEnvRevision } from "@/features/envs/envRevision";
 
@@ -102,6 +103,11 @@ export function CollectionOverview({ collection, onChanged, onSelectRequest, onC
   );
   const resolveKey = `${JSON.stringify(varsRecord)}|${activeWf.envName ?? ""}|${envRevision}`;
 
+  // Stamp for relative "last used" labels. Recomputed each render; the list re-renders
+  // when the in-memory tree changes (e.g. a Send optimistically bumps usage), so the
+  // count/time refresh live without a reload.
+  const now = Date.now();
+
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
       {/* header */}
@@ -179,9 +185,22 @@ export function CollectionOverview({ collection, onChanged, onSelectRequest, onC
                         <span className="hidden truncate font-mono text-[10.5px] text-muted-foreground/45 md:inline">
                           {h.request.service}.{h.request.method}
                         </span>
+                        <span
+                          className={cn(
+                            "ml-auto flex-none whitespace-nowrap font-mono text-[10.5px] tabular-nums",
+                            h.request.use_count > 0 ? "text-muted-foreground/60" : "text-muted-foreground/30",
+                          )}
+                          title={
+                            h.request.last_used_at != null
+                              ? `Last used ${new Date(h.request.last_used_at).toLocaleString()}`
+                              : undefined
+                          }
+                        >
+                          {usageLabel(h.request.use_count, h.request.last_used_at, now)}
+                        </span>
                         <Send
                           size={11}
-                          className="ml-auto flex-none text-muted-foreground/0 transition-colors group-hover:text-muted-foreground/60"
+                          className="flex-none text-muted-foreground/0 transition-colors group-hover:text-muted-foreground/60"
                         />
                       </button>
                     ))}
