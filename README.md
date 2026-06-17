@@ -1,8 +1,13 @@
-# Handshaker
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/logo-lockup-dark.svg" />
+  <img src="assets/logo-lockup-light.svg" alt="Handshaker — desktop gRPC client" width="330" />
+</picture>
+
+*pull the handles — we'll handle the handshake*
+
+![version](https://img.shields.io/badge/version-0.2.7-2563eb) ![platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-5f6671) ![license](https://img.shields.io/badge/license-MIT-2563eb)
 
 Cross-platform desktop client (macOS + Windows) for exploring and invoking internal gRPC services. Built on Tauri 2 + Rust + React/Vite/TypeScript + Tailwind v4 + shadcn/ui.
-
-Tagline: *pull the handles — we'll handle the handshake*.
 
 ## Status
 
@@ -76,4 +81,4 @@ pnpm build
 
 ## License
 
-Apache-2.0 OR MIT.
+MIT. See [LICENSE](LICENSE).
