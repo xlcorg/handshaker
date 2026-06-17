@@ -209,6 +209,13 @@ export async function collectionRestoreItem(collectionId: string, snapshot: Item
   if (r.status === "error") throw r.error;
 }
 
+/** Record one execution of a saved request: sets `last_used_at` and increments `use_count`
+ *  (persisted backend-side). Drives the "Recent" / "Most used" collection sorts. */
+export async function collectionBumpUsage(collectionId: string, itemId: string, usedAt: number): Promise<void> {
+  const r = await commands.collectionBumpUsage(collectionId, itemId, usedAt);
+  if (r.status === "error") throw r.error;
+}
+
 export async function bundleExport(path: string, collectionId: string | null): Promise<void> {
   const r = await commands.bundleExport(path, collectionId);
   if (r.status === "error") throw r.error;
@@ -321,6 +328,7 @@ export const ipc = {
   collectionDuplicateItem,
   collectionDeleteItem,
   collectionRestoreItem,
+  collectionBumpUsage,
   bundleExport,
   bundleImportInspect,
   bundleImportApply,

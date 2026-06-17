@@ -4,6 +4,7 @@ import type { CollectionIpc, ItemIpc, SavedRequestIpc } from "@/ipc/bindings";
 import { newId } from "@/lib/ids";
 import { toast } from "sonner";
 import {
+  bumpUsageInTree,
   insertItemInTree,
   moveItemAcrossTree,
   moveItemWithinTree,
@@ -28,6 +29,8 @@ export interface UseCatalogTree {
   addItem: (collectionId: string, parentId: string | null, item: ItemIpc) => Promise<void>;
   renameItem: (collectionId: string, itemId: string, name: string) => Promise<void>;
   updateItemContent: (collectionId: string, itemId: string, content: SavedRequestIpc) => Promise<void>;
+  /** Record one execution of a saved request (use_count++ / last_used_at). Best-effort. */
+  bumpUsage: (collectionId: string, itemId: string, usedAt: number) => Promise<void>;
   deleteItem: (collectionId: string, itemId: string) => Promise<void>;
   duplicateItem: (collectionId: string, itemId: string) => Promise<ItemIpc | null>;
   moveItem: (collectionId: string, itemId: string, parentId: string | null, position: number) => Promise<void>;
@@ -122,7 +125,7 @@ export function useCatalogTree(): UseCatalogTree {
     async (
       next: (prev: CollectionIpc[]) => CollectionIpc[],
       call: () => Promise<unknown>,
-      labels: { ok?: string; err: string },
+      labels: { ok?: string; err?: string },
     ) => {
       const snapshot = treeRef.current;
       apply(next(snapshot));
@@ -131,7 +134,7 @@ export function useCatalogTree(): UseCatalogTree {
         if (labels.ok) toast.success(labels.ok);
       } catch (e) {
         apply(snapshot);
-        toast.error(labels.err);
+        if (labels.err) toast.error(labels.err);
         throw e;
       }
     },
@@ -230,6 +233,19 @@ export function useCatalogTree(): UseCatalogTree {
     [optimistic],
   );
 
+  const bumpUsage = useCallback(
+    (collectionId: string, itemId: string, usedAt: number) =>
+      optimistic(
+        (prev) => bumpUsageInTree(prev, collectionId, itemId, usedAt),
+        () => ipc.collectionBumpUsage(collectionId, itemId, usedAt),
+        // Best-effort usage tracking: silent on both success AND failure (no toast) —
+        // a flaky bump must never nag. The optimistic helper still rolls the in-memory
+        // increment back if the backend call rejects, keeping the tree consistent.
+        {},
+      ),
+    [optimistic],
+  );
+
   const deleteItem = useCallback(
     (collectionId: string, itemId: string) => {
       const name = itemNameOf(treeRef.current, collectionId, itemId);
@@ -304,6 +320,7 @@ export function useCatalogTree(): UseCatalogTree {
     addItem,
     renameItem,
     updateItemContent,
+    bumpUsage,
     deleteItem,
     duplicateItem,
     moveItem,

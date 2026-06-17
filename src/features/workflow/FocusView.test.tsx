@@ -9,15 +9,21 @@ vi.mock("./CallPanel", () => ({
     step,
     originAuth,
     onQuickAddMethod,
+    onExecuted,
   }: {
     step: { method: string };
     originAuth?: { kind: string };
     onQuickAddMethod?: (service: string, method: string) => void;
+    onExecuted?: (executed: unknown) => void;
   }) => (
     <div>
       <div>CALL:{step.method}</div>
       <div data-testid="origin-auth">{originAuth?.kind ?? ""}</div>
       <div data-testid="quickadd-wired">{onQuickAddMethod ? "yes" : "no"}</div>
+      {/* Simulate CallPanel firing onExecuted (gated on shouldRecordExecuted = server responded). */}
+      <button type="button" onClick={() => onExecuted?.(step)}>
+        fire-executed
+      </button>
     </div>
   ),
 }));
@@ -25,9 +31,10 @@ vi.mock("./CallPanel", () => ({
 const cat = vi.hoisted(() => ({
   tree: [] as CollectionIpc[],
   duplicateItem: vi.fn(),
+  bumpUsage: vi.fn(() => Promise.resolve()),
 }));
 vi.mock("@/features/catalog/CatalogProvider", () => ({
-  useCatalog: () => ({ tree: cat.tree, duplicateItem: cat.duplicateItem }),
+  useCatalog: () => ({ tree: cat.tree, duplicateItem: cat.duplicateItem, bumpUsage: cat.bumpUsage }),
 }));
 
 const mockPatchUiState = vi.fn();
@@ -48,6 +55,7 @@ beforeEach(() => {
   cat.tree = [];
   cat.duplicateItem.mockReset();
   mockPatchUiState.mockReset();
+  cat.bumpUsage.mockClear();
 });
 
 describe("FocusView Save affordance", () => {
@@ -207,5 +215,24 @@ describe("FocusView Save affordance", () => {
     workflowStore.setDraft(newStep({ address: "h:1", tls: false, service: "p.S", method: "Get" }));
     renderFV(<FocusView onQuickAddMethod={vi.fn()} />);
     expect(screen.getByTestId("quickadd-wired")).toHaveTextContent("no");
+  });
+
+  it("bumps usage on the origin request when a send reaches the server (bound draft)", async () => {
+    const user = userEvent.setup();
+    workflowStore.setDraft(
+      newStep({ address: "h:443", tls: false, service: "p.S", method: "GetX" }),
+      { collectionId: "c1", requestId: "r1" },
+    );
+    renderFV();
+    await user.click(screen.getByRole("button", { name: "fire-executed" }));
+    expect(cat.bumpUsage).toHaveBeenCalledWith("c1", "r1", expect.any(Number));
+  });
+
+  it("does not bump usage for an unbound draft (no origin request to credit)", async () => {
+    const user = userEvent.setup();
+    workflowStore.setDraft(newStep({ address: "h:443", tls: false, service: "p.S", method: "GetX" }));
+    renderFV();
+    await user.click(screen.getByRole("button", { name: "fire-executed" }));
+    expect(cat.bumpUsage).not.toHaveBeenCalled();
   });
 });

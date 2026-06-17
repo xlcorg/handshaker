@@ -126,6 +126,23 @@ export function replaceItemInTree(
   }));
 }
 
+/** Credit one execution to a saved request: increment `use_count` and set `last_used_at`.
+ *  Mirrors the backend `collection_bump_usage`; keeps the in-memory tree in sync so a
+ *  later whole-collection autosave upsert doesn't clobber the bump with a stale count. */
+export function bumpUsageInTree(
+  tree: CollectionIpc[],
+  collectionId: string,
+  itemId: string,
+  usedAt: number,
+): CollectionIpc[] {
+  return mapCollection(tree, collectionId, (c) => ({
+    ...c,
+    items: mapItemsDeep(c.items, itemId, (it) =>
+      it.type === "request" ? { ...it, use_count: it.use_count + 1, last_used_at: usedAt } : it,
+    ),
+  }));
+}
+
 export function removeCollectionFromTree(
   tree: CollectionIpc[],
   collectionId: string,

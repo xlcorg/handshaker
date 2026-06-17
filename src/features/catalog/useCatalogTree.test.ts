@@ -15,6 +15,7 @@ vi.mock("@/ipc/client", () => ({
     collectionMoveItem: vi.fn(),
     collectionMoveItemAcross: vi.fn(),
     collectionSetExpanded: vi.fn(),
+    collectionBumpUsage: vi.fn(),
   },
 }));
 
@@ -157,6 +158,28 @@ describe("optimistic mutations + rollback", () => {
     });
     const item = result.current.tree[0].items[0] as Extract<{ type: "request"; method: string }, { type: "request" }>;
     expect(item.method).toBe("m"); // reverted to the seeded value
+  });
+
+  it("bumpUsage increments use_count + sets last_used_at and persists via collectionBumpUsage", async () => {
+    const { result } = await loaded();
+    vi.mocked(ipc.collectionBumpUsage).mockResolvedValue(undefined);
+    await act(async () => { await result.current.bumpUsage("c1", "r1", 4242); });
+    const item = result.current.tree[0].items[0] as Extract<ItemIpc, { type: "request" }>;
+    expect(item.use_count).toBe(1);
+    expect(item.last_used_at).toBe(4242);
+    expect(ipc.collectionBumpUsage).toHaveBeenCalledWith("c1", "r1", 4242);
+  });
+
+  it("bumpUsage rolls back the in-memory increment when the backend rejects (no toast)", async () => {
+    const { result } = await loaded();
+    vi.mocked(ipc.collectionBumpUsage).mockRejectedValue({ message: "gone" });
+    await act(async () => {
+      await expect(result.current.bumpUsage("c1", "r1", 4242)).rejects.toBeTruthy();
+    });
+    const item = result.current.tree[0].items[0] as Extract<ItemIpc, { type: "request" }>;
+    expect(item.use_count).toBe(0); // reverted
+    expect(item.last_used_at).toBeNull();
+    expect(toast.error).not.toHaveBeenCalled(); // best-effort: silent on failure
   });
 
   it("emits a success toast when an operation with an ok label resolves", async () => {

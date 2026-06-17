@@ -4,6 +4,7 @@ import {
   renameItemInTree, removeItemFromTree, insertItemInTree,
   renameCollectionInTree, setCollectionPinned, removeCollectionFromTree,
   replaceItemInTree, moveItemWithinTree, moveItemAcrossTree, setNodeExpanded,
+  bumpUsageInTree,
 } from "./treeEdit";
 
 function req(id: string, name = id): Extract<ItemIpc, { type: "request" }> {
@@ -38,6 +39,29 @@ describe("renameItemInTree", () => {
     const f1Before = before[0].items.find((i) => i.id === "f1") as Extract<ItemIpc, { type: "folder" }>;
     expect(f1Before.items[0].name).toBe("r2");
     expect(after[1]).toBe(before[1]);
+  });
+});
+
+describe("bumpUsageInTree", () => {
+  it("increments use_count and sets last_used_at on a nested request", () => {
+    const before = tree();
+    const after = bumpUsageInTree(before, "c1", "r2", 1234);
+    const f1 = after[0].items.find((i) => i.id === "f1") as Extract<ItemIpc, { type: "folder" }>;
+    const r2 = f1.items[0] as Extract<ItemIpc, { type: "request" }>;
+    expect(r2.use_count).toBe(1);
+    expect(r2.last_used_at).toBe(1234);
+    // immutability: original untouched, untargeted collection identity preserved
+    const r2Before = (before[0].items[1] as Extract<ItemIpc, { type: "folder" }>).items[0] as Extract<ItemIpc, { type: "request" }>;
+    expect(r2Before.use_count).toBe(0);
+    expect(r2Before.last_used_at).toBeNull();
+    expect(after[1]).toBe(before[1]);
+  });
+
+  it("accumulates across repeated bumps (latest timestamp wins)", () => {
+    const after = bumpUsageInTree(bumpUsageInTree(tree(), "c1", "r1", 100), "c1", "r1", 200);
+    const r1 = after[0].items[0] as Extract<ItemIpc, { type: "request" }>;
+    expect(r1.use_count).toBe(2);
+    expect(r1.last_used_at).toBe(200);
   });
 });
 

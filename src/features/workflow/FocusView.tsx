@@ -20,7 +20,7 @@ export function FocusView({ onRequestSave, onQuickAddMethod }: FocusViewProps = 
   const draft = useDraft();
   const origin = useDraftOrigin();
   const dirty = useDraftDirty();
-  const { tree, duplicateItem } = useCatalog();
+  const { tree, duplicateItem, bumpUsage } = useCatalog();
 
   // Origin-bound drafts autosave, so duplicating never loses edits — no discard guard.
   async function duplicate() {
@@ -104,7 +104,17 @@ export function FocusView({ onRequestSave, onQuickAddMethod }: FocusViewProps = 
           <CallPanel
             step={draft}
             onPatch={(patch: Partial<Step>) => workflowStore.updateDraft(patch)}
-            onExecuted={(executed: Step) => workflowStore.commitExecutedStep(executed)}
+            onExecuted={(executed: Step) => {
+              workflowStore.commitExecutedStep(executed);
+              // Credit the origin saved request with one execution. CallPanel fires
+              // onExecuted only when the call reached the server (shouldRecordExecuted),
+              // so this counts "any server response". Routed through the catalog so the
+              // in-memory tree stays in sync — otherwise a later whole-collection autosave
+              // would upsert the stale (pre-bump) count back over it. Best-effort.
+              if (origin) {
+                void bumpUsage(origin.collectionId, origin.requestId, Date.now()).catch(() => {});
+              }
+            }}
             editable
             // Quick-add «+» saves into the open request's collection (origin). An unbound
             // draft has no target collection, so the «+» is hidden rather than silently
