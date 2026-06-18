@@ -112,7 +112,7 @@ export function SidebarShell({
             <Button
               size="icon-sm"
               variant="ghost"
-              className="size-5"
+              className="size-5 text-muted-foreground"
               aria-label="collapse all"
               title="Collapse all"
               disabled={filterActive || visible.length === 0}
@@ -123,7 +123,7 @@ export function SidebarShell({
             <Button
               size="icon-sm"
               variant="ghost"
-              className="size-5"
+              className="size-5 text-muted-foreground"
               aria-label="expand all"
               title="Expand all"
               disabled={filterActive || visible.length === 0}
@@ -134,7 +134,7 @@ export function SidebarShell({
             <SortControl value={sortKey} onChange={onChangeSort} />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button size="icon-sm" variant="ghost" aria-label="collection actions" className="size-5">
+                <Button size="icon-sm" variant="ghost" aria-label="collection actions" className="size-5 text-muted-foreground">
                   <MoreHorizontal className="size-3.5" />
                 </Button>
               </DropdownMenuTrigger>

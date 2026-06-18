@@ -31,7 +31,7 @@ export function SortControl({ value, onChange }: SortControlProps) {
           size="icon"
           variant="ghost"
           aria-label="sort-collections"
-          className="size-5"
+          className="size-5 text-muted-foreground"
         >
           <ArrowUpDown className="size-3.5" />
         </Button>
