@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, createEvent, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { createRef } from "react";
 import type { CollectionIpc, ItemIpc } from "@/ipc/bindings";
-import { CollectionTree, type CollectionTreeProps } from "./CollectionTree";
+import { CollectionTree, type CollectionTreeProps, type CollectionTreeHandle } from "./CollectionTree";
 import { SidebarProvider } from "@/components/ui/sidebar";
 
 function renderWithSidebar(ui: React.ReactElement) {
@@ -23,8 +24,8 @@ function col(id: string, items: ItemIpc[]): CollectionIpc {
   };
 }
 
-function setup(over: Partial<CollectionTreeProps> = {}) {
-  const props: CollectionTreeProps = {
+function makeProps(over: Partial<CollectionTreeProps> = {}): CollectionTreeProps {
+  return {
     collections: [col("c1", [req("r1")]), col("c2", [])],
     filterActive: false,
     activeItemId: null,
@@ -47,6 +48,10 @@ function setup(over: Partial<CollectionTreeProps> = {}) {
     onSetExpanded: vi.fn(),
     ...over,
   };
+}
+
+function setup(over: Partial<CollectionTreeProps> = {}) {
+  const props = makeProps(over);
   renderWithSidebar(<CollectionTree {...props} />);
   return props;
 }
@@ -393,5 +398,60 @@ describe("CollectionTree persisted expansion", () => {
     fireEvent.keyDown(tree, { key: "ArrowDown" }); // focus f1 (c1 is expanded)
     fireEvent.keyDown(tree, { key: "ArrowRight" }); // expand f1
     expect(onSetExpanded).toHaveBeenCalledWith("c1", "f1", true);
+  });
+});
+
+describe("CollectionTree expand/collapse all handle", () => {
+  function efolder(id: string, items: ItemIpc[], expanded: boolean): Extract<ItemIpc, { type: "folder" }> {
+    return { type: "folder", id, name: id, items, expanded };
+  }
+
+  it("expandAll() opens every collection and persists each with null itemId", () => {
+    const props = makeProps({ collections: [col("c1", [req("r1")]), col("c2", [req("r2")])] });
+    const ref = createRef<CollectionTreeHandle>();
+    renderWithSidebar(<CollectionTree {...props} ref={ref} />);
+
+    // Both collections start collapsed -> children hidden.
+    expect(screen.queryByText("r1")).toBeNull();
+    expect(screen.queryByText("r2")).toBeNull();
+
+    act(() => ref.current!.expandAll());
+
+    expect(screen.getByText("r1")).toBeTruthy();
+    expect(screen.getByText("r2")).toBeTruthy();
+    expect(props.onSetExpanded).toHaveBeenCalledWith("c1", null, true);
+    expect(props.onSetExpanded).toHaveBeenCalledWith("c2", null, true);
+  });
+
+  it("collapseAll() closes every collection and persists each with null itemId", () => {
+    // Both collections start expanded (children visible).
+    const c1 = { ...col("c1", [req("r1")]), expanded: true };
+    const c2 = { ...col("c2", [req("r2")]), expanded: true };
+    const props = makeProps({ collections: [c1, c2] });
+    const ref = createRef<CollectionTreeHandle>();
+    renderWithSidebar(<CollectionTree {...props} ref={ref} />);
+
+    expect(screen.getByText("r1")).toBeTruthy();
+
+    act(() => ref.current!.collapseAll());
+
+    expect(screen.queryByText("r1")).toBeNull();
+    expect(screen.queryByText("r2")).toBeNull();
+    expect(props.onSetExpanded).toHaveBeenCalledWith("c1", null, false);
+    expect(props.onSetExpanded).toHaveBeenCalledWith("c2", null, false);
+  });
+
+  it("expandAll() targets collection ids only, never folder ids (top-level scope)", () => {
+    // c1 holds a collapsed folder f1; expandAll must not persist f1.
+    const props = makeProps({ collections: [{ ...col("c1", [efolder("f1", [req("rIn")], false)]), expanded: false }] });
+    const ref = createRef<CollectionTreeHandle>();
+    renderWithSidebar(<CollectionTree {...props} ref={ref} />);
+
+    act(() => ref.current!.expandAll());
+
+    expect(props.onSetExpanded).toHaveBeenCalledWith("c1", null, true);
+    expect(props.onSetExpanded).not.toHaveBeenCalledWith("c1", "f1", true);
+    // f1's own folded state is untouched: rIn stays hidden.
+    expect(screen.queryByText("rIn")).toBeNull();
   });
 });

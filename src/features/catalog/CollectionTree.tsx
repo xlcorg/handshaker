@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import type { CollectionIpc, SavedRequestIpc } from "@/ipc/bindings";
 import { CollectionNode } from "./CollectionNode";
 import { ConfirmDeleteDialog } from "./ConfirmDeleteDialog";
@@ -7,6 +7,13 @@ import { planDrop, type DragData, type DropTarget, type DropZone } from "./dnd";
 import type { TreeCallbacks } from "./treeTypes";
 import { SidebarMenu } from "@/components/ui/sidebar";
 import { ScrollArea } from "@/components/ui/scroll-area";
+
+export interface CollectionTreeHandle {
+  /** Expand every top-level collection (nested folders keep their own state). */
+  expandAll(): void;
+  /** Collapse every top-level collection. */
+  collapseAll(): void;
+}
 
 export interface CollectionTreeProps {
   collections: CollectionIpc[]; // already sorted + filtered by SidebarShell
@@ -44,7 +51,8 @@ type DeleteTarget =
   | { kind: "item"; collectionId: string; itemId: string }
   | { kind: "collection"; collectionId: string };
 
-export function CollectionTree(props: CollectionTreeProps) {
+export const CollectionTree = forwardRef<CollectionTreeHandle, CollectionTreeProps>(
+  function CollectionTree(props, ref) {
   const { collections, filterActive, editingId } = props;
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [focusedId, setFocusedId] = useState<string | null>(null);
@@ -116,6 +124,27 @@ export function CollectionTree(props: CollectionTreeProps) {
     setOpenId(id, false);
     persistExpanded(id, false);
   };
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      expandAll() {
+        const ids = collections.map((c) => c.id);
+        setOpen((prev) => new Set([...prev, ...ids]));
+        for (const id of ids) props.onSetExpanded(id, null, true);
+      },
+      collapseAll() {
+        const ids = collections.map((c) => c.id);
+        setOpen((prev) => {
+          const next = new Set(prev);
+          for (const id of ids) next.delete(id);
+          return next;
+        });
+        for (const id of ids) props.onSetExpanded(id, null, false);
+      },
+    }),
+    [collections, props.onSetExpanded],
+  );
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (editingId) return; // rename input owns the keyboard
@@ -276,4 +305,5 @@ export function CollectionTree(props: CollectionTreeProps) {
       />
     </>
   );
-}
+  },
+);
