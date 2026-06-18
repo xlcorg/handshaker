@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Download, FilePlus, FolderPlus, MoreHorizontal, Plus, Upload } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ChevronsDownUp, ChevronsUpDown, Download, FilePlus, FolderPlus, MoreHorizontal, Plus, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -15,7 +15,7 @@ import { useCatalog } from "./CatalogProvider";
 import { newRequestDraft, openSavedRequest } from "./actions";
 import { filterCollections, sortCollections, type SortKey } from "./sort";
 import { SortControl } from "./SortControl";
-import { CollectionTree } from "./CollectionTree";
+import { CollectionTree, type CollectionTreeHandle } from "./CollectionTree";
 import { exportBundle } from "./transfer";
 import { useImportFlow } from "./useImportFlow";
 import { ImportSummaryDialog } from "./ImportSummaryDialog";
@@ -48,6 +48,7 @@ export function SidebarShell({
   const [filter, setFilter] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("alpha");
   const [editingId, setEditingId] = useState<string | null>(null);
+  const treeRef = useRef<CollectionTreeHandle>(null);
 
   // Restore the persisted sort key once on mount (via the shared uiState cache).
   useEffect(() => {
@@ -108,6 +109,28 @@ export function SidebarShell({
         <div className="flex items-center justify-between border-b border-border px-2 py-1">
           <SidebarGroupLabel className="h-auto text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Collections</SidebarGroupLabel>
           <div className="flex items-center gap-1">
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              className="size-6"
+              aria-label="collapse all"
+              title="Collapse all"
+              disabled={filterActive || visible.length === 0}
+              onClick={() => treeRef.current?.collapseAll()}
+            >
+              <ChevronsDownUp className="size-4" />
+            </Button>
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              className="size-6"
+              aria-label="expand all"
+              title="Expand all"
+              disabled={filterActive || visible.length === 0}
+              onClick={() => treeRef.current?.expandAll()}
+            >
+              <ChevronsUpDown className="size-4" />
+            </Button>
             <SortControl value={sortKey} onChange={onChangeSort} />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -132,6 +155,7 @@ export function SidebarShell({
 
       <SidebarContent className="min-h-0 overflow-hidden">
         <CollectionTree
+          ref={treeRef}
           collections={visible}
           filterActive={filterActive}
           activeItemId={activeItemId ?? null}

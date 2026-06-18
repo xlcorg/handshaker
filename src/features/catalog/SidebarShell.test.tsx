@@ -149,4 +149,42 @@ describe("SidebarShell", () => {
     expect(row).not.toBeNull();
     expect(row!.getAttribute("data-active")).toBe("true");
   });
+
+  it("renders collapse all and expand all buttons in the header", () => {
+    tree.current.tree = [col("c1", "Alpha")];
+    renderShell();
+    expect(screen.getByLabelText("collapse all")).toBeTruthy();
+    expect(screen.getByLabelText("expand all")).toBeTruthy();
+  });
+
+  it("expand all reveals collapsed collections' children", () => {
+    tree.current.tree = [{ ...col("c1", "Alpha", [req("r1", "Req1")]), expanded: false }];
+    renderShell();
+    expect(screen.queryByText("Req1")).toBeNull();
+    fireEvent.click(screen.getByLabelText("expand all"));
+    expect(screen.getByText("Req1")).toBeTruthy();
+  });
+
+  it("collapse all hides expanded collections' children", () => {
+    tree.current.tree = [{ ...col("c1", "Alpha", [req("r1", "Req1")]), expanded: true }];
+    renderShell();
+    expect(screen.getByText("Req1")).toBeTruthy();
+    fireEvent.click(screen.getByLabelText("collapse all"));
+    expect(screen.queryByText("Req1")).toBeNull();
+  });
+
+  it("disables both buttons while a filter is active", () => {
+    tree.current.tree = [col("c1", "Alpha")];
+    renderShell();
+    fireEvent.change(screen.getByLabelText("collection-filter"), { target: { value: "alpha" } });
+    expect(screen.getByLabelText("collapse all")).toBeDisabled();
+    expect(screen.getByLabelText("expand all")).toBeDisabled();
+  });
+
+  it("disables both buttons when there are no collections", () => {
+    tree.current.tree = [];
+    renderShell();
+    expect(screen.getByLabelText("collapse all")).toBeDisabled();
+    expect(screen.getByLabelText("expand all")).toBeDisabled();
+  });
 });
