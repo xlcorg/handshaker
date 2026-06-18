@@ -31,9 +31,9 @@ export function SortControl({ value, onChange }: SortControlProps) {
           size="icon"
           variant="ghost"
           aria-label="sort-collections"
-          className="size-7"
+          className="size-5"
         >
-          <ArrowUpDown className="size-4" />
+          <ArrowUpDown className="size-3.5" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
