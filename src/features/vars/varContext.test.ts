@@ -19,3 +19,22 @@ describe("openVarToken", () => {
     expect(openVarToken("{{a}")).toBeNull();
   });
 });
+
+import { filterCandidates } from "./varContext";
+import type { VarCandidate } from "./candidates";
+
+const C = (name: string): VarCandidate => ({ name, value: "", origin: "env" });
+
+describe("filterCandidates", () => {
+  it("returns all when partial is empty", () => {
+    expect(filterCandidates([C("a"), C("b")], "").map((c) => c.name)).toEqual(["a", "b"]);
+  });
+  it("case-insensitive substring match, prefix matches first", () => {
+    const out = filterCandidates([C("api_root"), C("host"), C("hostname")], "host");
+    expect(out.map((c) => c.name)).toEqual(["host", "hostname"]);
+  });
+  it("keeps prefix before mid-substring, preserving input order within a rank", () => {
+    const out = filterCandidates([C("x_host"), C("host"), C("hostly")], "host");
+    expect(out.map((c) => c.name)).toEqual(["host", "hostly", "x_host"]);
+  });
+});
