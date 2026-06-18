@@ -6,15 +6,37 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 
 ## Active work
 
-Нет активной фичи в работе. Последняя влитая — **Командная палитра — быстрый поиск
-по коллекциям и методам** (🎉 DONE 2026-06-18, ребейз+ff в `main`; план+спека
-`2026-06-16-command-palette-quick-search*` в `archive/`; live-verified в WebView2;
-см. ниже).
+Нет активной фичи в работе. Последняя влитая — **Collapse all / Expand all — кнопки
+в шапке панели коллекций** (🎉 DONE 2026-06-18, ребейз+ff в `main`; план+спека
+`2026-06-17-collection-expand-collapse-all*` в `archive/`; остаток — live
+WebView2-проход; см. ниже).
 
 Интеграционная ветка — `main`; фичи ведутся в отдельных worktree-ветках
 (`claude/*`) и вливаются в `main` fast-forward.
 
 ### Завершённые фичи (всё в `archive/`)
+
+- **Collapse all / Expand all — кнопки в шапке панели коллекций** (🎉 DONE 2026-06-18,
+  ребейз+ff в `main`; план+спека `2026-06-17-collection-expand-collapse-all*` в
+  `archive/`) — две icon-кнопки в ряду-шапке «Collections» (слева от `SortControl`):
+  **Collapse all** (`ChevronsDownUp`) и **Expand all** (`ChevronsUpDown`),
+  сворачивают/разворачивают **все коллекции верхнего уровня** одним кликом (вложенные
+  папки сохраняют своё состояние — осознанный выбор «top-level only»). Персист как у
+  ручного тоггла через существующий IPC `collection_set_expanded` (`itemId=null`);
+  **бэкенд/IPC/bindings не тронуты**. Обе кнопки `disabled` при активном фильтре
+  (дерево и так force-развёрнуто) и при нуле коллекций. **Мостик шапка↔дерево:**
+  `CollectionTree` (где живёт локальный `open: Set` — истина рендера) экспонирует
+  крошечный императивный handle `{ expandAll, collapseAll }` через `forwardRef` +
+  `useImperativeHandle`; `SidebarShell` держит `useRef<CollectionTreeHandle>` и зовёт
+  его из кнопок — без подъёма ~80 строк логики `open`/клавиатуры/drag. `expandAll`
+  добавляет id коллекций в `open` (не затирая открытые папки) + персист по каждой;
+  `collapseAll` удаляет только id коллекций. Subagent-driven (2 задачи TDD, spec+quality
+  ревью на каждой + финальное ревью ветки = READY TO MERGE). Чистый фронт, 2 файла
+  (`CollectionTree.tsx` + `SidebarShell.tsx`) + тесты. При вливании — ребейз на
+  актуальный `main` (с командной палитрой): два source-файла байт-идентичны базе и
+  `main` ⇒ конфликтов нет; после ребейза свежий воркстри требовал `pnpm install`
+  (палитра добавила `cmdk` — старый node_modules не имел его, падали тесты палитры).
+  Пост-ребейз гейт: vitest 1025 · tsc · vite build. Остаток — live WebView2-проход.
 
 - **Командная палитра — быстрый поиск по коллекциям и методам** (🎉 DONE 2026-06-18,
   ребейз+ff в `main`; план+спека `2026-06-16-command-palette-quick-search*` в `archive/`)

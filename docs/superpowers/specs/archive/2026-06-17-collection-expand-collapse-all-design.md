@@ -1,6 +1,9 @@
 # Collapse all / Expand all — кнопки в шапке панели коллекций
 
-**Статус:** 🟡 SPEC — дизайн утверждён, имплементации нет.
+**Статус:** 🎉 DONE — ребейз+ff в `main` (2026-06-18; subagent-driven, 2 задачи
+TDD, spec+quality ревью на каждой + финальное ревью ветки = READY TO MERGE).
+Гейт после ребейза на актуальный `main` (с командной палитрой): vitest 1025 · tsc ·
+vite build. Остаток — live WebView2-проход (см. «Live-проход»).
 **Ветка:** `claude/zealous-swanson-101d5f`
 **Дата:** 2026-06-17
 

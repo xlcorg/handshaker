@@ -1,5 +1,9 @@
 # Collapse all / Expand all buttons — Implementation Plan
 
+**Статус:** 🎉 DONE — все задачи выполнены, ребейз+ff в `main` (2026-06-18). Гейт
+после ребейза на актуальный `main`: vitest 1025 · tsc · vite build. Остаток — live
+WebView2-проход.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add **Collapse all** and **Expand all** icon buttons to the collections-panel header that fold/unfold every top-level collection in one click.
