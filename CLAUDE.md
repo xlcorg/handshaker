@@ -6,17 +6,50 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 
 ## Active work
 
-Нет активной фичи в работе. Последняя влитая — **Навигация по большому ответу —
-minimap · scrollbar · collapse/expand all** (🎉 DONE 2026-06-19, ff в `main`
-`2420325`; план+спека `2026-06-19-large-response-navigation*` в `archive/`;
-live-verified в WebView2; live-pass амендмент `d46c810` 2026-06-20 — минимапа
-**заменяет** вертикальный скроллбар в **обоих** редакторах тела, без «двух полос»;
-см. ниже).
+Последняя завершённая фича — **Автокомплит `{{var}}` (переменные окружения +
+коллекции)** (🎉 DONE 2026-06-19, code-complete на ветке
+`claude/peaceful-gauss-f0850e`; план+спека `2026-06-19-var-autocomplete*` в
+`archive/`; остаток — вливание в `main` fast-forward + live WebView2-проход;
+см. ниже). Предыдущая влитая — **Навигация по большому ответу — minimap · scrollbar
+· collapse/expand all** (🎉 DONE 2026-06-19, ff в `main` `2420325`; live-pass
+амендмент `d46c810` 2026-06-20 — минимапа **заменяет** вертикальный скроллбар в
+**обоих** редакторах тела, без «двух полос»).
 
 Интеграционная ветка — `main`; фичи ведутся в отдельных worktree-ветках
 (`claude/*`) и вливаются в `main` fast-forward.
 
 ### Завершённые фичи (всё в `archive/`)
+
+- **Автокомплит `{{var}}` — переменные окружения + коллекции** (🎉 DONE 2026-06-19,
+  code-complete на ветке `claude/peaceful-gauss-f0850e`; план+спека
+  `2026-06-19-var-autocomplete*` в `archive/`) — при наборе `{{` предлагаются
+  доступные переменные **активного окружения + привязанной коллекции** (имя ·
+  приглушённый превью значения · тег `env`/`collection`; дедуп по имени, активное
+  окружение выигрывает у одноимённой переменной коллекции с пометкой `overrides` —
+  зеркало приоритета резолва env > collection). **Две поверхности**, общее чистое
+  ядро `src/features/vars/candidates.ts` (`buildVarCandidates`) + `varContext.ts`
+  (`openVarToken` — каретко-независимый детектор открытого `{{`, грамматика по
+  ядровому `VAR_RE` `[^{}]+`; `filterCandidates` — substring, prefix-first;
+  `applyVarPick` — вставка `{{name}}`, не дублирует `}}` если уже впереди): (1)
+  **тело запроса** — расширён единый Monaco-провайдер на `json-with-vars`
+  (var-ветка **до** schema-гейта ⇒ работает и без схемы; триггер `{{`/Ctrl+Space;
+  range от офсета `{{`+2 ⇒ точечные имена не дублируют префикс; при нуле совпадений
+  **проваливается** в schema-комплит, чтобы шальной незакрытый `{{` его не глушил);
+  кандидаты на модель через per-model `WeakMap` `setModelVarCandidates`. (2)
+  **plain-инпуты `VarHighlightInput`** (адресная строка + поле значения переменных
+  коллекции) — новый каретко-привязанный listbox-дропдаун (позиция через мерочный
+  span; клавиатура ↑/↓/Enter/Tab/Esc; a11y по APG editable-combobox —
+  `role=combobox`/`listbox`/`option` + `aria-activedescendant`); проп `variables`.
+  Источник: фронт собирает сам (`useActiveEnvVars` + `CollectionIpc.variables` из
+  каталога) — **бэкенд/IPC/bindings не тронуты**. Триггер/вид сверены с Postman
+  (autocomplete на `{{`, имя+значение+scope, overridden) и Insomnia; a11y — WAI-ARIA
+  APG combobox. Subagent-driven (7 имплементер-задач TDD + финальное ревью ветки =
+  APPROVED после 2 фиксов: provider-fall-through и sync `lastTypedRef` на внешнюю
+  смену `value`). Гейт: vitest 1046 · tsc · vite build · bindings no-drift. Остаток
+  — вливание в `main` ff + live WebView2-проход (тело: `{{` открывает список, Enter
+  вставляет, Send проходит; адрес и поле коллекции — то же; русская раскладка;
+  точечные имена; известный лимит — редактирование `{{` в середине строки в
+  plain-инпуте, каретка берётся как конец текста).
 
 - **Навигация по большому ответу — minimap · scrollbar · collapse/expand all**
   (🎉 DONE 2026-06-19, ff в `main` `2420325`; план+спека
