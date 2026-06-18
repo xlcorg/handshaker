@@ -1062,34 +1062,38 @@ Destructure `variables` in the signature. Inside the component, add state + a me
   const [suggest, setSuggest] = useState<{ items: VarCandidate[]; active: number; left: number } | null>(null);
   const measureRef = useRef<HTMLSpanElement>(null);
 
-  const caret = () => inputRef.current?.selectionStart ?? value.length;
-
-  // Recompute the open-token + matches from the caret; position at `{{`.
-  const refreshSuggest = (text: string) => {
-    if (!variables || variables.length === 0) { setSuggest(null); return; }
-    const tok = openVarToken(text.slice(0, caret()));
+  // Recompute the open-token + matches from the LIVE input (DOM value + caret), NOT the
+  // `value` prop — the prop can lag within a tick, and an uncontrolled-parent test drives
+  // the DOM directly. Position the dropdown at the `{{` via the measuring span.
+  const refreshSuggest = () => {
+    const el = inputRef.current;
+    if (!el || !variables || variables.length === 0) { setSuggest(null); return; }
+    const text = el.value;
+    const caret = el.selectionStart ?? text.length;
+    const tok = openVarToken(text.slice(0, caret));
     if (!tok) { setSuggest(null); return; }
     const items = filterCandidates(variables, tok.partial);
     if (items.length === 0) { setSuggest(null); return; }
     let left = 0;
     if (measureRef.current) {
       measureRef.current.textContent = text.slice(0, tok.tokenStart);
-      left = measureRef.current.offsetWidth - (inputRef.current?.scrollLeft ?? 0);
+      left = measureRef.current.offsetWidth - el.scrollLeft;
     }
     setSuggest((prev) => ({ items, active: prev ? Math.min(prev.active, items.length - 1) : 0, left: Math.max(0, left) }));
   };
 
   const pick = (index: number) => {
+    const el = inputRef.current;
     const item = suggest?.items[index];
-    if (!item) return;
-    const res = applyVarPick(value, caret(), item.name);
+    if (!el || !item) return;
+    const res = applyVarPick(el.value, el.selectionStart ?? el.value.length, item.name);
     if (!res) return;
     onChange(res.value);
     setSuggest(null);
-    // Restore caret after the controlled value re-renders.
+    // Restore caret after the controlled value re-renders (parent feeds `value` back).
     requestAnimationFrame(() => {
-      const el = inputRef.current;
-      if (el) { el.focus(); el.setSelectionRange(res.caret, res.caret); }
+      const e = inputRef.current;
+      if (e) { e.focus(); e.setSelectionRange(res.caret, res.caret); }
     });
   };
 
@@ -1125,10 +1129,10 @@ Wire the `<input>`: add `onKeyDown={onInputKeyDown}`, call `refreshSuggest(e.tar
         aria-autocomplete="list"
         aria-activedescendant={suggest ? optionId(listboxId, suggest.active) : undefined}
         value={value}
-        onChange={(e) => { onChange(e.target.value); refreshSuggest(e.target.value); }}
+        onChange={(e) => { onChange(e.target.value); refreshSuggest(); }}
         onKeyDown={onInputKeyDown}
-        onKeyUp={() => refreshSuggest(value)}
-        onSelect={() => refreshSuggest(value)}
+        onKeyUp={refreshSuggest}
+        onSelect={refreshSuggest}
         onBlur={() => setSuggest(null)}
         onScroll={syncScroll}
         placeholder={placeholder}
