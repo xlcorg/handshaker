@@ -11,7 +11,9 @@ import { exceedsByteCeiling } from "./elide";
 import { attachBodyController } from "./controller";
 import { badgeDecorationOptions } from "./badgeDecoration";
 import type { MessageSchemaIpc } from "@/ipc/bindings";
-import { setModelSchema, computeSuggestions, collectPresentKeys } from "./completion";
+import { setModelSchema, computeSuggestions, collectPresentKeys, setModelVarCandidates } from "./completion";
+import { openVarToken, filterCandidates } from "@/features/vars/varContext";
+import type { VarCandidate } from "@/features/vars/candidates";
 import { GhostZone, computeGhostLines } from "./ghost";
 import { computeUnknownFieldMarkers } from "./validate";
 import { attachDecodeActions, type DecodeEditorLike } from "./decodeActions";
@@ -36,6 +38,8 @@ export interface BodyViewProps {
    *  ghost skeleton, unknown-field markers. Response mode receives none (the
    *  Contract tab carries the contract). */
   schema?: MessageSchemaIpc | null;
+  /** Variable candidates for `{{`-autocomplete — request mode only. */
+  varCandidates?: VarCandidate[];
 }
 
 interface Live {
@@ -64,7 +68,7 @@ interface Live {
   minimapSubs: DisposableLike[];
 }
 
-export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewProps) {
+export function BodyView({ mode, value, onChange, onSubmit, schema, varCandidates }: BodyViewProps) {
   const [prefs] = usePrefs();
   const live = useRef<Live | null>(null);
   // Ref so the Monaco command (bound once in onMount) always calls the freshest handler.
@@ -72,6 +76,8 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
   onSubmitRef.current = onSubmit;
   const schemaRef = useRef(schema);
   schemaRef.current = schema;
+  const varCandidatesRef = useRef(varCandidates);
+  varCandidatesRef.current = varCandidates;
 
   // --- response rendering ------------------------------------------------
   const renderResponse = (text: string) => {
@@ -214,6 +220,7 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
       // Attach schema to the model (request mode is the only consumer:
       // autocomplete + ghost + unknown-field markers; response passes none).
       setModelSchema(editor.getModel(), schemaRef.current ?? null);
+      setModelVarCandidates(editor.getModel(), varCandidatesRef.current ?? null);
       if (mode === "request") {
         // Postman-style: opening a quote (a key or a value string) force-opens the
         // suggest widget. Monaco does NOT auto-trigger completion inside strings
@@ -223,19 +230,26 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
         // suggest at the caret — otherwise Monaco shows a noisy "No suggestions" popup
         // on every value quote of a free-form string field.
         live.current.typeSub = editor.onKeyUp((e) => {
-          if (e.browserEvent.key !== '"') return;
-          const sc = schemaRef.current;
+          const key = e.browserEvent.key;
+          if (key !== '"' && key !== "{") return;
           const model = editor.getModel();
           const pos = editor.getPosition();
-          if (!sc || !model || !pos) return;
+          if (!model || !pos) return;
           const textBefore = model.getValueInRange({
-            startLineNumber: 1,
-            startColumn: 1,
-            endLineNumber: pos.lineNumber,
-            endColumn: pos.column,
+            startLineNumber: 1, startColumn: 1,
+            endLineNumber: pos.lineNumber, endColumn: pos.column,
           });
-          // Same present-key filter as the provider, so a fully-populated object
-          // doesn't force-open an empty ("No suggestions") widget.
+          // Variable token: open the widget if `{{…` and candidates match.
+          const tok = openVarToken(textBefore);
+          const vc = varCandidatesRef.current;
+          if (tok && vc && filterCandidates(vc, tok.partial).length > 0) {
+            editor.trigger("autocomplete", "editor.action.triggerSuggest", {});
+            return;
+          }
+          // Schema path (quote open) — unchanged behaviour.
+          if (key !== '"') return;
+          const sc = schemaRef.current;
+          if (!sc) return;
           const present = collectPresentKeys(model.getValue(), model.getOffsetAt(pos));
           if (computeSuggestions(sc, textBefore, present).length > 0) {
             editor.trigger("autocomplete", "editor.action.triggerSuggest", {});
@@ -337,8 +351,9 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
   useEffect(() => {
     const model = live.current?.editor.getModel();
     setModelSchema(model ?? null, schema ?? null);
+    setModelVarCandidates(model ?? null, varCandidates ?? null);
     applyGhost();
-  }, [schema, mode, applyGhost]);
+  }, [schema, varCandidates, mode, applyGhost]);
 
   // Re-apply (or clear) the ghost zone when the bodyHints toggle changes.
   // No mode guard needed: applyGhost no-ops when ghost is null (response mode).
@@ -365,6 +380,7 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
       const l = live.current;
       const model = l?.editor.getModel();
       setModelSchema(model ?? null, null);
+      setModelVarCandidates(model ?? null, null);
       if (l && model) l.monaco.editor.setModelMarkers(model, "hs-contract", []);
     },
     [],
