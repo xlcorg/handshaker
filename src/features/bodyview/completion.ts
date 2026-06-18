@@ -1,7 +1,7 @@
 import type { MessageSchemaIpc, MessageNodeIpc, FieldNodeIpc } from "@/ipc/bindings";
 import type * as Monaco from "monaco-editor";
 import { scalarWktShape } from "@/lib/wellKnown";
-import { filterCandidates } from "@/features/vars/varContext";
+import { filterCandidates, openVarToken } from "@/features/vars/varContext";
 import type { VarCandidate } from "@/features/vars/candidates";
 
 // ---------------------------------------------------------------------------
@@ -422,6 +422,18 @@ export function setModelSchema(
   else schemaByModel.delete(model);
 }
 
+const varsByModel = new WeakMap<Monaco.editor.ITextModel, VarCandidate[]>();
+
+/** Attach (or clear) the var candidates for a model — request body only. */
+export function setModelVarCandidates(
+  model: Monaco.editor.ITextModel | null,
+  candidates: VarCandidate[] | null,
+): void {
+  if (!model) return;
+  if (candidates && candidates.length) varsByModel.set(model, candidates);
+  else varsByModel.delete(model);
+}
+
 /** Separator to append after an accepted completion, given the text that follows the
  *  replacement range. Mirrors VS Code's `evaluateSeparatorAfter`: another token ahead
  *  (the next property/value) needs a `,`; a closing brace/bracket, an existing comma,
@@ -486,17 +498,50 @@ export function insertionColumns(
 /** Register the request-body completion provider exactly once (called from monaco.ts). */
 export function registerBodyCompletion(monaco: typeof Monaco): void {
   monaco.languages.registerCompletionItemProvider("json-with-vars", {
-    triggerCharacters: ['"', ":", " "],
+    triggerCharacters: ['"', ":", " ", "{"],
     provideCompletionItems(model, position) {
-      const schema = schemaByModel.get(model);
-      if (!schema) return { suggestions: [] };
-
       const textBefore = model.getValueInRange({
         startLineNumber: 1,
         startColumn: 1,
         endLineNumber: position.lineNumber,
         endColumn: position.column,
       });
+
+      // --- variable completion (works without a schema) -------------------
+      const varCands = varsByModel.get(model);
+      const tok = openVarToken(textBefore);
+      if (tok && varCands) {
+        // Range covers the whole partial (offset after `{{` → caret), so dotted
+        // names replace correctly instead of duplicating the prefix.
+        const start = model.getPositionAt(tok.tokenStart + 2);
+        const lineEnd = model.getLineMaxColumn(position.lineNumber);
+        const after = model.getValueInRange({
+          startLineNumber: position.lineNumber, startColumn: position.column,
+          endLineNumber: position.lineNumber, endColumn: lineEnd,
+        });
+        const closingAhead = /^\}\}/.test(after);
+        const items = buildVarSuggestions(varCands, tok.partial, closingAhead);
+        if (items.length === 0) return { suggestions: [] };
+        const range: Monaco.IRange = {
+          startLineNumber: start.lineNumber, startColumn: start.column,
+          endLineNumber: position.lineNumber, endColumn: position.column,
+        };
+        return {
+          suggestions: items.map((s) => ({
+            label: s.label,
+            detail: s.detail,
+            kind: monacoKind(monaco, s.kind),
+            insertText: s.insertText,
+            sortText: s.sortText,
+            filterText: s.label,
+            range,
+          })),
+        };
+      }
+
+      const schema = schemaByModel.get(model);
+      if (!schema) return { suggestions: [] };
+
       const ctx = resolveCompletionContext(textBefore);
       const items =
         ctx.where === "key"
