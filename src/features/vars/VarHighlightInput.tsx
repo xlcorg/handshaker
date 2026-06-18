@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { cn } from "@/lib/cn";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -6,6 +6,9 @@ import { usePrefs } from "@/lib/use-prefs";
 import type { ResolutionReportIpc } from "@/ipc/bindings";
 
 import { useTokenResolveStates, useVarResolve } from "./useVarResolve";
+import { VarSuggestDropdown, optionId } from "./VarSuggestDropdown";
+import { openVarToken, filterCandidates, applyVarPick } from "./varContext";
+import type { VarCandidate } from "./candidates";
 
 // Default font/box metrics so the (transparent-text) input and the highlight backdrop
 // lay out identically character-for-character. The address bar uses this; hosts with
@@ -52,6 +55,8 @@ export interface VarHighlightInputProps {
   /** Sizing/chrome for the wrapper (e.g. "w-[22rem]", or a border+focus-within ring to
    *  frame it like an Input); the input/backdrop fill it. */
   className?: string;
+  /** Variable candidates for `{{`-autocomplete. Omit/empty to disable. */
+  variables?: VarCandidate[];
 }
 
 /** A single-line text input that highlights `{{var}}` tokens in place (Postman-style):
@@ -61,7 +66,7 @@ export interface VarHighlightInputProps {
  *  available via a hover tooltip on the field (so long addresses still expose it). */
 export function VarHighlightInput({
   value, onChange, resolver, resolveKey, placeholder, ariaLabel,
-  metrics = DEFAULT_METRICS, className,
+  metrics = DEFAULT_METRICS, className, variables,
 }: VarHighlightInputProps) {
   const [prefs] = usePrefs();
   // Whole-template report drives the field-level resolved-value chip + tooltip + `ok`.
@@ -92,6 +97,73 @@ export function VarHighlightInput({
   const contentRef = useRef<HTMLSpanElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const chipRef = useRef<HTMLSpanElement>(null);
+  const measureRef = useRef<HTMLSpanElement>(null);
+
+  // Autocomplete dropdown state
+  const listboxId = useId();
+  const [suggest, setSuggest] = useState<{ items: VarCandidate[]; active: number; left: number } | null>(null);
+  // Track the last-typed text + caret position independently of the controlled value.
+  // `inputRef.current.value` is reset to the controlled `value` prop on React re-render,
+  // so reading from it after a re-render (e.g. in onKeyUp that fires after the re-render)
+  // would see the prop value, not what the user just typed. Similarly, `selectionStart`
+  // gets clamped to 0 when React resets the value to a shorter string. Storing both here
+  // lets refreshSuggest always operate on the latest typed text + caret position.
+  const lastTypedRef = useRef<{ text: string; caret: number }>({ text: value, caret: value.length });
+
+  // Recompute the open-token + matches from the LIVE input (DOM value + caret), NOT the
+  // `value` prop — the prop can lag within a tick, and an uncontrolled-parent test drives
+  // the DOM directly. Position the dropdown at the `{{` via the measuring span.
+  const refreshSuggest = () => {
+    const el = inputRef.current;
+    if (!el || !variables || variables.length === 0) { setSuggest(null); return; }
+    const text = lastTypedRef.current.text;
+    const caret = lastTypedRef.current.caret;
+    const tok = openVarToken(text.slice(0, caret));
+    if (!tok) { setSuggest(null); return; }
+    const items = filterCandidates(variables, tok.partial);
+    if (items.length === 0) { setSuggest(null); return; }
+    let left = 0;
+    if (measureRef.current) {
+      measureRef.current.textContent = text.slice(0, tok.tokenStart);
+      left = measureRef.current.offsetWidth - el.scrollLeft;
+    }
+    setSuggest((prev) => ({ items, active: prev ? Math.min(prev.active, items.length - 1) : 0, left: Math.max(0, left) }));
+  };
+
+  const pick = (index: number) => {
+    const el = inputRef.current;
+    const item = suggest?.items[index];
+    if (!el || !item) return;
+    const { text, caret } = lastTypedRef.current;
+    const res = applyVarPick(text, caret, item.name);
+    if (!res) return;
+    onChange(res.value);
+    setSuggest(null);
+    // Restore caret after the controlled value re-renders (parent feeds `value` back).
+    requestAnimationFrame(() => {
+      const e = inputRef.current;
+      if (e) { e.focus(); e.setSelectionRange(res.caret, res.caret); }
+    });
+  };
+
+  const onInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!suggest) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setSuggest((s) => s && { ...s, active: (s.active + 1) % s.items.length });
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setSuggest((s) => s && { ...s, active: (s.active - 1 + s.items.length) % s.items.length });
+    } else if (e.key === "Enter" || e.key === "Tab") {
+      e.preventDefault();
+      e.stopPropagation();
+      pick(suggest.active);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      setSuggest(null);
+    }
+  };
 
   const syncScroll = () => {
     if (backdropRef.current && inputRef.current) {
@@ -159,8 +231,17 @@ export function VarHighlightInput({
       <input
         ref={inputRef}
         aria-label={ariaLabel}
+        role="combobox"
+        aria-expanded={suggest != null}
+        aria-controls={suggest ? listboxId : undefined}
+        aria-autocomplete="list"
+        aria-activedescendant={suggest ? optionId(listboxId, suggest.active) : undefined}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => { lastTypedRef.current = { text: e.target.value, caret: e.target.value.length }; onChange(e.target.value); refreshSuggest(); }}
+        onKeyDown={onInputKeyDown}
+        onKeyUp={refreshSuggest}
+        onSelect={refreshSuggest}
+        onBlur={() => setSuggest(null)}
         onScroll={syncScroll}
         placeholder={placeholder}
         spellCheck={false}
@@ -181,6 +262,20 @@ export function VarHighlightInput({
         >
           {resolvedValue}
         </span>
+      )}
+      <span
+        ref={measureRef}
+        aria-hidden
+        className={cn("pointer-events-none invisible absolute left-0 top-0 whitespace-pre", metrics)}
+      />
+      {suggest && (
+        <VarSuggestDropdown
+          items={suggest.items}
+          active={suggest.active}
+          listboxId={listboxId}
+          onPick={pick}
+          left={suggest.left}
+        />
       )}
     </div>
   );

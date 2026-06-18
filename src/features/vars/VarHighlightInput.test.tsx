@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import type { ReactElement } from "react";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import type { VarCandidate } from "./candidates";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { VarHighlightInput } from "./VarHighlightInput";
@@ -72,5 +73,58 @@ describe("VarHighlightInput", () => {
     r(<VarHighlightInput value="" onChange={onChange} ariaLabel="addr" />);
     fireEvent.change(screen.getByLabelText("addr"), { target: { value: "h:1" } });
     expect(onChange).toHaveBeenCalledWith("h:1");
+  });
+});
+
+const VARS: VarCandidate[] = [
+  { name: "host", value: "api.staging", origin: "env" },
+  { name: "hostname", value: "h", origin: "collection" },
+  { name: "token", value: "jwt", origin: "env" },
+];
+
+function typeInto(input: HTMLInputElement, value: string) {
+  input.focus();
+  fireEvent.change(input, { target: { value } });
+  // place caret at end (jsdom doesn't track it from change)
+  input.setSelectionRange(value.length, value.length);
+  fireEvent.keyUp(input, { key: value.slice(-1) });
+}
+
+describe("VarHighlightInput autocomplete", () => {
+  it("opens a listbox filtered by the partial after {{", () => {
+    const onChange = vi.fn();
+    render(<VarHighlightInput value="" onChange={onChange} ariaLabel="addr" variables={VARS} />);
+    const input = screen.getByLabelText("addr") as HTMLInputElement;
+    typeInto(input, "{{host");
+    const opts = screen.getAllByRole("option");
+    expect(opts.map((o) => o.textContent)).toEqual([
+      expect.stringContaining("host"),
+      expect.stringContaining("hostname"),
+    ]);
+    expect(input).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("Enter inserts the active variable with closing braces", () => {
+    const onChange = vi.fn();
+    render(<VarHighlightInput value="" onChange={onChange} ariaLabel="addr" variables={VARS} />);
+    const input = screen.getByLabelText("addr") as HTMLInputElement;
+    typeInto(input, "{{host");
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onChange).toHaveBeenLastCalledWith("{{host}}");
+  });
+
+  it("Escape closes the listbox without inserting", () => {
+    render(<VarHighlightInput value="" onChange={() => {}} ariaLabel="addr" variables={VARS} />);
+    const input = screen.getByLabelText("addr") as HTMLInputElement;
+    typeInto(input, "{{ho");
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(screen.queryByRole("listbox")).toBeNull();
+  });
+
+  it("does not open when there are no variables", () => {
+    render(<VarHighlightInput value="" onChange={() => {}} ariaLabel="addr" />);
+    const input = screen.getByLabelText("addr") as HTMLInputElement;
+    typeInto(input, "{{ho");
+    expect(screen.queryByRole("listbox")).toBeNull();
   });
 });
