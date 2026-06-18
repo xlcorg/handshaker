@@ -7,7 +7,30 @@ import {
   collectPresentKeys,
   insertionColumns,
   separatorAfter,
+  buildVarSuggestions,
 } from "./completion";
+import type { VarCandidate } from "@/features/vars/candidates";
+
+const VC: VarCandidate[] = [
+  { name: "host", value: "api.staging", origin: "env", overrides: true },
+  { name: "order_id", value: "42", origin: "collection" },
+];
+
+describe("buildVarSuggestions", () => {
+  it("maps candidates to var Suggestions filtered by partial, value+origin in detail", () => {
+    const out = buildVarSuggestions(VC, "ho", false);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({
+      label: "host",
+      kind: "variable",
+      insertText: "host}}",          // no closing ahead → append }}
+      detail: "api.staging · env (overrides)",
+    });
+  });
+  it("omits the trailing }} when closing is already ahead", () => {
+    expect(buildVarSuggestions(VC, "", true)[0].insertText).toBe("host");
+  });
+});
 
 // Schema fixture:
 //   M { string title; Address addr; repeated Tag tags; Status status;

@@ -1,6 +1,8 @@
 import type { MessageSchemaIpc, MessageNodeIpc, FieldNodeIpc } from "@/ipc/bindings";
 import type * as Monaco from "monaco-editor";
 import { scalarWktShape } from "@/lib/wellKnown";
+import { filterCandidates } from "@/features/vars/varContext";
+import type { VarCandidate } from "@/features/vars/candidates";
 
 // ---------------------------------------------------------------------------
 // Cursor context — a schema-blind scanner over the text before the cursor.
@@ -247,7 +249,7 @@ export interface Suggestion {
   label: string;
   detail?: string;
   insertText: string;
-  kind: "field" | "message" | "enum" | "scalar" | "value";
+  kind: "field" | "message" | "enum" | "scalar" | "value" | "variable";
   isSnippet?: boolean;
   /** Ask Monaco to re-trigger suggestions after accepting (next nesting level). */
   triggerNext?: boolean;
@@ -382,6 +384,28 @@ export function computeSuggestions(
     : buildValueSuggestions(schema, ctx);
 }
 
+/** Human detail line for a var suggestion: "<value> · <origin>[ (overrides)]". */
+function varDetail(c: VarCandidate): string {
+  const origin = c.overrides ? "env (overrides)" : c.origin;
+  return c.value ? `${c.value} · ${origin}` : origin;
+}
+
+/** Variable-name suggestions for an open `{{` token. `closingAhead` = `}}` already
+ *  immediately follows the caret (skip appending it). */
+export function buildVarSuggestions(
+  candidates: VarCandidate[],
+  partial: string,
+  closingAhead: boolean,
+): Suggestion[] {
+  return filterCandidates(candidates, partial).map((c, i) => ({
+    label: c.name,
+    detail: varDetail(c),
+    insertText: closingAhead ? c.name : `${c.name}}}`,
+    kind: "variable" as const,
+    sortText: sortKey(i),
+  }));
+}
+
 // ---------------------------------------------------------------------------
 // Monaco glue — a single provider on `json-with-vars`, schema scoped per model.
 // ---------------------------------------------------------------------------
@@ -430,6 +454,8 @@ function monacoKind(monaco: typeof Monaco, kind: Suggestion["kind"]): Monaco.lan
       return K.EnumMember;
     case "scalar":
       return K.Value;
+    case "variable":
+      return K.Variable;
     default:
       return K.Field;
   }
