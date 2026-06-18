@@ -28,3 +28,22 @@ export function filterCandidates(cands: VarCandidate[], partial: string): VarCan
     .sort((a, b) => (a.idx === 0 ? 0 : 1) - (b.idx === 0 ? 0 : 1))
     .map((s) => s.c);
 }
+
+/** Replace the open `{{partial` ending at `caret` with `{{name}}`. Returns the new
+ *  value and caret (just past `}}`), or null if the caret is not in an open token. */
+export function applyVarPick(
+  value: string,
+  caret: number,
+  name: string,
+): { value: string; caret: number } | null {
+  const tok = openVarToken(value.slice(0, caret));
+  if (!tok) return null;
+  const head = value.slice(0, tok.tokenStart); // everything before `{{`
+  const after = value.slice(caret);
+  const closingAhead = after.startsWith("}}");
+  const inserted = `{{${name}${closingAhead ? "" : "}}"}`;
+  return {
+    value: head + inserted + after,
+    caret: head.length + inserted.length + (closingAhead ? 2 : 0),
+  };
+}

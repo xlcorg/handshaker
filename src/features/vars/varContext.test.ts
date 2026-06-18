@@ -38,3 +38,19 @@ describe("filterCandidates", () => {
     expect(out.map((c) => c.name)).toEqual(["host", "hostly", "x_host"]);
   });
 });
+
+import { applyVarPick } from "./varContext";
+
+describe("applyVarPick", () => {
+  it("inserts {{name}} and places caret after }} (no closing ahead)", () => {
+    // value="a {{ho", caret at end (6)
+    expect(applyVarPick("a {{ho", 6, "host")).toEqual({ value: "a {{host}}", caret: 10 });
+  });
+  it("does not duplicate }} when closing already ahead", () => {
+    // value="a {{ho}}", caret after "ho" (6), "}}" follows
+    expect(applyVarPick("a {{ho}}", 6, "host")).toEqual({ value: "a {{host}}", caret: 10 });
+  });
+  it("returns null when caret is not in an open token", () => {
+    expect(applyVarPick("plain", 5, "host")).toBeNull();
+  });
+});
