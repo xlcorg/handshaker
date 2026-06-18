@@ -2,12 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-> **Статус:** ✅ CODE-COMPLETE (2026-06-16) — все 7 задач выполнены subagent-driven
-> (spec+quality ревью на каждой + финальное ревью ветки: READY TO MERGE). Гейт зелёный:
-> `pnpm lint` 0 ошибок · `pnpm test` 933 (127 файлов) · `pnpm build` ✓. Коммиты
-> `eaf7617`…`9fa5a2a` на ветке `claude/nervous-swartz-f4def4` (поверх `main`). **Остаток:**
-> живой WebView2-проход (ручной) + влитие в `main` ff. Бэкенд/IPC/bindings не тронуты.
-> **Спека:** `docs/superpowers/specs/2026-06-16-command-palette-quick-search-design.md`.
+> **Статус:** 🎉 DONE (2026-06-18) — live-verified в WebView2, **ребейз+ff в `main`**.
+> Все 7 задач subagent-driven (spec+quality ревью на каждой + финальное ревью = APPROVED).
+> Гейт после ребейза на актуальный `main`: `pnpm lint` 0 · `pnpm test` 1017 (140 файлов) ·
+> `pnpm build` ✓. Бэкенд/IPC/bindings не тронуты. **Спека (archive):**
+> `docs/superpowers/specs/archive/2026-06-16-command-palette-quick-search-design.md`.
 
 **Goal:** Вызываемая (`Ctrl/Cmd+K` и `Ctrl/Cmd+P`) палитра быстрого поиска: плоский fuzzy по коллекциям и сохранённым запросам + drill `коллекция → TAB → «.» → метод → TAB → Enter`.
 

@@ -6,15 +6,36 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 
 ## Active work
 
-Нет активной фичи в работе. Последняя влитая — **Импорт/экспорт коллекций**
-(🎉 DONE 2026-06-17, ребейз+ff в `main`; план+спека
-`2026-06-16-collection-import-export*` в `archive/`; остаток — live WebView2-проход
-против реальных save/open-диалогов; см. ниже).
+Нет активной фичи в работе. Последняя влитая — **Командная палитра — быстрый поиск
+по коллекциям и методам** (🎉 DONE 2026-06-18, ребейз+ff в `main`; план+спека
+`2026-06-16-command-palette-quick-search*` в `archive/`; live-verified в WebView2;
+см. ниже).
 
 Интеграционная ветка — `main`; фичи ведутся в отдельных worktree-ветках
 (`claude/*`) и вливаются в `main` fast-forward.
 
 ### Завершённые фичи (всё в `archive/`)
+
+- **Командная палитра — быстрый поиск по коллекциям и методам** (🎉 DONE 2026-06-18,
+  ребейз+ff в `main`; план+спека `2026-06-16-command-palette-quick-search*` в `archive/`)
+  — вызываемая палитра (`Ctrl/Cmd+K` и `Ctrl/Cmd+P`, матч по **физической** клавише
+  `e.code` — раскладко-независимо; capture-фаза + `stopPropagation`, т.к. `Ctrl+K` —
+  чорд-префикс Monaco) на `cmdk`/shadcn `Command` (новая зависимость `cmdk@1.1.1`).
+  **Суперсет-поиск:** плоский fuzzy (группы Collections + Requests) по умолчанию + drill
+  `коллекция → TAB → «.» → метод → TAB → Enter` поверх. «Метод» = сохранённый запрос,
+  открывается в Focus через существующий discard-guarded `openRequest`; Enter на коллекции
+  без метода → Collection Overview. TAB принимает/дополняет (коллекция → scope-чип +
+  авто-«.»; запрос → имя в инпут), «.» коммитит лучшую коллекцию, Backspace снимает чип,
+  Esc закрывает. Реюз воскрешённого `palette.ts` (+`rankCollections`) и `fuzzy.ts`; чистое
+  ядро `paletteModel.ts` (state→rows) + тонкий `CommandPalette.tsx` + предикат
+  `paletteHotkey.ts`; **бэкенд/IPC/bindings не тронуты** (поиск по `cat.tree`). Гочи cmdk:
+  проп `prefix` коллизит с HTML-атрибутом `<input prefix>` → `Omit<…,"prefix">`; подсветка
+  uncontrolled (`onValueChange` + фолбэк `result.rows[0]`, без `value=`) — иначе глохнет
+  Enter; `shouldFilter={false}` под свой ранжер; синтетические `value` (`r0…`) обходят
+  нормализацию value; scope-режим фильтрует методы по имени (плоский — по полному haystack).
+  Subagent-driven (7 задач TDD, spec+quality ревью на каждой + финальное ревью = READY TO
+  MERGE; пофикшены тип-коллизия `prefix` и a11y `DialogDescription`); гейт после ребейза на
+  актуальный `main`: tsc · vitest 1017 · build. Live-verified в WebView2.
 
 - **Импорт/экспорт коллекций** (🎉 DONE 2026-06-17, ребейз+ff в `main`; план+спека
   `2026-06-16-collection-import-export*` в `archive/`) — неразрушающий import/export
