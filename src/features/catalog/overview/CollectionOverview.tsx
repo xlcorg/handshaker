@@ -17,6 +17,8 @@ import { SavedAuthEditor } from "./SavedAuthEditor";
 import { usageLabel } from "./usage";
 import { useActiveWorkflow } from "@/features/workflow/store";
 import { useEnvRevision } from "@/features/envs/envRevision";
+import { useActiveEnvVars } from "@/features/envs/useActiveEnvVars";
+import { buildVarCandidates } from "@/features/vars/candidates";
 
 function countFolders(items: ItemIpc[]): number {
   return items.reduce((n, it) => (it.type === "folder" ? n + 1 + countFolders(it.items) : n), 0);
@@ -95,6 +97,11 @@ export function CollectionOverview({ collection, onChanged, onSelectRequest, onC
   // is otherwise invisible to resolveKey and the preview would go stale.
   const envRevision = useEnvRevision();
   const varsRecord = useMemo(() => rowsToRecord(varRows), [varRows]);
+  const activeEnvVars = useActiveEnvVars();
+  const varCandidates = useMemo(
+    () => buildVarCandidates(activeEnvVars, varsRecord),
+    [activeEnvVars, varsRecord],
+  );
   // Unsaved editor rows overlay the stored collection vars; env = active env (backend resolves it).
   const resolveRow = useCallback(
     (t: string) =>
@@ -234,6 +241,7 @@ export function CollectionOverview({ collection, onChanged, onSelectRequest, onC
                 }}
                 resolveRow={resolveRow}
                 resolveKey={resolveKey}
+                variables={varCandidates}
               />
             </COBlock>
           )}

@@ -5,6 +5,7 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { newId } from "@/lib/ids";
 import { VarHighlightInput } from "@/features/vars/VarHighlightInput";
 import type { ResolutionReportIpc } from "@/ipc/bindings";
+import type { VarCandidate } from "@/features/vars/candidates";
 
 export interface VarRow {
   id: string;
@@ -18,9 +19,11 @@ interface VariablesBlockProps {
   /** Optional per-row resolve preview; the caller bakes the ctx into the resolver. */
   resolveRow?: (value: string) => Promise<ResolutionReportIpc>;
   resolveKey?: string;
+  /** Variable candidates for `{{`-autocomplete inside the value field. */
+  variables?: VarCandidate[];
 }
 
-export function VariablesBlock({ rows, onChange, resolveRow, resolveKey }: VariablesBlockProps) {
+export function VariablesBlock({ rows, onChange, resolveRow, resolveKey, variables }: VariablesBlockProps) {
   const add = () => onChange([...rows, { id: newId(), k: "", v: "" }]);
 
   const upd = (id: string, key: "k" | "v", val: string) =>
@@ -72,6 +75,7 @@ export function VariablesBlock({ rows, onChange, resolveRow, resolveKey }: Varia
             placeholder="value"
             ariaLabel="variable value"
             metrics="h-8 px-3 font-mono text-[12px] leading-8"
+            variables={variables}
             className="w-full rounded-md border border-input bg-transparent shadow-xs transition-[color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30"
           />
           <Tooltip content="Remove">

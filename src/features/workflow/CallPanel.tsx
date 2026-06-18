@@ -20,8 +20,10 @@ import {
 } from "./actions";
 import { workflowStore } from "./store";
 import { useEnvRevision } from "@/features/envs/envRevision";
+import { useActiveEnvVars } from "@/features/envs/useActiveEnvVars";
+import { buildVarCandidates } from "@/features/vars/candidates";
 import { newId } from "@/lib/ids";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { SavedAuthConfigIpc } from "@/ipc/bindings";
 import type { MetadataRow, Step } from "./model";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
@@ -40,16 +42,23 @@ interface CallPanelProps {
   onQuickAddMethod?: (service: string, method: string) => void;
   /** Auth of the draft's origin collection — inherited when the step's own auth is none. */
   originAuth?: SavedAuthConfigIpc;
+  /** Variables of the draft's origin collection — feeds {{var}} autocomplete. */
+  originVars?: Partial<Record<string, string>>;
 }
 
 /** The editable, sendable surface for one step — reused by Focus(draft)/List/Ledger. */
-export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMethod, originAuth }: CallPanelProps) {
+export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMethod, originAuth, originVars }: CallPanelProps) {
   const [prefs, setPref] = usePrefs();
   const activeWf = useActiveWorkflow();
   // Re-resolve the address preview when the active env's identity or contents change
   // (the preview resolves against the active env via the backend — see envRevision).
   const envRevision = useEnvRevision();
   const addressResolveKey = `${step.collectionId ?? ""}|${activeWf.envName ?? ""}|${envRevision}`;
+  const activeEnvVars = useActiveEnvVars();
+  const varCandidates = useMemo(
+    () => (editable ? buildVarCandidates(activeEnvVars, originVars) : undefined),
+    [editable, activeEnvVars, originVars],
+  );
   // prefs.split is our own convention ("horizontal" = a horizontal divider = Top/Bottom);
   // react-resizable-panels uses the inverse ("horizontal" = side-by-side), so flip it.
   const orientation = prefs.split === "horizontal" ? "vertical" : "horizontal";
@@ -166,6 +175,7 @@ export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMetho
       onQuickAdd={onQuickAddMethod}
       resolveAddress={varsResolverFor(step.collectionId)}
       resolveKey={addressResolveKey}
+      variables={varCandidates}
     />
   ) : (
     <AddressBar step={step} onSend={onSend} onCancel={onCancel} />
@@ -193,6 +203,7 @@ export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMetho
             onSubmit={() => sendShortcutRef.current()}
             onResetTemplate={editable ? onResetBody : undefined}
             schema={schema}
+            varCandidates={varCandidates}
           />
         </ResizablePanel>
         <ResizableHandle withHandle />

@@ -7,6 +7,7 @@ import type { SelectedMethod } from "@/features/shell/SelectedMethod";
 import type { ResolutionReportIpc, ServiceCatalogIpc } from "@/ipc/bindings";
 import { VarHighlightInput } from "@/features/vars/VarHighlightInput";
 import { useBusyDelay } from "@/lib/use-busy-delay";
+import type { VarCandidate } from "@/features/vars/candidates";
 import type { Step } from "./model";
 
 export interface DraftAddressBarProps {
@@ -29,6 +30,7 @@ export interface DraftAddressBarProps {
   resolveAddress?: (t: string) => Promise<ResolutionReportIpc>;
   /** Extra resolve inputs (active env, env revision); change ⇒ re-resolve. */
   resolveKey?: string;
+  variables?: VarCandidate[];
 }
 
 /** Editable Focus header for a draft: TLS lock + host → full-width MethodPicker → Send.
@@ -38,7 +40,7 @@ export interface DraftAddressBarProps {
 export function DraftAddressBar({
   step, catalog, reflecting, reflectError,
   onAddress, onTls, onRefresh, onReflectCancel, onSelectMethod, onSend, onCancel, onQuickAdd,
-  resolveAddress, resolveKey,
+  resolveAddress, resolveKey, variables,
 }: DraftAddressBarProps) {
   const sending = step.status === "sending";
   // Delay the Send→Cancel swap so a sub-250ms call never twitches the button.
@@ -66,6 +68,7 @@ export function DraftAddressBar({
           placeholder="host:port"
           resolver={resolveAddress}
           resolveKey={resolveKey}
+          variables={variables}
           className="min-w-0 flex-1"
         />
       </div>

@@ -35,6 +35,7 @@ export function FocusView({ onRequestSave, onQuickAddMethod }: FocusViewProps = 
   // Auth of the origin collection — CallPanel falls back to it when the step's own
   // auth is none (request-level auth has no editor; collections carry the config).
   const originAuth = origin ? tree.find((c) => c.id === origin.collectionId)?.auth : undefined;
+  const originVars = origin ? tree.find((c) => c.id === origin.collectionId)?.variables : undefined;
 
   const segments = draft ? draftBreadcrumb(draft, origin, tree) : [];
   const prefix = segments.slice(0, -1);
@@ -121,6 +122,7 @@ export function FocusView({ onRequestSave, onQuickAddMethod }: FocusViewProps = 
             // landing the method in some arbitrary collection.
             onQuickAddMethod={origin ? onQuickAddMethod : undefined}
             originAuth={originAuth}
+            originVars={originVars}
           />
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
