@@ -521,22 +521,25 @@ export function registerBodyCompletion(monaco: typeof Monaco): void {
         });
         const closingAhead = /^\}\}/.test(after);
         const items = buildVarSuggestions(varCands, tok.partial, closingAhead);
-        if (items.length === 0) return { suggestions: [] };
-        const range: Monaco.IRange = {
-          startLineNumber: start.lineNumber, startColumn: start.column,
-          endLineNumber: position.lineNumber, endColumn: position.column,
-        };
-        return {
-          suggestions: items.map((s) => ({
-            label: s.label,
-            detail: s.detail,
-            kind: monacoKind(monaco, s.kind),
-            insertText: s.insertText,
-            sortText: s.sortText,
-            filterText: s.label,
-            range,
-          })),
-        };
+        if (items.length > 0) {
+          const range: Monaco.IRange = {
+            startLineNumber: start.lineNumber, startColumn: start.column,
+            endLineNumber: position.lineNumber, endColumn: position.column,
+          };
+          return {
+            suggestions: items.map((s) => ({
+              label: s.label,
+              detail: s.detail,
+              kind: monacoKind(monaco, s.kind),
+              insertText: s.insertText,
+              sortText: s.sortText,
+              filterText: s.label,
+              range,
+            })),
+          };
+        }
+        // Zero matches → not a real var context (e.g. a stray unclosed `{{`); fall
+        // through to schema completion below.
       }
 
       const schema = schemaByModel.get(model);

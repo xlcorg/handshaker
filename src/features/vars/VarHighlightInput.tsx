@@ -1,4 +1,4 @@
-import { useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { cn } from "@/lib/cn";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -109,6 +109,12 @@ export function VarHighlightInput({
   // gets clamped to 0 when React resets the value to a shorter string. Storing both here
   // lets refreshSuggest always operate on the latest typed text + caret position.
   const lastTypedRef = useRef<{ text: string; caret: number }>({ text: value, caret: value.length });
+
+  // Keep the typed-text ref in sync with external value changes (method switch /
+  // programmatic edits) so a later keyUp/select doesn't open a stale dropdown.
+  useEffect(() => {
+    lastTypedRef.current = { text: value, caret: value.length };
+  }, [value]);
 
   // Recompute the open-token + matches from the LIVE input (DOM value + caret), NOT the
   // `value` prop — the prop can lag within a tick, and an uncontrolled-parent test drives
@@ -237,6 +243,8 @@ export function VarHighlightInput({
         aria-autocomplete="list"
         aria-activedescendant={suggest ? optionId(listboxId, suggest.active) : undefined}
         value={value}
+        // NOTE: caret is stored as value.length (end-of-text). Editing mid-string (placing
+        // the cursor inside existing text) is a known limitation — the partial won't reflect it.
         onChange={(e) => { lastTypedRef.current = { text: e.target.value, caret: e.target.value.length }; onChange(e.target.value); refreshSuggest(); }}
         onKeyDown={onInputKeyDown}
         onKeyUp={refreshSuggest}

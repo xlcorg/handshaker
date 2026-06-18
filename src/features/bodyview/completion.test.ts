@@ -30,6 +30,12 @@ describe("buildVarSuggestions", () => {
   it("omits the trailing }} when closing is already ahead", () => {
     expect(buildVarSuggestions(VC, "", true)[0].insertText).toBe("host");
   });
+  it("returns [] when the partial matches no variable (provider must fall through to schema)", () => {
+    // This documents the contract the var-branch fall-through relies on: a stray unclosed
+    // `{{` with a partial that matches nothing must produce an empty array so the provider
+    // continues to schema key/value completion instead of returning an empty suggestion list.
+    expect(buildVarSuggestions(VC, "zzz", false)).toEqual([]);
+  });
 });
 
 // Schema fixture:

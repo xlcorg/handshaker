@@ -111,6 +111,7 @@ describe("VarHighlightInput autocomplete", () => {
     typeInto(input, "{{host");
     fireEvent.keyDown(input, { key: "Enter" });
     expect(onChange).toHaveBeenLastCalledWith("{{host}}");
+    expect(screen.queryByRole("listbox")).toBeNull();
   });
 
   it("Escape closes the listbox without inserting", () => {
