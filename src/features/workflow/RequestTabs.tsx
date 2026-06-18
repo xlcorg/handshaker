@@ -5,6 +5,7 @@ import { UnderlineTabs } from "@/components/ui/underline-tabs";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import type { SavedAuthConfigIpc, MessageSchemaIpc } from "@/ipc/bindings";
+import type { VarCandidate } from "@/features/vars/candidates";
 import { usePrefs } from "@/lib/use-prefs";
 import { MetadataEditor } from "./MetadataEditor";
 import type { MetadataRow, Step } from "./model";
@@ -22,9 +23,11 @@ export interface RequestTabsProps {
   onResetTemplate?: () => void;
   /** Flat field-schema for the current method; drives body autocomplete. */
   schema?: MessageSchemaIpc | null;
+  /** Variable candidates for body `{{`-autocomplete. */
+  varCandidates?: VarCandidate[];
 }
 
-export function RequestTabs({ step, serviceAuth, onBody, onMetadata, onSubmit, onResetTemplate, schema }: RequestTabsProps) {
+export function RequestTabs({ step, serviceAuth, onBody, onMetadata, onSubmit, onResetTemplate, schema, varCandidates }: RequestTabsProps) {
   const [tab, setTab] = useState<Tab>("request");
   const [prefs, setPref] = usePrefs();
   return (
@@ -72,7 +75,7 @@ export function RequestTabs({ step, serviceAuth, onBody, onMetadata, onSubmit, o
       </div>
       <div className="min-h-0 flex-1 overflow-hidden">
         {tab === "request" ? (
-          <BodyEditor value={step.requestJson} onChange={onBody} onSubmit={onSubmit} schema={schema} />
+          <BodyEditor value={step.requestJson} onChange={onBody} onSubmit={onSubmit} schema={schema} varCandidates={varCandidates} />
         ) : null}
         {tab === "metadata" ? (
           <div className="h-full overflow-auto">
