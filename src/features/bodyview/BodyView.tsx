@@ -1,4 +1,4 @@
-import { Suspense, forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef } from "react";
 import type * as Monaco from "monaco-editor";
 import { MonacoEditor, BODY_EDIT_OPTIONS, BODY_READONLY_OPTIONS, MONACO_THEME } from "@/lib/monaco";
 import { usePrefs, readPrefs } from "@/lib/use-prefs";
@@ -21,7 +21,7 @@ import { base64Save, base64SaveEncoded } from "@/ipc/client";
 import { toast } from "sonner";
 import { installContextMenuCleanup } from "./contextMenuCleanup";
 import { copyDecodedBase64 } from "./copyDecoded";
-import { foldAll, unfoldAll } from "./foldActions";
+import { attachFoldActions, type FoldMenuEditor } from "./foldActions";
 import { shouldShowMinimap } from "./minimapGate";
 
 type Mode = "request" | "response";
@@ -48,6 +48,8 @@ interface Live {
   expanded: Set<string>;
   controller: DisposableLike | null;
   decode: DisposableLike | null;
+  /** Collapse/Expand-all context-menu actions (response only). */
+  fold: DisposableLike | null;
   typeSub: DisposableLike | null;
   ghost: GhostZone | null;
   ghostTimer: number | null;
@@ -62,17 +64,7 @@ interface Live {
   minimapSubs: DisposableLike[];
 }
 
-export interface BodyViewHandle {
-  /** Collapse every foldable region in the body (no-op until the editor mounts). */
-  collapseAll(): void;
-  /** Expand every folded region. */
-  expandAll(): void;
-}
-
-export const BodyView = forwardRef<BodyViewHandle, BodyViewProps>(function BodyView(
-  { mode, value, onChange, onSubmit, schema },
-  ref,
-) {
+export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewProps) {
   const [prefs] = usePrefs();
   const live = useRef<Live | null>(null);
   // Ref so the Monaco command (bound once in onMount) always calls the freshest handler.
@@ -80,24 +72,6 @@ export const BodyView = forwardRef<BodyViewHandle, BodyViewProps>(function BodyV
   onSubmitRef.current = onSubmit;
   const schemaRef = useRef(schema);
   schemaRef.current = schema;
-
-  // Header buttons (ResponsePanel) drive folding through this handle — the same
-  // bridge as SidebarShell↔CollectionTree. Guards on the live editor so it no-ops
-  // before mount (and in unit tests, where the Monaco stub never fires onMount).
-  useImperativeHandle(
-    ref,
-    () => ({
-      collapseAll() {
-        const e = live.current?.editor;
-        if (e) foldAll(e);
-      },
-      expandAll() {
-        const e = live.current?.editor;
-        if (e) unfoldAll(e);
-      },
-    }),
-    [],
-  );
 
   // --- response rendering ------------------------------------------------
   const renderResponse = (text: string) => {
@@ -221,11 +195,12 @@ export const BodyView = forwardRef<BodyViewHandle, BodyViewProps>(function BodyV
       live.current?.ghost?.dispose();
       live.current?.controller?.dispose();
       live.current?.decode?.dispose();
+      live.current?.fold?.dispose();
       live.current?.typeSub?.dispose();
       live.current?.minimapSubs?.forEach((d) => d.dispose());
       live.current = {
         editor, monaco, tree: null, spans: [], badges: [],
-        decorations: null, expanded: new Set(), controller: null, decode: null, typeSub: null,
+        decorations: null, expanded: new Set(), controller: null, decode: null, fold: null, typeSub: null,
         ghost: null, ghostTimer: null,
         lineCount: editor.getModel()?.getLineCount() ?? 1,
         lastText: editor.getValue(),
@@ -308,6 +283,9 @@ export const BodyView = forwardRef<BodyViewHandle, BodyViewProps>(function BodyV
           onSaveDecoded: (v) => reportSave(base64Save(v)),
           onSaveBase64: (v) => reportSave(base64SaveEncoded(v)),
         });
+        // Collapse all / Expand all live in the right-click menu (document-wide
+        // fold actions), beside the decode/copy items.
+        live.current.fold = attachFoldActions(editor as unknown as FoldMenuEditor);
       } else {
         const parsed = parseWithSpans(editor.getValue());
         live.current.tree = parsed?.tree ?? null;
@@ -341,6 +319,7 @@ export const BodyView = forwardRef<BodyViewHandle, BodyViewProps>(function BodyV
   useEffect(() => () => {
     live.current?.controller?.dispose();
     live.current?.decode?.dispose();
+    live.current?.fold?.dispose();
     live.current?.typeSub?.dispose();
     if (live.current?.ghostTimer != null) window.clearTimeout(live.current.ghostTimer);
     live.current?.ghost?.dispose();
@@ -446,4 +425,4 @@ export const BodyView = forwardRef<BodyViewHandle, BodyViewProps>(function BodyV
       />
     </Suspense>
   );
-});
+}

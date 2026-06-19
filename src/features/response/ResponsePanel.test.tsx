@@ -122,27 +122,3 @@ describe("ResponsePanel contract tab", () => {
     expect(lines).toContain("message Out {}");
   });
 });
-
-describe("ResponsePanel collapse/expand buttons", () => {
-  it("shows Collapse all + Expand all on a successful JSON body", () => {
-    render(<ResponsePanel state="success" outcome={ok} />);
-    expect(screen.getByRole("button", { name: "collapse all" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "expand all" })).toBeInTheDocument();
-  });
-
-  it("hides them on the idle empty state", () => {
-    render(<ResponsePanel state="idle" outcome={null} />);
-    expect(screen.queryByRole("button", { name: "collapse all" })).toBeNull();
-  });
-
-  it("hides them on an error response (no JSON tree)", () => {
-    render(<ResponsePanel state="error" outcome={err} />);
-    expect(screen.queryByRole("button", { name: "collapse all" })).toBeNull();
-  });
-
-  it("hides them when a non-Body tab is active", () => {
-    render(<ResponsePanel state="success" outcome={ok} />);
-    fireEvent.click(screen.getByRole("tab", { name: "Trailers" }));
-    expect(screen.queryByRole("button", { name: "collapse all" })).toBeNull();
-  });
-});
