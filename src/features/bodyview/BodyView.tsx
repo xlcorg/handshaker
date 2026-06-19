@@ -22,7 +22,7 @@ import { toast } from "sonner";
 import { installContextMenuCleanup } from "./contextMenuCleanup";
 import { copyDecodedBase64 } from "./copyDecoded";
 import { attachFoldActions, type FoldMenuEditor } from "./foldActions";
-import { shouldShowMinimap } from "./minimapGate";
+import { shouldShowMinimap, minimapToggleOptions } from "./minimapGate";
 
 type Mode = "request" | "response";
 
@@ -246,23 +246,31 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
       }
       if (mode === "response") {
         renderResponse(editor.getValue());
-        // Size-gate the minimap: show it only when content overflows the viewport
-        // (short responses / tall panes stay strip-free). Re-evaluate on content
-        // growth (badge-expand) and pane resize. The minimapOn guard makes
-        // updateOptions a no-op when nothing changed.
-        const syncMinimap = () => {
-          const l = live.current;
-          if (!l) return;
-          const want = shouldShowMinimap(l.editor.getContentHeight(), l.editor.getLayoutInfo().height);
-          if (want === l.minimapOn) return;
-          l.minimapOn = want;
-          l.editor.updateOptions({ minimap: { enabled: want, renderCharacters: false } });
-        };
-        live.current.minimapSubs = [
-          editor.onDidContentSizeChange(syncMinimap),
-          editor.onDidLayoutChange(syncMinimap),
-        ];
-        syncMinimap();
+      } else {
+        const parsed = parseWithSpans(editor.getValue());
+        live.current.tree = parsed?.tree ?? null;
+        live.current.spans = parsed?.spans ?? [];
+      }
+      // Size-gate the minimap in BOTH editors (request + response) for a uniform
+      // large-body experience: the minimap appears only when content overflows the
+      // viewport and, when shown, replaces the redundant vertical scrollbar (see
+      // minimapToggleOptions) — short bodies / tall panes stay strip-free with a
+      // plain scrollbar. Re-evaluated on content growth (typing / badge-expand) and
+      // pane resize; the minimapOn guard makes updateOptions a no-op when unchanged.
+      const syncMinimap = () => {
+        const l = live.current;
+        if (!l) return;
+        const want = shouldShowMinimap(l.editor.getContentHeight(), l.editor.getLayoutInfo().height);
+        if (want === l.minimapOn) return;
+        l.minimapOn = want;
+        l.editor.updateOptions(minimapToggleOptions(want));
+      };
+      live.current.minimapSubs = [
+        editor.onDidContentSizeChange(syncMinimap),
+        editor.onDidLayoutChange(syncMinimap),
+      ];
+      syncMinimap();
+      if (mode === "response") {
         // `v` is the FULL value from the JSON tree (the editor display may be
         // elided), so decode/save always operate on the complete value.
         const reportSave = (run: Promise<string | null>) =>
@@ -286,10 +294,6 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
         // Collapse all / Expand all live in the right-click menu (document-wide
         // fold actions), beside the decode/copy items.
         live.current.fold = attachFoldActions(editor as unknown as FoldMenuEditor);
-      } else {
-        const parsed = parseWithSpans(editor.getValue());
-        live.current.tree = parsed?.tree ?? null;
-        live.current.spans = parsed?.spans ?? [];
       }
       // Monaco intercepts Ctrl/Cmd+Enter (inserts a newline by default), so the
       // window-level Send shortcut never sees it while the editor has focus.

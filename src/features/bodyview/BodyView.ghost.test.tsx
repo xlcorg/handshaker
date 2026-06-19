@@ -42,6 +42,13 @@ vi.mock("@/lib/monaco", () => ({
         },
         applyFontInfo: () => {},
         createDecorationsCollection: () => ({ set: () => {}, clear: () => {} }),
+        // Both editors now size-gate the minimap on mount; this content fits the
+        // viewport (height undefined → no overflow), so the gate stays a no-op.
+        getContentHeight: () => 0,
+        getLayoutInfo: () => ({ contentLeft: 0 }),
+        onDidContentSizeChange: () => ({ dispose: () => {} }),
+        onDidLayoutChange: () => ({ dispose: () => {} }),
+        updateOptions: () => {},
       };
       onMount?.(editor, { editor: { setModelMarkers: () => {} }, MarkerSeverity: { Error: 8 }, Range: class {} });
     }
