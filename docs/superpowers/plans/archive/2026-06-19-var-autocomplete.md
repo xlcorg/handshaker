@@ -2,9 +2,12 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Status:** в работе · **Ветка:** `claude/peaceful-gauss-f0850e` · **Спека:**
-`docs/superpowers/specs/2026-06-19-var-autocomplete-design.md` · **Гейт:**
-`pnpm test` · `pnpm lint` (tsc) · `pnpm build`. Бэкенд/IPC/bindings **не трогаем**.
+**Status:** 🎉 DONE 2026-06-19 (subagent-driven, 7 имплементер-задач + финальное
+ревью ветки = APPROVED после 2 фиксов) · **Ветка:** `claude/peaceful-gauss-f0850e`
+· **Спека:** `docs/superpowers/specs/archive/2026-06-19-var-autocomplete-design.md`
+· **Гейт:** `pnpm test` (1046) · `pnpm lint` (tsc) · `pnpm build` · bindings no-drift.
+Бэкенд/IPC/bindings **не тронуты**. Остаток — вливание в `main` + live
+WebView2-проход.
 
 **Goal:** При наборе `{{` предлагать переменные активного окружения + привязанной
 коллекции (имя · превью значения · тег env/collection) — в теле запроса (Monaco) и
