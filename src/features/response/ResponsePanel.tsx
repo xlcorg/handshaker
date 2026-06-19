@@ -1,7 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { ChevronsDownUp, ChevronsUpDown } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { useBusyDelay } from "@/lib/use-busy-delay";
 import { Activity } from "lucide-react";
 import { ResponseBody } from "./ResponseBody";
+import type { BodyViewHandle } from "@/features/bodyview/BodyView";
 import { EmptyState } from "./EmptyState";
 import { ErrorView } from "./ErrorView";
 import { ClientErrorView } from "./ClientErrorView";
@@ -31,6 +34,7 @@ type ResponseTab = "body" | "trailers" | "headers" | "contract";
 
 export function ResponsePanel({ state, outcome, error, contract }: ResponsePanelProps) {
   const [tab, setTab] = useState<ResponseTab>("body");
+  const bodyRef = useRef<BodyViewHandle>(null);
   // Sending always pulls the view to Body — that's where the response lands.
   // Until then the default is Body; Contract is an explicit click away.
   useEffect(() => {
@@ -39,6 +43,10 @@ export function ResponsePanel({ state, outcome, error, contract }: ResponsePanel
 
   const isError = state === "error";
   const sending = state === "sending";
+
+  // The collapse/expand controls only make sense over the foldable JSON tree —
+  // the same condition that renders <ResponseBody> below.
+  const showBodyTools = state === "success" && !!outcome && tab === "body" && outcome.response_json !== null;
 
   // Delay the in-flight progress indicator: fast responses shouldn't flash it
   // (a sub-threshold loader reads as a twitch). Same gate as the Send→Cancel
@@ -83,6 +91,30 @@ export function ResponsePanel({ state, outcome, error, contract }: ResponsePanel
           ]}
         />
         <div className="ml-auto flex items-center gap-2.5">
+          {showBodyTools && (
+            <div className="flex items-center gap-1">
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                className="size-5 text-muted-foreground"
+                aria-label="collapse all"
+                title="Collapse all"
+                onClick={() => bodyRef.current?.collapseAll()}
+              >
+                <ChevronsDownUp className="size-3.5" />
+              </Button>
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                className="size-5 text-muted-foreground"
+                aria-label="expand all"
+                title="Expand all"
+                onClick={() => bodyRef.current?.expandAll()}
+              >
+                <ChevronsUpDown className="size-3.5" />
+              </Button>
+            </div>
+          )}
           <RespMeta state={state} outcome={outcome} />
         </div>
         {showProgress && (
@@ -108,7 +140,7 @@ export function ResponsePanel({ state, outcome, error, contract }: ResponsePanel
       )}
       {state === "success" && outcome && tab === "body" && outcome.response_json !== null && (
         <div className="hs-fade-in flex min-h-0 flex-1 flex-col">
-          <ResponseBody json={outcome.response_json} />
+          <ResponseBody ref={bodyRef} json={outcome.response_json} />
         </div>
       )}
       {state === "success" && outcome && tab === "trailers" && <KVTable rows={trailers} />}
