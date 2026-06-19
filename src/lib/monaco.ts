@@ -144,7 +144,10 @@ export const EDITOR_OPTIONS = {
   guides: { indentation: false },
   overviewRulerBorder: false,
   hideCursorInOverviewRuler: true,
-  scrollbar: { verticalScrollbarSize: 8, horizontalScrollbarSize: 8 },
+  // 14px vertical bar (VS Code default) is a real mouse target; the thin 8px bar
+  // was hard to grab on a big response. scrollByPage: clicking the trough pages by
+  // a screenful instead of teleporting — jump-anywhere is covered by the minimap.
+  scrollbar: { verticalScrollbarSize: 14, horizontalScrollbarSize: 8, scrollByPage: true },
   padding: { top: 10, bottom: 24 },
 } as const;
 
@@ -177,6 +180,10 @@ export const BODY_READONLY_OPTIONS = {
   ...EDITOR_OPTIONS,
   folding: true,
   readOnly: true,
+  // Minimap starts OFF; BodyView (response) flips `enabled` on only when the
+  // rendered content overflows the viewport (size-gated, see minimapGate.ts).
+  // renderCharacters:false → a clean color-block overview matching the dark theme.
+  minimap: { enabled: false, renderCharacters: false },
 } as const;
 
 export const MONACO_THEME = "handshaker-dark" as const;
