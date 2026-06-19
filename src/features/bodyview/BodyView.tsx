@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useEffect, useMemo, useRef } from "react";
+import { Suspense, forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef } from "react";
 import type * as Monaco from "monaco-editor";
 import { MonacoEditor, BODY_EDIT_OPTIONS, BODY_READONLY_OPTIONS, MONACO_THEME } from "@/lib/monaco";
 import { usePrefs, readPrefs } from "@/lib/use-prefs";
@@ -21,6 +21,8 @@ import { base64Save, base64SaveEncoded } from "@/ipc/client";
 import { toast } from "sonner";
 import { installContextMenuCleanup } from "./contextMenuCleanup";
 import { copyDecodedBase64 } from "./copyDecoded";
+import { foldAll, unfoldAll } from "./foldActions";
+import { shouldShowMinimap } from "./minimapGate";
 
 type Mode = "request" | "response";
 
@@ -53,9 +55,24 @@ interface Live {
   lineCount: number;
   /** Last text seen by handleChange / mount — used to detect external value updates. */
   lastText: string;
+  /** Whether the minimap is currently enabled (response only) — guards the
+   *  size-gate so toggling it never loops with the layout-change listener. */
+  minimapOn: boolean;
+  /** Disposables for the size-gate listeners (response only). */
+  minimapSubs: DisposableLike[];
 }
 
-export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewProps) {
+export interface BodyViewHandle {
+  /** Collapse every foldable region in the body (no-op until the editor mounts). */
+  collapseAll(): void;
+  /** Expand every folded region. */
+  expandAll(): void;
+}
+
+export const BodyView = forwardRef<BodyViewHandle, BodyViewProps>(function BodyView(
+  { mode, value, onChange, onSubmit, schema },
+  ref,
+) {
   const [prefs] = usePrefs();
   const live = useRef<Live | null>(null);
   // Ref so the Monaco command (bound once in onMount) always calls the freshest handler.
@@ -63,6 +80,24 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
   onSubmitRef.current = onSubmit;
   const schemaRef = useRef(schema);
   schemaRef.current = schema;
+
+  // Header buttons (ResponsePanel) drive folding through this handle — the same
+  // bridge as SidebarShell↔CollectionTree. Guards on the live editor so it no-ops
+  // before mount (and in unit tests, where the Monaco stub never fires onMount).
+  useImperativeHandle(
+    ref,
+    () => ({
+      collapseAll() {
+        const e = live.current?.editor;
+        if (e) foldAll(e);
+      },
+      expandAll() {
+        const e = live.current?.editor;
+        if (e) unfoldAll(e);
+      },
+    }),
+    [],
+  );
 
   // --- response rendering ------------------------------------------------
   const renderResponse = (text: string) => {
@@ -187,12 +222,15 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
       live.current?.controller?.dispose();
       live.current?.decode?.dispose();
       live.current?.typeSub?.dispose();
+      live.current?.minimapSubs?.forEach((d) => d.dispose());
       live.current = {
         editor, monaco, tree: null, spans: [], badges: [],
         decorations: null, expanded: new Set(), controller: null, decode: null, typeSub: null,
         ghost: null, ghostTimer: null,
         lineCount: editor.getModel()?.getLineCount() ?? 1,
         lastText: editor.getValue(),
+        minimapOn: false,
+        minimapSubs: [],
       };
       // Drop Monaco's default "Command Palette" entry from the right-click menu
       // (F1 still opens it). In the read-only response viewer, also drop the
@@ -233,6 +271,23 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
       }
       if (mode === "response") {
         renderResponse(editor.getValue());
+        // Size-gate the minimap: show it only when content overflows the viewport
+        // (short responses / tall panes stay strip-free). Re-evaluate on content
+        // growth (badge-expand) and pane resize. The minimapOn guard makes
+        // updateOptions a no-op when nothing changed.
+        const syncMinimap = () => {
+          const l = live.current;
+          if (!l) return;
+          const want = shouldShowMinimap(l.editor.getContentHeight(), l.editor.getLayoutInfo().height);
+          if (want === l.minimapOn) return;
+          l.minimapOn = want;
+          l.editor.updateOptions({ minimap: { enabled: want, renderCharacters: false } });
+        };
+        live.current.minimapSubs = [
+          editor.onDidContentSizeChange(syncMinimap),
+          editor.onDidLayoutChange(syncMinimap),
+        ];
+        syncMinimap();
         // `v` is the FULL value from the JSON tree (the editor display may be
         // elided), so decode/save always operate on the complete value.
         const reportSave = (run: Promise<string | null>) =>
@@ -289,6 +344,7 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
     live.current?.typeSub?.dispose();
     if (live.current?.ghostTimer != null) window.clearTimeout(live.current.ghostTimer);
     live.current?.ghost?.dispose();
+    live.current?.minimapSubs?.forEach((d) => d.dispose());
   }, []);
 
   // Keep the model's attached schema current as the selected method changes.
@@ -390,4 +446,4 @@ export function BodyView({ mode, value, onChange, onSubmit, schema }: BodyViewPr
       />
     </Suspense>
   );
-}
+});

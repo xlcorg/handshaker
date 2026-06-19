@@ -34,6 +34,10 @@ vi.mock("@/lib/monaco", () => ({
       // onMount strips Monaco's "Command Palette" context-menu item; the cleanup
       // no-ops when getContribution yields nothing.
       getContribution: () => null,
+      // Response mode size-gates the minimap on content/layout changes.
+      getContentHeight: () => 0,
+      onDidContentSizeChange: () => ({ dispose: () => {} }),
+      onDidLayoutChange: () => ({ dispose: () => {} }),
       changeViewZones: (cb: (acc: { addZone: () => string; removeZone: () => void }) => void) => {
         cb({ addZone: () => "z1", removeZone: () => {} });
       },

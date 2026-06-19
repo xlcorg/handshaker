@@ -23,7 +23,8 @@ vi.mock("@/lib/use-prefs", () => ({
   readPrefs: () => prefs,
 }));
 
-import { BodyView } from "./BodyView";
+import { createRef } from "react";
+import { BodyView, type BodyViewHandle } from "./BodyView";
 
 // NOTE: the mocked MonacoEditor does NOT invoke onMount, so the imperative
 // response render (parse → renderJsonTree → model.setValue) does not run here.
@@ -54,5 +55,18 @@ describe("BodyView", () => {
     render(<BodyView mode="response" value={`{"a":1}`} />);
     expect(screen.getByTestId("monaco").getAttribute("data-wordwrap")).toBe("on");
     prefs.wordWrap = false; // restore — shared module-level mock object
+  });
+
+  it("exposes a collapse/expand handle (no-op before the editor mounts)", () => {
+    const ref = createRef<BodyViewHandle>();
+    render(<BodyView ref={ref} mode="response" value={`{"a":1}`} />);
+    expect(typeof ref.current?.collapseAll).toBe("function");
+    expect(typeof ref.current?.expandAll).toBe("function");
+    // The Monaco stub never fires onMount, so there is no live editor — the
+    // handle must guard and no-op rather than throw.
+    expect(() => {
+      ref.current?.collapseAll();
+      ref.current?.expandAll();
+    }).not.toThrow();
   });
 });
