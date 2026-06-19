@@ -6,15 +6,40 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 
 ## Active work
 
-Нет активной фичи в работе. Последняя влитая — **Collapse all / Expand all — кнопки
-в шапке панели коллекций** (🎉 DONE 2026-06-18, ребейз+ff в `main`; план+спека
-`2026-06-17-collection-expand-collapse-all*` в `archive/`; остаток — live
-WebView2-проход; см. ниже).
+Нет активной фичи в работе. Последняя влитая — **Навигация по большому ответу —
+minimap · scrollbar · collapse/expand all** (🎉 DONE 2026-06-19, ff в `main`
+`2420325`; план+спека `2026-06-19-large-response-navigation*` в `archive/`; остаток —
+live WebView2-проход; см. ниже).
 
 Интеграционная ветка — `main`; фичи ведутся в отдельных worktree-ветках
 (`claude/*`) и вливаются в `main` fast-forward.
 
 ### Завершённые фичи (всё в `archive/`)
+
+- **Навигация по большому ответу — minimap · scrollbar · collapse/expand all**
+  (🎉 DONE 2026-06-19, ff в `main` `2420325`; план+спека
+  `2026-06-19-large-response-navigation*` в `archive/`) — три независимых улучшения
+  навигации по большому JSON-телу ответа (read-only Monaco `BodyView mode="response"`).
+  **(1) Minimap** только на редакторе ответа (`BODY_READONLY_OPTIONS`), блок-форма
+  (`renderCharacters:false`), **size-gated — видна только при переполнении вьюпорта**:
+  чистый предикат `shouldShowMinimap(contentHeight, viewportHeight)`
+  (`bodyview/minimapGate.ts`), переоценка живьём на `onDidContentSizeChange` +
+  `onDidLayoutChange` с гардом `minimapOn` (toggling minimap меняет ширину, не высоту ⇒
+  без петли); адаптивно к resizable-панелям. Request-редактор без minimap.
+  **(2) Scrollbar** в базовых `EDITOR_OPTIONS`: `verticalScrollbarSize` 8→14 + `scrollByPage`
+  (постраничный клик по жёлобу; прыжок «куда угодно» закрыт минимапой). **(3) Collapse
+  all / Expand all** — пункты **right-click контекстного меню** тела (НЕ кнопки): чистый
+  `attachFoldActions(editor)` (`bodyview/foldActions.ts`, группа `"1_folding"` над
+  decode/copy-группой `"9_cutcopypaste*"`, без keybinding) дёргает встроенные
+  `editor.foldAll`/`unfoldAll`; вешается в response-ветке `onMount` рядом с
+  `attachDecodeActions`, диспозится в обоих teardown. **Бэкенд/IPC/bindings не тронуты.**
+  Изначально (Tasks 4–6) collapse/expand были icon-кнопками в шапке `ResponsePanel` через
+  мост `BodyViewHandle`/`forwardRef` (BodyView→ResponseBody→ResponsePanel `useRef`); по
+  live-фидбеку **перенесены в контекстное меню**, весь ref-мост удалён как мёртвый код
+  (commit `2420325`). Subagent-driven (6 задач TDD, spec+quality ревью + финальное ревью
+  ветки = READY TO MERGE; relocation-амендмент ревью = APPROVED). Гейт: vitest 1036 · tsc ·
+  vite build (бинд-дрейфа нет). Остаток — live WebView2-проход (minimap при переполнении +
+  клик-прыжок; маленький ответ — без полосы; широкий скроллбар; right-click → Collapse/Expand all).
 
 - **Collapse all / Expand all — кнопки в шапке панели коллекций** (🎉 DONE 2026-06-18,
   ребейз+ff в `main`; план+спека `2026-06-17-collection-expand-collapse-all*` в

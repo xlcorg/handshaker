@@ -1,6 +1,6 @@
 # Навигация по большому ответу — minimap · scrollbar · collapse/expand all
 
-**Статус:** 📝 SPEC (на ревью) · 2026-06-19 · ветка `claude/sad-shtern-c77fd3`
+**Статус:** 🎉 DONE 2026-06-19 · ff в `main` (commit `2420325`) · остаток — live WebView2-проход.
 
 ## Проблема
 
