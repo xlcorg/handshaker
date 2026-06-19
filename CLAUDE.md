@@ -8,8 +8,10 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 
 Нет активной фичи в работе. Последняя влитая — **Навигация по большому ответу —
 minimap · scrollbar · collapse/expand all** (🎉 DONE 2026-06-19, ff в `main`
-`2420325`; план+спека `2026-06-19-large-response-navigation*` в `archive/`; остаток —
-live WebView2-проход; см. ниже).
+`2420325`; план+спека `2026-06-19-large-response-navigation*` в `archive/`;
+live-verified в WebView2; live-pass амендмент `d46c810` 2026-06-20 — минимапа
+**заменяет** вертикальный скроллбар в **обоих** редакторах тела, без «двух полос»;
+см. ниже).
 
 Интеграционная ветка — `main`; фичи ведутся в отдельных worktree-ветках
 (`claude/*`) и вливаются в `main` fast-forward.
@@ -38,8 +40,17 @@ live WebView2-проход; см. ниже).
   live-фидбеку **перенесены в контекстное меню**, весь ref-мост удалён как мёртвый код
   (commit `2420325`). Subagent-driven (6 задач TDD, spec+quality ревью + финальное ревью
   ветки = READY TO MERGE; relocation-амендмент ревью = APPROVED). Гейт: vitest 1036 · tsc ·
-  vite build (бинд-дрейфа нет). Остаток — live WebView2-проход (minimap при переполнении +
-  клик-прыжок; маленький ответ — без полосы; широкий скроллбар; right-click → Collapse/Expand all).
+  vite build (бинд-дрейфа нет). Live-verified в WebView2 (2026-06-20). **Live-pass амендмент
+  (2026-06-20, ff в `main` `d46c810`):** минимапа теперь **заменяет** вертикальный скроллбар,
+  а не соседствует с ним — при переполнении показывается одна минимапа с закреплённым слайдером
+  (`showSlider:"always"`), вертикаль скрывается (`vertical:"hidden"`), убирая «две полосы рядом»
+  (best-practice: VS Code держит скроллбар поверх минимапы, два параллельных бара — антипаттерн).
+  Size-gate вынесен из response-only в **оба** редактора тела (request+response) для единообразия;
+  маленькое тело — обычный скроллбар (`auto`, страхует 8px-зазор гейта), горизонталь не тронута
+  (word-wrap off → длинные значения скроллятся вбок). Чистый `minimapToggleOptions`
+  (`bodyview/minimapGate.ts`) переуказывает **полный** `scrollbar` в обоих состояниях
+  (`editor.updateOptions` заменяет объект опции целиком, не мёржит). TDD (helper-юнит +
+  интеграционный тест на оба режима). Гейт: vitest 1041 · tsc · vite build. Live-verified в WebView2.
 
 - **Collapse all / Expand all — кнопки в шапке панели коллекций** (🎉 DONE 2026-06-18,
   ребейз+ff в `main`; план+спека `2026-06-17-collection-expand-collapse-all*` в
