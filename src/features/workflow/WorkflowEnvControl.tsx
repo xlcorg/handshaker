@@ -7,6 +7,7 @@ import { EnvSwitcherMenu } from "@/features/envs/EnvSwitcherMenu";
 import { bumpEnvRevision, useEnvRevision } from "@/features/envs/envRevision";
 import { colorHex, resolveColorKey } from "@/features/envs/colors";
 import { isEnvCycleHotkey, nextEnvName } from "@/features/envs/cycle";
+import { isEnvEditHotkey } from "@/features/envs/openEditor";
 import { envList, envReorder } from "@/ipc/client";
 import type { EnvironmentIpc } from "@/ipc/bindings";
 
@@ -86,6 +87,20 @@ export function WorkflowEnvControl() {
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
   }, [envs, activeEnv]);
+
+  // Global Ctrl+Shift+E / Cmd+Shift+E opens Edit environment for the active env
+  // (no active env → create mode). Same capture-phase + stopPropagation discipline
+  // as the cycle hotkey so a focused Monaco editor never sees the key.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.repeat || !isEnvEditHotkey(e)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setEditor({ originalName: activeEnv });
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [activeEnv]);
 
   return (
     <>

@@ -135,12 +135,15 @@ export const EnvSwitcherMenu = forwardRef<HTMLButtonElement, EnvSwitcherMenuProp
             </div>
           ))}
           <DropdownMenuSeparator />
-          {/* Non-interactive footer hint for the global Ctrl+E / ⌘E env-cycle
-              hotkey (wired in WorkflowEnvControl). The keycap glyph is aria-hidden;
-              the label carries the meaning for screen readers. */}
+          {/* Non-interactive footer hints for the global env hotkeys (wired in
+              WorkflowEnvControl). Keycap glyphs are aria-hidden; labels carry meaning. */}
           <div className="flex items-center justify-between px-2 py-1 text-[10px] text-muted-foreground/70">
             <span>Cycle environment</span>
             <span aria-hidden>{isMacOS ? "⌘E" : "Ctrl+E"}</span>
+          </div>
+          <div className="flex items-center justify-between px-2 py-1 text-[10px] text-muted-foreground/70">
+            <span>Edit environment</span>
+            <span aria-hidden>{isMacOS ? "⇧⌘E" : "Ctrl+Shift+E"}</span>
           </div>
         </DropdownMenuContent>
       </DropdownMenu>

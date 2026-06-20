@@ -164,6 +164,14 @@ describe("EnvSwitcherMenu", () => {
     expect(document.querySelector("[data-drop-line]")).not.toBeNull();
   });
 
+  it("shows the Edit-environment hotkey hint in the footer", async () => {
+    const user = userEvent.setup();
+    setup();
+    await user.click(screen.getByText("env-trigger"));
+    expect(await screen.findByText("Cycle environment")).toBeInTheDocument();
+    expect(await screen.findByText("Edit environment")).toBeInTheDocument();
+  });
+
   it("dropping above a row's midpoint inserts before it", async () => {
     const user = userEvent.setup();
     // envs = [prod, local] so dragging local BEFORE prod → ["local", "prod"]
