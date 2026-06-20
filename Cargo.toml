@@ -11,7 +11,13 @@ authors = ["Handshaker Authors"]
 [workspace.dependencies]
 thiserror = "2"
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+# `preserve_order` makes serde_json's `Value::Object` an IndexMap (insertion order)
+# instead of the default BTreeMap (alphabetical). Tauri's IPC layer serializes
+# command results through `serde_json::to_value`, so without this the IndexMap order
+# of env/collection variables is silently re-sorted alphabetically on the way to the
+# WebView (and back through arg `from_value`). Feature unification applies it to
+# tauri's own serde_json too. See src-tauri/src/ipc/env.rs regression test.
+serde_json = { version = "1", features = ["preserve_order"] }
 http = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
 async-trait = "0.1"
