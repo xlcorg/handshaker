@@ -97,6 +97,7 @@ impl CollectionStore for FileCollectionStore {
 mod tests {
     use super::*;
     use crate::auth::SavedAuthConfig;
+    use indexmap::IndexMap;
     use uuid::Uuid;
 
     fn coll(id: u128, name: &str) -> Collection {
@@ -104,7 +105,7 @@ mod tests {
             id: CollectionId(Uuid::from_u128(id)),
             name: name.into(),
             items: vec![],
-            variables: HashMap::new(),
+            variables: IndexMap::new(),
             auth: SavedAuthConfig::None,
             default_tls: false,
             skip_tls_verify: false,
@@ -144,6 +145,31 @@ mod tests {
         assert!(store.get(CollectionId(Uuid::from_u128(1))).is_none());
         let store2 = FileCollectionStore::load(dir.path().to_path_buf()).unwrap();
         assert!(store2.list().is_empty());
+    }
+
+    #[test]
+    fn var_order_survives_reload() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = FileCollectionStore::load(dir.path().to_path_buf()).unwrap();
+        let ordered = [
+            ("zeta", "1"), ("alpha", "2"), ("mu", "3"), ("beta", "4"),
+            ("kappa", "5"), ("delta", "6"), ("iota", "7"), ("nu", "8"),
+        ];
+        let mut c = coll(1, "c");
+        for (k, v) in ordered {
+            c.variables.insert(k.to_string(), v.to_string());
+        }
+        store.upsert(c).unwrap();
+        drop(store);
+        let store2 = FileCollectionStore::load(dir.path().to_path_buf()).unwrap();
+        let keys: Vec<String> = store2
+            .get(CollectionId(Uuid::from_u128(1)))
+            .unwrap()
+            .variables
+            .keys()
+            .cloned()
+            .collect();
+        assert_eq!(keys, ordered.iter().map(|(k, _)| k.to_string()).collect::<Vec<_>>());
     }
 
     #[test]

@@ -28,6 +28,7 @@ prost-reflect.workspace = true     # features ["serde"] from workspace
 
 # Plan #4 — Env + Vars
 regex.workspace = true
+indexmap = { workspace = true }
 
 # Plan #6 — Collections
 uuid = { workspace = true }

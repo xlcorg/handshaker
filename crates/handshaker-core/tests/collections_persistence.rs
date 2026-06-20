@@ -2,7 +2,7 @@
 //! through a FileCollectionStore on a TempDir, drop + reconstruct, assert the
 //! tree survived. Mirrors the style of `tests/vars_end_to_end.rs`.
 
-use std::collections::HashMap;
+use indexmap::IndexMap;
 
 use handshaker_core::auth::SavedAuthConfig;
 use handshaker_core::collections::ids::{CollectionId, ItemId};
@@ -42,7 +42,7 @@ fn collection_tree_survives_restart() {
             items: vec![],
             expanded: false,
         })],
-        variables: HashMap::new(),
+        variables: IndexMap::new(),
         auth: SavedAuthConfig::None,
         default_tls: false,
         skip_tls_verify: false,

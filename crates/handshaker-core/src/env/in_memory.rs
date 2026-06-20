@@ -1,7 +1,8 @@
 //! In-memory implementation of [`EnvironmentStore`].
 
-use std::collections::HashMap;
 use std::sync::RwLock;
+
+use indexmap::IndexMap;
 
 use crate::error::CoreError;
 
@@ -24,7 +25,7 @@ impl InMemoryEnvironmentStore {
         Self {
             inner: RwLock::new(vec![Environment {
                 name: "Default".to_string(),
-                variables: HashMap::new(),
+                variables: IndexMap::new(),
                 color: None,
             }]),
         }
@@ -91,13 +92,13 @@ mod tests {
     #[test]
     fn upsert_inserts_and_replaces() {
         let s = InMemoryEnvironmentStore::new();
-        let mut vars = HashMap::new();
+        let mut vars = IndexMap::new();
         vars.insert("k".to_string(), "v1".to_string());
         s.upsert(Environment { name: "e1".into(), variables: vars, color: None }).unwrap();
         assert_eq!(s.get("e1").unwrap().variables.get("k"), Some(&"v1".to_string()));
 
         // Replace
-        let mut vars2 = HashMap::new();
+        let mut vars2 = IndexMap::new();
         vars2.insert("k".to_string(), "v2".to_string());
         s.upsert(Environment { name: "e1".into(), variables: vars2, color: None }).unwrap();
         assert_eq!(s.get("e1").unwrap().variables.get("k"), Some(&"v2".to_string()));
@@ -108,7 +109,7 @@ mod tests {
         let s = InMemoryEnvironmentStore::new();
         let err = s.upsert(Environment {
             name: "".into(),
-            variables: HashMap::new(),
+            variables: IndexMap::new(),
             color: None,
         }).unwrap_err();
         match err {
@@ -120,7 +121,7 @@ mod tests {
     #[test]
     fn delete_removes_silently_idempotent() {
         let s = InMemoryEnvironmentStore::new();
-        s.upsert(Environment { name: "e".into(), variables: HashMap::new(), color: None }).unwrap();
+        s.upsert(Environment { name: "e".into(), variables: IndexMap::new(), color: None }).unwrap();
         s.delete("e").unwrap();
         assert!(s.get("e").is_none());
         // Idempotent — delete missing returns Ok.
@@ -135,7 +136,7 @@ mod tests {
             let s = s.clone();
             handles.push(tokio::spawn(async move {
                 let name = format!("env_{i}");
-                let mut vars = HashMap::new();
+                let mut vars = IndexMap::new();
                 vars.insert("k".to_string(), format!("v_{i}"));
                 s.upsert(Environment { name, variables: vars, color: None }).unwrap();
                 let _ = s.list();
@@ -148,7 +149,7 @@ mod tests {
     }
 
     fn named(name: &str) -> Environment {
-        Environment { name: name.into(), variables: HashMap::new(), color: None }
+        Environment { name: name.into(), variables: IndexMap::new(), color: None }
     }
 
     #[test]
@@ -167,7 +168,7 @@ mod tests {
         for n in ["a", "b", "c"] {
             s.upsert(named(n)).unwrap();
         }
-        let mut vars = HashMap::new();
+        let mut vars = IndexMap::new();
         vars.insert("k".to_string(), "v".to_string());
         s.upsert(Environment { name: "b".into(), variables: vars, color: None }).unwrap();
         let names: Vec<_> = s.list().into_iter().map(|e| e.name).collect();

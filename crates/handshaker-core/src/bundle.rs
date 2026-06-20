@@ -52,7 +52,7 @@ pub fn read_bundle(path: &Path) -> Result<Bundle, CoreError> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
+    use indexmap::IndexMap;
 
     use uuid::Uuid;
 
@@ -65,7 +65,7 @@ mod tests {
             id: CollectionId(Uuid::from_u128(id)),
             name: name.into(),
             items: vec![],
-            variables: HashMap::new(),
+            variables: IndexMap::new(),
             auth: SavedAuthConfig::None,
             default_tls: false,
             skip_tls_verify: false,
@@ -77,7 +77,7 @@ mod tests {
     }
 
     fn sample_env(name: &str) -> Environment {
-        Environment { name: name.into(), variables: HashMap::new(), color: None }
+        Environment { name: name.into(), variables: IndexMap::new(), color: None }
     }
 
     #[test]

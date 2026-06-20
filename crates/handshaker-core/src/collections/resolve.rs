@@ -21,9 +21,14 @@ pub fn resolve_request(
     active_env: Option<&Environment>,
 ) -> Result<EffectiveRequest, CoreError> {
     // --- 1. Variables (priority env > collection) ---
-    let empty = HashMap::new();
-    let env_vars = active_env.map(|e| &e.variables).unwrap_or(&empty);
-    let vars = VariableSet { env: env_vars, collection: &collection.variables };
+    // VariableSet borrows `&HashMap` (resolution is order-agnostic). The stored
+    // maps are now IndexMap, so convert here — the maps are tiny.
+    let env_vars: HashMap<String, String> = active_env
+        .map(|e| e.variables.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+        .unwrap_or_default();
+    let collection_vars: HashMap<String, String> =
+        collection.variables.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+    let vars = VariableSet { env: &env_vars, collection: &collection_vars };
 
     let address = resolve_string(&request.address_template, &vars)?;
     let body_json = resolve_string(&request.body_template, &vars)?;

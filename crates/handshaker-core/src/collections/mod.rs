@@ -8,6 +8,7 @@
 
 use std::collections::HashMap;
 
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
 use crate::auth::{AuthCredentials, SavedAuthConfig};
@@ -40,7 +41,7 @@ pub struct Collection {
     pub id: CollectionId,
     pub name: String,
     pub items: Vec<Item>,
-    pub variables: HashMap<String, String>,
+    pub variables: IndexMap<String, String>,
     pub auth: SavedAuthConfig,
     pub default_tls: bool,
     pub skip_tls_verify: bool,
@@ -201,7 +202,7 @@ mod model_tests {
             id: CollectionId(Uuid::from_u128(2)),
             name: "c".into(),
             items: vec![],
-            variables: std::collections::HashMap::new(),
+            variables: IndexMap::new(),
             auth: SavedAuthConfig::None,
             default_tls: false,
             skip_tls_verify: false,

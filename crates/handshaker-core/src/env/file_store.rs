@@ -234,6 +234,25 @@ mod tests {
     }
 
     #[test]
+    fn var_order_survives_reload() {
+        // Insertion order of variables must round-trip through serde (HashMap would
+        // shuffle). 8 keys in a deliberately non-alphabetical order so a HashMap
+        // could not pass by luck.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("environments.json");
+        let store = FileEnvironmentStore::load(path.clone()).unwrap();
+        let ordered = [
+            ("zeta", "1"), ("alpha", "2"), ("mu", "3"), ("beta", "4"),
+            ("kappa", "5"), ("delta", "6"), ("iota", "7"), ("nu", "8"),
+        ];
+        store.upsert(env("prod", &ordered)).unwrap();
+        drop(store);
+        let store2 = FileEnvironmentStore::load(path).unwrap();
+        let keys: Vec<String> = store2.get("prod").unwrap().variables.keys().cloned().collect();
+        assert_eq!(keys, ordered.iter().map(|(k, _)| k.to_string()).collect::<Vec<_>>());
+    }
+
+    #[test]
     fn reorder_rejects_set_mismatch() {
         let dir = tempfile::tempdir().unwrap();
         let store = FileEnvironmentStore::load(dir.path().join("environments.json")).unwrap();

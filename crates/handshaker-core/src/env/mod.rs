@@ -4,7 +4,7 @@
 //! in [`in_memory`]. Active-env tracking is *not* a core concept — it's a Tauri
 //! session concept handled in `src-tauri/src/state.rs`.
 
-use std::collections::HashMap;
+use indexmap::IndexMap;
 
 use crate::error::CoreError;
 use serde::{Deserialize, Serialize};
@@ -16,7 +16,7 @@ pub mod in_memory;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Environment {
     pub name: String,
-    pub variables: HashMap<String, String>,
+    pub variables: IndexMap<String, String>,
     /// Optional palette-key color marker (e.g. "red"). `None` ⇒ frontend derives a
     /// default from the name. Stored opaquely; not validated here.
     #[serde(default)]
@@ -101,7 +101,7 @@ mod tests {
     }
 
     fn env(name: &str) -> Environment {
-        Environment { name: name.into(), variables: HashMap::new(), color: None }
+        Environment { name: name.into(), variables: IndexMap::new(), color: None }
     }
 
     #[test]

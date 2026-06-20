@@ -29,6 +29,8 @@ tonic-health = "0.14"   # dev-only filler service for bare-server integration te
 
 # Plan #4 — Env + Vars
 regex = "1"
+# Insertion-order-preserving map for env/collection variables (round-trips order).
+indexmap = { version = "2", features = ["serde"] }
 
 # Plan #6 — Collections
 uuid = { version = "1", features = ["v7", "serde"] }

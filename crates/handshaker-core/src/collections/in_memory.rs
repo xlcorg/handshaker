@@ -49,6 +49,7 @@ impl CollectionStore for InMemoryCollectionStore {
 mod tests {
     use super::*;
     use crate::auth::SavedAuthConfig;
+    use indexmap::IndexMap;
     use uuid::Uuid;
 
     fn coll(id: u128, name: &str) -> Collection {
@@ -56,7 +57,7 @@ mod tests {
             id: CollectionId(Uuid::from_u128(id)),
             name: name.into(),
             items: vec![],
-            variables: HashMap::new(),
+            variables: IndexMap::new(),
             auth: SavedAuthConfig::None,
             default_tls: false,
             skip_tls_verify: false,
