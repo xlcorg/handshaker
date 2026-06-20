@@ -44,12 +44,24 @@ describe("minimapToggleOptions", () => {
     expect(opts.scrollbar.vertical).toBe("auto");
   });
 
-  it("re-specifies the full scrollbar so updateOptions can't reset sibling fields to defaults", () => {
+  it("collapses the reserved scrollbar slot to 0 when the minimap shows (minimap sits flush to the edge)", () => {
+    // Monaco reserves `verticalScrollbarSize` px at the right edge for the vertical
+    // scrollbar REGARDLESS of `vertical:"hidden"` — its layout positions a right-side
+    // minimap at `outerWidth - minimapWidth - verticalScrollbarSize`. So hiding the
+    // scrollbar without also zeroing its size leaves a blank band between the minimap
+    // and the edge. Zero the size in the shown state to reclaim that slot.
+    expect(minimapToggleOptions(true).scrollbar.verticalScrollbarSize).toBe(0);
+  });
+
+  it("restores the grabbable 14px scrollbar when the minimap hides", () => {
+    expect(minimapToggleOptions(false).scrollbar.verticalScrollbarSize).toBe(14);
+  });
+
+  it("re-specifies the sibling scrollbar fields so updateOptions can't reset them to defaults", () => {
     // editor.updateOptions replaces the scrollbar option object; any unspecified
-    // field would fall back to a Monaco default. Keep size + scrollByPage present
-    // in BOTH toggle states (must stay in sync with EDITOR_OPTIONS.scrollbar).
+    // field would fall back to a Monaco default. Keep horizontal size + scrollByPage
+    // present in BOTH toggle states (in sync with EDITOR_OPTIONS.scrollbar).
     for (const opts of [minimapToggleOptions(true), minimapToggleOptions(false)]) {
-      expect(opts.scrollbar.verticalScrollbarSize).toBe(14);
       expect(opts.scrollbar.horizontalScrollbarSize).toBe(8);
       expect(opts.scrollbar.scrollByPage).toBe(true);
     }
