@@ -41,7 +41,11 @@ export function Tooltip({
   return (
     <TooltipRoot delayDuration={delayDuration}>
       <TooltipTrigger asChild>{children}</TooltipTrigger>
-      <TooltipContent side={side}>{content}</TooltipContent>
+      {/* Render the (portaled) content only when there's something to show. Keeping the
+       *  Root+Trigger always-mounted lets callers wrap children unconditionally without
+       *  remounting them when content toggles empty (the trigger child's tree position is
+       *  invariant); an empty `content` would otherwise pop an empty box on hover. */}
+      {content ? <TooltipContent side={side}>{content}</TooltipContent> : null}
     </TooltipRoot>
   );
 }

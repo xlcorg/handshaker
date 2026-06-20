@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import type { ReactElement } from "react";
+import { useState, type ReactElement } from "react";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import type { VarCandidate } from "./candidates";
 
@@ -73,6 +73,31 @@ describe("VarHighlightInput", () => {
     r(<VarHighlightInput value="" onChange={onChange} ariaLabel="addr" />);
     fireEvent.change(screen.getByLabelText("addr"), { target: { value: "h:1" } });
     expect(onChange).toHaveBeenCalledWith("h:1");
+  });
+
+  it("keeps the input focused (no remount) when a resolved field is cleared", async () => {
+    // Regression: the field used to flip its root element between <Tooltip>{field}</Tooltip>
+    // (resolved value present) and a bare <div> (empty value), which remounts the <input>
+    // and drops focus — so select-all + delete kicked the caret out of the field.
+    function Host() {
+      const [v, setV] = useState("{{host}}");
+      return (
+        <>
+          <VarHighlightInput value={v} onChange={setV} resolver={ok("api.staging")} ariaLabel="addr" />
+          <button onClick={() => setV("")}>clear</button>
+        </>
+      );
+    }
+    r(<Host />);
+    await waitFor(() => expect(screen.getByText("api.staging")).toBeInTheDocument()); // report resolved
+    const input = screen.getByLabelText("addr") as HTMLInputElement; // node after the resolve settled
+    input.focus();
+    expect(document.activeElement).toBe(input);
+
+    fireEvent.click(screen.getByText("clear")); // select-all + delete ⇒ value goes empty
+
+    expect(screen.getByLabelText("addr")).toBe(input); // same DOM node — not remounted
+    expect(document.activeElement).toBe(input); // focus preserved
   });
 });
 

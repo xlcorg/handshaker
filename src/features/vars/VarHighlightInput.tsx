@@ -1,7 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { cn } from "@/lib/cn";
-import { Tooltip } from "@/components/ui/tooltip";
+import { Tooltip, TooltipProvider } from "@/components/ui/tooltip";
 import { usePrefs } from "@/lib/use-prefs";
 import type { ResolutionReportIpc } from "@/ipc/bindings";
 
@@ -312,9 +312,15 @@ export function VarHighlightInput({
     </div>
   );
 
-  return tooltip ? (
-    <Tooltip content={tooltip}>{field}</Tooltip>
-  ) : (
-    field
+  // Always wrap in the same Tooltip so the field's tree position is invariant: toggling the
+  // wrapper (resolved value present ↔ empty) used to remount the <input> and drop focus —
+  // e.g. select-all + delete kicked the caret out of the field. The shared Tooltip renders
+  // no popup when `tooltip` is empty. A self-provided TooltipProvider keeps the input usable
+  // without an ancestor provider (the app supplies a global one in main.tsx; this just makes
+  // the component self-contained, including in tests).
+  return (
+    <TooltipProvider>
+      <Tooltip content={tooltip}>{field}</Tooltip>
+    </TooltipProvider>
   );
 }
