@@ -6,27 +6,57 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 
 ## Active work
 
-Активная фича — **Порядок переменных + хоткей открытия Edit environment**
-(✅ code-complete, гейт зелёный, финальное ревью READY TO MERGE; ветка
-`claude/peaceful-gauss-f0850e`; план+спека `2026-06-20-env-vars-order-edit-hotkey*`;
-остаток — live WebView2-проход + ff в `main`) — (1) `Environment.variables`/
-`Collection.variables` `HashMap` → `IndexMap` ⇒ порядок переменных переживает
-рестарт и экспорт (фронт не меняется; движок резолва на `&HashMap`, конвертация на
-границе; specta сворачивает `IndexMap` в тот же TS `Record` ⇒ без дрейфа bindings);
-(2) глобальный хоткей **Ctrl+Shift+E** открывает Edit environment активного
-окружения (нет активного → create-mode).
+Активная фича — нет (между фичами).
 
-Последняя влитая — **Автокомплит `{{var}}` (переменные окружения + коллекции)**
-(🎉 DONE 2026-06-19, ребейз+ff в `main` `8b0a611` 2026-06-20; план+спека
-`2026-06-19-var-autocomplete*` в `archive/`; остаток — live WebView2-проход).
-Предыдущая — **Навигация по большому ответу — minimap · scrollbar · collapse/expand
-all** (🎉 DONE 2026-06-19, ff в `main` `2420325`; live-pass амендмент `d46c810`
-2026-06-20 — минимапа **заменяет** вертикальный скроллбар в обоих редакторах тела).
+Последняя влитая — **Порядок переменных + хоткей открытия Edit environment**
+(🎉 DONE 2026-06-20, ff в `main`; план+спека `2026-06-20-env-vars-order-edit-hotkey*`
+в `archive/`) — (1) `Environment.variables`/`Collection.variables` `HashMap` →
+`IndexMap` ⇒ порядок переменных переживает рестарт и экспорт (фронт не меняется;
+движок резолва на `&HashMap`, конвертация на границе; specta сворачивает `IndexMap`
+в тот же TS `Record` ⇒ без дрейфа bindings); (2) глобальный хоткей **Ctrl+Shift+E**
+открывает Edit environment активного окружения (нет активного → create-mode).
+**Live-fix `110ee31`:** включён `serde_json` `preserve_order` — без него tauri-IPC
+(`to_value`, `Value::Object`=BTreeMap) пересортировывал переменные по алфавиту на
+границе (file-store-тесты это не ловили). Предыдущая — **Автокомплит `{{var}}`
+(переменные окружения + коллекции)** (🎉 DONE 2026-06-19, ff в `main` `8b0a611`;
+план+спека `2026-06-19-var-autocomplete*` в `archive/`).
 
 Интеграционная ветка — `main`; фичи ведутся в отдельных worktree-ветках
 (`claude/*`) и вливаются в `main` fast-forward.
 
 ### Завершённые фичи (всё в `archive/`)
+
+- **Порядок переменных + хоткей открытия Edit environment** (🎉 DONE 2026-06-20,
+  ff в `main`; план+спека `2026-06-20-env-vars-order-edit-hotkey*` в `archive/`) —
+  две независимые вещи. **(1) Порядок переменных** переживает рестарт/экспорт:
+  `Environment.variables`/`Collection.variables` `HashMap` → `IndexMap`
+  (insertion-order). Движок резолва (`VariableSet`) остаётся на `&HashMap` (порядок
+  ему безразличен) ⇒ конвертация на двух construction-сайтах (`collections/resolve.rs`,
+  `commands/vars.rs`). specta сворачивает `HashMap`/`IndexMap` в один `DataType::Map`
+  ⇒ тот же TS `Record` ⇒ **bindings не дрейфят, фронт не тронут**. **(2) Хоткей
+  Ctrl+Shift+E** открывает Edit environment активного окружения (нет активного →
+  create-mode): чистый предикат `isEnvEditHotkey` (физ. `e.code === "KeyE"` +
+  `shiftKey`, AltGr/Shift-гарды — зеркало `cycle.ts`; Ctrl+E цикл vs Ctrl+Shift+E
+  edit разводятся Shift) + capture-phase listener в `WorkflowEnvControl` +
+  footer-хинт в `EnvSwitcherMenu`. Subagent-driven (core+IPC+predicate+wire, spec+
+  quality ревью + финальное ревью = READY TO MERGE). **Live-fix `110ee31` (КЛЮЧЕВОЕ):**
+  весь гейт был зелёный, но вживую порядок не сохранялся — переменные алфавитились
+  при переоткрытии. Корень: tauri сериализует возвраты команд через
+  `serde_json::to_value`, а `serde_json::Value::Object` — `BTreeMap` (алфавит) без
+  фичи **`preserve_order`**. Порядок `IndexMap` доживал до файла (прямой `to_writer`,
+  без `Value` ⇒ file-store-тесты зелёные), но пересортировывался на границе IPC.
+  Фикс — `serde_json = { features = ["preserve_order"] }` в workspace `Cargo.toml`
+  (унификация фич применяет к собственному serde_json внутри tauri) + регресс-тест
+  `ipc/env.rs::to_value_preserves_variable_insertion_order` (RED→GREEN на границе
+  `to_value`). Побочка — скелеты запросов теперь в proto-порядке (улучшение, как
+  grpcurl/buf); тело ответа не затронуто (prost-reflect → `serde_json::Serializer`
+  напрямую). **Дизайн-решение:** оставлен `IndexMap` (порядок структурен, ноль
+  дрейфа bindings), НЕ поле `order` (денормализация+инвариант) и НЕ `Vec<VarEntry>`
+  (дрейф bindings+переписать фронт); к `Vec<VarEntry>` перейти ТОЛЬКО при нужде в
+  чисто числовых именах переменных (ECMAScript hoisting) или drag-reorder. Урок:
+  file-store round-trip НЕ ловит сериализационные баги границы IPC — нужен тест на
+  `to_value`. Гейт: `cargo test --workspace` (188+64) · vitest 1084 · tsc · vite
+  build · bindings no-drift. Live-verified в WebView2.
 
 - **Автокомплит `{{var}}` — переменные окружения + коллекции** (🎉 DONE 2026-06-19,
   code-complete на ветке `claude/peaceful-gauss-f0850e`; план+спека
