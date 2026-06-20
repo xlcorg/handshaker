@@ -96,6 +96,10 @@ pub async fn grpc_refresh_contract(
 }
 
 /// Build a JSON skeleton from the cached pool. On a cache miss, activate first.
+///
+/// The reflecting path (miss only) runs under `race_cancel_timeout`, so it honors the
+/// caller's deadline and can be cancelled by `grpc_cancel(request_id)` — otherwise a
+/// slow/unreachable endpoint would hang this command with no bound and no cancel path.
 #[tauri::command]
 #[specta::specta]
 pub async fn grpc_build_request_skeleton(
@@ -103,6 +107,8 @@ pub async fn grpc_build_request_skeleton(
     target: GrpcTargetIpc,
     service: String,
     method: String,
+    request_id: String,
+    timeout_ms: u32,
 ) -> Result<String, IpcError> {
     let target = target.into_core()?;
     let key = ContractKey::from_target(&target);
@@ -110,9 +116,13 @@ pub async fn grpc_build_request_skeleton(
     if let Some(cached) = state.contract_cache.get(&key) {
         return Ok(build_request_skeleton_from_pool(&cached.pool, &service, &method)?);
     }
-    let transport = Arc::new(TonicTransport::new());
-    let conn = activate(target, transport, state.contract_cache.as_ref()).await?;
-    Ok(build_request_skeleton_from_pool(&conn.pool, &service, &method)?)
+    let cache = state.contract_cache.clone();
+    let work = async move {
+        let transport = Arc::new(TonicTransport::new());
+        let conn = activate(target, transport, cache.as_ref()).await?;
+        Ok::<String, IpcError>(build_request_skeleton_from_pool(&conn.pool, &service, &method)?)
+    };
+    race_cancel_timeout(&state.in_flight, request_id, timeout_ms, work).await
 }
 
 /// Build the flat field-schema for a method's input or output message — drives autocomplete
@@ -126,6 +136,8 @@ pub async fn grpc_message_schema(
     service: String,
     method: String,
     side: MessageSideIpc,
+    request_id: String,
+    timeout_ms: u32,
 ) -> Result<MessageSchemaIpc, IpcError> {
     let target = target.into_core()?;
     let key = ContractKey::from_target(&target);
@@ -133,9 +145,15 @@ pub async fn grpc_message_schema(
     if let Some(cached) = state.contract_cache.get(&key) {
         return Ok(build_message_schema_from_pool(&cached.pool, &service, &method, side.into())?.into());
     }
-    let transport = Arc::new(TonicTransport::new());
-    let conn = activate(target, transport, state.contract_cache.as_ref()).await?;
-    Ok(build_message_schema_from_pool(&conn.pool, &service, &method, side.into())?.into())
+    let cache = state.contract_cache.clone();
+    let work = async move {
+        let transport = Arc::new(TonicTransport::new());
+        let conn = activate(target, transport, cache.as_ref()).await?;
+        Ok::<MessageSchemaIpc, IpcError>(
+            build_message_schema_from_pool(&conn.pool, &service, &method, side.into())?.into(),
+        )
+    };
+    race_cancel_timeout(&state.in_flight, request_id, timeout_ms, work).await
 }
 
 /// Sentinel transport messages classified on the frontend (Transport(msg) reuse — see the
@@ -149,11 +167,16 @@ fn timed_out_msg(ms: u32) -> String {
 struct DeregisterGuard<'a> {
     map: &'a InFlight,
     id: String,
+    notify: Arc<Notify>,
 }
 impl Drop for DeregisterGuard<'_> {
     fn drop(&mut self) {
         if let Ok(mut g) = self.map.lock() {
-            g.remove(&self.id);
+            // Remove only OUR entry: if a later request reused this id and overwrote the
+            // slot, its `Notify` differs by identity — leave it so it stays cancelable.
+            if g.get(&self.id).is_some_and(|n| Arc::ptr_eq(n, &self.notify)) {
+                g.remove(&self.id);
+            }
         }
     }
 }
@@ -175,7 +198,7 @@ where
         .lock()
         .expect("in_flight registry poisoned")
         .insert(request_id.clone(), notify.clone());
-    let _guard = DeregisterGuard { map: in_flight, id: request_id };
+    let _guard = DeregisterGuard { map: in_flight, id: request_id, notify: notify.clone() };
 
     tokio::select! {
         biased;
@@ -289,6 +312,69 @@ mod tests {
             other => panic!("expected timeout Transport, got {other:?}"),
         }
         assert!(m.lock().unwrap().is_empty(), "registry entry removed on timeout");
+    }
+
+    #[tokio::test]
+    async fn duplicate_id_cleanup_keeps_the_later_registration_cancelable() {
+        // Two in-flight calls reuse the same request_id: B registers after A and
+        // overwrites the slot. When A finishes, its guard must remove ONLY its own
+        // entry (ptr-eq), leaving B cancelable. The old by-id removal clobbered B,
+        // so cancelling it did nothing and it timed out instead of cancelling.
+        let m = empty_in_flight();
+        let id = "dup";
+
+        let a_registered = Arc::new(Notify::new());
+        let release_a = Arc::new(Notify::new());
+        let b_registered = Arc::new(Notify::new());
+        let a_done = Arc::new(Notify::new());
+
+        // A: signals once registered, then blocks until released, then completes. The
+        // work future owns its clones; the driver futures below borrow the originals.
+        let work_a = {
+            let (a_registered, release_a) = (a_registered.clone(), release_a.clone());
+            async move {
+                a_registered.notify_one();
+                release_a.notified().await;
+                Ok::<i32, IpcError>(1)
+            }
+        };
+        // B: registers only after A (so it overwrites A's slot), then waits to be cancelled.
+        let work_b = {
+            let b_registered = b_registered.clone();
+            async move {
+                b_registered.notify_one();
+                std::future::pending::<()>().await;
+                Ok::<i32, IpcError>(2)
+            }
+        };
+
+        let a_future = async {
+            let r = race_cancel_timeout(&m, id.to_string(), 60_000, work_a).await;
+            a_done.notify_one();
+            r
+        };
+        let b_future = async {
+            a_registered.notified().await;
+            race_cancel_timeout(&m, id.to_string(), 2_000, work_b).await
+        };
+
+        let orchestrator = async {
+            b_registered.notified().await; // both registered; map[id] now holds B's notify
+            release_a.notify_one(); // let A finish → A's DeregisterGuard drops
+            a_done.notified().await; // A's guard has dropped
+            // Cancel by id, mirroring grpc_cancel.
+            if let Some(n) = m.lock().unwrap().get(id).cloned() {
+                n.notify_one();
+            }
+        };
+
+        let (_a, b, _o) = tokio::join!(a_future, b_future, orchestrator);
+        match b {
+            Err(IpcError::Transport { message }) => {
+                assert!(message.contains("cancelled"), "expected B cancelled, got: {message}")
+            }
+            other => panic!("expected B cancelled, got {other:?}"),
+        }
     }
 
     #[tokio::test]

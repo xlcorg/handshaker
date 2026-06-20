@@ -14,6 +14,19 @@ async appVersion() : Promise<AppVersion> {
     return await TAURI_INVOKE("app_version");
 },
 /**
+ * Drain the files quarantined as corrupt during startup load. The frontend calls this
+ * once on mount to show a "recovered from a corrupt file" notice; it returns each path
+ * only once (subsequent calls are empty), so the notice shows a single time per launch.
+ */
+async startupRecoveryTake() : Promise<Result<string[], IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("startup_recovery_take") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
  * Cache-first contract describe. On a cache hit, returns the cached catalog
  * WITHOUT opening a channel (auto-reflect-on-blur fires often). On a miss,
  * `activate()` reflects + populates the cache, then the connection is dropped.
@@ -44,10 +57,14 @@ async grpcRefreshContract(target: GrpcTargetIpc, requestId: string, timeoutMs: n
 },
 /**
  * Build a JSON skeleton from the cached pool. On a cache miss, activate first.
+ * 
+ * The reflecting path (miss only) runs under `race_cancel_timeout`, so it honors the
+ * caller's deadline and can be cancelled by `grpc_cancel(request_id)` — otherwise a
+ * slow/unreachable endpoint would hang this command with no bound and no cancel path.
  */
-async grpcBuildRequestSkeleton(target: GrpcTargetIpc, service: string, method: string) : Promise<Result<string, IpcError>> {
+async grpcBuildRequestSkeleton(target: GrpcTargetIpc, service: string, method: string, requestId: string, timeoutMs: number) : Promise<Result<string, IpcError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("grpc_build_request_skeleton", { target, service, method }) };
+    return { status: "ok", data: await TAURI_INVOKE("grpc_build_request_skeleton", { target, service, method, requestId, timeoutMs }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -58,9 +75,9 @@ async grpcBuildRequestSkeleton(target: GrpcTargetIpc, service: string, method: s
  * and the contract view. Same cache discipline as `grpc_build_request_skeleton`: cache
  * hit → build from the pool; miss → `activate` first.
  */
-async grpcMessageSchema(target: GrpcTargetIpc, service: string, method: string, side: MessageSideIpc) : Promise<Result<MessageSchemaIpc, IpcError>> {
+async grpcMessageSchema(target: GrpcTargetIpc, service: string, method: string, side: MessageSideIpc, requestId: string, timeoutMs: number) : Promise<Result<MessageSchemaIpc, IpcError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("grpc_message_schema", { target, service, method, side }) };
+    return { status: "ok", data: await TAURI_INVOKE("grpc_message_schema", { target, service, method, side, requestId, timeoutMs }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };

@@ -33,6 +33,13 @@ export async function appVersion(): Promise<string> {
   return r.version;
 }
 
+/** Drain the list of files quarantined as corrupt during startup load (one-shot). */
+export async function startupRecoveryTake(): Promise<string[]> {
+  const r = await commands.startupRecoveryTake();
+  if (r.status === "error") throw r.error;
+  return r.data;
+}
+
 // Reflection carries the same (requestId, deadline) surface as invoke, so a slow/hung
 // describe times out and can be aborted via `grpcCancel(requestId)`. Defaults serve any
 // caller without a cancel/timeout surface: a fresh id keeps registry entries unique,
@@ -61,8 +68,13 @@ export async function grpcBuildRequestSkeleton(
   target: GrpcTargetIpc,
   service: string,
   method: string,
+  // On a cache miss the backend dials the endpoint, so carry the same (requestId,
+  // deadline) surface as describe/invoke: a fresh id bounds the registry entry and
+  // 30_000ms caps an otherwise-unbounded reflection hang.
+  requestId = newId(),
+  timeoutMs = 30_000,
 ): Promise<string> {
-  const r = await commands.grpcBuildRequestSkeleton(target, service, method);
+  const r = await commands.grpcBuildRequestSkeleton(target, service, method, requestId, timeoutMs);
   if (r.status === "error") throw r.error;
   return r.data;
 }
@@ -72,8 +84,10 @@ export async function grpcMessageSchema(
   service: string,
   method: string,
   side: MessageSideIpc,
+  requestId = newId(),
+  timeoutMs = 30_000,
 ): Promise<MessageSchemaIpc> {
-  const r = await commands.grpcMessageSchema(target, service, method, side);
+  const r = await commands.grpcMessageSchema(target, service, method, side, requestId, timeoutMs);
   if (r.status === "error") throw r.error;
   return r.data;
 }
@@ -303,6 +317,7 @@ export async function base64SaveEncoded(input: string): Promise<string | null> {
 
 export const ipc = {
   appVersion,
+  startupRecoveryTake,
   grpcDescribe,
   grpcRefreshContract,
   grpcInvokeOneshot,
