@@ -6,14 +6,19 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 
 ## Active work
 
-Последняя завершённая фича — **Автокомплит `{{var}}` (переменные окружения +
-коллекции)** (🎉 DONE 2026-06-19, code-complete на ветке
-`claude/peaceful-gauss-f0850e`; план+спека `2026-06-19-var-autocomplete*` в
-`archive/`; остаток — вливание в `main` fast-forward + live WebView2-проход;
-см. ниже). Предыдущая влитая — **Навигация по большому ответу — minimap · scrollbar
-· collapse/expand all** (🎉 DONE 2026-06-19, ff в `main` `2420325`; live-pass
-амендмент `d46c810` 2026-06-20 — минимапа **заменяет** вертикальный скроллбар в
-**обоих** редакторах тела, без «двух полос»).
+Активная фича — **Порядок переменных + хоткей открытия Edit environment**
+(🚧 спека утверждена, имплементация впереди; ветка `claude/peaceful-gauss-f0850e`;
+спека `docs/superpowers/specs/2026-06-20-env-vars-order-edit-hotkey-design.md`) —
+(1) `Environment.variables`/`Collection.variables` `HashMap` → `IndexMap` ⇒ порядок
+переменных переживает рестарт и экспорт (фронт не меняется); (2) глобальный хоткей
+**Ctrl+Shift+E** открывает Edit environment активного окружения.
+
+Последняя влитая — **Автокомплит `{{var}}` (переменные окружения + коллекции)**
+(🎉 DONE 2026-06-19, ребейз+ff в `main` `8b0a611` 2026-06-20; план+спека
+`2026-06-19-var-autocomplete*` в `archive/`; остаток — live WebView2-проход).
+Предыдущая — **Навигация по большому ответу — minimap · scrollbar · collapse/expand
+all** (🎉 DONE 2026-06-19, ff в `main` `2420325`; live-pass амендмент `d46c810`
+2026-06-20 — минимапа **заменяет** вертикальный скроллбар в обоих редакторах тела).
 
 Интеграционная ветка — `main`; фичи ведутся в отдельных worktree-ветках
 (`claude/*`) и вливаются в `main` fast-forward.
