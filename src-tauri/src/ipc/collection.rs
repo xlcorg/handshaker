@@ -4,7 +4,7 @@
 //! `ItemIpc` is a `#[serde(tag = "type")]` tagged union — the frontend (#3)
 //! discriminates on `type` ("folder" | "request").
 
-use std::collections::HashMap;
+use indexmap::IndexMap;
 
 use handshaker_core::auth::{
     EnvVarAuthConfig, OAuth2ClientCredentialsConfig, SavedAuthConfig,
@@ -221,7 +221,7 @@ pub struct CollectionIpc {
     pub id: String,
     pub name: String,
     pub items: Vec<ItemIpc>,
-    pub variables: HashMap<String, String>,
+    pub variables: IndexMap<String, String>,
     pub auth: SavedAuthConfigIpc,
     pub default_tls: bool,
     pub skip_tls_verify: bool,
@@ -322,7 +322,7 @@ mod tests {
                 })],
                 expanded: true,
             })],
-            variables: HashMap::new(),
+            variables: IndexMap::new(),
             auth: SavedAuthConfig::None,
             default_tls: false,
             skip_tls_verify: false,
@@ -391,7 +391,7 @@ mod tests {
             id: "not-a-uuid".into(),
             name: "c".into(),
             items: vec![],
-            variables: HashMap::new(),
+            variables: IndexMap::new(),
             auth: SavedAuthConfigIpc::None,
             default_tls: false,
             skip_tls_verify: false,

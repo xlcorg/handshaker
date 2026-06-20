@@ -133,7 +133,7 @@ pub async fn bundle_import_apply(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
+    use indexmap::IndexMap;
 
     use handshaker_core::bundle::read_bundle;
     use uuid::Uuid;
@@ -147,7 +147,7 @@ mod tests {
             id: Uuid::from_u128(id).to_string(),
             name: name.into(),
             items: vec![],
-            variables: HashMap::new(),
+            variables: IndexMap::new(),
             auth: SavedAuthConfigIpc::None,
             default_tls: false,
             skip_tls_verify: false,
@@ -167,14 +167,14 @@ mod tests {
         let source = AppState::default();
         source.collection_upsert_impl(empty_collection_ipc(1, "c1")).unwrap();
         source.collection_upsert_impl(empty_collection_ipc(2, "c2")).unwrap();
-        source.env_upsert_impl(handshaker_core::env::Environment { name: "prod".into(), variables: HashMap::new(), color: None }).unwrap();
-        source.env_upsert_impl(handshaker_core::env::Environment { name: "staging".into(), variables: HashMap::new(), color: None }).unwrap();
+        source.env_upsert_impl(handshaker_core::env::Environment { name: "prod".into(), variables: IndexMap::new(), color: None }).unwrap();
+        source.env_upsert_impl(handshaker_core::env::Environment { name: "staging".into(), variables: IndexMap::new(), color: None }).unwrap();
         source.bundle_export_impl(src.to_string_lossy().into_owned(), None).unwrap();
 
         // Target already has c1 (id collision) + env prod (name collision).
         let target = AppState::default();
         target.collection_upsert_impl(empty_collection_ipc(1, "c1-local")).unwrap();
-        target.env_upsert_impl(handshaker_core::env::Environment { name: "prod".into(), variables: HashMap::new(), color: None }).unwrap();
+        target.env_upsert_impl(handshaker_core::env::Environment { name: "prod".into(), variables: IndexMap::new(), color: None }).unwrap();
 
         let summary = target.bundle_import_inspect_impl(src.to_string_lossy().into_owned()).unwrap();
         assert_eq!(summary.collections_total, 2);
@@ -196,7 +196,7 @@ mod tests {
         state
             .env_upsert_impl(handshaker_core::env::Environment {
                 name: "prod".into(),
-                variables: HashMap::new(),
+                variables: IndexMap::new(),
                 color: None,
             })
             .unwrap();
@@ -218,7 +218,7 @@ mod tests {
         state
             .env_upsert_impl(handshaker_core::env::Environment {
                 name: "prod".into(),
-                variables: HashMap::new(),
+                variables: IndexMap::new(),
                 color: None,
             })
             .unwrap();
@@ -300,20 +300,20 @@ mod tests {
         // Imported color Some(..) overwrites the existing color.
         let a = dir.path().join("a.json");
         let src_a = AppState::default();
-        src_a.env_upsert_impl(Environment { name: "e".into(), variables: HashMap::new(), color: Some("blue".into()) }).unwrap();
+        src_a.env_upsert_impl(Environment { name: "e".into(), variables: IndexMap::new(), color: Some("blue".into()) }).unwrap();
         src_a.bundle_export_impl(a.to_string_lossy().into_owned(), None).unwrap();
         let tgt_a = AppState::default();
-        tgt_a.env_upsert_impl(Environment { name: "e".into(), variables: HashMap::new(), color: Some("red".into()) }).unwrap();
+        tgt_a.env_upsert_impl(Environment { name: "e".into(), variables: IndexMap::new(), color: Some("red".into()) }).unwrap();
         tgt_a.bundle_import_apply_impl(a.to_string_lossy().into_owned()).unwrap();
         assert_eq!(tgt_a.env_store.get("e").unwrap().color.as_deref(), Some("blue"));
 
         // Imported color None preserves the existing color.
         let b = dir.path().join("b.json");
         let src_b = AppState::default();
-        src_b.env_upsert_impl(Environment { name: "e".into(), variables: HashMap::new(), color: None }).unwrap();
+        src_b.env_upsert_impl(Environment { name: "e".into(), variables: IndexMap::new(), color: None }).unwrap();
         src_b.bundle_export_impl(b.to_string_lossy().into_owned(), None).unwrap();
         let tgt_b = AppState::default();
-        tgt_b.env_upsert_impl(Environment { name: "e".into(), variables: HashMap::new(), color: Some("red".into()) }).unwrap();
+        tgt_b.env_upsert_impl(Environment { name: "e".into(), variables: IndexMap::new(), color: Some("red".into()) }).unwrap();
         tgt_b.bundle_import_apply_impl(b.to_string_lossy().into_owned()).unwrap();
         assert_eq!(tgt_b.env_store.get("e").unwrap().color.as_deref(), Some("red"));
     }

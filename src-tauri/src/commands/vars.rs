@@ -1,6 +1,8 @@
 //! Variable substitution IPC command. See spec §5.1 and
 //! docs/superpowers/specs/2026-06-13-collection-vars-resolve-design.md.
 
+use std::collections::HashMap;
+
 use handshaker_core::vars::{resolve_template_with_diagnostics, ResolutionReport, VariableSet};
 use tauri::State;
 
@@ -20,25 +22,25 @@ impl AppState {
         ctx: Option<VarsResolveCtxIpc>,
     ) -> ResolutionReport {
         let ctx = ctx.unwrap_or_default();
-        let env_owned = match ctx.env_vars {
+        let env_owned: HashMap<String, String> = match ctx.env_vars {
             Some(vars) => vars,
             None => {
                 let active = self.active_env.read().await.clone();
                 active
                     .as_deref()
                     .and_then(|n| self.env_store.get(n))
-                    .map(|e| e.variables)
+                    .map(|e| e.variables.into_iter().collect())
                     .unwrap_or_default()
             }
         };
-        let collection_owned = match ctx.collection_vars {
+        let collection_owned: HashMap<String, String> = match ctx.collection_vars {
             Some(vars) => vars,
             None => ctx
                 .collection_id
                 .as_deref()
                 .and_then(|id| parse_collection_id(id).ok())
                 .and_then(|cid| self.collection_store.get(cid))
-                .map(|c| c.variables)
+                .map(|c| c.variables.into_iter().collect())
                 .unwrap_or_default(),
         };
         let vars = VariableSet {
@@ -106,7 +108,7 @@ mod tests {
                 id: cid,
                 name: "Notes".into(),
                 items: vec![],
-                variables: map(&[("uri-root", "{{notes-api-root}}")]),
+                variables: map(&[("uri-root", "{{notes-api-root}}")]).into_iter().collect(),
                 auth: SavedAuthConfig::None,
                 default_tls: false,
                 skip_tls_verify: false,

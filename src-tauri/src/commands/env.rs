@@ -109,7 +109,7 @@ pub async fn env_reorder(state: State<'_, AppState>, names: Vec<String>) -> Resu
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
+    use indexmap::IndexMap;
     use std::sync::Arc;
 
     use handshaker_core::collections::in_memory::InMemoryCollectionStore;
@@ -123,7 +123,7 @@ mod tests {
     fn build_state(envs: &[(&str, &[(&str, &str)])], active: Option<&str>) -> AppState {
         let store = InMemoryEnvironmentStore::new();
         for (name, vars) in envs {
-            let mut map = HashMap::new();
+            let mut map = IndexMap::new();
             for (k, v) in *vars {
                 map.insert(k.to_string(), v.to_string());
             }

@@ -37,8 +37,9 @@ tauri-plugin-process = { workspace = true }
 tauri-plugin-decorum = { workspace = true }
 tauri-plugin-dialog = { workspace = true }
 tauri-specta = { workspace = true }
-specta = { workspace = true }
+specta = { workspace = true, features = ["indexmap"] }
 specta-typescript = { workspace = true }
+indexmap = { workspace = true }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

@@ -3,7 +3,7 @@
 //! unit-testable without Tauri's `State<'_, T>` plumbing — see the `#[cfg(test)]`
 //! block at the bottom.
 
-use std::collections::HashMap;
+use indexmap::IndexMap;
 
 use handshaker_core::collections::ids::{CollectionId, ItemId};
 use handshaker_core::collections::{tree, Item};
@@ -51,7 +51,7 @@ impl AppState {
         self.collection_store.delete(cid)
     }
 
-    pub fn collection_set_variables_impl(&self, id: &str, vars: HashMap<String, String>) -> Result<(), CoreError> {
+    pub fn collection_set_variables_impl(&self, id: &str, vars: IndexMap<String, String>) -> Result<(), CoreError> {
         let cid = parse_collection_id(id)?;
         let mut c = self.require_collection(cid)?;
         c.variables = vars;
@@ -253,7 +253,7 @@ pub async fn collection_delete(state: State<'_, AppState>, id: String) -> Result
 
 #[tauri::command]
 #[specta::specta]
-pub async fn collection_set_variables(state: State<'_, AppState>, id: String, vars: HashMap<String, String>) -> Result<(), IpcError> {
+pub async fn collection_set_variables(state: State<'_, AppState>, id: String, vars: IndexMap<String, String>) -> Result<(), IpcError> {
     state.collection_set_variables_impl(&id, vars).map_err(IpcError::from)
 }
 
@@ -336,6 +336,7 @@ mod tests {
     use super::*;
     use crate::ipc::collection::{FolderIpc, SavedRequestIpc};
     use handshaker_core::collections::CollectionStore;
+    use std::collections::HashMap;
     use uuid::Uuid;
 
     fn empty_collection_ipc(id: u128, name: &str) -> CollectionIpc {
@@ -343,7 +344,7 @@ mod tests {
             id: Uuid::from_u128(id).to_string(),
             name: name.into(),
             items: vec![],
-            variables: HashMap::new(),
+            variables: IndexMap::new(),
             auth: SavedAuthConfigIpc::None,
             default_tls: false,
             skip_tls_verify: false,

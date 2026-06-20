@@ -1,6 +1,6 @@
 //! IPC wrapper for `Environment` — adds `specta::Type` and serde derives.
 
-use std::collections::HashMap;
+use indexmap::IndexMap;
 
 use handshaker_core::env::Environment;
 use serde::{Deserialize, Serialize};
@@ -9,7 +9,7 @@ use specta::Type;
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct EnvironmentIpc {
     pub name: String,
-    pub variables: HashMap<String, String>,
+    pub variables: IndexMap<String, String>,
     pub color: Option<String>,
 }
 
