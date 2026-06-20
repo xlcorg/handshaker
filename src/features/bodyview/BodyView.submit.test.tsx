@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render } from "@testing-library/react";
 
-// Capture the keybinding + handler that BodyView registers via editor.addCommand.
-const captured = vi.hoisted(() => ({ keybinding: 0, handler: undefined as undefined | (() => void) }));
+// Capture every keybinding + handler BodyView registers via editor.addCommand.
+const captured = vi.hoisted(() => ({
+  commands: [] as Array<{ keybinding: number; handler: () => void }>,
+}));
 
 // Mock Monaco so the MonacoEditor stub actually invokes onMount with a fake
 // editor/monaco — the default BodyView.test mock does not, so onMount (and the
@@ -15,13 +17,12 @@ vi.mock("@/lib/monaco", () => ({
   }) => {
     const monaco = {
       KeyMod: { CtrlCmd: 2048 },
-      KeyCode: { Enter: 3 },
+      KeyCode: { Enter: 3, KeyR: 48 },
     };
     const editor = {
       getValue: () => "{}",
       addCommand: (keybinding: number, handler: () => void) => {
-        captured.keybinding = keybinding;
-        captured.handler = handler;
+        captured.commands.push({ keybinding, handler });
       },
       getModel: () => null,
       getLayoutInfo: () => ({ contentLeft: 0 }),
@@ -61,26 +62,36 @@ vi.mock("./controller", () => ({
 
 import { BodyView } from "./BodyView";
 
-describe("BodyView Ctrl+Enter submit", () => {
+describe("BodyView Send submit shortcuts", () => {
   beforeEach(() => {
-    captured.keybinding = 0;
-    captured.handler = undefined;
+    captured.commands = [];
   });
 
   it("binds Ctrl/Cmd+Enter and forwards it to onSubmit", () => {
     const onSubmit = vi.fn();
     render(<BodyView mode="request" value="{}" onChange={vi.fn()} onSubmit={onSubmit} />);
     // CtrlCmd | Enter === 2048 | 3
-    expect(captured.keybinding).toBe(2048 | 3);
-    captured.handler?.();
+    const enter = captured.commands.find((c) => c.keybinding === (2048 | 3));
+    expect(enter).toBeDefined();
+    enter!.handler();
     expect(onSubmit).toHaveBeenCalledTimes(1);
   });
 
-  // Regression: the read-only response editor (no onSubmit) must NOT register the
+  it("also binds Ctrl/Cmd+R and forwards it to onSubmit", () => {
+    const onSubmit = vi.fn();
+    render(<BodyView mode="request" value="{}" onChange={vi.fn()} onSubmit={onSubmit} />);
+    // CtrlCmd | KeyR === 2048 | 48
+    const ctrlR = captured.commands.find((c) => c.keybinding === (2048 | 48));
+    expect(ctrlR).toBeDefined();
+    ctrlR!.handler();
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  // Regression: the read-only response editor (no onSubmit) must NOT register any
   // command — Monaco's addCommand is global/last-wins, so a no-op registration
-  // would clobber the request editor's shortcut after the first response renders.
-  it("does not bind the command when there is no onSubmit (response editor)", () => {
+  // would clobber the request editor's shortcuts after the first response renders.
+  it("does not bind any command when there is no onSubmit (response editor)", () => {
     render(<BodyView mode="response" value="{}" />);
-    expect(captured.handler).toBeUndefined();
+    expect(captured.commands).toHaveLength(0);
   });
 });

@@ -19,6 +19,7 @@ import {
   varsResolverFor,
 } from "./actions";
 import { workflowStore } from "./store";
+import { isSendHotkey } from "./sendHotkey";
 import { useEnvRevision } from "@/features/envs/envRevision";
 import { useActiveEnvVars } from "@/features/envs/useActiveEnvVars";
 import { buildVarCandidates } from "@/features/vars/candidates";
@@ -110,9 +111,11 @@ export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMetho
     if (step.requestId) void cancelStep(step.requestId);
   };
 
-  // Ctrl/Cmd+Enter sends the active draft (mirrors the Send button). Bound only
-  // for the editable Focus draft so history re-send panels don't all fire at once.
-  // A ref holds the freshest send logic so the window listener binds once.
+  // Ctrl/Cmd+Enter and Ctrl/Cmd+R send the active draft (mirrors the Send button).
+  // Bound only for the editable Focus draft so history re-send panels don't all
+  // fire at once. A ref holds the freshest send logic so the window listener binds
+  // once. (Monaco swallows these chords while the request editor has focus, so
+  // BodyView re-binds them as editor commands too.)
   const sendShortcutRef = useRef<() => void>(() => {});
   sendShortcutRef.current = () => {
     if (step.status === "sending" || step.method.trim().length === 0) return;
@@ -121,10 +124,10 @@ export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMetho
   useEffect(() => {
     if (!editable) return;
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-        e.preventDefault();
-        sendShortcutRef.current();
-      }
+      if (!isSendHotkey(e)) return;
+      // preventDefault also suppresses the WebView's built-in Ctrl+R reload.
+      e.preventDefault();
+      sendShortcutRef.current();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

@@ -74,6 +74,17 @@ describe("CallPanel editable", () => {
     expect(onPatch).toHaveBeenCalledWith(expect.objectContaining({ status: "sending" }));
   });
 
+  it("Ctrl+R also sends the editable draft (physical-key, layout-independent)", () => {
+    const onPatch = vi.fn();
+    render(
+      <TooltipProvider>
+        <CallPanel step={draft} onPatch={onPatch} editable />
+      </TooltipProvider>
+    );
+    fireEvent.keyDown(window, { code: "KeyR", key: "r", ctrlKey: true });
+    expect(onPatch).toHaveBeenCalledWith(expect.objectContaining({ status: "sending" }));
+  });
+
   it("does not start a second send when already sending (button stays Send pre-gate)", () => {
     const onPatch = vi.fn();
     const sendingStep = { ...draft, status: "sending" as const };

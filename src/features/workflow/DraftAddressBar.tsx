@@ -89,7 +89,7 @@ export function DraftAddressBar({
           Cancel
         </Button>
       ) : (
-        <Tooltip content={<span><Kbd>Ctrl</Kbd> <Kbd>Enter</Kbd></span>}>
+        <Tooltip content={<span><Kbd>Ctrl</Kbd> <Kbd>Enter</Kbd> · <Kbd>Ctrl</Kbd> <Kbd>R</Kbd></span>}>
           <Button
             size="sm"
             onClick={onSend}

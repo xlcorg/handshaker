@@ -319,9 +319,14 @@ export function BodyView({ mode, value, onChange, onSubmit, schema, varCandidate
       // editor's command the moment a response renders — breaking the shortcut
       // after the first send.
       if (onSubmitRef.current) {
-        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
-          onSubmitRef.current?.();
-        });
+        const submit = () => onSubmitRef.current?.();
+        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, submit);
+        // Ctrl/Cmd+R is the alternate Send chord. Binding it as an editor command
+        // both fires Send when the editor has focus AND lets Monaco preventDefault
+        // the WebView's reload (the window-level listener can't see it while Monaco
+        // holds the key). Same focus-scoped, last-wins reasoning as Enter above, so
+        // it's likewise gated to the request editor (onSubmit present).
+        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyR, submit);
       }
       live.current.controller = attachBodyController(editor, {
         getTree: () => live.current?.tree ?? null,
