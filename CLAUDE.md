@@ -8,18 +8,24 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 
 Активная фича — нет (между фичами).
 
-Последняя влитая — **Порядок переменных + хоткей открытия Edit environment**
-(🎉 DONE 2026-06-20, ff в `main`; план+спека `2026-06-20-env-vars-order-edit-hotkey*`
-в `archive/`) — (1) `Environment.variables`/`Collection.variables` `HashMap` →
-`IndexMap` ⇒ порядок переменных переживает рестарт и экспорт (фронт не меняется;
-движок резолва на `&HashMap`, конвертация на границе; specta сворачивает `IndexMap`
-в тот же TS `Record` ⇒ без дрейфа bindings); (2) глобальный хоткей **Ctrl+Shift+E**
-открывает Edit environment активного окружения (нет активного → create-mode).
-**Live-fix `110ee31`:** включён `serde_json` `preserve_order` — без него tauri-IPC
-(`to_value`, `Value::Object`=BTreeMap) пересортировывал переменные по алфавиту на
-границе (file-store-тесты это не ловили). Предыдущая — **Автокомплит `{{var}}`
-(переменные окружения + коллекции)** (🎉 DONE 2026-06-19, ff в `main` `8b0a611`;
-план+спека `2026-06-19-var-autocomplete*` в `archive/`).
+Последняя влитая — **Хоткеи: Ctrl/Cmd+R как второй Send + macOS word-wrap `⌥⌘Z`**
+(🎉 DONE 2026-06-21, ff в `main` `5e74fc7`; план-дока нет — прямые TDD-правки, чистый
+фронт) — две независимые мелочи. **(1) Ctrl/Cmd+R** — второй аккорд Send рядом с
+Ctrl/Cmd+Enter (зеркало existing-wiring: window-listener в `CallPanel` + Monaco-команда
+в `BodyView`; чистый `isSendHotkey`, физ. `KeyR` ⇒ раскладко-независимо, AltGr-гард;
+`preventDefault` гасит встроенный reload WebView2). **(2) macOS word-wrap → `⌥⌘Z`**
+(был `Alt+Z`; на маке `⌥`+буква = ввод символа `Ω` + часто перехватывается глобальной
+программой): `isWordWrapHotkey(e, mac)` платформо-зависимый (Win/Linux остаётся
+`Alt+Z`), хук берёт `isMacOS`; встроенный `Alt+Z` Monaco (`editor.action.toggleWordWrap`)
+**отвязан** в `monaco.ts` через `addKeybindingRule({command:null})`, чтобы голый `⌥Z`
+не дёргал внутренний флаг редактора в рассинхрон с pref (отвязка vs swallow ⇒ `⌥Z`
+по-прежнему печатает `Ω`). Палитру (Cmd+K) не трогали — выбран вариант «только хоткей».
+Предыдущая — **Порядок переменных + хоткей открытия Edit environment** (🎉 DONE
+2026-06-20, ff в `main`; план+спека `2026-06-20-env-vars-order-edit-hotkey*` в
+`archive/`) — `IndexMap` для порядка переменных (переживает рестарт/экспорт) +
+**Ctrl+Shift+E** открывает Edit environment; **live-fix `110ee31`** — `serde_json`
+`preserve_order` (без него tauri-IPC `to_value`=BTreeMap алфавитил переменные на
+границе; file-store-тесты не ловили).
 
 Интеграционная ветка — `main`; фичи ведутся в отдельных worktree-ветках
 (`claude/*`) и вливаются в `main` fast-forward.
