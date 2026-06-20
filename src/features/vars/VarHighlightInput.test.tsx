@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import { messages } from "@/lib/messages";
 import { useState, type ReactElement } from "react";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import type { VarCandidate } from "./candidates";
@@ -164,6 +165,6 @@ describe("VarHighlightInput autocomplete", () => {
     const input = screen.getByLabelText("addr") as HTMLInputElement;
     typeInto(input, "{{var"); // all 10 match → capped to 8, 2 hidden
     expect(screen.getAllByRole("option")).toHaveLength(8);
-    expect(screen.getByText(/ещё 2/)).toBeInTheDocument();
+    expect(screen.getByText(messages.vars.suggest.moreResults(2))).toBeInTheDocument();
   });
 });

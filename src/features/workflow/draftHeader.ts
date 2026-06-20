@@ -3,6 +3,7 @@ import { pathNamesToItem } from "@/features/catalog/treeNav";
 import type { CollectionIpc } from "@/ipc/bindings";
 import type { Step } from "./model";
 import type { DraftOrigin } from "./store";
+import { messages } from "@/lib/messages";
 
 /** Breadcrumb segments for the draft header.
  *  - Unbound → ["Новый реквест"].
@@ -14,7 +15,7 @@ export function draftBreadcrumb(
   origin: DraftOrigin | null,
   collections: CollectionIpc[] = [],
 ): string[] {
-  if (!origin) return ["Новый реквест"];
+  if (!origin) return [messages.workflow.draft.newRequest];
 
   const path = pathNamesToItem(collections, origin.requestId);
   if (path) return path;
@@ -26,5 +27,5 @@ export function draftBreadcrumb(
   }
 
   const svc = shortService(draft.service);
-  return [draft.method ? `${svc} / ${draft.method}` : svc || "Saved request"];
+  return [draft.method ? `${svc} / ${draft.method}` : svc || messages.workflow.draft.savedRequestFallback];
 }

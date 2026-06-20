@@ -66,7 +66,7 @@ export function MethodPicker({ selected, catalog, onSelect, className, reflectio
           <span className="text-muted-foreground truncate min-w-0">
             {shortService(selected.service)}
           </span>
-          <span className="text-muted-foreground/50 flex-none">/</span>
+          <span className="text-muted-foreground/55 flex-none">/</span>
           <span className="text-foreground font-medium truncate min-w-0">
             {selected.method}
           </span>
@@ -218,7 +218,7 @@ function KindDot({ kind }: { kind: MethodKind }) {
   const cls =
     kind === "server" ? "bg-stream" :
     kind === "client" ? "bg-warn" :
-    kind === "bidi"   ? "bg-purple-400" :
+    kind === "bidi"   ? "bg-kind-bidi" :
                         "bg-muted-foreground/50";
   return <span className={cn("h-1.5 w-1.5 rounded-full flex-none", cls)} aria-hidden />;
 }

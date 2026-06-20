@@ -37,7 +37,7 @@ export function ClientErrorView({ message }: { message: string }) {
       )}
       {/* The raw error is the important bit — keep it front-and-centre, not in a footer. */}
       <div className="w-full max-w-[460px] rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-left">
-        <p className="text-[10.5px] font-medium uppercase tracking-wide text-destructive/80">Error</p>
+        <p className="text-[10px] font-medium uppercase tracking-wide text-destructive/80">Error</p>
         <p className="mt-0.5 break-all font-mono text-xs leading-relaxed text-destructive">{message}</p>
       </div>
     </div>

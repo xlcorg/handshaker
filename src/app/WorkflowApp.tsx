@@ -28,6 +28,7 @@ import { isPaletteHotkey } from "@/features/catalog/paletteHotkey";
 import { EMPTY_BODY_TEMPLATE } from "@/features/workflow/actions";
 import { toast } from "sonner";
 import { newId } from "@/lib/ids";
+import { messages } from "@/lib/messages";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { usePrefs, readPrefs } from "@/lib/use-prefs";
@@ -228,7 +229,7 @@ export function WorkflowApp() {
     if (plan.kind === "exists") {
       const req = findSavedRequest(cat.tree, plan.location.collectionId, plan.location.requestId);
       if (req) {
-        toast.info(`Уже в коллекции «${plan.location.collectionName}»`);
+        toast.info(messages.workflow.toast.alreadyInCollection(plan.location.collectionName));
         openRequest(plan.location.collectionId, req);
       }
       return;
@@ -249,7 +250,7 @@ export function WorkflowApp() {
       use_count: 0,
     };
     await cat.addItem(collectionId, folderId, { type: "request", ...saved });
-    toast.success(`Сохранено в ${plan.collectionName} / ${plan.folderName}`);
+    toast.success(messages.workflow.toast.savedTo(plan.collectionName, plan.folderName));
     openRequest(collectionId, saved);
   }
 

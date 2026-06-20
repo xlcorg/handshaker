@@ -31,7 +31,7 @@ export function COTabs({ value, onChange, items }: COTabsProps) {
               <span
                 className={cn(
                   "font-mono text-[10px] tabular-nums rounded px-1 py-px",
-                  active ? "bg-accent text-muted-foreground" : "text-muted-foreground/55",
+                  active ? "bg-accent text-muted-foreground" : "text-muted-foreground/70",
                 )}
               >
                 {it.hint}

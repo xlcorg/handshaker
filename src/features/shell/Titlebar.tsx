@@ -8,9 +8,10 @@ import { WorkflowSelector } from "@/features/workflow/WorkflowSelector";
 import { WorkflowEnvControl } from "@/features/workflow/WorkflowEnvControl";
 import type { UpdatePhase } from "@/features/updater/useUpdateCheck";
 import { ViewSwitcher } from "@/features/workflow/ViewSwitcher";
+import { compactFocusRing } from "@/lib/focusRing";
 
 const btn =
-  "h-5 w-6 rounded-sm inline-flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground";
+  `h-5 w-6 rounded-sm inline-flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground ${compactFocusRing}`;
 
 /**
  * Единый титлбар: лого + workflow/env слева, view-switcher по центру, утилиты
@@ -112,7 +113,7 @@ export function Titlebar({
               <button
                 type="button"
                 onClick={() => getCurrentWindow().close()}
-                className="h-5 w-6 rounded-sm inline-flex items-center justify-center text-muted-foreground hover:bg-destructive hover:text-destructive-foreground"
+                className={`h-5 w-6 rounded-sm inline-flex items-center justify-center text-muted-foreground hover:bg-destructive hover:text-destructive-foreground ${compactFocusRing}`}
                 aria-label="Close window"
               >
                 <X size={11} strokeWidth={1.5} />

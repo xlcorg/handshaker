@@ -2,6 +2,7 @@ import { createPortal } from "react-dom";
 
 import { cn } from "@/lib/cn";
 import type { VarCandidate } from "./candidates";
+import { messages } from "@/lib/messages";
 
 export interface VarSuggestDropdownProps {
   /** Visible (capped) candidates. */
@@ -62,18 +63,18 @@ export function VarSuggestDropdown({ items, total, active, listboxId, onPick, le
           <span
             className={cn(
               "shrink-0 rounded px-1.5 py-px text-[10px]",
-              c.origin === "env" ? "bg-emerald-500/15 text-emerald-400" : "bg-amber-500/15 text-amber-400",
+              c.origin === "env" ? "bg-ok/15 text-ok" : "bg-warn/15 text-warn",
             )}
           >
             {c.origin}
           </span>
-          {c.overrides ? <span className="shrink-0 text-[10px] text-muted-foreground/50">overrides</span> : null}
+          {c.overrides ? <span className="shrink-0 text-[10px] text-muted-foreground/55">overrides</span> : null}
         </li>
       ))}
       {hidden > 0 ? (
         // Non-option hint (keyboard nav skips it): the list is capped, not exhaustive.
         <li role="presentation" className="px-2.5 pt-1 text-[11px] text-muted-foreground/55">
-          …ещё {hidden} — продолжай ввод
+          {messages.vars.suggest.moreResults(hidden)}
         </li>
       ) : null}
     </ul>,

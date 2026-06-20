@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { workflowStore } from "./store";
 import { addStep, setActiveStep } from "./reducers";
 import { newStep } from "./model";
+import { messages } from "@/lib/messages";
 
 vi.mock("./CallPanel", () => ({
   CallPanel: ({ step }: { step: { method: string } }) => (
@@ -26,7 +27,7 @@ beforeEach(() => workflowStore.reset());
 describe("LedgerView", () => {
   it("shows an empty hint with no steps", () => {
     render(<LedgerView />);
-    expect(screen.getByText(/Нет шагов/)).toBeInTheDocument();
+    expect(screen.getByText(messages.workflow.steps.empty)).toBeInTheDocument();
   });
 
   it("expands only the active step, collapses the rest", () => {
@@ -44,7 +45,7 @@ describe("LedgerView", () => {
     const user = userEvent.setup();
     seed("Alpha", "Beta");
     render(<LedgerView />);
-    await user.click(screen.getByRole("button", { name: /свернуть все/i }));
+    await user.click(screen.getByRole("button", { name: messages.workflow.steps.collapseAll }));
     expect(workflowStore.activeWorkflow().activeStepId).toBeNull();
     expect(screen.queryByTestId("call-panel")).not.toBeInTheDocument();
   });

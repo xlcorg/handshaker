@@ -6,6 +6,7 @@ import { useActiveWorkflow, workflowStore } from "./store";
 import { removeStep, reorderStep, setActiveStep, updateStep } from "./reducers";
 import { makeDragHandlers } from "./dnd";
 import type { Step } from "./model";
+import { messages } from "@/lib/messages";
 
 const dragFor = makeDragHandlers((from, to) =>
   workflowStore.update((w) => reorderStep(w, from, to)),
@@ -17,7 +18,7 @@ export function LedgerView() {
   if (wf.steps.length === 0) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-        Нет шагов — создай вызов в сайдбаре.
+        {messages.workflow.steps.empty}
       </div>
     );
   }
@@ -30,7 +31,7 @@ export function LedgerView() {
           variant="ghost"
           onClick={() => workflowStore.update((w) => setActiveStep(w, null))}
         >
-          свернуть все
+          {messages.workflow.steps.collapseAll}
         </Button>
       </div>
       <div role="list" className="min-h-0 flex-1 overflow-auto">

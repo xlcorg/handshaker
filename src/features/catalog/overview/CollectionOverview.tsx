@@ -121,7 +121,7 @@ export function CollectionOverview({ collection, onChanged, onSelectRequest, onC
       <div className="flex h-12 flex-none items-center gap-3 border-b border-border px-4">
         <Layers size={15} className="flex-none text-muted-foreground" />
         <CollectionTitle name={collection.name} onRename={persistName} />
-        <span className="truncate text-[11.5px] text-muted-foreground/55">
+        <span className="truncate text-[11px] text-muted-foreground/55">
           {folders} {folders === 1 ? "folder" : "folders"} · {total}{" "}
           {total === 1 ? "request" : "requests"}
         </span>
@@ -189,13 +189,13 @@ export function CollectionOverview({ collection, onChanged, onSelectRequest, onC
                         >
                           {h.request.name}
                         </span>
-                        <span className="hidden truncate font-mono text-[10.5px] text-muted-foreground/45 md:inline">
+                        <span className="hidden truncate font-mono text-[10px] text-muted-foreground/55 md:inline">
                           {h.request.service}.{h.request.method}
                         </span>
                         <span
                           className={cn(
-                            "ml-auto flex-none whitespace-nowrap font-mono text-[10.5px] tabular-nums",
-                            h.request.use_count > 0 ? "text-muted-foreground/60" : "text-muted-foreground/30",
+                            "ml-auto flex-none whitespace-nowrap font-mono text-[10px] tabular-nums",
+                            h.request.use_count > 0 ? "text-muted-foreground/70" : "text-muted-foreground/30",
                           )}
                           title={
                             h.request.last_used_at != null
@@ -207,7 +207,7 @@ export function CollectionOverview({ collection, onChanged, onSelectRequest, onC
                         </span>
                         <Send
                           size={11}
-                          className="flex-none text-muted-foreground/0 transition-colors group-hover:text-muted-foreground/60"
+                          className="flex-none text-muted-foreground/0 transition-colors group-hover:text-muted-foreground/70"
                         />
                       </button>
                     ))}

@@ -203,7 +203,7 @@ export function VariablesTable({ value, onChange, resolveRow, resolveKey }: Vari
                 </TableRow>
                 {dupFlags[i] && (
                   <TableRow className="hover:bg-transparent border-b-0">
-                    <TableCell colSpan={3} className="py-1 px-2 text-xs text-amber-500">
+                    <TableCell colSpan={3} className="py-1 px-2 text-xs text-warn">
                       duplicate key — last value wins
                     </TableCell>
                   </TableRow>

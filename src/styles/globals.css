@@ -36,6 +36,11 @@
   --color-warn-foreground: hsl(var(--warn-foreground));
   --color-stream: hsl(var(--stream));
   --color-stream-foreground: hsl(var(--stream-foreground));
+  --color-info: hsl(var(--info));
+  --color-info-foreground: hsl(var(--info-foreground));
+  --color-grpc: hsl(var(--grpc));
+  --color-grpc-foreground: hsl(var(--grpc-foreground));
+  --color-kind-bidi: hsl(var(--kind-bidi));
   --radius-md: var(--radius);
   --radius-lg: calc(var(--radius) + 2px);
   --radius-sm: calc(var(--radius) - 2px);
@@ -90,6 +95,14 @@
   --warn-foreground: 0 0% 98%;
   --stream: 200 65% 42%;
   --stream-foreground: 0 0% 98%;
+  /* info callout (≈ blue-500/400, softened toward the --stream family) */
+  --info: 212 70% 45%;
+  --info-foreground: 0 0% 98%;
+  /* gRPC brand marker (≈ blue-500) */
+  --grpc: 214 80% 50%;
+  --grpc-foreground: 0 0% 98%;
+  /* bidi stream kind dot (≈ purple-400) */
+  --kind-bidi: 270 60% 58%;
 
   /* JSON syntax (light) */
   --syntax-key:    214 65% 38%;
@@ -137,6 +150,14 @@
   --warn-foreground: 0 0% 9%;
   --stream: 200 70% 65%;
   --stream-foreground: 0 0% 9%;
+  /* info callout (≈ blue-500/400, softened toward the --stream family) */
+  --info: 212 70% 62%;
+  --info-foreground: 0 0% 98%;
+  /* gRPC brand marker (≈ blue-500) */
+  --grpc: 214 80% 62%;
+  --grpc-foreground: 0 0% 98%;
+  /* bidi stream kind dot (≈ purple-400) */
+  --kind-bidi: 270 70% 72%;
 
   --syntax-key:    210 60% 65%;
   --syntax-str:    95 40% 65%;

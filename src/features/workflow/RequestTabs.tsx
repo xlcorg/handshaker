@@ -9,6 +9,7 @@ import type { VarCandidate } from "@/features/vars/candidates";
 import { usePrefs } from "@/lib/use-prefs";
 import { MetadataEditor } from "./MetadataEditor";
 import type { MetadataRow, Step } from "./model";
+import { messages } from "@/lib/messages";
 
 type Tab = "request" | "metadata" | "auth";
 
@@ -106,7 +107,7 @@ function AuthReadOnly({ auth }: { auth: SavedAuthConfigIpc }) {
   return (
     <div className="space-y-2 p-3.5 text-xs">
       <div className="text-muted-foreground">
-        Auth наследуется от сервиса (настраивается в панели сервиса).
+        {messages.workflow.requestTabs.authInherited}
       </div>
       <div className="rounded-md border border-border bg-card p-3 font-mono">
         <div>kind: {auth.kind}</div>

@@ -77,7 +77,7 @@ export function UnderlineTabs<T extends string>({
               <span
                 className={cn(
                   "font-mono text-[10px] tabular-nums",
-                  active ? "text-muted-foreground" : "text-muted-foreground/60",
+                  active ? "text-muted-foreground" : "text-muted-foreground/70",
                 )}
               >
                 {it.hint}

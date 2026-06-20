@@ -35,8 +35,8 @@ export function VariablesBlock({ rows, onChange, resolveRow, resolveKey, variabl
     return (
       <div className="flex flex-col items-start gap-3">
         <div className="w-full rounded-md border border-dashed border-border/80 px-4 py-6 text-center">
-          <p className="text-[12px] text-muted-foreground/65">No collection variables yet.</p>
-          <p className="text-[11px] text-muted-foreground/45 mt-0.5">
+          <p className="text-[12.5px] text-muted-foreground/70">No collection variables yet.</p>
+          <p className="text-[11px] text-muted-foreground/55 mt-0.5">
             Reusable values like base URLs or IDs — referenced as{" "}
             <span className="font-mono">{"{{name}}"}</span> in requests.
           </p>
@@ -51,10 +51,10 @@ export function VariablesBlock({ rows, onChange, resolveRow, resolveKey, variabl
   return (
     <div className="flex flex-col gap-1.5">
       <div className="grid grid-cols-[1fr_1.4fr_28px] gap-2 px-1 pb-0.5">
-        <span className="text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground/50">
+        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/55">
           Name
         </span>
-        <span className="text-[10.5px] font-medium uppercase tracking-wide text-muted-foreground/50">
+        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground/55">
           Value
         </span>
         <span />
@@ -65,7 +65,7 @@ export function VariablesBlock({ rows, onChange, resolveRow, resolveKey, variabl
             value={row.k}
             onChange={(e) => upd(row.id, "k", e.target.value)}
             placeholder="name"
-            className="h-8 font-mono text-[12px]"
+            className="h-8 font-mono text-[12.5px]"
           />
           <VarHighlightInput
             value={row.v}
@@ -74,7 +74,7 @@ export function VariablesBlock({ rows, onChange, resolveRow, resolveKey, variabl
             resolveKey={resolveKey}
             placeholder="value"
             ariaLabel="variable value"
-            metrics="h-8 px-3 font-mono text-[12px] leading-8"
+            metrics="h-8 px-3 font-mono text-[12.5px] leading-8"
             variables={variables}
             className="w-full rounded-md border border-input bg-transparent shadow-xs transition-[color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30"
           />
@@ -82,7 +82,7 @@ export function VariablesBlock({ rows, onChange, resolveRow, resolveKey, variabl
             <button
               onClick={() => del(row.id)}
               aria-label="Remove variable"
-              className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted-foreground/45 hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover/var:opacity-100 focus-visible:opacity-100 transition-[opacity,color,background-color]"
+              className="h-7 w-7 inline-flex items-center justify-center rounded-md text-muted-foreground/55 hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover/var:opacity-100 focus-visible:opacity-100 transition-[opacity,color,background-color]"
             >
               <Trash2 size={13} />
             </button>

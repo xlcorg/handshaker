@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { workflowStore } from "./store";
 import { addStep, setActiveStep } from "./reducers";
 import { newStep } from "./model";
+import { messages } from "@/lib/messages";
 
 vi.mock("./CallPanel", () => ({
   CallPanel: ({ step }: { step: { method: string } }) => (
@@ -17,7 +18,7 @@ beforeEach(() => workflowStore.reset());
 describe("ListView", () => {
   it("shows an empty hint with no steps", () => {
     render(<ListView />);
-    expect(screen.getByText(/Нет шагов/)).toBeInTheDocument();
+    expect(screen.getByText(messages.workflow.steps.empty)).toBeInTheDocument();
   });
 
   it("renders the rows and the active step's detail", () => {
@@ -33,7 +34,7 @@ describe("ListView", () => {
     workflowStore.update((w) => addStep(w, newStep({ address: "h", tls: true, service: "p.v1.S", method: "Alpha" })));
     workflowStore.update((w) => setActiveStep(w, null));
     render(<ListView />);
-    expect(screen.getByText(/Выбери шаг/)).toBeInTheDocument();
+    expect(screen.getByText(messages.workflow.list.pickStep)).toBeInTheDocument();
     expect(screen.queryByTestId("call-panel")).not.toBeInTheDocument();
   });
 });

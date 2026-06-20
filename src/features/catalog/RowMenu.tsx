@@ -2,6 +2,7 @@ import React from "react";
 import { MoreVertical } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { actionRight } from "./bleed";
+import { compactFocusRing } from "@/lib/focusRing";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -82,7 +83,8 @@ export function RowMenu({ items, children, className, padRight = 4, depth = 0 }:
                 className={cn(
                   "absolute top-1/2 z-10 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded",
                   "text-muted-foreground transition-opacity hover:bg-sidebar-accent hover:text-foreground",
-                  "opacity-0 group-hover/row:opacity-100 data-[state=open]:opacity-100",
+                  "opacity-0 group-hover/row:opacity-100 group-focus-within/row:opacity-100 data-[state=open]:opacity-100 focus-visible:opacity-100",
+                  compactFocusRing,
                 )}
               >
                 <MoreVertical size={13} />

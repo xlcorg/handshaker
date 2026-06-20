@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import type { MessageSchemaIpc } from "@/ipc/bindings";
 import { renderContractDoc } from "./proto";
 import { ProtoView } from "./ProtoView";
+import { messages } from "@/lib/messages";
 
 export interface ContractViewProps {
   /** Method display name (plain name, not full path); empty → "pick a method" hint. */
@@ -21,21 +22,20 @@ export function ContractView({ method, input, output }: ContractViewProps) {
     <div className="h-full min-h-0 overflow-auto">
       {method.trim().length === 0 ? (
         <div className="px-3.5 py-3 text-xs text-muted-foreground">
-          Выбери метод — его контракт появится здесь.
+          {messages.contract.pickMethod}
         </div>
       ) : doc ? (
         <>
           <ProtoView doc={doc} />
           {(input === null || output === null) && (
             <div className="px-3.5 pb-3 text-xs text-muted-foreground">
-              {input === null ? "Request" : "Response"}-схема недоступна.
+              {messages.contract.schemaUnavailable(input === null ? "Request" : "Response")}
             </div>
           )}
         </>
       ) : (
         <div className="px-3.5 py-3 text-xs text-muted-foreground">
-          Контракт недоступен — схема метода не получена (reflection выключен или
-          сервер недоступен).
+          {messages.contract.unavailable}
         </div>
       )}
     </div>

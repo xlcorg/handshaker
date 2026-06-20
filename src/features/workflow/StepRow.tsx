@@ -3,6 +3,7 @@ import { cn } from "@/lib/cn";
 import { summarizeStep, type StepTone } from "./stepView";
 import type { RowDragProps } from "./dnd";
 import type { Step } from "./model";
+import { compactFocusRing } from "@/lib/focusRing";
 
 const TONE_DOT: Record<StepTone, string> = {
   ok: "text-ok",
@@ -55,7 +56,7 @@ export function StepRow({
           e.stopPropagation();
           onDelete();
         }}
-        className="flex-none text-muted-foreground opacity-0 hover:text-destructive group-hover:opacity-100"
+        className={`flex-none rounded text-muted-foreground opacity-0 hover:text-destructive group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 ${compactFocusRing}`}
       >
         <X className="size-3" />
       </button>

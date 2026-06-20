@@ -17,7 +17,7 @@ export function AboutPane() {
         <p className="text-xs text-muted-foreground leading-relaxed -mt-1">
           A gRPC client for the rest of us. No accounts, no telemetry, no nonsense.
         </p>
-        <div className="grid gap-1.5 font-mono text-[11.5px] text-muted-foreground mt-1">
+        <div className="grid gap-1.5 font-mono text-[11px] text-muted-foreground mt-1">
           <div>
             version <span className="text-foreground">{version || "0.0.0"}</span>
           </div>

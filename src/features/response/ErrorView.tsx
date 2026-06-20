@@ -1,6 +1,7 @@
 import { AlertCircle } from "lucide-react";
 import { statusName, statusDescription } from "@/lib/grpc-status";
 import type { InvokeOutcomeIpc } from "@/ipc/bindings";
+import { messages } from "@/lib/messages";
 
 /**
  * Postman-style gRPC error face: the canonical status code + name and what it means,
@@ -36,9 +37,9 @@ export function ErrorView({ outcome }: { outcome: InvokeOutcomeIpc }) {
         <div>
           <p className="mb-1 font-medium text-foreground/70">details</p>
           <p className="leading-relaxed text-muted-foreground">
-            Структурированные details (google.rpc) пока недоступны — требуется декодирование
-            бинарного трейлера <code className="font-mono">grpc-status-details-bin</code> на бэкенде.
-            Trailing metadata см. во вкладке Trailers.
+            {messages.response.error.detailsUnavailablePre}
+            <code className="font-mono">grpc-status-details-bin</code>
+            {messages.response.error.detailsUnavailablePost}
           </p>
         </div>
       </div>

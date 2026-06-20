@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import type { CollectionIpc, ItemIpc } from "@/ipc/bindings";
 import { draftBreadcrumb } from "./draftHeader";
 import { newStep } from "./model";
+import { messages } from "@/lib/messages";
 
 const draft = newStep({
   address: "h:443", tls: false, service: "pkg.v1.NotesService", method: "Create",
@@ -30,7 +31,7 @@ const tree: CollectionIpc[] = [
 
 describe("draftBreadcrumb", () => {
   it("returns the unbound label for a draft with no origin", () => {
-    expect(draftBreadcrumb(draft, null)).toEqual(["Новый реквест"]);
+    expect(draftBreadcrumb(draft, null)).toEqual([messages.workflow.draft.newRequest]);
   });
 
   it("returns the full live path (collection › folders › request) from the catalog", () => {

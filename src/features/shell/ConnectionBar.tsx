@@ -101,7 +101,7 @@ export function ConnectionBar({
             {connected && pickerSlot ? (
               pickerSlot
             ) : (
-              <span className="font-mono text-[11.5px] text-muted-foreground/70 select-none truncate">
+              <span className="font-mono text-[11px] text-muted-foreground/70 select-none truncate">
                 {hint}
               </span>
             )}

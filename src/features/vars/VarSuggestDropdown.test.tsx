@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { VarSuggestDropdown } from "./VarSuggestDropdown";
 import type { VarCandidate } from "./candidates";
+import { messages } from "@/lib/messages";
 
 const items: VarCandidate[] = [
   { name: "host", value: "api.staging", origin: "env", overrides: true },
@@ -37,11 +38,11 @@ describe("VarSuggestDropdown", () => {
     expect(opts).toHaveLength(8); // no scroll: capped, not all rendered
     expect(opts[0]).toHaveAttribute("aria-setsize", "10");
     expect(opts[0]).toHaveAttribute("aria-posinset", "1");
-    expect(screen.getByText(/ещё 2/)).toBeInTheDocument();
+    expect(screen.getByText(messages.vars.suggest.moreResults(2))).toBeInTheDocument();
   });
 
   it("omits the hint row when nothing is hidden", () => {
     render(<VarSuggestDropdown items={items} total={items.length} active={0} listboxId="lb" onPick={() => {}} left={0} top={0} />);
-    expect(screen.queryByText(/ещё/)).toBeNull();
+    expect(screen.queryByText(/keep typing/)).toBeNull();
   });
 });

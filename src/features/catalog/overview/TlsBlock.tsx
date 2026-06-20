@@ -23,7 +23,7 @@ export function TlsBlock({ enabled, skipVerify, onChange }: TlsBlockProps) {
         />
         <div className="min-w-0">
           <div className="text-[12.5px] text-foreground/90">Use TLS by default</div>
-          <div className="text-[11.5px] text-muted-foreground/60">
+          <div className="text-[11px] text-muted-foreground/70">
             New requests in this collection start with TLS enabled.
           </div>
         </div>
@@ -44,7 +44,7 @@ export function TlsBlock({ enabled, skipVerify, onChange }: TlsBlockProps) {
           <div className="text-[12.5px] text-foreground/90 flex items-center gap-1.5">
             Skip certificate verification
           </div>
-          <div className="text-[11.5px] text-muted-foreground/60">
+          <div className="text-[11px] text-muted-foreground/70">
             {enabled
               ? "Accept self-signed or mismatched certs."
               : "Enable TLS to configure verification."}
@@ -57,7 +57,7 @@ export function TlsBlock({ enabled, skipVerify, onChange }: TlsBlockProps) {
           <span className="text-warn mt-0.5 flex-none">
             <AlertCircle size={13} />
           </span>
-          <p className="text-[11.5px] text-warn/90 leading-relaxed">
+          <p className="text-[11px] text-warn/90 leading-relaxed">
             Connections won't validate server certificates. Use only for local or trusted endpoints.
           </p>
         </div>

@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { SaveRequestDialog } from "./SaveRequestDialog";
 import type { CollectionIpc, ItemIpc } from "@/ipc/bindings";
+import { messages } from "@/lib/messages";
 
 function folder(id: string, name: string, items: ItemIpc[] = []): ItemIpc {
   return { type: "folder", id, name, items, expanded: false };
@@ -41,7 +42,7 @@ describe("SaveRequestDialog — shell", () => {
   it("saves to the selected collection root by default (first collection)", async () => {
     const p = props();
     render(<SaveRequestDialog {...p} />);
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: messages.catalog.saveDialog.save }));
     await waitFor(() =>
       expect(p.onSave).toHaveBeenCalledWith({ collectionId: "c1", parentId: null, name: "Create" }),
     );
@@ -52,7 +53,7 @@ describe("SaveRequestDialog — shell", () => {
     render(<SaveRequestDialog {...p} />);
     // Auto-reveal: My APIs is auto-expanded because c1 is the default selected collection.
     fireEvent.click(screen.getByText("Staging"));
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: messages.catalog.saveDialog.save }));
     await waitFor(() =>
       expect(p.onSave).toHaveBeenCalledWith({ collectionId: "c1", parentId: "f1", name: "Create" }),
     );
@@ -81,14 +82,14 @@ describe("SaveRequestDialog — recommendation chip", () => {
 
   it("hides the chip when the draft has no method", () => {
     render(<SaveRequestDialog {...props({ draftMethod: "", draftService: "" })} />);
-    expect(screen.queryByText(/Рекомендуем/i)).toBeNull();
+    expect(screen.queryByText(messages.catalog.saveDialog.recommendationTitle)).toBeNull();
   });
 
   it("'Добавить' adds the recommended folder and saves into it", async () => {
     const p = props();
     render(<SaveRequestDialog {...p} />);
-    fireEvent.click(screen.getByRole("button", { name: /Добавить/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: messages.catalog.saveDialog.addToRecommended }));
+    fireEvent.click(screen.getByRole("button", { name: messages.catalog.saveDialog.save }));
     await waitFor(() => expect(p.onCreateFolder).toHaveBeenCalledWith("c1", null, "NotesApi"));
     await waitFor(() =>
       expect(p.onSave).toHaveBeenCalledWith({ collectionId: "c1", parentId: "f-new", name: "Create" }),
@@ -103,8 +104,8 @@ describe("SaveRequestDialog — recommendation chip", () => {
   it("'Добавить' with no collections creates a new collection + folder and saves into it", async () => {
     const p = props({ collections: [] });
     render(<SaveRequestDialog {...p} />);
-    fireEvent.click(screen.getByRole("button", { name: /Добавить/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: messages.catalog.saveDialog.addToRecommended }));
+    fireEvent.click(screen.getByRole("button", { name: messages.catalog.saveDialog.save }));
     await waitFor(() => expect(p.onCreateCollection).toHaveBeenCalledWith("New Collection"));
     await waitFor(() => expect(p.onCreateFolder).toHaveBeenCalledWith("c-new", null, "NotesApi"));
     await waitFor(() =>
@@ -116,8 +117,8 @@ describe("SaveRequestDialog — recommendation chip", () => {
     const withFolder = [col("c1", "My APIs", [folder("nf", "NotesApi")]), col("c2", "Sandbox")];
     const p = props({ collections: withFolder });
     render(<SaveRequestDialog {...p} />);
-    fireEvent.click(screen.getByRole("button", { name: /Добавить/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: messages.catalog.saveDialog.addToRecommended }));
+    fireEvent.click(screen.getByRole("button", { name: messages.catalog.saveDialog.save }));
     await waitFor(() =>
       expect(p.onSave).toHaveBeenCalledWith({ collectionId: "c1", parentId: "nf", name: "Create" }),
     );
@@ -136,8 +137,8 @@ describe("SaveRequestDialog — contextual New", () => {
     render(<SaveRequestDialog {...p} />);
     fireEvent.click(screen.getByRole("button", { name: /New folder in/ }));
     fireEvent.change(screen.getByLabelText("New node name"), { target: { value: "Billing" } });
-    fireEvent.click(screen.getByRole("button", { name: "Add" }));
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(within(screen.getByLabelText("New node name").parentElement!).getByRole("button", { name: messages.catalog.saveDialog.add }));
+    fireEvent.click(screen.getByRole("button", { name: messages.catalog.saveDialog.save }));
     await waitFor(() => expect(p.onCreateFolder).toHaveBeenCalledWith("c1", null, "Billing"));
     await waitFor(() =>
       expect(p.onSave).toHaveBeenCalledWith({ collectionId: "c1", parentId: "f-new", name: "Create" }),
@@ -154,8 +155,8 @@ describe("SaveRequestDialog — contextual New", () => {
     render(<SaveRequestDialog {...p} />);
     fireEvent.click(screen.getByRole("button", { name: /New collection/ }));
     fireEvent.change(screen.getByLabelText("New node name"), { target: { value: "Fresh" } });
-    fireEvent.click(screen.getByRole("button", { name: "Add" }));
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(within(screen.getByLabelText("New node name").parentElement!).getByRole("button", { name: messages.catalog.saveDialog.add }));
+    fireEvent.click(screen.getByRole("button", { name: messages.catalog.saveDialog.save }));
     await waitFor(() => expect(p.onCreateCollection).toHaveBeenCalledWith("Fresh"));
     await waitFor(() =>
       expect(p.onSave).toHaveBeenCalledWith({ collectionId: "c-new", parentId: null, name: "Create" }),
@@ -174,8 +175,8 @@ describe("SaveRequestDialog — contextual New", () => {
     render(<SaveRequestDialog {...p} />);
     fireEvent.click(screen.getByRole("button", { name: /New collection/ }));
     fireEvent.change(screen.getByLabelText("New node name"), { target: { value: "Fresh" } });
-    fireEvent.click(screen.getByRole("button", { name: "Add" }));
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(within(screen.getByLabelText("New node name").parentElement!).getByRole("button", { name: messages.catalog.saveDialog.add }));
+    fireEvent.click(screen.getByRole("button", { name: messages.catalog.saveDialog.save }));
     await waitFor(() => expect(p.onCreateCollection).toHaveBeenCalledWith("Fresh"));
     await waitFor(() =>
       expect(p.onSave).toHaveBeenCalledWith({ collectionId: "c-new", parentId: null, name: "Create" }),
@@ -195,10 +196,10 @@ describe("SaveRequestDialog — contextual New", () => {
     // create a pending folder under My APIs (selects it)
     fireEvent.click(screen.getByRole("button", { name: /New folder in/ }));
     fireEvent.change(screen.getByLabelText("New node name"), { target: { value: "Stray" } });
-    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    fireEvent.click(within(screen.getByLabelText("New node name").parentElement!).getByRole("button", { name: messages.catalog.saveDialog.add }));
     // navigate away: select a different collection's root
     fireEvent.click(screen.getByText("Sandbox"));
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: messages.catalog.saveDialog.save }));
     await waitFor(() =>
       expect(p.onSave).toHaveBeenCalledWith({ collectionId: "c2", parentId: null, name: "Create" }),
     );
@@ -216,14 +217,14 @@ describe("SaveRequestDialog — pending materialization order", () => {
     // New collection
     fireEvent.click(screen.getByRole("button", { name: /New collection/ }));
     fireEvent.change(screen.getByLabelText("New node name"), { target: { value: "Acme" } });
-    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    fireEvent.click(within(screen.getByLabelText("New node name").parentElement!).getByRole("button", { name: messages.catalog.saveDialog.add }));
 
     // New folder inside it (selection is now the pending collection root)
     fireEvent.click(screen.getByRole("button", { name: /New folder in .*Acme/ }));
     fireEvent.change(screen.getByLabelText("New node name"), { target: { value: "NotesApi" } });
-    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    fireEvent.click(within(screen.getByLabelText("New node name").parentElement!).getByRole("button", { name: messages.catalog.saveDialog.add }));
 
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: messages.catalog.saveDialog.save }));
 
     await waitFor(() => expect(onCreateCollection).toHaveBeenCalledWith("Acme"));
     await waitFor(() => expect(onCreateFolder).toHaveBeenCalledWith("real-col", null, "NotesApi"));
@@ -248,14 +249,14 @@ describe("SaveRequestDialog — pending materialization order", () => {
     // First collection "My APIs" is selected by default → create "Outer" under it
     fireEvent.click(screen.getByRole("button", { name: /New folder in .*My APIs/ }));
     fireEvent.change(screen.getByLabelText("New node name"), { target: { value: "Outer" } });
-    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    fireEvent.click(within(screen.getByLabelText("New node name").parentElement!).getByRole("button", { name: messages.catalog.saveDialog.add }));
 
     // Now "Outer" is selected → create "Inner" under it
     fireEvent.click(screen.getByRole("button", { name: /New folder in .*Outer/ }));
     fireEvent.change(screen.getByLabelText("New node name"), { target: { value: "Inner" } });
-    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    fireEvent.click(within(screen.getByLabelText("New node name").parentElement!).getByRole("button", { name: messages.catalog.saveDialog.add }));
 
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    fireEvent.click(screen.getByRole("button", { name: messages.catalog.saveDialog.save }));
 
     await waitFor(() =>
       expect(p.onSave).toHaveBeenCalledWith({ collectionId: "c1", parentId: "real-inner", name: "Create" }),

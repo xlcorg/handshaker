@@ -86,7 +86,7 @@ export function SettingsRow({
     <div className="flex items-center justify-between gap-4 py-2.5 border-b border-border/60 last:border-0">
       <div className="grid gap-0.5">
         <div className="text-[12.5px] text-foreground">{title}</div>
-        {hint && <div className="text-[11.5px] text-muted-foreground leading-snug">{hint}</div>}
+        {hint && <div className="text-[11px] text-muted-foreground leading-snug">{hint}</div>}
       </div>
       <div className="flex-none">{control}</div>
     </div>

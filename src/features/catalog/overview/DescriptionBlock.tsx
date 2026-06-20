@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Plus, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
+import { compactFocusRing } from "@/lib/focusRing";
 
 interface DescriptionBlockProps {
   text: string;
@@ -57,7 +58,7 @@ export function DescriptionBlock({ text, onChange }: DescriptionBlockProps) {
           >
             Cancel
           </Button>
-          <span className="ml-auto text-[10.5px] text-muted-foreground/45">Esc to cancel</span>
+          <span className="ml-auto text-[10px] text-muted-foreground/55">Esc to cancel</span>
         </div>
       </div>
     );
@@ -70,12 +71,12 @@ export function DescriptionBlock({ text, onChange }: DescriptionBlockProps) {
           setDraft("");
           setEdit(true);
         }}
-        className="w-full rounded-md border border-dashed border-border/80 px-4 py-5 text-left hover:border-border hover:bg-accent/30 transition-colors group/desc"
+        className={`w-full rounded-md border border-dashed border-border/80 px-4 py-5 text-left hover:border-border hover:bg-accent/30 transition-colors group/desc ${compactFocusRing}`}
       >
         <span className="inline-flex items-center gap-1.5 text-[12.5px] text-muted-foreground/70 group-hover/desc:text-foreground/80">
           <Plus size={12} /> Add a description
         </span>
-        <p className="text-[11px] text-muted-foreground/45 mt-0.5">
+        <p className="text-[11px] text-muted-foreground/55 mt-0.5">
           Explain what the collection covers, conventions, required variables…
         </p>
       </button>
@@ -94,7 +95,7 @@ export function DescriptionBlock({ text, onChange }: DescriptionBlockProps) {
             setEdit(true);
           }}
           aria-label="Edit description"
-          className="absolute top-0 right-0 h-6 w-6 inline-flex items-center justify-center rounded text-muted-foreground/45 hover:text-foreground hover:bg-accent opacity-0 group-hover/desc:opacity-100 focus-visible:opacity-100 transition-[opacity,color,background-color]"
+          className={`absolute top-0 right-0 h-6 w-6 inline-flex items-center justify-center rounded text-muted-foreground/55 hover:text-foreground hover:bg-accent opacity-0 group-hover/desc:opacity-100 focus-visible:opacity-100 transition-[opacity,color,background-color] ${compactFocusRing}`}
         >
           <Pencil size={12} />
         </button>

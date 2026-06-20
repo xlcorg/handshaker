@@ -184,7 +184,7 @@ export function SavedAuthEditor({ value, onChange }: SavedAuthEditorProps) {
               {token.kind === "loading" ? "Getting token…" : "Get token"}
             </Button>
             {token.kind === "ok" && (
-              <span className="flex min-w-0 items-center gap-1.5 text-[11px] text-emerald-500">
+              <span className="flex min-w-0 items-center gap-1.5 text-[11px] text-ok">
                 <code className="truncate font-mono text-muted-foreground">{truncateToken(token.token)}</code>
                 <Button
                   variant="ghost"

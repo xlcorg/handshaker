@@ -46,7 +46,7 @@ export function DisconnectedHero({ scenario, host }: { scenario: string; host: s
         Reconnect to resume, or pick any method from your collections in the sidebar — Handshaker connects to
         its server automatically.
       </div>
-      <div className="flex items-center gap-2 text-[11.5px] font-mono text-muted-foreground">
+      <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground">
         {host.trim() && <span className="px-2 py-1 border border-border rounded-md bg-card">{host}</span>}
         <span className="px-2 py-1 border border-border rounded-md bg-card">+ Add server</span>
       </div>

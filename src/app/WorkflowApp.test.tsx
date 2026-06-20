@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { messages } from "@/lib/messages";
 import { render as rtlRender, screen, act, waitFor } from "@testing-library/react";
 import type * as React from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -246,7 +247,7 @@ describe("WorkflowApp titlebar + view dispatch", () => {
     expect(screen.getByText("FOCUS")).toBeInTheDocument();
     await user.click(screen.getByRole("radio", { name: "List" }));
     expect(screen.queryByText("FOCUS")).not.toBeInTheDocument();
-    expect(screen.getByText(/Нет шагов/)).toBeInTheDocument();
+    expect(screen.getByText(messages.workflow.steps.empty)).toBeInTheDocument();
   });
 });
 

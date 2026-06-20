@@ -70,7 +70,7 @@ export function CollectionTitle({ name, onRename }: CollectionTitleProps) {
       <span className="text-[14px] font-semibold tracking-tight truncate">{name}</span>
       <Pencil
         size={12}
-        className="flex-none text-muted-foreground/0 group-hover/title:text-muted-foreground/60 transition-colors"
+        className="flex-none text-muted-foreground/0 group-hover/title:text-muted-foreground/70 transition-colors"
       />
     </button>
   );

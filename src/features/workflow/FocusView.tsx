@@ -8,6 +8,8 @@ import { openSavedRequest } from "@/features/catalog/actions";
 import { patchUiState } from "@/features/catalog/uiState";
 import { Tooltip } from "@/components/ui/tooltip";
 import type { Step } from "./model";
+import { compactFocusRing } from "@/lib/focusRing";
+import { messages } from "@/lib/messages";
 
 export interface FocusViewProps {
   /** Open the Save dialog for the current unbound draft (Ctrl+S / the Save button). */
@@ -29,7 +31,7 @@ export function FocusView({ onRequestSave, onQuickAddMethod }: FocusViewProps = 
     if (!item || item.type !== "request") return;
     openSavedRequest(origin.collectionId, item);
     void patchUiState({ active_request: { collection_id: origin.collectionId, item_id: item.id } });
-    toast.success(`Duplicated as "${item.name}"`);
+    toast.success(messages.workflow.focus.duplicatedAs(item.name));
   }
 
   // Auth of the origin collection — CallPanel falls back to it when the step's own
@@ -59,22 +61,22 @@ export function FocusView({ onRequestSave, onQuickAddMethod }: FocusViewProps = 
           </span>
           {origin ? (
             <span className="flex items-center gap-2">
-              <Tooltip content="Duplicate request">
+              <Tooltip content={messages.workflow.focus.duplicateRequest}>
                 <button
                   type="button"
-                  aria-label="Duplicate request"
+                  aria-label={messages.workflow.focus.duplicateRequest}
                   onClick={() => void duplicate().catch(() => {})}
-                  className="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+                  className={`inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground ${compactFocusRing}`}
                 >
                   <CopyPlus className="size-3.5" />
                 </button>
               </Tooltip>
-              <Tooltip content="Сохранено">
+              <Tooltip content={messages.workflow.focus.saved}>
                 <span
                   role="status"
-                  aria-label="Сохранено"
+                  aria-label={messages.workflow.focus.saved}
                   data-testid="autosave-status"
-                  className="inline-flex h-5 w-5 items-center justify-center text-muted-foreground/60"
+                  className="inline-flex h-5 w-5 items-center justify-center text-muted-foreground/70"
                 >
                   <Save className="size-3.5" />
                 </span>
@@ -83,12 +85,12 @@ export function FocusView({ onRequestSave, onQuickAddMethod }: FocusViewProps = 
           ) : (
             <button
               type="button"
-              aria-label="Сохранить"
+              aria-label={messages.workflow.focus.save}
               onClick={() => onRequestSave?.()}
-              className="inline-flex items-center gap-1.5 rounded border border-border px-2 py-0.5 hover:bg-accent"
+              className={`inline-flex items-center gap-1.5 rounded border border-border px-2 py-0.5 hover:bg-accent ${compactFocusRing}`}
             >
               <Save className="size-3.5" />
-              Сохранить
+              {messages.workflow.focus.save}
               {dirty && (
                 <span
                   data-testid="draft-dirty-dot"
@@ -126,7 +128,7 @@ export function FocusView({ onRequestSave, onQuickAddMethod }: FocusViewProps = 
           />
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            Нет активного реквеста — выбери метод в сайдбаре.
+            {messages.workflow.focus.noActiveRequest}
           </div>
         )}
       </div>

@@ -14,12 +14,12 @@ export function GrpcIcon({ variant, className }: GrpcIconProps) {
       data-variant={variant}
       className={cn(
         "inline-flex size-4 flex-none items-center justify-center select-none text-[10px] font-bold leading-none",
-        variant === "solid" && "rounded bg-blue-500 text-white",
+        variant === "solid" && "rounded bg-grpc text-grpc-foreground",
         // Letter has no box, so a slightly larger glyph keeps it from looking lost
         // in the 16px slot and lines it up with the row label.
-        variant === "letter" && "text-[13px] text-blue-500",
-        variant === "outline" && "rounded border border-blue-500 text-blue-500",
-        variant === "circle" && "rounded-full bg-blue-500 text-white",
+        variant === "letter" && "text-[13px] text-grpc",
+        variant === "outline" && "rounded border border-grpc text-grpc",
+        variant === "circle" && "rounded-full bg-grpc text-grpc-foreground",
         className,
       )}
     >

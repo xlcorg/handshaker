@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { ContractView } from "./ContractView";
 import type { MessageSchemaIpc } from "@/ipc/bindings";
+import { messages } from "@/lib/messages";
 
 const IN: MessageSchemaIpc = {
   root: "t.In",
@@ -36,23 +37,23 @@ describe("ContractView", () => {
 
   it("asks to pick a method when none is selected", () => {
     render(<ContractView method="" input={null} output={null} />);
-    expect(screen.getByText(/Выбери метод/)).toBeInTheDocument();
+    expect(screen.getByText(messages.contract.pickMethod)).toBeInTheDocument();
   });
 
   it("shows the unavailable placeholder when both schemas are missing", () => {
     render(<ContractView method="Search" input={null} output={null} />);
-    expect(screen.getByText(/Контракт недоступен/)).toBeInTheDocument();
+    expect(screen.getByText(messages.contract.unavailable)).toBeInTheDocument();
   });
 
   it("renders the present side and notes the missing one", () => {
     const { container } = render(<ContractView method="Search" input={null} output={OUT} />);
     expect(renderedLines(container)[0]).toBe("rpc Search(?) returns (Out);");
-    expect(screen.getByText(/Request-схема недоступна/)).toBeInTheDocument();
+    expect(screen.getByText(messages.contract.schemaUnavailable("Request"))).toBeInTheDocument();
   });
 
   it("notes a missing response side likewise", () => {
     const { container } = render(<ContractView method="Search" input={IN} output={null} />);
     expect(renderedLines(container)[0]).toBe("rpc Search(In) returns (?);");
-    expect(screen.getByText(/Response-схема недоступна/)).toBeInTheDocument();
+    expect(screen.getByText(messages.contract.schemaUnavailable("Response"))).toBeInTheDocument();
   });
 });

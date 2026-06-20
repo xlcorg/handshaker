@@ -22,6 +22,7 @@ vi.mock("@/ipc/client", () => ({
 
 import { CallPanel } from "./CallPanel";
 import { newStep } from "./model";
+import { messages } from "@/lib/messages";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { grpcMessageSchema, grpcRefreshContract, authInvalidate, authResolve, varsResolve, grpcInvokeOneshot } from "@/ipc/client";
 import type { MessageSchemaIpc, InvokeOutcomeIpc, ResolutionReportIpc } from "@/ipc/bindings";
@@ -119,7 +120,7 @@ describe("CallPanel contract tab", () => {
     );
     fireEvent.click(screen.getByRole("tab", { name: "Contract" }));
     // schema fetch is mocked away → both sides null → placeholder text
-    expect(screen.getByText(/Контракт недоступен/)).toBeInTheDocument();
+    expect(screen.getByText(messages.contract.unavailable)).toBeInTheDocument();
   });
 
   it("offers no Contract tab on non-editable (history) panels", () => {

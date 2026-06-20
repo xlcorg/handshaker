@@ -15,6 +15,7 @@ import { suggestSaveTarget } from "./grouping";
 import { CollectionPicker, type PickTarget } from "./CollectionPicker";
 import { newId } from "@/lib/ids";
 import { augmentTree, type PendingFolder, type PendingCollection } from "./savePicker";
+import { messages } from "@/lib/messages";
 
 const DEFAULT_NEW_COLLECTION_NAME = "New Collection";
 
@@ -219,7 +220,7 @@ export function SaveRequestDialog(props: SaveRequestDialogProps) {
             aria-label="Request name"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="My request"
+            placeholder={messages.catalog.saveDialog.defaultRequestName}
             autoFocus
           />
         </div>
@@ -227,13 +228,13 @@ export function SaveRequestDialog(props: SaveRequestDialogProps) {
         {!originBound && (
           <>
             {reco && reco.folderName && (
-              <div className="rounded-md border border-blue-500/60 bg-blue-500/10 px-2.5 py-2 text-xs">
-                <div className="mb-0.5 text-blue-400">✨ Рекомендуем сохранить как</div>
+              <div className="rounded-md border border-info/60 bg-info/10 px-2.5 py-2 text-xs">
+                <div className="mb-0.5 text-info">{messages.catalog.saveDialog.recommendationTitle}</div>
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-mono text-foreground">
                     {(selectedCollection?.name ?? DEFAULT_NEW_COLLECTION_NAME) + " / " + reco.folderName + " / " + name.trim()}
                   </span>
-                  <Button size="sm" variant="secondary" onClick={applyReco}>Добавить</Button>
+                  <Button size="sm" variant="secondary" onClick={applyReco}>{messages.catalog.saveDialog.addToRecommended}</Button>
                 </div>
               </div>
             )}
@@ -253,7 +254,7 @@ export function SaveRequestDialog(props: SaveRequestDialogProps) {
 
             <Input
               aria-label="Search collections"
-              placeholder="🔍 Search collection or folder"
+              placeholder={messages.catalog.saveDialog.searchCollectionOrFolder}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
@@ -272,11 +273,11 @@ export function SaveRequestDialog(props: SaveRequestDialogProps) {
                       if (e.key === "Enter") commitNew();
                       if (e.key === "Escape") { setAddingKind(null); setNewName(""); }
                     }}
-                    placeholder="Name"
+                    placeholder={messages.catalog.saveDialog.nameLabel}
                     className="h-7 text-xs"
                   />
-                  <Button size="sm" onClick={commitNew}>Add</Button>
-                  <Button size="sm" variant="ghost" onClick={() => { setAddingKind(null); setNewName(""); }}>Cancel</Button>
+                  <Button size="sm" onClick={commitNew}>{messages.catalog.saveDialog.add}</Button>
+                  <Button size="sm" variant="ghost" onClick={() => { setAddingKind(null); setNewName(""); }}>{messages.catalog.saveDialog.cancel}</Button>
                 </>
               ) : (
                 <>
@@ -303,8 +304,8 @@ export function SaveRequestDialog(props: SaveRequestDialogProps) {
         )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={submit} disabled={busy || (!originBound && !target)}>Save</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{messages.catalog.saveDialog.cancel}</Button>
+          <Button onClick={submit} disabled={busy || (!originBound && !target)}>{messages.catalog.saveDialog.save}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

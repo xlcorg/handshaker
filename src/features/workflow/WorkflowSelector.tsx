@@ -8,6 +8,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useWorkflowState, workflowStore } from "./store";
+import { messages } from "@/lib/messages";
 
 export function WorkflowSelector() {
   const { workflows, activeWorkflowId } = useWorkflowState();
@@ -40,7 +41,7 @@ export function WorkflowSelector() {
           onSelect={() => workflowStore.createWorkflow(`workflow-${workflows.length + 1}`)}
           className="flex items-center gap-2"
         >
-          <Plus className="size-3" /> Новый workflow
+          <Plus className="size-3" /> {messages.workflow.selector.newWorkflow}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

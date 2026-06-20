@@ -3,6 +3,7 @@ import { StepList } from "./StepList";
 import { useActiveWorkflow, workflowStore } from "./store";
 import { updateStep } from "./reducers";
 import type { Step } from "./model";
+import { messages } from "@/lib/messages";
 
 export function ListView() {
   const wf = useActiveWorkflow();
@@ -11,7 +12,7 @@ export function ListView() {
   if (wf.steps.length === 0) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-        Нет шагов — создай вызов в сайдбаре.
+        {messages.workflow.steps.empty}
       </div>
     );
   }
@@ -31,7 +32,7 @@ export function ListView() {
           />
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            Выбери шаг слева.
+            {messages.workflow.list.pickStep}
           </div>
         )}
       </div>

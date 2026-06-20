@@ -31,7 +31,7 @@ export function COBlock({ icon, title, desc, action, children, danger }: COBlock
             {title}
           </h3>
           {desc && (
-            <p className="text-[12px] text-muted-foreground/70 leading-relaxed mt-0.5 text-pretty">
+            <p className="text-[12.5px] text-muted-foreground/70 leading-relaxed mt-0.5 text-pretty">
               {desc}
             </p>
           )}

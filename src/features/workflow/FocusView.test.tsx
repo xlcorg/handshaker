@@ -45,6 +45,7 @@ vi.mock("@/features/catalog/uiState", () => ({
 import { FocusView } from "./FocusView";
 import { workflowStore } from "./store";
 import { newStep } from "./model";
+import { messages } from "@/lib/messages";
 
 function renderFV(ui = <FocusView />) {
   return render(<TooltipProvider>{ui}</TooltipProvider>);
@@ -61,8 +62,8 @@ beforeEach(() => {
 describe("FocusView Save affordance", () => {
   it("shows the empty state and no Save button when there is no draft", () => {
     renderFV();
-    expect(screen.getByText(/Нет активного реквеста/)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Сохранить" })).not.toBeInTheDocument();
+    expect(screen.getByText(messages.workflow.focus.noActiveRequest)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: messages.workflow.focus.save })).not.toBeInTheDocument();
   });
 
   it("shows a Save button for an unbound draft and calls onRequestSave", async () => {
@@ -72,7 +73,7 @@ describe("FocusView Save affordance", () => {
     renderFV(<FocusView onRequestSave={onRequestSave} />);
     expect(screen.getByText("CALL:GetX")).toBeInTheDocument();
     expect(screen.queryByTestId("draft-dirty-dot")).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Сохранить" }));
+    await user.click(screen.getByRole("button", { name: messages.workflow.focus.save }));
     expect(onRequestSave).toHaveBeenCalledTimes(1);
     expect(screen.queryByTestId("autosave-status")).not.toBeInTheDocument();
   });
@@ -83,14 +84,14 @@ describe("FocusView Save affordance", () => {
       { collectionId: "c1", requestId: "r1" },
     );
     renderFV(<FocusView onRequestSave={vi.fn()} />);
-    expect(screen.getByTestId("autosave-status")).toHaveAccessibleName("Сохранено");
-    expect(screen.queryByRole("button", { name: "Сохранить" })).not.toBeInTheDocument();
+    expect(screen.getByTestId("autosave-status")).toHaveAccessibleName(messages.workflow.focus.saved);
+    expect(screen.queryByRole("button", { name: messages.workflow.focus.save })).not.toBeInTheDocument();
   });
 
   it("shows the unbound breadcrumb label for a draft with no origin", () => {
     workflowStore.setDraft(newStep({ address: "h:443", tls: false, service: "p.S", method: "GetX" }));
     renderFV(<FocusView onRequestSave={vi.fn()} />);
-    expect(screen.getByTestId("draft-breadcrumb")).toHaveTextContent("Новый реквест");
+    expect(screen.getByTestId("draft-breadcrumb")).toHaveTextContent(messages.workflow.draft.newRequest);
   });
 
   it("shows a dirty dot once the unbound draft is edited", () => {
@@ -184,7 +185,7 @@ describe("FocusView Save affordance", () => {
     );
     const user = userEvent.setup();
     renderFV();
-    await user.click(screen.getByRole("button", { name: "Duplicate request" }));
+    await user.click(screen.getByRole("button", { name: messages.workflow.focus.duplicateRequest }));
     expect(cat.duplicateItem).toHaveBeenCalledWith("c1", "r1");
     await waitFor(() => {
       const st = workflowStore.getState();
@@ -199,7 +200,7 @@ describe("FocusView Save affordance", () => {
   it("shows no duplicate button for an unbound draft", () => {
     workflowStore.setDraft(newStep({ address: "h:1", tls: false, service: "p.S", method: "Get" }));
     renderFV();
-    expect(screen.queryByRole("button", { name: "Duplicate request" })).toBeNull();
+    expect(screen.queryByRole("button", { name: messages.workflow.focus.duplicateRequest })).toBeNull();
   });
 
   it("wires quick-add to CallPanel only for a bound draft (has a target collection)", () => {
