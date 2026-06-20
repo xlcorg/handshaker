@@ -204,6 +204,8 @@ export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMetho
             onResetTemplate={editable ? onResetBody : undefined}
             schema={schema}
             varCandidates={varCandidates}
+            metadataResolver={editable ? varsResolverFor(step.collectionId) : undefined}
+            metadataResolveKey={addressResolveKey}
           />
         </ResizablePanel>
         <ResizableHandle withHandle />

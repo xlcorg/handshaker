@@ -4,7 +4,7 @@ import { BodyEditor } from "@/features/invoke/BodyEditor";
 import { UnderlineTabs } from "@/components/ui/underline-tabs";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
-import type { SavedAuthConfigIpc, MessageSchemaIpc } from "@/ipc/bindings";
+import type { SavedAuthConfigIpc, MessageSchemaIpc, ResolutionReportIpc } from "@/ipc/bindings";
 import type { VarCandidate } from "@/features/vars/candidates";
 import { usePrefs } from "@/lib/use-prefs";
 import { MetadataEditor } from "./MetadataEditor";
@@ -23,11 +23,15 @@ export interface RequestTabsProps {
   onResetTemplate?: () => void;
   /** Flat field-schema for the current method; drives body autocomplete. */
   schema?: MessageSchemaIpc | null;
-  /** Variable candidates for body `{{`-autocomplete. */
+  /** Variable candidates for body + metadata `{{`-autocomplete. */
   varCandidates?: VarCandidate[];
+  /** Resolves a metadata value template for inline {{var}} highlighting; omit to disable. */
+  metadataResolver?: (t: string) => Promise<ResolutionReportIpc>;
+  /** Extra resolve inputs for metadata highlighting (active env, env revision). */
+  metadataResolveKey?: string;
 }
 
-export function RequestTabs({ step, serviceAuth, onBody, onMetadata, onSubmit, onResetTemplate, schema, varCandidates }: RequestTabsProps) {
+export function RequestTabs({ step, serviceAuth, onBody, onMetadata, onSubmit, onResetTemplate, schema, varCandidates, metadataResolver, metadataResolveKey }: RequestTabsProps) {
   const [tab, setTab] = useState<Tab>("request");
   const [prefs, setPref] = usePrefs();
   return (
@@ -79,7 +83,13 @@ export function RequestTabs({ step, serviceAuth, onBody, onMetadata, onSubmit, o
         ) : null}
         {tab === "metadata" ? (
           <div className="h-full overflow-auto">
-            <MetadataEditor rows={step.metadata} onChange={onMetadata} />
+            <MetadataEditor
+              rows={step.metadata}
+              onChange={onMetadata}
+              variables={varCandidates}
+              resolver={metadataResolver}
+              resolveKey={metadataResolveKey}
+            />
           </div>
         ) : null}
         {tab === "auth" ? (

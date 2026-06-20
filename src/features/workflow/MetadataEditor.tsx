@@ -1,13 +1,24 @@
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { VarHighlightInput } from "@/features/vars/VarHighlightInput";
+import type { VarCandidate } from "@/features/vars/candidates";
+import type { ResolutionReportIpc } from "@/ipc/bindings";
 import type { MetadataRow } from "./model";
 
 export interface MetadataEditorProps {
   rows: MetadataRow[];
   onChange: (next: MetadataRow[]) => void;
+  /** Resolves a value template for inline {{var}} highlighting; omit to disable. */
+  resolver?: (t: string) => Promise<ResolutionReportIpc>;
+  /** Extra resolve inputs (active env, env revision); change ⇒ re-resolve. */
+  resolveKey?: string;
+  /** Variable candidates for value-field {{-autocomplete. Only values are template-resolved
+   *  (keys are header names sent verbatim — see resolveStepTemplates), so only the value
+   *  field gets the dropdown + highlighting. */
+  variables?: VarCandidate[];
 }
 
-export function MetadataEditor({ rows, onChange }: MetadataEditorProps) {
+export function MetadataEditor({ rows, onChange, resolver, resolveKey, variables }: MetadataEditorProps) {
   const updateRow = (i: number, patch: Partial<MetadataRow>) =>
     onChange(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   const removeRow = (i: number) => onChange(rows.filter((_, j) => j !== i));
@@ -42,12 +53,16 @@ export function MetadataEditor({ rows, onChange }: MetadataEditorProps) {
               />
             </div>
             <div className="flex h-8 items-center px-3">
-              <input
+              <VarHighlightInput
                 value={row.value}
-                aria-label={`metadata-value-${i}`}
-                onChange={(e) => updateRow(i, { value: e.target.value })}
+                onChange={(v) => updateRow(i, { value: v })}
+                resolver={resolver}
+                resolveKey={resolveKey}
                 placeholder="value or {{var}}"
-                className="w-full bg-transparent font-mono text-xs placeholder:text-muted-foreground focus:outline-none"
+                ariaLabel={`metadata-value-${i}`}
+                metrics="h-8 px-0 font-mono text-xs leading-8"
+                variables={variables}
+                className="w-full"
               />
             </div>
             <div className="flex items-center justify-center">
