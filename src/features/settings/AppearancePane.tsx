@@ -19,6 +19,11 @@ import {
   ZOOM_MAX,
 } from "@/lib/use-prefs";
 import { nextZoom } from "@/features/shell/zoom";
+import { isMacOS } from "@/lib/platform";
+
+// Word-wrap toggle chord — platform-aware (plain ⌥Z is reserved for character input
+// on macOS, so the Mac chord is ⌥⌘Z; see features/shell/wordWrap.ts).
+const WORD_WRAP_CHORD = isMacOS ? "⌥⌘Z" : "Alt+Z";
 
 const METHOD_GROUP_STYLES: { key: MethodGroupStyle; label: string; hint: string }[] = [
   { key: "band", label: "Band", hint: "Filled header strip" },
@@ -118,7 +123,7 @@ export function AppearancePane() {
       <SettingsGroup title="Editor">
         <SettingsRow
           title="Word wrap"
-          hint="Wrap long lines in the request and response editors. Alt+Z toggles."
+          hint={`Wrap long lines in the request and response editors. ${WORD_WRAP_CHORD} toggles.`}
           control={
             <Switch checked={prefs.wordWrap} onCheckedChange={(v) => setPref("wordWrap", v)} />
           }

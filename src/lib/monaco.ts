@@ -41,6 +41,17 @@ const setupPromise = (async () => {
   monaco.languages.register({ id: "json-with-vars" });
   registerBodyCompletion(monaco);
 
+  // We own the wordWrap state via the `wordWrap` pref (toggled by our global hotkey
+  // — Alt+Z on Win/Linux, ⌥⌘Z on macOS — and the Settings switch). Disable Monaco's
+  // built-in Alt+Z (`editor.action.toggleWordWrap`) so it can't independently flip an
+  // editor's wrap out of sync with the pref. Critical on macOS: the hotkey there is
+  // ⌥⌘Z, so plain ⌥Z now reaches Monaco — unbinding (vs. swallowing) leaves ⌥Z free
+  // to type its normal character (Ω) while removing only the rogue toggle.
+  monaco.editor.addKeybindingRule({
+    keybinding: monaco.KeyMod.Alt | monaco.KeyCode.KeyZ,
+    command: null,
+  });
+
   monaco.languages.setLanguageConfiguration("json-with-vars", {
     brackets: [
       ["{", "}"],

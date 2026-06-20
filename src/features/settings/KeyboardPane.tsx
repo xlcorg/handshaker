@@ -1,11 +1,16 @@
 import { Kbd } from "@/components/ui/kbd";
 import { SettingsGroup, SettingsRow } from "./SettingsDialog";
+import { isMacOS } from "@/lib/platform";
+
+// Word-wrap chord differs by OS: plain ⌥Z is reserved for character input on macOS,
+// so the Mac chord is ⌥⌘Z (see features/shell/wordWrap.ts).
+const WORD_WRAP_KEYS = isMacOS ? ["⌥", "⌘", "Z"] : ["Alt", "Z"];
 
 // Each action lists one or more equivalent chords (rendered "·"-separated).
 const ROWS: Array<[string, string[][]]> = [
   ["Send request", [["Ctrl", "Enter"], ["Ctrl", "R"]]],
   ["Toggle sidebar", [["Ctrl", "B"]]],
-  ["Word wrap", [["Alt", "Z"]]],
+  ["Word wrap", [WORD_WRAP_KEYS]],
 ];
 
 export function KeyboardPane() {
