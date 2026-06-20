@@ -11,6 +11,13 @@ use crate::error::CoreError;
 
 const DEFAULT_EXPIRES_IN_SECS: u64 = 300;
 
+/// Cap on a token's lifetime. Guards `Instant::now() + Duration` (in `store`) against
+/// an overflow panic when a buggy/hostile IdP returns an absurd `expires_in` (e.g.
+/// `1e20`, which saturates to `u64::MAX`). `u32::MAX` seconds (~136 years) is
+/// effectively "never refetch" yet safe for `Instant` math, and matches the IPC DTO's
+/// `u32` so there is no truncation surprise downstream.
+const MAX_EXPIRES_IN_SECS: u64 = u32::MAX as u64;
+
 /// Parsed, validated token-endpoint response.
 #[derive(Debug)]
 pub struct TokenResponse {
@@ -70,7 +77,10 @@ fn parse_token_response(status: u16, body: &str) -> Result<TokenResponse, CoreEr
         .ok_or_else(|| CoreError::Auth("oauth2 token response missing access_token".into()))?;
     Ok(TokenResponse {
         access_token,
-        expires_in_secs: raw.expires_in.map(|v| v as u64).unwrap_or(DEFAULT_EXPIRES_IN_SECS),
+        expires_in_secs: raw
+            .expires_in
+            .map(|v| (v as u64).min(MAX_EXPIRES_IN_SECS))
+            .unwrap_or(DEFAULT_EXPIRES_IN_SECS),
     })
 }
 
@@ -310,6 +320,14 @@ mod tests {
     }
 
     #[test]
+    fn parse_clamps_absurd_expires_in() {
+        // A buggy/hostile IdP returning a huge expires_in (here 1e20) would, uncapped,
+        // saturate to u64::MAX and later overflow `Instant + Duration` → panic. Clamp it.
+        let r = parse_token_response(200, r#"{"access_token":"tok","expires_in":1e20}"#).unwrap();
+        assert_eq!(r.expires_in_secs, u32::MAX as u64);
+    }
+
+    #[test]
     fn parse_error_status_surfaces_idp_error_fields() {
         let body = r#"{"error":"invalid_client","error_description":"bad secret"}"#;
         let err = parse_token_response(401, body).unwrap_err();
@@ -440,5 +458,24 @@ mod tests {
             CoreError::Auth(m) => assert!(m.contains("invalid_client") && m.contains("nope")),
             other => panic!("expected Auth, got {other:?}"),
         }
+    }
+
+    #[tokio::test]
+    async fn force_fetch_survives_absurd_expires_in_without_panicking() {
+        // Regression: caching a token whose expires_in is absurd must not overflow
+        // `Instant::now() + Duration` in `store()` and panic. The value is clamped.
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/token"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(
+                r#"{"access_token":"tok","expires_in":1e20}"#,
+            ))
+            .mount(&server)
+            .await;
+
+        let provider = Oauth2TokenProvider::new();
+        let cfg = cfg_at(format!("{}/token", server.uri()));
+        let resp = provider.force_fetch(&cfg).await.unwrap();
+        assert_eq!(resp.expires_in_secs, u32::MAX as u64);
     }
 }
