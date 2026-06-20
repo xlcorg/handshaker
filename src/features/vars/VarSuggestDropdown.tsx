@@ -1,3 +1,5 @@
+import { createPortal } from "react-dom";
+
 import { cn } from "@/lib/cn";
 import type { VarCandidate } from "./candidates";
 
@@ -9,24 +11,29 @@ export interface VarSuggestDropdownProps {
   active: number;
   listboxId: string;
   onPick: (index: number) => void;
-  /** px offset from the wrapper's left edge (caret-anchored at `{{`). */
+  /** Viewport x of the caret (`{{` anchor) — the dropdown is `position: fixed`. */
   left: number;
+  /** Viewport y just below the input. */
+  top: number;
 }
 
 export function optionId(listboxId: string, i: number): string {
   return `${listboxId}-opt-${i}`;
 }
 
-export function VarSuggestDropdown({ items, total, active, listboxId, onPick, left }: VarSuggestDropdownProps) {
+export function VarSuggestDropdown({ items, total, active, listboxId, onPick, left, top }: VarSuggestDropdownProps) {
   // No scroll: the list is capped and the hidden remainder is signalled by the hint row
   // (Baymard — keep the suggestion list short, narrow by typing).
   const hidden = total - items.length;
-  return (
+  // Portal + `fixed` positioning so the list escapes any overflow-hidden/auto ancestor
+  // (e.g. the metadata editor's bordered container), which would otherwise clip it to a
+  // single visible row. This is the standard popover-in-overflow approach (Radix/Floating-UI).
+  return createPortal(
     <ul
       id={listboxId}
       role="listbox"
-      className="absolute top-full z-50 mt-1 w-[min(22rem,90vw)] rounded-md border border-border bg-popover py-1 text-xs shadow-md"
-      style={{ left }}
+      className="fixed z-50 w-[min(22rem,90vw)] rounded-md border border-border bg-popover py-1 text-xs shadow-md"
+      style={{ left, top }}
     >
       {items.map((c, i) => (
         <li
@@ -69,6 +76,7 @@ export function VarSuggestDropdown({ items, total, active, listboxId, onPick, le
           …ещё {hidden} — продолжай ввод
         </li>
       ) : null}
-    </ul>
+    </ul>,
+    document.body,
   );
 }

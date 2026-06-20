@@ -101,7 +101,7 @@ export function VarHighlightInput({
 
   // Autocomplete dropdown state
   const listboxId = useId();
-  const [suggest, setSuggest] = useState<{ items: VarCandidate[]; total: number; active: number; left: number } | null>(null);
+  const [suggest, setSuggest] = useState<{ items: VarCandidate[]; total: number; active: number; left: number; top: number } | null>(null);
   // Track the last-typed text + caret position independently of the controlled value.
   // `inputRef.current.value` is reset to the controlled `value` prop on React re-render,
   // so reading from it after a re-render (e.g. in onKeyUp that fires after the re-render)
@@ -115,6 +115,20 @@ export function VarHighlightInput({
   useEffect(() => {
     lastTypedRef.current = { text: value, caret: value.length };
   }, [value]);
+
+  // The dropdown is `fixed` (portaled), so a scroll/resize of any ancestor leaves it
+  // mispositioned. Close it on those rather than chase the caret — typing reopens it.
+  const suggestOpen = suggest != null;
+  useEffect(() => {
+    if (!suggestOpen) return;
+    const close = () => setSuggest(null);
+    window.addEventListener("scroll", close, true); // capture: catch nested scroll containers
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [suggestOpen]);
 
   // Recompute the open-token + matches from the LIVE input (DOM value + caret), NOT the
   // `value` prop — the prop can lag within a tick, and an uncontrolled-parent test drives
@@ -131,12 +145,17 @@ export function VarHighlightInput({
     // Cap the visible list (no scroll); the "…ещё M" hint signals the rest. Narrow by typing.
     const items = all.slice(0, MAX_VAR_SUGGESTIONS);
     const total = all.length;
-    let left = 0;
+    let caretX = 0;
     if (measureRef.current) {
       measureRef.current.textContent = text.slice(0, tok.tokenStart);
-      left = measureRef.current.offsetWidth - el.scrollLeft;
+      caretX = measureRef.current.offsetWidth - el.scrollLeft;
     }
-    setSuggest((prev) => ({ items, total, active: prev ? Math.min(prev.active, items.length - 1) : 0, left: Math.max(0, left) }));
+    // The dropdown is portal+fixed (escapes overflow-hidden ancestors), so anchor it in
+    // viewport coords: the wrapper's left edge + the caret offset, just below the field.
+    const rect = wrapperRef.current?.getBoundingClientRect();
+    const left = (rect ? rect.left : 0) + Math.max(0, caretX);
+    const top = (rect ? rect.bottom : 0) + 4;
+    setSuggest((prev) => ({ items, total, active: prev ? Math.min(prev.active, items.length - 1) : 0, left, top }));
   };
 
   const pick = (index: number) => {
@@ -287,6 +306,7 @@ export function VarHighlightInput({
           listboxId={listboxId}
           onPick={pick}
           left={suggest.left}
+          top={suggest.top}
         />
       )}
     </div>
