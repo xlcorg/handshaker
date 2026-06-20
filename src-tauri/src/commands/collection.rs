@@ -115,14 +115,13 @@ impl AppState {
         // position. On error we return before either upsert, so stored state is untouched.
         tree::restore_item(&mut tgt.items, snap.item, new_parent, position as usize)?;
 
-        // No cross-store transaction primitive exists (the store is per-collection atomic only).
-        // We persist source-removal then target-insert: if the second upsert failed, the item
-        // would be lost rather than duplicated. Loss is the accepted tradeoff here because both
-        // upserts target an in-memory store backed by a single data dir and effectively cannot
-        // fail independently in practice; should that change, prefer target-first (duplicate over
-        // loss).
-        self.collection_store.upsert(src)?;
-        self.collection_store.upsert(tgt)
+        // No cross-store transaction primitive exists (the store is per-collection atomic only),
+        // so persist target-first: the target (with the item inserted) is written before the
+        // source (with the item removed). If the second write fails the item is duplicated across
+        // both collections rather than lost; if the first write fails we return before touching
+        // the source, so the item stays put. Either failure is recoverable — loss is not.
+        self.collection_store.upsert(tgt)?;
+        self.collection_store.upsert(src)
     }
 
     pub fn collection_duplicate_item_impl(&self, collection_id: &str, item_id: &str) -> Result<String, CoreError> {
@@ -336,6 +335,7 @@ pub async fn collection_set_expanded(
 mod tests {
     use super::*;
     use crate::ipc::collection::{FolderIpc, SavedRequestIpc};
+    use handshaker_core::collections::CollectionStore;
     use uuid::Uuid;
 
     fn empty_collection_ipc(id: u128, name: &str) -> CollectionIpc {
@@ -577,5 +577,82 @@ mod tests {
         state.collection_upsert_impl(empty_collection_ipc(1, "c")).unwrap();
         let err = state.collection_set_expanded_impl(&cid(1), Some(cid(999)), true).unwrap_err();
         assert!(matches!(err, CoreError::InvalidTarget(_)));
+    }
+
+    // --- cross-collection move: partial-persistence failure must not lose the item ---
+
+    /// Test double: an in-memory store whose `upsert` fails for one specific collection
+    /// id, simulating a partial-persistence failure (e.g. disk full) mid move.
+    struct FailUpsertOf {
+        inner: handshaker_core::collections::InMemoryCollectionStore,
+        fail_id: handshaker_core::collections::ids::CollectionId,
+    }
+
+    impl handshaker_core::collections::CollectionStore for FailUpsertOf {
+        fn list(&self) -> Vec<handshaker_core::collections::Collection> {
+            self.inner.list()
+        }
+        fn get(&self, id: CollectionId) -> Option<handshaker_core::collections::Collection> {
+            self.inner.get(id)
+        }
+        fn upsert(&self, c: handshaker_core::collections::Collection) -> Result<(), CoreError> {
+            if c.id == self.fail_id {
+                return Err(CoreError::Persistence("simulated disk failure".into()));
+            }
+            self.inner.upsert(c)
+        }
+        fn delete(&self, id: CollectionId) -> Result<(), CoreError> {
+            self.inner.delete(id)
+        }
+    }
+
+    fn state_with_collection_store(
+        store: std::sync::Arc<dyn handshaker_core::collections::CollectionStore>,
+    ) -> AppState {
+        let ui_dir = tempfile::tempdir().unwrap().keep();
+        AppState {
+            env_store: std::sync::Arc::new(
+                handshaker_core::env::in_memory::InMemoryEnvironmentStore::new(),
+            ),
+            active_env: tokio::sync::RwLock::new(None),
+            active_env_path: None,
+            collection_store: store,
+            contract_cache: std::sync::Arc::new(handshaker_core::grpc::InMemoryContractCache::new()),
+            ui_state_store: std::sync::Arc::new(
+                handshaker_core::ui_state::FileUiStateStore::load(&ui_dir).unwrap(),
+            ),
+            in_flight: std::sync::Mutex::new(HashMap::new()),
+            oauth2_provider: handshaker_core::auth::oauth2::Oauth2TokenProvider::new(),
+            recovered: std::sync::Mutex::new(Vec::new()),
+        }
+    }
+
+    #[test]
+    fn move_across_target_first_keeps_item_when_persist_fails() {
+        // Seed a source (id=1) holding the request and an empty target (id=2) directly
+        // into the inner store, then wrap it so persisting the *target* fails.
+        let inner = handshaker_core::collections::InMemoryCollectionStore::new();
+        let mut src_ipc = empty_collection_ipc(1, "src");
+        src_ipc.items = vec![request_ipc(20, "r")];
+        inner.upsert(src_ipc.into_core().unwrap()).unwrap();
+        inner.upsert(empty_collection_ipc(2, "dst").into_core().unwrap()).unwrap();
+
+        let store = std::sync::Arc::new(FailUpsertOf {
+            inner,
+            fail_id: CollectionId(Uuid::from_u128(2)),
+        });
+        let state = state_with_collection_store(store);
+
+        // Move 20 from src(1) → dst(2). The target upsert fails.
+        let err = state
+            .collection_move_item_across_impl(&cid(1), &cid(20), &cid(2), None, 0)
+            .unwrap_err();
+        assert!(matches!(err, CoreError::Persistence(_)));
+
+        // The item must NOT be lost: target-first means the source removal was never
+        // persisted, so the request is still recoverable from the source collection.
+        let src = state.collection_get_impl(&cid(1)).unwrap();
+        assert_eq!(src.items.len(), 1);
+        assert!(matches!(&src.items[0], ItemIpc::Request(r) if r.id == cid(20)));
     }
 }

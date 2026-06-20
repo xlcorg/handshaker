@@ -18,7 +18,7 @@ use commands::grpc::{
     grpc_build_request_skeleton, grpc_cancel, grpc_describe, grpc_invoke_oneshot,
     grpc_message_schema, grpc_refresh_contract,
 };
-use commands::meta::app_version;
+use commands::meta::{app_version, startup_recovery_take};
 use commands::bundle::{bundle_export, bundle_import_apply, bundle_import_inspect};
 use commands::ui_state::{app_settings_get, app_settings_set};
 use commands::vars::vars_resolve;
@@ -33,6 +33,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
     Builder::<tauri::Wry>::new()
         .commands(collect_commands![
             app_version,
+            startup_recovery_take,
             grpc_describe,
             grpc_refresh_contract,
             grpc_build_request_skeleton,

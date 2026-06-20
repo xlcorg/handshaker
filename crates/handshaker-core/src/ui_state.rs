@@ -11,7 +11,7 @@ use std::sync::RwLock;
 
 use serde::{Deserialize, Serialize};
 
-use crate::persist::{atomic_write_json, read_json_or_default, Envelope};
+use crate::persist::{atomic_write_json, read_json_or_recover, Envelope};
 use crate::CoreError;
 
 /// Reference to the request currently open in the workflow editor.
@@ -36,14 +36,23 @@ pub struct UiState {
 pub struct FileUiStateStore {
     path: PathBuf,
     inner: RwLock<UiState>,
+    /// File quarantined as corrupt during `load` (moved to `<name>.corrupt`).
+    recovered: Vec<PathBuf>,
 }
 
 impl FileUiStateStore {
     /// Load `ui-state.json` from `dir` (empty default if the file is missing).
     pub fn load(dir: &Path) -> Result<Self, CoreError> {
         let path = dir.join("ui-state.json");
-        let state: UiState = read_json_or_default(&path)?;
-        Ok(Self { path, inner: RwLock::new(state) })
+        let mut recovered = Vec::new();
+        let state: UiState = read_json_or_recover(&path, &mut recovered)?;
+        Ok(Self { path, inner: RwLock::new(state), recovered })
+    }
+
+    /// Files quarantined as corrupt during `load`, so the caller can surface a
+    /// "recovered from a corrupt file" notice. Empty on a clean load.
+    pub fn recovered_files(&self) -> &[PathBuf] {
+        &self.recovered
     }
 
     /// Snapshot the current state.
@@ -90,5 +99,17 @@ mod tests {
         let dir = tempdir().unwrap();
         let store = FileUiStateStore::load(dir.path()).unwrap();
         assert_eq!(store.get(), UiState::default());
+    }
+
+    #[test]
+    fn corrupt_file_is_quarantined_and_loads_default() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("ui-state.json");
+        std::fs::write(&path, b"{ not valid json").unwrap();
+        // Must not brick: load default, move the corrupt file aside, record it.
+        let store = FileUiStateStore::load(dir.path()).unwrap();
+        assert_eq!(store.get(), UiState::default(), "loads default rather than erroring");
+        assert!(!path.exists(), "the corrupt file was moved aside");
+        assert_eq!(store.recovered_files().len(), 1, "the corrupt file was recorded");
     }
 }

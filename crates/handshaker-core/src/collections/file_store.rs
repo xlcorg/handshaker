@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::sync::RwLock;
 
 use crate::error::CoreError;
-use crate::persist::{atomic_write_json, read_json, Envelope};
+use crate::persist::{atomic_write_json, quarantine_corrupt, read_json, Envelope};
 
 use super::ids::CollectionId;
 use super::store::CollectionStore;
@@ -18,6 +18,8 @@ use super::Collection;
 pub struct FileCollectionStore {
     dir: PathBuf,
     inner: RwLock<HashMap<CollectionId, Collection>>,
+    /// Files quarantined as corrupt during `load` (each moved to `<name>.corrupt`).
+    recovered: Vec<PathBuf>,
 }
 
 impl FileCollectionStore {
@@ -26,6 +28,7 @@ impl FileCollectionStore {
         fs::create_dir_all(&dir)
             .map_err(|e| CoreError::Persistence(format!("create dir {}: {e}", dir.display())))?;
         let mut map = HashMap::new();
+        let mut recovered = Vec::new();
         for entry in fs::read_dir(&dir)
             .map_err(|e| CoreError::Persistence(format!("read dir {}: {e}", dir.display())))?
         {
@@ -34,14 +37,30 @@ impl FileCollectionStore {
             if path.extension().and_then(|s| s.to_str()) != Some("json") {
                 continue; // skip orphaned .tmp etc.
             }
-            let c: Collection = read_json(&path)?;
-            map.insert(c.id, c);
+            match read_json::<Collection>(&path) {
+                Ok(c) => {
+                    map.insert(c.id, c);
+                }
+                // A corrupt collection file is quarantined and skipped, so one bad file
+                // neither bricks startup nor drops its sibling collections.
+                Err(_) => {
+                    if let Some(q) = quarantine_corrupt(&path) {
+                        recovered.push(q);
+                    }
+                }
+            }
         }
-        Ok(Self { dir, inner: RwLock::new(map) })
+        Ok(Self { dir, inner: RwLock::new(map), recovered })
     }
 
     fn file_path(&self, id: CollectionId) -> PathBuf {
         self.dir.join(format!("{}.json", id.0))
+    }
+
+    /// Files quarantined as corrupt during `load`, so the caller can surface a
+    /// "recovered from a corrupt file" notice. Empty on a clean load.
+    pub fn recovered_files(&self) -> &[PathBuf] {
+        &self.recovered
     }
 }
 
@@ -128,11 +147,20 @@ mod tests {
     }
 
     #[test]
-    fn corrupt_file_is_persistence_error_not_panic() {
+    fn corrupt_file_is_quarantined_and_siblings_still_load() {
         let dir = tempfile::tempdir().unwrap();
+        // One good collection on disk…
+        let store = FileCollectionStore::load(dir.path().to_path_buf()).unwrap();
+        store.upsert(coll(1, "good")).unwrap();
+        drop(store);
+        // …plus a corrupt sibling file.
         let bad = dir.path().join(format!("{}.json", Uuid::from_u128(3)));
         std::fs::write(&bad, b"{ not valid json").unwrap();
-        let err = FileCollectionStore::load(dir.path().to_path_buf()).unwrap_err();
-        assert!(matches!(err, CoreError::Persistence(_)));
+
+        // Load must NOT brick: the good collection loads, the corrupt file is moved aside.
+        let store = FileCollectionStore::load(dir.path().to_path_buf()).unwrap();
+        assert_eq!(store.list().len(), 1, "the good collection still loads");
+        assert!(!bad.exists(), "the corrupt file was moved aside");
+        assert_eq!(store.recovered_files().len(), 1, "the corrupt file was recorded");
     }
 }

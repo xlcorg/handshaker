@@ -8,23 +8,32 @@ use std::path::PathBuf;
 use std::sync::RwLock;
 
 use crate::error::CoreError;
-use crate::persist::{atomic_write_json, read_json_or_default, Envelope};
+use crate::persist::{atomic_write_json, read_json_or_recover, Envelope};
 
 use super::{validate_env_name, Environment, EnvironmentStore};
 
 pub struct FileEnvironmentStore {
     path: PathBuf,
     inner: RwLock<Vec<Environment>>,
+    /// Files quarantined as corrupt during `load` (moved to `<name>.corrupt`).
+    recovered: Vec<PathBuf>,
 }
 
 impl FileEnvironmentStore {
     pub fn load(path: PathBuf) -> Result<Self, CoreError> {
-        let mut list: Vec<Environment> = read_json_or_default(&path)?;
+        let mut recovered = Vec::new();
+        let mut list: Vec<Environment> = read_json_or_recover(&path, &mut recovered)?;
         // A hand-edited file may contain duplicate names; the store relies on
         // name uniqueness. Keep the first occurrence of each name.
         let mut seen = std::collections::HashSet::new();
         list.retain(|e| seen.insert(e.name.clone()));
-        Ok(Self { path, inner: RwLock::new(list) })
+        Ok(Self { path, inner: RwLock::new(list), recovered })
+    }
+
+    /// Files quarantined as corrupt during `load`, so the caller can surface a
+    /// "recovered from a corrupt file" notice. Empty on a clean load.
+    pub fn recovered_files(&self) -> &[PathBuf] {
+        &self.recovered
     }
 
     /// Serialize the given list to disk in its (user-meaningful) order.
@@ -150,6 +159,18 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let store = FileEnvironmentStore::load(dir.path().join("environments.json")).unwrap();
         assert!(store.list().is_empty());
+    }
+
+    #[test]
+    fn corrupt_file_is_quarantined_and_starts_empty() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("environments.json");
+        std::fs::write(&path, b"{ not valid json").unwrap();
+        // Must not brick: start empty, move the corrupt file aside, record it.
+        let store = FileEnvironmentStore::load(path.clone()).unwrap();
+        assert!(store.list().is_empty(), "starts empty rather than erroring");
+        assert!(!path.exists(), "the corrupt file was moved aside");
+        assert_eq!(store.recovered_files().len(), 1, "the corrupt file was recorded");
     }
 
     #[test]

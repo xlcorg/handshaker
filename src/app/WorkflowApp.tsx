@@ -38,6 +38,7 @@ import { UpdaterProvider } from "@/features/updater/updaterContext";
 import { useUiZoom } from "@/features/shell/zoom";
 import { useWordWrapHotkey } from "@/features/shell/wordWrap";
 import { dismissSplash } from "@/features/shell/splash";
+import { useStartupRecovery } from "@/features/shell/startupRecovery";
 
 function renderView(
   view: ViewMode,
@@ -80,6 +81,8 @@ export function WorkflowApp() {
   useUiZoom();
   // Глобальный Alt+Z → переключает prefs.wordWrap (перенос строк в редакторах тела).
   useWordWrapHotkey();
+  // Уведомить один раз о файлах, помещённых в карантин при старте (битый JSON → .corrupt).
+  useStartupRecovery();
 
   // Снять стартовый оверлей #splash, как только оболочка смонтирована (маунт корня
   // = первый осмысленный кадр). Дисмисс через CSS-fade; идемпотентно (см. splash.ts).

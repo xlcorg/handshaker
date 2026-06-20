@@ -90,6 +90,40 @@ pub fn read_json_or_default<T: DeserializeOwned + Default>(path: &Path) -> Resul
     }
 }
 
+/// Move a corrupt file aside (to `<path>.corrupt`) so it stops bricking loads while staying
+/// recoverable on disk. Best-effort: returns the new path on success, `None` if the rename
+/// failed (the file is then left in place). Any stale `<path>.corrupt` is overwritten.
+pub fn quarantine_corrupt(path: &Path) -> Option<PathBuf> {
+    let mut q = path.as_os_str().to_owned();
+    q.push(".corrupt");
+    let q = PathBuf::from(q);
+    let _ = fs::remove_file(&q);
+    fs::rename(path, &q).ok().map(|()| q)
+}
+
+/// Like [`read_json_or_default`], but a *corrupt* (present-but-unparsable) file is quarantined
+/// (moved to `<path>.corrupt`, its new path pushed onto `recovered`) and the default returned,
+/// rather than erroring. A missing file still defaults silently; a non-`NotFound` IO error
+/// still propagates. This is what keeps one bad file from bricking startup.
+pub fn read_json_or_recover<T: DeserializeOwned + Default>(
+    path: &Path,
+    recovered: &mut Vec<PathBuf>,
+) -> Result<T, CoreError> {
+    match fs::read(path) {
+        Ok(bytes) => match parse_envelope(&bytes, path) {
+            Ok(value) => Ok(value),
+            Err(_) => {
+                if let Some(q) = quarantine_corrupt(path) {
+                    recovered.push(q);
+                }
+                Ok(T::default())
+            }
+        },
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(T::default()),
+        Err(e) => Err(CoreError::Persistence(format!("read {}: {e}", path.display()))),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -109,6 +143,36 @@ mod tests {
         let path = dir.path().join("nope.json");
         let back: Vec<u32> = read_json_or_default(&path).unwrap();
         assert!(back.is_empty());
+    }
+
+    #[test]
+    fn recover_quarantines_corrupt_file_and_returns_default() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("data.json");
+        std::fs::write(&path, b"{ not valid json").unwrap();
+        let mut recovered = Vec::new();
+        let back: Vec<u32> = read_json_or_recover(&path, &mut recovered).unwrap();
+        assert!(back.is_empty(), "corrupt file should yield the default");
+        assert!(!path.exists(), "corrupt file should be moved aside");
+        assert_eq!(recovered.len(), 1, "the quarantined file should be recorded");
+        assert!(recovered[0].exists(), "quarantine copy should exist on disk");
+        assert!(recovered[0].to_string_lossy().ends_with(".corrupt"));
+    }
+
+    #[test]
+    fn recover_passes_through_valid_and_missing_without_recording() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("data.json");
+        let mut recovered = Vec::new();
+        // missing → default, nothing recorded
+        let back: Vec<u32> = read_json_or_recover(&path, &mut recovered).unwrap();
+        assert!(back.is_empty());
+        assert!(recovered.is_empty());
+        // valid → parsed, nothing recorded
+        atomic_write_json(&path, &Envelope::new(vec![1u32, 2, 3])).unwrap();
+        let back: Vec<u32> = read_json_or_recover(&path, &mut recovered).unwrap();
+        assert_eq!(back, vec![1, 2, 3]);
+        assert!(recovered.is_empty());
     }
 
     #[test]
