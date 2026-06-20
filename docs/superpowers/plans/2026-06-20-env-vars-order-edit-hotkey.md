@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust (handshaker-core + src-tauri), `indexmap` crate, tauri-specta bindings, React 18 + TypeScript + Vitest.
 
-**Status banner:** 🚧 спека утверждена (`docs/superpowers/specs/2026-06-20-env-vars-order-edit-hotkey-design.md`), имплементация впереди. Ветка `claude/peaceful-gauss-f0850e` (сидит ровно на `main` `8b0a611` после ff `{{var}}`). Гейт: `cargo test --workspace` · `pnpm test` · `pnpm lint` · `pnpm build` · bindings no-drift.
+**Status banner:** ✅ code-complete (гейт зелёный, spec+quality ревью на каждой половине + финальное ревью = READY TO MERGE). Остаток — live WebView2-проход + вливание ff в `main`. Ветка `claude/peaceful-gauss-f0850e`. Коммиты: `10c4aaf` (core IndexMap) · `2d7df41` (IPC) · `afac67f` (predicate) · `60b2091` (wire+hint) · `6f9d684` (Cargo.lock). Гейт: `cargo test --workspace` · `pnpm test` 1084 · `pnpm lint` · `pnpm build` · bindings no-drift (specta сворачивает `IndexMap`→тот же TS `Record`).
 
 **Commit convention:** conventional commits; end every commit message with:
 ```

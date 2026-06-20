@@ -7,11 +7,14 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 ## Active work
 
 Активная фича — **Порядок переменных + хоткей открытия Edit environment**
-(🚧 спека утверждена, имплементация впереди; ветка `claude/peaceful-gauss-f0850e`;
-спека `docs/superpowers/specs/2026-06-20-env-vars-order-edit-hotkey-design.md`) —
-(1) `Environment.variables`/`Collection.variables` `HashMap` → `IndexMap` ⇒ порядок
-переменных переживает рестарт и экспорт (фронт не меняется); (2) глобальный хоткей
-**Ctrl+Shift+E** открывает Edit environment активного окружения.
+(✅ code-complete, гейт зелёный, финальное ревью READY TO MERGE; ветка
+`claude/peaceful-gauss-f0850e`; план+спека `2026-06-20-env-vars-order-edit-hotkey*`;
+остаток — live WebView2-проход + ff в `main`) — (1) `Environment.variables`/
+`Collection.variables` `HashMap` → `IndexMap` ⇒ порядок переменных переживает
+рестарт и экспорт (фронт не меняется; движок резолва на `&HashMap`, конвертация на
+границе; specta сворачивает `IndexMap` в тот же TS `Record` ⇒ без дрейфа bindings);
+(2) глобальный хоткей **Ctrl+Shift+E** открывает Edit environment активного
+окружения (нет активного → create-mode).
 
 Последняя влитая — **Автокомплит `{{var}}` (переменные окружения + коллекции)**
 (🎉 DONE 2026-06-19, ребейз+ff в `main` `8b0a611` 2026-06-20; план+спека
