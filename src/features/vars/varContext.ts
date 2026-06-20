@@ -17,6 +17,11 @@ export function openVarToken(textBefore: string): OpenToken | null {
   return { partial, tokenStart: open };
 }
 
+/** Max variable suggestions shown in the plain-input dropdown before a "…ещё M" hint.
+ *  Baymard autocomplete guidance: keep ≤10 on desktop and avoid the scroll paradigm —
+ *  narrow by typing instead. The Monaco body widget is unaffected (native scroll). */
+export const MAX_VAR_SUGGESTIONS = 8;
+
 /** Case-insensitive substring filter; prefix matches rank above mid-string matches.
  *  Stable within a rank (Array.sort is stable), so input order is preserved. */
 export function filterCandidates(cands: VarCandidate[], partial: string): VarCandidate[] {

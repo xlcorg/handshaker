@@ -128,4 +128,17 @@ describe("VarHighlightInput autocomplete", () => {
     typeInto(input, "{{ho");
     expect(screen.queryByRole("listbox")).toBeNull();
   });
+
+  it("caps the list at 8 (no scroll) and shows an '…ещё M' hint", () => {
+    const many: VarCandidate[] = Array.from({ length: 10 }, (_, i) => ({
+      name: `var${i}`,
+      value: "x",
+      origin: "env" as const,
+    }));
+    render(<VarHighlightInput value="" onChange={() => {}} ariaLabel="addr" variables={many} />);
+    const input = screen.getByLabelText("addr") as HTMLInputElement;
+    typeInto(input, "{{var"); // all 10 match → capped to 8, 2 hidden
+    expect(screen.getAllByRole("option")).toHaveLength(8);
+    expect(screen.getByText(/ещё 2/)).toBeInTheDocument();
+  });
 });

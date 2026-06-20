@@ -10,7 +10,7 @@ const items: VarCandidate[] = [
 
 describe("VarSuggestDropdown", () => {
   it("renders a listbox with option rows showing name, value and origin", () => {
-    render(<VarSuggestDropdown items={items} active={0} listboxId="lb" onPick={() => {}} left={0} />);
+    render(<VarSuggestDropdown items={items} total={items.length} active={0} listboxId="lb" onPick={() => {}} left={0} />);
     expect(screen.getByRole("listbox")).toBeInTheDocument();
     const opts = screen.getAllByRole("option");
     expect(opts).toHaveLength(2);
@@ -23,9 +23,25 @@ describe("VarSuggestDropdown", () => {
 
   it("calls onPick with the index on mousedown", () => {
     const onPick = vi.fn();
-    render(<VarSuggestDropdown items={items} active={0} listboxId="lb" onPick={onPick} left={0} />);
+    render(<VarSuggestDropdown items={items} total={items.length} active={0} listboxId="lb" onPick={onPick} left={0} />);
     // mousedown (not click) so the input keeps focus
     screen.getAllByRole("option")[1].dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
     expect(onPick).toHaveBeenCalledWith(1);
+  });
+
+  it("caps the visible list and shows an '…ещё M' hint with honest aria-setsize", () => {
+    const many: VarCandidate[] = Array.from({ length: 8 }, (_, i) => ({ name: `v${i}`, value: "", origin: "env" as const }));
+    // items = the 8 visible, total = 10 ⇒ 2 hidden
+    render(<VarSuggestDropdown items={many} total={10} active={0} listboxId="lb" onPick={() => {}} left={0} />);
+    const opts = screen.getAllByRole("option");
+    expect(opts).toHaveLength(8); // no scroll: capped, not all rendered
+    expect(opts[0]).toHaveAttribute("aria-setsize", "10");
+    expect(opts[0]).toHaveAttribute("aria-posinset", "1");
+    expect(screen.getByText(/ещё 2/)).toBeInTheDocument();
+  });
+
+  it("omits the hint row when nothing is hidden", () => {
+    render(<VarSuggestDropdown items={items} total={items.length} active={0} listboxId="lb" onPick={() => {}} left={0} />);
+    expect(screen.queryByText(/ещё/)).toBeNull();
   });
 });
