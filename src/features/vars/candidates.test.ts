@@ -2,15 +2,15 @@ import { describe, it, expect } from "vitest";
 import { buildVarCandidates } from "./candidates";
 
 describe("buildVarCandidates", () => {
-  it("lists env first, then collection, env wins on name clash (marked overrides)", () => {
+  it("lists collection first, then env, env wins on name clash (marked overrides)", () => {
     const out = buildVarCandidates(
       { host: "api.staging", token: "jwt" },
       { host: "api.local", order_id: "42" },
     );
     expect(out).toEqual([
+      { name: "order_id", value: "42", origin: "collection" },
       { name: "host", value: "api.staging", origin: "env", overrides: true },
       { name: "token", value: "jwt", origin: "env" },
-      { name: "order_id", value: "42", origin: "collection" },
     ]);
   });
 
