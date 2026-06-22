@@ -24,11 +24,16 @@ pub async fn base64_inspect(input: String) -> Result<Base64InspectIpc, String> {
 ///
 /// Async-command-safe: a non-blocking dialog (callback + oneshot) rather than
 /// `blocking_save_file`, which must NOT run on the main thread.
+///
+/// No extension filter is set on purpose: decoded content is arbitrary (json /
+/// txt / png / pdf / raw base64 …), and on macOS a filter LOCKS the extension —
+/// `NSSavePanel` greys out every other type and force-appends the filter's first
+/// extension, so the user can't pick their own (rfd docs; tauri-plugin-dialog
+/// guidance is to drop the filter for "any extension"). `default_name` still
+/// carries the suggested extension, so it's a suggestion, not a cage.
 async fn save_bytes_via_dialog(
     app: &tauri::AppHandle,
     default_name: &str,
-    filter_label: &str,
-    filter_exts: &[&str],
     bytes: &[u8],
 ) -> Result<Option<String>, String> {
     use tauri_plugin_dialog::DialogExt;
@@ -37,7 +42,6 @@ async fn save_bytes_via_dialog(
     app.dialog()
         .file()
         .set_file_name(default_name)
-        .add_filter(filter_label, filter_exts)
         .save_file(move |path| {
             let _ = tx.send(path);
         });
@@ -59,14 +63,7 @@ async fn save_bytes_via_dialog(
 pub async fn base64_save(app: tauri::AppHandle, input: String) -> Result<Option<String>, String> {
     let bytes = decode_lenient(&input)?;
     let ext = suggested_extension(&classify(&bytes));
-    save_bytes_via_dialog(
-        &app,
-        &format!("decoded.{ext}"),
-        &ext.to_uppercase(),
-        &[ext.as_str()],
-        &bytes,
-    )
-    .await
+    save_bytes_via_dialog(&app, &format!("decoded.{ext}"), &bytes).await
 }
 
 /// Write the RAW base64 text (verbatim, no decode) to a user-picked file.
@@ -77,7 +74,7 @@ pub async fn base64_save_encoded(
     app: tauri::AppHandle,
     input: String,
 ) -> Result<Option<String>, String> {
-    save_bytes_via_dialog(&app, "base64.txt", "Text", &["txt"], input.as_bytes()).await
+    save_bytes_via_dialog(&app, "base64.txt", input.as_bytes()).await
 }
 
 #[cfg(test)]
