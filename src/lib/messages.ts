@@ -52,6 +52,13 @@ export const messages = {
     unavailable:
       "Contract unavailable — the method schema was not received (reflection is off or the server is unreachable).",
   },
+  bodyview: {
+    menu: {
+      /** Context-menu toggle label — reads as the action a click performs. */
+      wordWrap: (wrapped: boolean): string =>
+        wrapped ? "Disable word wrap" : "Enable word wrap",
+    },
+  },
   vars: {
     suggest: {
       moreResults: (count: number) => `…${count} more — keep typing`,
