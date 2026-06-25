@@ -114,7 +114,8 @@ pub async fn invoke_unary(
     let input_desc = m.input();
     let output_desc = m.output();
 
-    let mut deserializer = serde_json::Deserializer::from_str(request_json);
+    let cleaned = lenient::strip_trailing_commas(request_json);
+    let mut deserializer = serde_json::Deserializer::from_str(&cleaned);
     let request_msg =
         prost_reflect::DynamicMessage::deserialize(input_desc.clone(), &mut deserializer)
             .map_err(|e| CoreError::EncodeRequest(e.to_string()))?;

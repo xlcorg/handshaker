@@ -147,4 +147,17 @@ mod tests {
             "{\"id\":12345678901234567890}"
         );
     }
+
+    #[test]
+    fn scrubbed_body_parses_with_strict_serde_json() {
+        // Baseline: strict serde_json rejects the trailing comma (this is exactly
+        // the `trailing comma at line N` error the user hit on Send).
+        assert!(serde_json::from_str::<serde_json::Value>("{\"a\":1,}").is_err());
+
+        // After the scrub the same strict parser accepts it.
+        let cleaned = strip_trailing_commas("{\"a\":1,}");
+        let v: serde_json::Value =
+            serde_json::from_str(&cleaned).expect("scrubbed body must parse");
+        assert_eq!(v["a"], serde_json::json!(1));
+    }
 }
