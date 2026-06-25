@@ -8,7 +8,21 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 
 Активная фича — нет (между фичами).
 
-Последняя влитая — **Хоткеи: Ctrl/Cmd+R как второй Send + macOS word-wrap `⌥⌘Z`**
+Последняя влитая — **Прощение trailing comma в теле запроса при Send** (🎉 DONE
+2026-06-25, ff в `main` `501f46e`; план+спека `2026-06-25-lenient-trailing-comma-send*`
+в `archive/`) — частая опечатка «забыл убрать запятую» (`,` прямо перед `}`/`]`)
+больше не валит Send ошибкой `trailing comma at line N`. Чистый **string-aware** скраб
+`strip_trailing_commas(&str) → Cow<str>` в ядре (`grpc/invoke/lenient.rs`) убирает
+висячую запятую **только на проводе**, перед `serde_json::Deserializer` в `invoke_unary`;
+текст в редакторе не трогаем (тихо). Прощается **только** настоящая trailing comma —
+двойные/sparse запятые (`[1,2,,]`→`[1,2,]`) и прочий мусор по-прежнему честная ошибка
+serde_json. String-aware ⇒ запятая внутри строки `"x, ]"` не портится (голый regex
+`repairTrailingCommas` из фронта — display-only и для wire негоден); скраб не
+пере-сериализует числа (точность int64 цела), `Cow::Borrowed` на чистом входе (без
+аллокации). Бэкенд-only, bindings без дрейфа. Subagent-driven (TDD, spec ✅ + quality
+approved-with-minor: добавлены тесты UTF-8/незакрытой строки). Гейт: `cargo test
+--workspace` (core 202 · src-tauri 64, 0 failed). Остаток — live WebView2-проход.
+Предыдущая — **Хоткеи: Ctrl/Cmd+R как второй Send + macOS word-wrap `⌥⌘Z`**
 (🎉 DONE 2026-06-21, ff в `main` `5e74fc7`; план-дока нет — прямые TDD-правки, чистый
 фронт) — две независимые мелочи. **(1) Ctrl/Cmd+R** — второй аккорд Send рядом с
 Ctrl/Cmd+Enter (зеркало existing-wiring: window-listener в `CallPanel` + Monaco-команда
@@ -20,12 +34,6 @@ Ctrl/Cmd+Enter (зеркало existing-wiring: window-listener в `CallPanel` +
 **отвязан** в `monaco.ts` через `addKeybindingRule({command:null})`, чтобы голый `⌥Z`
 не дёргал внутренний флаг редактора в рассинхрон с pref (отвязка vs swallow ⇒ `⌥Z`
 по-прежнему печатает `Ω`). Палитру (Cmd+K) не трогали — выбран вариант «только хоткей».
-Предыдущая — **Порядок переменных + хоткей открытия Edit environment** (🎉 DONE
-2026-06-20, ff в `main`; план+спека `2026-06-20-env-vars-order-edit-hotkey*` в
-`archive/`) — `IndexMap` для порядка переменных (переживает рестарт/экспорт) +
-**Ctrl+Shift+E** открывает Edit environment; **live-fix `110ee31`** — `serde_json`
-`preserve_order` (без него tauri-IPC `to_value`=BTreeMap алфавитил переменные на
-границе; file-store-тесты не ловили).
 
 Интеграционная ветка — `main`; фичи ведутся в отдельных worktree-ветках
 (`claude/*`) и вливаются в `main` fast-forward.
