@@ -1,6 +1,6 @@
 # Прощать trailing comma при Send — дизайн
 
-**Статус:** ✅ APPROVED (дизайн утверждён 2026-06-25) — ожидает плана
+**Статус:** 🎉 DONE 2026-06-25 (branch `claude/hopeful-mccarthy-4e1a0c`; commits `7af3f84`+`5fbdd6a`+`76f8a79`; план — `docs/superpowers/plans/2026-06-25-lenient-trailing-comma-send.md`). Гейт: `cargo test --workspace` (core 202 · src-tauri 64, 0 failed) · vite build. Бэкенд-only, bindings без дрейфа. Остаток — live WebView2-проход (Send тела с висячей запятой проходит).
 **Дата:** 2026-06-25
 **Объём:** backend-only (handshaker-core), 1 новый файл + ~3 строки в `mod.rs` + тесты
 **Frontend / IPC / bindings:** не трогаются

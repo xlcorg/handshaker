@@ -2,8 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Status:** 📝 NOT STARTED · branch `claude/hopeful-mccarthy-4e1a0c` · spec
-`docs/superpowers/specs/2026-06-25-lenient-trailing-comma-send-design.md`
+**Status:** 🎉 DONE 2026-06-25 · branch `claude/hopeful-mccarthy-4e1a0c` · commits
+`7af3f84`+`5fbdd6a`+`76f8a79` · spec
+`docs/superpowers/specs/2026-06-25-lenient-trailing-comma-send-design.md` · гейт
+`cargo test --workspace` (core 202 · src-tauri 64, 0 failed) + vite build · остаток —
+live WebView2-проход
 
 **Goal:** A request body with a genuine trailing comma (`,` directly before `}`/`]`) no longer fails Send — the comma is silently stripped on the wire before deserialization, with everything else (including malformed JSON) untouched.
 
