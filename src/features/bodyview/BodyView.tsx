@@ -1,7 +1,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef } from "react";
 import type * as Monaco from "monaco-editor";
 import { MonacoEditor, BODY_EDIT_OPTIONS, BODY_READONLY_OPTIONS, MONACO_THEME } from "@/lib/monaco";
-import { usePrefs, readPrefs } from "@/lib/use-prefs";
+import { usePrefs, readPrefs, setPref } from "@/lib/use-prefs";
 import { parseWithSpans } from "./parse";
 import { renderJsonTree, type Badge } from "./render";
 import type { JsonTree } from "./jsonTree";
@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import { installContextMenuCleanup } from "./contextMenuCleanup";
 import { copyDecodedBase64 } from "./copyDecoded";
 import { attachFoldActions, type FoldMenuEditor } from "./foldActions";
+import { attachWordWrapAction, type WordWrapMenuEditor } from "./wordWrapAction";
 import { shouldShowMinimap, minimapToggleOptions } from "./minimapGate";
 
 type Mode = "request" | "response";
@@ -54,6 +55,8 @@ interface Live {
   decode: DisposableLike | null;
   /** Collapse/Expand-all context-menu actions (response only). */
   fold: DisposableLike | null;
+  /** Word-wrap toggle context-menu action (both modes). */
+  wrap: DisposableLike | null;
   typeSub: DisposableLike | null;
   ghost: GhostZone | null;
   ghostTimer: number | null;
@@ -202,11 +205,12 @@ export function BodyView({ mode, value, onChange, onSubmit, schema, varCandidate
       live.current?.controller?.dispose();
       live.current?.decode?.dispose();
       live.current?.fold?.dispose();
+      live.current?.wrap?.dispose();
       live.current?.typeSub?.dispose();
       live.current?.minimapSubs?.forEach((d) => d.dispose());
       live.current = {
         editor, monaco, tree: null, spans: [], badges: [],
-        decorations: null, expanded: new Set(), controller: null, decode: null, fold: null, typeSub: null,
+        decorations: null, expanded: new Set(), controller: null, decode: null, fold: null, wrap: null, typeSub: null,
         ghost: null, ghostTimer: null,
         lineCount: editor.getModel()?.getLineCount() ?? 1,
         lastText: editor.getValue(),
@@ -221,6 +225,14 @@ export function BodyView({ mode, value, onChange, onSubmit, schema, varCandidate
       // autocomplete + ghost + unknown-field markers; response passes none).
       setModelSchema(editor.getModel(), schemaRef.current ?? null);
       setModelVarCandidates(editor.getModel(), varCandidatesRef.current ?? null);
+      // Word-wrap toggle in the right-click menu — both editors share prefs.wordWrap,
+      // so the item lives in both. Label reflects the current state; the effect below
+      // re-attaches it when the pref flips.
+      live.current.wrap = attachWordWrapAction(
+        editor as unknown as WordWrapMenuEditor,
+        readPrefs().wordWrap,
+        () => setPref("wordWrap", !readPrefs().wordWrap),
+      );
       if (mode === "request") {
         // Postman-style: opening a quote (a key or a value string) force-opens the
         // suggest widget. Monaco does NOT auto-trigger completion inside strings
@@ -343,6 +355,7 @@ export function BodyView({ mode, value, onChange, onSubmit, schema, varCandidate
     live.current?.controller?.dispose();
     live.current?.decode?.dispose();
     live.current?.fold?.dispose();
+    live.current?.wrap?.dispose();
     live.current?.typeSub?.dispose();
     if (live.current?.ghostTimer != null) window.clearTimeout(live.current.ghostTimer);
     live.current?.ghost?.dispose();
@@ -363,6 +376,21 @@ export function BodyView({ mode, value, onChange, onSubmit, schema, varCandidate
   // Re-apply (or clear) the ghost zone when the bodyHints toggle changes.
   // No mode guard needed: applyGhost no-ops when ghost is null (response mode).
   useEffect(() => { applyGhost(); }, [prefs.bodyHints, applyGhost]);
+
+  // Re-register the word-wrap menu action with a fresh label when the pref flips.
+  // Monaco fixes an action's label at registration, so reflecting state means
+  // dispose + re-add. No-ops until the editor mounts (onMount does the first attach;
+  // setPref/readPrefs are module-level/stable, so deps are just [prefs.wordWrap]).
+  useEffect(() => {
+    const l = live.current;
+    if (!l) return;
+    l.wrap?.dispose();
+    l.wrap = attachWordWrapAction(
+      l.editor as unknown as WordWrapMenuEditor,
+      prefs.wordWrap,
+      () => setPref("wordWrap", !readPrefs().wordWrap),
+    );
+  }, [prefs.wordWrap]);
 
   // External (non-user) updates to the controlled value — e.g. Reset-to-template —
   // are applied to the Monaco model programmatically by the wrapper and do NOT
