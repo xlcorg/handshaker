@@ -50,6 +50,26 @@ describe("useMessageSchema", () => {
     );
   });
 
+  it("refetches when the env resolve key changes (env switch / edit — same target)", async () => {
+    const FIRST: MessageSchemaIpc = { root: "t.First", messages: [], enums: [] };
+    const SECOND: MessageSchemaIpc = { root: "t.Second", messages: [], enums: [] };
+    fetchMock.mockResolvedValueOnce(FIRST).mockResolvedValueOnce(SECOND);
+    const target = { address: "env-key-host", tls: false, service: "S", method: "M" };
+
+    const { result, rerender } = renderHook(
+      ({ envKey }: { envKey: string }) => useMessageSchema(target, "input", 0, envKey),
+      { initialProps: { envKey: "|prod|0" } },
+    );
+    await waitFor(() => expect(result.current).toEqual(FIRST));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // A different active env resolves the address differently; the raw target is unchanged,
+    // so without folding the env key into the cache key the contract would freeze.
+    rerender({ envKey: "|staging|0" });
+    await waitFor(() => expect(result.current).toEqual(SECOND));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("refetches the same target when the revision bumps (manual reflection refresh)", async () => {
     const FIRST: MessageSchemaIpc = { root: "t.First", messages: [], enums: [] };
     const SECOND: MessageSchemaIpc = { root: "t.Second", messages: [], enums: [] };

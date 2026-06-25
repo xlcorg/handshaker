@@ -54,6 +54,22 @@ describe("useDraftReflection", () => {
     );
   });
 
+  it("re-reflects when the env resolve key changes (env switch — raw address unchanged)", async () => {
+    vi.useFakeTimers();
+    const { rerender } = renderHook(
+      ({ key }: { key: string }) => useDraftReflection("{{host}}:443", true, true, null, key),
+      { initialProps: { key: "|prod|0" } },
+    );
+    await act(async () => { await vi.advanceTimersByTimeAsync(400); });
+    expect(ipc.grpcDescribe).toHaveBeenCalledTimes(1);
+
+    // Switching environments changes the resolve key but NOT the raw `{{host}}` template;
+    // the resolved address differs, so reflection must re-run instead of going stale.
+    rerender({ key: "|staging|0" });
+    await act(async () => { await vi.advanceTimersByTimeAsync(400); });
+    expect(ipc.grpcDescribe).toHaveBeenCalledTimes(2);
+  });
+
   it("does not reflect when the address is empty", async () => {
     vi.useFakeTimers();
     renderHook(() => useDraftReflection("   ", false));

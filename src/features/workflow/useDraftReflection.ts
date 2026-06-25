@@ -26,12 +26,19 @@ function reflectErr(e: unknown): string {
  *  carries a fresh request id and the user's deadline pref (`requestTimeoutMs`), so a slow
  *  or hung reflection times out instead of spinning forever, and `cancel()` can abort the
  *  in-flight run early — both reuse the invoke registry (`grpcCancel` + the backend's
- *  `race_cancel_timeout`). */
+ *  `race_cancel_timeout`).
+ *
+ *  `resolveKey` is the active-env signal (env name + revision + collection — see
+ *  `CallPanel.addressResolveKey`). The address is a `{{var}}` template resolved live inside
+ *  `run`, so switching/editing the active env changes the resolved host WITHOUT changing the
+ *  raw `address`. Folding that key into the debounce effect re-reflects on env change instead
+ *  of freezing on the first env's contract until a manual refresh. */
 export function useDraftReflection(
   address: string,
   tls: boolean,
   enabled = true,
   collectionId: string | null = null,
+  resolveKey = "",
 ): DraftReflection {
   const [catalog, setCatalog] = useState<ServiceCatalogIpc | null>(null);
   const [loading, setLoading] = useState(false);
@@ -85,7 +92,9 @@ export function useDraftReflection(
     if (!enabled || !address.trim()) return;
     const t = setTimeout(() => void run(false), DEBOUNCE_MS);
     return () => clearTimeout(t);
-  }, [run, enabled, address]);
+    // `resolveKey` (active env) is a trigger only: `run` re-resolves the address live, so the
+    // closure needn't change — but the effect must re-fire when the env does.
+  }, [run, enabled, address, resolveKey]);
 
   const refresh = useCallback(() => void run(true), [run]);
   const cancel = useCallback(() => {

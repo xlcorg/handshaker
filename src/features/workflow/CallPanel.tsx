@@ -133,7 +133,11 @@ export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMetho
     return () => window.removeEventListener("keydown", onKey);
   }, [editable]);
 
-  const reflection = useDraftReflection(step.address, step.tls, !!editable, step.collectionId);
+  // `addressResolveKey` carries the active env (name + revision + collection): the address is
+  // a `{{var}}` template resolved against it, so an env switch/edit must re-reflect even though
+  // `step.address` is unchanged. Without it the contract froze on the first env until a manual
+  // refresh — the "doesn't pick up on env change" bug.
+  const reflection = useDraftReflection(step.address, step.tls, !!editable, step.collectionId, addressResolveKey);
 
   // Manual "Refresh server reflection": re-reflect the backend pool AND force the schema
   // hooks to refetch. The schema feeds the Contract tab + body hints from a cache that's
@@ -151,8 +155,8 @@ export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMetho
   const schemaTarget = editable
     ? { address: step.address, tls: step.tls, service: step.service, method: step.method, collectionId: step.collectionId }
     : { address: "", tls: false, service: "", method: "", collectionId: null };
-  const schema = useMessageSchema(schemaTarget, "input", schemaRevision);
-  const outputSchema = useMessageSchema(schemaTarget, "output", schemaRevision);
+  const schema = useMessageSchema(schemaTarget, "input", schemaRevision, addressResolveKey);
+  const outputSchema = useMessageSchema(schemaTarget, "output", schemaRevision, addressResolveKey);
 
   const header = editable ? (
     <DraftAddressBar
