@@ -52,8 +52,9 @@ vi.mock("@/lib/monaco", () => ({
   MONACO_THEME: "handshaker-dark",
 }));
 vi.mock("@/lib/use-prefs", () => ({
-  usePrefs: () => [{ bodyHints: false }],
-  readPrefs: () => ({ bodyHints: false }),
+  usePrefs: () => [{ bodyHints: false, wordWrap: false }],
+  readPrefs: () => ({ bodyHints: false, wordWrap: false }),
+  setPref: vi.fn(),
 }));
 vi.mock("./controller", () => ({
   attachBodyController: () => ({ dispose: () => {} }),

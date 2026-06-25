@@ -21,6 +21,7 @@ const prefs = { bodyHints: false, wordWrap: false };
 vi.mock("@/lib/use-prefs", () => ({
   usePrefs: () => [prefs],
   readPrefs: () => prefs,
+  setPref: vi.fn(),
 }));
 
 import { BodyView } from "./BodyView";

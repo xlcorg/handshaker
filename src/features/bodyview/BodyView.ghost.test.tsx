@@ -60,10 +60,11 @@ vi.mock("@/lib/monaco", () => ({
   BODY_READONLY_OPTIONS: { readOnly: true },
 }));
 
-const prefs = { bodyHints: true };
+const prefs = { bodyHints: true, wordWrap: false };
 vi.mock("@/lib/use-prefs", () => ({
   usePrefs: () => [prefs],
   readPrefs: () => prefs,
+  setPref: vi.fn(),
 }));
 vi.mock("./controller", () => ({
   attachBodyController: () => ({ dispose: () => {} }),
