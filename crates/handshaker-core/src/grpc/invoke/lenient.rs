@@ -160,4 +160,27 @@ mod tests {
             serde_json::from_str(&cleaned).expect("scrubbed body must parse");
         assert_eq!(v["a"], serde_json::json!(1));
     }
+
+    #[test]
+    fn multibyte_string_value_is_untouched() {
+        // Multibyte interior bytes (incl. a `,]`-looking sequence inside the
+        // string) must not be scanned as structure — the value stays verbatim.
+        let input = "{\"name\":\"日本, ]\"}";
+        assert_eq!(strip_trailing_commas(input), input);
+    }
+
+    #[test]
+    fn owned_path_after_multibyte_value_stays_valid_utf8() {
+        // Trailing comma after a multibyte value forces the allocating (owned)
+        // path; the Vec<u8> -> String round-trip must yield valid UTF-8.
+        assert_eq!(strip_trailing_commas("[\"café\",]"), "[\"café\"]");
+    }
+
+    #[test]
+    fn unterminated_string_does_not_panic() {
+        // A string literal that never closes must not panic or over-read; the
+        // scan simply ends inside the string and the input is returned as-is.
+        let input = "{\"a\":\"oops";
+        assert_eq!(strip_trailing_commas(input), input);
+    }
 }
