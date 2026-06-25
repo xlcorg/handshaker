@@ -98,11 +98,15 @@ export function usePrefs(): [Prefs, <K extends keyof Prefs>(key: K, value: Prefs
     };
   }, []);
   function setKey<K extends keyof Prefs>(key: K, value: Prefs[K]) {
-    broadcast({ ...current, [key]: value });
+    setPref(key, value);
   }
   return [state, setKey];
 }
 
 export function readPrefs(): Prefs {
   return current;
+}
+
+export function setPref<K extends keyof Prefs>(key: K, value: Prefs[K]): void {
+  broadcast({ ...current, [key]: value });
 }

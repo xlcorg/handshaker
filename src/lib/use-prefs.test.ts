@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { PREFS_DEFAULTS, clampTimeoutMs, readPrefs } from "./use-prefs";
+import { PREFS_DEFAULTS, clampTimeoutMs, readPrefs, setPref } from "./use-prefs";
 
 describe("requestTimeoutMs pref", () => {
   it("defaults to 30000 ms", () => {
@@ -128,5 +128,16 @@ describe("wordWrap pref", () => {
     const merged = { ...PREFS_DEFAULTS, wordWrap: true };
     expect(merged.wordWrap).toBe(true);
     expect(typeof readPrefs().wordWrap).toBe("boolean");
+  });
+});
+
+describe("setPref (module-level setter)", () => {
+  beforeEach(() => localStorage.clear());
+
+  it("writes a pref that readPrefs() reflects", () => {
+    const before = readPrefs().wordWrap;
+    setPref("wordWrap", !before);
+    expect(readPrefs().wordWrap).toBe(!before);
+    setPref("wordWrap", before); // restore shared module-level state
   });
 });
