@@ -2,6 +2,18 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 
+/**
+ * Bound the update CHECK request (only). The Tauri updater leaves `timeout`
+ * unset by default, so a stalled GitHub/CDN connection on the silent mount
+ * check hangs with no upper bound — and because every check shares one
+ * `inFlight` latch, that stuck request disables the titlebar button and turns
+ * a manual recheck into a no-op until the app is restarted. A bounded check
+ * fails fast instead, releasing the latch so the next click just works.
+ * The download path passes its own (unbounded) timeout, so large updates are
+ * unaffected. 10s tolerates a slow-but-live link while still recovering quickly.
+ */
+export const UPDATE_CHECK_TIMEOUT_MS = 10_000;
+
 export type UpdatePhase =
   | "idle"
   | "checking"
@@ -47,7 +59,7 @@ export function useUpdateCheck(): UseUpdateCheck {
     inFlight.current = true;
     setState((s) => ({ ...s, phase: "checking", progress: 0, manual }));
     try {
-      const update = await check();
+      const update = await check({ timeout: UPDATE_CHECK_TIMEOUT_MS });
       if (!mounted.current) return;
       if (update) {
         updateRef.current = update;

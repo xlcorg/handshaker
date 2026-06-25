@@ -3,10 +3,10 @@ import { renderHook, act, waitFor } from "@testing-library/react";
 
 const check = vi.fn();
 const relaunch = vi.fn();
-vi.mock("@tauri-apps/plugin-updater", () => ({ check: () => check() }));
+vi.mock("@tauri-apps/plugin-updater", () => ({ check: (opts: unknown) => check(opts) }));
 vi.mock("@tauri-apps/plugin-process", () => ({ relaunch: () => relaunch() }));
 
-import { useUpdateCheck } from "./useUpdateCheck";
+import { useUpdateCheck, UPDATE_CHECK_TIMEOUT_MS } from "./useUpdateCheck";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -26,6 +26,16 @@ describe("useUpdateCheck", () => {
     const { result } = renderHook(() => useUpdateCheck());
     await waitFor(() => expect(result.current.phase).toBe("available"));
     expect(result.current.version).toBe("0.2.0");
+  });
+
+  it("bounds the check with a request timeout so a stalled request can't hang until restart", async () => {
+    check.mockResolvedValue(null);
+    renderHook(() => useUpdateCheck());
+    await waitFor(() => expect(check).toHaveBeenCalled());
+    expect(check).toHaveBeenCalledWith(
+      expect.objectContaining({ timeout: UPDATE_CHECK_TIMEOUT_MS }),
+    );
+    expect(UPDATE_CHECK_TIMEOUT_MS).toBeGreaterThan(0);
   });
 
   it("reports upToDate when check returns null", async () => {
