@@ -1,14 +1,24 @@
-import { describe, it, expect } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { render, screen } from "@testing-library/react";
+
+// vi.hoisted ensures the variable is initialized before the mock factory runs,
+// avoiding TDZ errors from transitive imports that evaluate isMacOS at module load.
+const { mockIsMacOS } = vi.hoisted(() => ({ mockIsMacOS: { value: false } }));
+
+vi.mock("@/lib/platform", () => ({
+  get isMacOS() {
+    return mockIsMacOS.value;
+  },
+}));
+
 import { KeyboardPane } from "./KeyboardPane";
 
 describe("KeyboardPane", () => {
-  it("lists the Word wrap → Alt+Z shortcut", () => {
+  it("lists the Split direction shortcut with Alt+V on Windows/Linux", () => {
+    mockIsMacOS.value = false;
     render(<KeyboardPane />);
-    // Scope to the Word wrap row so the assertion can't be confused by another
-    // shortcut adopting "Alt" or "Z" as ROWS grows.
-    const row = screen.getByText("Word wrap").closest("div.flex") as HTMLElement;
-    expect(within(row).getByText("Alt")).toBeInTheDocument();
-    expect(within(row).getByText("Z")).toBeInTheDocument();
+    expect(screen.getByText("Split direction")).toBeInTheDocument();
+    // chord glyphs render as <Kbd> with text "Alt" and "V"
+    expect(screen.getAllByText("V").length).toBeGreaterThan(0);
   });
 });

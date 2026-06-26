@@ -73,6 +73,12 @@ export const messages = {
     },
   },
   shell: {
+    keyboard: {
+      sendRequest: "Send request",
+      toggleSidebar: "Toggle sidebar",
+      wordWrap: "Word wrap",
+      splitDirection: "Split direction",
+    },
     titlebar: {
       toggleSidebar: "Toggle sidebar",
       checkForUpdates: "Check for updates",
