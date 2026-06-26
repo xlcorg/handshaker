@@ -1,6 +1,6 @@
 # Split-direction toggle — кнопка в титлбаре + хоткей
 
-**Статус:** 🎉 DONE 2026-06-26 — влито в `main` ff `4cc5c0c` (subagent-driven, spec+quality+final ревью). Остаток — live WebView2-проход.
+**Статус:** 🎉 DONE 2026-06-26 — влито в `main` ff `4cc5c0c` (subagent-driven, spec+quality+final ревью). **Live-verified** в WebView2 2026-06-26.
 **Дата:** 2026-06-26
 **Ветка:** `claude/relaxed-hawking-059cef`
 **Тип:** чистый фронт (FE-only). Бэкенд / IPC / bindings **не трогаем**.

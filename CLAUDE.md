@@ -32,9 +32,9 @@ stopPropagation + e.repeat-гард, AltGr-гард; ⌥⌘ на маке, т.к
 тронуты. Subagent-driven (TDD: helpers+hook · titlebar · keyboard; spec+quality ревью на
 каждой + финальное ревью ветки = READY TO MERGE; мелкие фиксы по ревью: scope-инг тестов
 KeyboardPane, lucide-класс `lucide-columns2` без дефиса). Гейт: vitest 1133 · tsc · vite
-build. Остаток — live WebView2-проход (флип раскладки кнопкой; хоткей на обеих ОС, вкл.
-русскую раскладку — физ. `KeyV`; AltGr+V не срабатывает; синхрон с тумблером Settings;
-переживает рестарт). Уроки — в памяти `project_claude_rules_dir`.
+build. **Live-verified** в WebView2 (2026-06-26): флип раскладки кнопкой; хоткей на обеих
+ОС, вкл. русскую раскладку — физ. `KeyV`; AltGr+V не срабатывает; синхрон с тумблером
+Settings; переживает рестарт. Уроки — в памяти `project_claude_rules_dir`.
 Предыдущая — **Word-wrap toggle в контекстном меню + правый клик по ghost-хинту**
 (🎉 DONE 2026-06-26, ff в `main`; план+спека `2026-06-26-wordwrap-context-menu*` в
 `archive/`; ключевые коммиты `90018b6` (word-wrap) + `5910745` (ghost-fix)) — две
