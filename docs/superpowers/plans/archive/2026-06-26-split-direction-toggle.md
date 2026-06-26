@@ -1,5 +1,7 @@
 # Split-direction toggle — Implementation Plan
 
+**Статус:** 🎉 DONE 2026-06-26 — все задачи выполнены и влиты в `main` ff `4cc5c0c`. Гейт: vitest 1133 · tsc · vite build.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Кнопка в титлбаре (между Toggle sidebar и Check for updates) + глобальный хоткей `Alt+V` / `⌥⌘V`, переключающие `prefs.split` (Left/Right ↔ Top/Bottom); все строки — в `messages.ts`.
