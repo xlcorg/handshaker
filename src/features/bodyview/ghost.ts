@@ -77,10 +77,7 @@ export interface ViewZoneEditorLike {
   applyFontInfo(target: HTMLElement): void;
 }
 
-export function ghostDomNode(
-  lines: string[],
-  onContextMenu?: (e: MouseEvent) => void,
-): HTMLElement {
+export function ghostDomNode(lines: string[]): HTMLElement {
   const node = document.createElement("div");
   node.className = "hs-ghost-skeleton";
   for (const l of lines) {
@@ -88,29 +85,13 @@ export function ghostDomNode(
     row.textContent = l;
     node.appendChild(row);
   }
-  // Monaco won't open its context menu over a view zone (it preventDefaults the
-  // event then bails — see openContextMenu.ts), so the zone forwards the
-  // right-click itself: suppress the native menu and stop the event reaching the
-  // editor's own (broken) handler, then let the caller open the menu at the mouse.
-  if (onContextMenu) {
-    node.addEventListener("contextmenu", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      onContextMenu(e);
-    });
-  }
   return node;
 }
 
 /** Owns at most ONE view zone on an editor; `apply(null)` removes it. */
 export class GhostZone {
   private zoneId: string | null = null;
-  constructor(
-    private readonly editor: ViewZoneEditorLike,
-    /** Forwards a right-click on the ghost zone — Monaco won't open its menu over
-     *  a view zone, so the caller (BodyView) opens it via openEditorContextMenu. */
-    private readonly onContextMenu?: (e: MouseEvent) => void,
-  ) {}
+  constructor(private readonly editor: ViewZoneEditorLike) {}
 
   apply(block: GhostBlock | null): void {
     this.editor.changeViewZones((acc) => {
@@ -124,7 +105,7 @@ export class GhostZone {
       // the code's content origin — past the line-number gutter. The ghost text
       // carries its own 2-space field indent, so no horizontal offset is needed;
       // adding contentLeft here would push it a full gutter-width too far right.
-      const node = ghostDomNode(block.lines, this.onContextMenu);
+      const node = ghostDomNode(block.lines);
       this.editor.applyFontInfo(node);
       this.zoneId = acc.addZone({
         afterLineNumber: block.afterLine,

@@ -25,6 +25,7 @@ vi.mock("@/lib/monaco", () => ({
         getModel: () => null, // маркеры/схема скипаются, ghost-ветка работает
         addCommand: () => {},
         getContribution: () => null, // onMount strips the "Command Palette" item; no-ops here
+        onContextMenu: () => ({ dispose: () => {} }),
         onKeyUp: () => ({ dispose: () => {} }),
         changeViewZones: (
           cb: (acc: { addZone: (z: unknown) => string; removeZone: (id: string) => void }) => void,
@@ -51,7 +52,7 @@ vi.mock("@/lib/monaco", () => ({
         onDidLayoutChange: () => ({ dispose: () => {} }),
         updateOptions: () => {},
       };
-      onMount?.(editor, { editor: { setModelMarkers: () => {} }, MarkerSeverity: { Error: 8 }, Range: class {} });
+      onMount?.(editor, { editor: { setModelMarkers: () => {}, MouseTargetType: { CONTENT_VIEW_ZONE: 8 } }, MarkerSeverity: { Error: 8 }, Range: class {} });
     }
     return <div data-testid="monaco" />;
   },

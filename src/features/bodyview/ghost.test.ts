@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import type { MessageSchemaIpc, FieldNodeIpc } from "@/ipc/bindings";
 import { computeGhostLines, GhostZone, ghostDomNode } from "./ghost";
 
@@ -173,39 +173,5 @@ describe("GhostZone", () => {
     expect(node.children).toHaveLength(1);
     expect(node.children[0].textContent).toBe('  "a <b>": X');
     expect(node.innerHTML).not.toContain("<b>");
-  });
-
-  it("ghostDomNode forwards a right-click to the handler, suppressing the default + propagation", () => {
-    // Monaco won't open its menu over a view zone (it preventDefaults then bails),
-    // so the zone forwards the contextmenu itself. Suppressing propagation keeps
-    // the editor's own (broken) handler from running.
-    const onMenu = vi.fn();
-    const node = ghostDomNode(['  "a": X'], onMenu);
-    const ev = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
-    const pd = vi.spyOn(ev, "preventDefault");
-    const sp = vi.spyOn(ev, "stopPropagation");
-    // dispatch on a row to also exercise bubbling up to the container listener
-    node.children[0].dispatchEvent(ev);
-    expect(onMenu).toHaveBeenCalledTimes(1);
-    expect(onMenu).toHaveBeenCalledWith(ev);
-    expect(pd).toHaveBeenCalled();
-    expect(sp).toHaveBeenCalled();
-  });
-
-  it("ghostDomNode without a handler ignores a right-click (no throw)", () => {
-    const node = ghostDomNode(['  "a": X']);
-    expect(() =>
-      node.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true })),
-    ).not.toThrow();
-  });
-
-  it("GhostZone threads the right-click handler through to the rendered zone node", () => {
-    const onMenu = vi.fn();
-    const ed = fakeZoneEditor();
-    const gz = new GhostZone(ed, onMenu);
-    gz.apply({ afterLine: 1, lines: ["x"] });
-    const z = [...ed.zones.values()][0];
-    z.domNode.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
-    expect(onMenu).toHaveBeenCalledTimes(1);
   });
 });

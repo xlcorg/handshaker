@@ -25,7 +25,7 @@ import { installContextMenuCleanup } from "./contextMenuCleanup";
 import { copyDecodedBase64 } from "./copyDecoded";
 import { attachFoldActions, type FoldMenuEditor } from "./foldActions";
 import { attachWordWrapAction, type WordWrapMenuEditor } from "./wordWrapAction";
-import { openEditorContextMenu } from "./openContextMenu";
+import { forwardViewZoneContextMenu } from "./openContextMenu";
 import { shouldShowMinimap, minimapToggleOptions } from "./minimapGate";
 
 type Mode = "request" | "response";
@@ -58,6 +58,8 @@ interface Live {
   fold: DisposableLike | null;
   /** Word-wrap toggle context-menu action (both modes). */
   wrap: DisposableLike | null;
+  /** Forwards a right-click on a view zone (the ghost hint) to the editor menu. */
+  ctxMenu: DisposableLike | null;
   typeSub: DisposableLike | null;
   ghost: GhostZone | null;
   ghostTimer: number | null;
@@ -207,11 +209,12 @@ export function BodyView({ mode, value, onChange, onSubmit, schema, varCandidate
       live.current?.decode?.dispose();
       live.current?.fold?.dispose();
       live.current?.wrap?.dispose();
+      live.current?.ctxMenu?.dispose();
       live.current?.typeSub?.dispose();
       live.current?.minimapSubs?.forEach((d) => d.dispose());
       live.current = {
         editor, monaco, tree: null, spans: [], badges: [],
-        decorations: null, expanded: new Set(), controller: null, decode: null, fold: null, wrap: null, typeSub: null,
+        decorations: null, expanded: new Set(), controller: null, decode: null, fold: null, wrap: null, ctxMenu: null, typeSub: null,
         ghost: null, ghostTimer: null,
         lineCount: editor.getModel()?.getLineCount() ?? 1,
         lastText: editor.getValue(),
@@ -233,6 +236,14 @@ export function BodyView({ mode, value, onChange, onSubmit, schema, varCandidate
         editor as unknown as WordWrapMenuEditor,
         readPrefs().wordWrap,
         () => setPref("wordWrap", !readPrefs().wordWrap),
+      );
+      // Monaco refuses to open its context menu over a view zone, so a right-click
+      // on the request body's ghost-skeleton hint shows no menu at all. Forward
+      // such clicks to the editor's own menu (both editors — only the request
+      // ghost is a view zone, so this never fires in the response viewer).
+      live.current.ctxMenu = forwardViewZoneContextMenu(
+        editor,
+        monaco.editor.MouseTargetType.CONTENT_VIEW_ZONE,
       );
       if (mode === "request") {
         // Postman-style: opening a quote (a key or a value string) force-opens the
@@ -268,11 +279,7 @@ export function BodyView({ mode, value, onChange, onSubmit, schema, varCandidate
             editor.trigger("autocomplete", "editor.action.triggerSuggest", {});
           }
         });
-        // Monaco won't open its context menu over the ghost view zone, so forward
-        // the right-click: open the editor's menu at the cursor ourselves.
-        live.current.ghost = new GhostZone(editor, (e) =>
-          openEditorContextMenu(editor, e.pageX, e.pageY),
-        );
+        live.current.ghost = new GhostZone(editor);
         applyGhost();
       }
       if (mode === "response") {
@@ -361,6 +368,7 @@ export function BodyView({ mode, value, onChange, onSubmit, schema, varCandidate
     live.current?.decode?.dispose();
     live.current?.fold?.dispose();
     live.current?.wrap?.dispose();
+    live.current?.ctxMenu?.dispose();
     live.current?.typeSub?.dispose();
     if (live.current?.ghostTimer != null) window.clearTimeout(live.current.ghostTimer);
     live.current?.ghost?.dispose();

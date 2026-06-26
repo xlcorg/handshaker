@@ -23,6 +23,7 @@ vi.mock("@/lib/monaco", () => ({
         getModel: () => null,
         addCommand: () => {},
         getContribution: () => null,
+        onContextMenu: () => ({ dispose: () => {} }),
         onKeyUp: () => ({ dispose: () => {} }),
         createContextKey: () => ({ set: () => {} }),
         addAction: (d: { id: string; label: string; contextMenuGroupId?: string; run: () => void }) => {
@@ -43,7 +44,7 @@ vi.mock("@/lib/monaco", () => ({
       onMount?.(editor, {
         KeyMod: { CtrlCmd: 2048 },
         KeyCode: { Enter: 3, KeyR: 48 },
-        editor: { setModelMarkers: () => {} },
+        editor: { setModelMarkers: () => {}, MouseTargetType: { CONTENT_VIEW_ZONE: 8 } },
         MarkerSeverity: { Error: 8 },
         Range: class {},
       });

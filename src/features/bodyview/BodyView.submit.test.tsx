@@ -18,6 +18,7 @@ vi.mock("@/lib/monaco", () => ({
     const monaco = {
       KeyMod: { CtrlCmd: 2048 },
       KeyCode: { Enter: 3, KeyR: 48 },
+      editor: { MouseTargetType: { CONTENT_VIEW_ZONE: 8 } },
     };
     const editor = {
       getValue: () => "{}",
@@ -35,6 +36,7 @@ vi.mock("@/lib/monaco", () => ({
       // onMount strips Monaco's "Command Palette" context-menu item; the cleanup
       // no-ops when getContribution yields nothing.
       getContribution: () => null,
+      onContextMenu: () => ({ dispose: () => {} }),
       // Response mode size-gates the minimap on content/layout changes.
       getContentHeight: () => 0,
       onDidContentSizeChange: () => ({ dispose: () => {} }),
