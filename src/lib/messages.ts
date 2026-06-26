@@ -86,6 +86,7 @@ export const messages = {
       maximizeWindow: "Maximize window",
       closeWindow: "Close window",
       splitDirection: "Toggle split direction",
+      /** Tooltip — reads as where a click will take the layout, not the current state. */
       splitDirectionTooltip: (split: "horizontal" | "vertical"): string =>
         split === "horizontal" ? "Switch to left / right layout" : "Switch to top / bottom layout",
     },

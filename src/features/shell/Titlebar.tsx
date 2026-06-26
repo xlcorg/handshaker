@@ -42,6 +42,8 @@ export function Titlebar({
   const [prefs, setPref] = usePrefs();
   const fullscreen = useIsFullscreen();
   const showTrafficInset = isMacOS && !fullscreen;
+  // Inside the component (not module-level like KeyboardPane's WORD_WRAP_KEYS): a
+  // module-level isMacOS read trips a TDZ error under vitest's hoisted vi.mock.
   // ⌥V на macOS печатает символ → используем ⌥⌘V (см. features/shell/splitDirection.ts).
   const splitKeys = isMacOS ? ["⌥", "⌘", "V"] : ["Alt", "V"];
 

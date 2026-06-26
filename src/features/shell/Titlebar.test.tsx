@@ -119,7 +119,7 @@ describe("Titlebar — split-direction toggle", () => {
     setPref("split", "vertical");
   });
 
-  it("renders the toggle button on both platforms", () => {
+  it("renders the toggle button", () => {
     render(<Titlebar onOpenSettings={() => {}} />);
     expect(screen.getByRole("button", { name: "Toggle split direction" })).toBeInTheDocument();
   });
@@ -163,6 +163,11 @@ describe("Titlebar on macOS", () => {
     expect(screen.getByRole("button", { name: "Toggle sidebar" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Settings" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Toggle theme" })).toBeNull();
+  });
+
+  it("renders the split-direction toggle", () => {
+    render(<Titlebar onOpenSettings={() => {}} />);
+    expect(screen.getByRole("button", { name: "Toggle split direction" })).toBeInTheDocument();
   });
 
   it("renders the traffic-light inset when not fullscreen", () => {
