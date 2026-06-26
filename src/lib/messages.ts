@@ -85,6 +85,9 @@ export const messages = {
       minimizeWindow: "Minimize window",
       maximizeWindow: "Maximize window",
       closeWindow: "Close window",
+      splitDirection: "Toggle split direction",
+      splitDirectionTooltip: (split: "horizontal" | "vertical"): string =>
+        split === "horizontal" ? "Switch to left / right layout" : "Switch to top / bottom layout",
     },
   },
 } as const;

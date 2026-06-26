@@ -34,6 +34,7 @@ vi.mock("@/lib/use-fullscreen", () => ({
 
 import { Titlebar } from "./Titlebar";
 import { workflowStore } from "@/features/workflow/store";
+import { readPrefs, setPref } from "@/lib/use-prefs";
 
 // Titlebar uses <Tooltip>, which (like main.tsx) requires a TooltipProvider.
 function render(ui: React.ReactElement) {
@@ -109,6 +110,34 @@ describe("Titlebar on Windows/Linux", () => {
   it("shows the Handshaker wordmark", () => {
     render(<Titlebar onOpenSettings={() => {}} />);
     expect(screen.getByText("Handshaker")).toBeInTheDocument();
+  });
+});
+
+describe("Titlebar — split-direction toggle", () => {
+  beforeEach(() => {
+    mockIsMacOS = false;
+    setPref("split", "vertical");
+  });
+
+  it("renders the toggle button on both platforms", () => {
+    render(<Titlebar onOpenSettings={() => {}} />);
+    expect(screen.getByRole("button", { name: "Toggle split direction" })).toBeInTheDocument();
+  });
+
+  it("shows the Columns2 icon when split is vertical (Left/Right)", () => {
+    const { container } = render(<Titlebar onOpenSettings={() => {}} />);
+    expect(container.querySelector(".lucide-columns2")).not.toBeNull();
+    expect(container.querySelector(".lucide-rows2")).toBeNull();
+  });
+
+  it("flips prefs.split and swaps the icon on click", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<Titlebar onOpenSettings={() => {}} />);
+    await user.click(screen.getByRole("button", { name: "Toggle split direction" }));
+    expect(readPrefs().split).toBe("horizontal");
+    expect(container.querySelector(".lucide-rows2")).not.toBeNull();
+    await user.click(screen.getByRole("button", { name: "Toggle split direction" }));
+    expect(readPrefs().split).toBe("vertical");
   });
 });
 

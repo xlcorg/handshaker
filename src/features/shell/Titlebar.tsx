@@ -1,4 +1,4 @@
-import { Minus, PanelLeft, RefreshCw, Settings, Square, X } from "lucide-react";
+import { Columns2, Minus, PanelLeft, RefreshCw, Rows2, Settings, Square, X } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Tooltip } from "@/components/ui/tooltip";
 import { usePrefs } from "@/lib/use-prefs";
@@ -10,6 +10,8 @@ import type { UpdatePhase } from "@/features/updater/useUpdateCheck";
 import { ViewSwitcher } from "@/features/workflow/ViewSwitcher";
 import { compactFocusRing } from "@/lib/focusRing";
 import { messages } from "@/lib/messages";
+import { Kbd } from "@/components/ui/kbd";
+import { nextSplit } from "@/features/shell/splitDirection";
 
 const btn =
   `h-5 w-6 rounded-sm inline-flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground ${compactFocusRing}`;
@@ -40,6 +42,8 @@ export function Titlebar({
   const [prefs, setPref] = usePrefs();
   const fullscreen = useIsFullscreen();
   const showTrafficInset = isMacOS && !fullscreen;
+  // ⌥V на macOS печатает символ → используем ⌥⌘V (см. features/shell/splitDirection.ts).
+  const splitKeys = isMacOS ? ["⌥", "⌘", "V"] : ["Alt", "V"];
 
   return (
     <div
@@ -67,6 +71,26 @@ export function Titlebar({
         <Tooltip content={messages.shell.titlebar.toggleSidebar} side="bottom">
           <button type="button" onClick={() => setPref("sidebar", !prefs.sidebar)} className={btn} aria-label={messages.shell.titlebar.toggleSidebar}>
             <PanelLeft size={13} />
+          </button>
+        </Tooltip>
+        <Tooltip
+          content={
+            <span>
+              {messages.shell.titlebar.splitDirectionTooltip(prefs.split)}{" "}
+              {splitKeys.map((k) => (
+                <Kbd key={k}>{k}</Kbd>
+              ))}
+            </span>
+          }
+          side="bottom"
+        >
+          <button
+            type="button"
+            onClick={() => setPref("split", nextSplit(prefs.split))}
+            className={btn}
+            aria-label={messages.shell.titlebar.splitDirection}
+          >
+            {prefs.split === "horizontal" ? <Rows2 size={13} /> : <Columns2 size={13} />}
           </button>
         </Tooltip>
         {onCheckForUpdates && (
