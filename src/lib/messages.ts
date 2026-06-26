@@ -72,4 +72,19 @@ export const messages = {
         " trailer in the backend is required. Trailing metadata is in the Trailers tab.",
     },
   },
+  shell: {
+    titlebar: {
+      toggleSidebar: "Toggle sidebar",
+      checkForUpdates: "Check for updates",
+      checkingForUpdates: "Checking for updates…",
+      updateAvailable: "Update available",
+      settings: "Settings",
+      minimize: "Minimize",
+      maximize: "Maximize",
+      close: "Close",
+      minimizeWindow: "Minimize window",
+      maximizeWindow: "Maximize window",
+      closeWindow: "Close window",
+    },
+  },
 } as const;
