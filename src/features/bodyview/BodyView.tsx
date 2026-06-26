@@ -25,6 +25,7 @@ import { installContextMenuCleanup } from "./contextMenuCleanup";
 import { copyDecodedBase64 } from "./copyDecoded";
 import { attachFoldActions, type FoldMenuEditor } from "./foldActions";
 import { attachWordWrapAction, type WordWrapMenuEditor } from "./wordWrapAction";
+import { openEditorContextMenu } from "./openContextMenu";
 import { shouldShowMinimap, minimapToggleOptions } from "./minimapGate";
 
 type Mode = "request" | "response";
@@ -267,7 +268,11 @@ export function BodyView({ mode, value, onChange, onSubmit, schema, varCandidate
             editor.trigger("autocomplete", "editor.action.triggerSuggest", {});
           }
         });
-        live.current.ghost = new GhostZone(editor);
+        // Monaco won't open its context menu over the ghost view zone, so forward
+        // the right-click: open the editor's menu at the cursor ourselves.
+        live.current.ghost = new GhostZone(editor, (e) =>
+          openEditorContextMenu(editor, e.pageX, e.pageY),
+        );
         applyGhost();
       }
       if (mode === "response") {
