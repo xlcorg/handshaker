@@ -38,6 +38,7 @@ import { UpdateToast } from "@/features/updater/UpdateToast";
 import { UpdaterProvider } from "@/features/updater/updaterContext";
 import { useUiZoom } from "@/features/shell/zoom";
 import { useWordWrapHotkey } from "@/features/shell/wordWrap";
+import { useSplitDirectionHotkey } from "@/features/shell/splitDirection";
 import { dismissSplash } from "@/features/shell/splash";
 import { useStartupRecovery } from "@/features/shell/startupRecovery";
 
@@ -82,6 +83,8 @@ export function WorkflowApp() {
   useUiZoom();
   // Глобальный Alt+Z → переключает prefs.wordWrap (перенос строк в редакторах тела).
   useWordWrapHotkey();
+  // Глобальный Alt+V / ⌥⌘V → переключает prefs.split (ориентация request/response).
+  useSplitDirectionHotkey();
   // Уведомить один раз о файлах, помещённых в карантин при старте (битый JSON → .corrupt).
   useStartupRecovery();
 
