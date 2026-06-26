@@ -20,7 +20,7 @@ const ROWS: Array<[string, string[][]]> = [
 
 export function KeyboardPane() {
   return (
-    <SettingsGroup title="Shortcuts">
+    <SettingsGroup title={messages.shell.keyboard.shortcutsTitle}>
       {ROWS.map(([n, combos]) => (
         <SettingsRow
           key={n}

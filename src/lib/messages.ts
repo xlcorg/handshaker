@@ -74,6 +74,7 @@ export const messages = {
   },
   shell: {
     keyboard: {
+      shortcutsTitle: "Shortcuts",
       sendRequest: "Send request",
       toggleSidebar: "Toggle sidebar",
       wordWrap: "Word wrap",
