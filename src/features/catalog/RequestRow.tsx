@@ -87,7 +87,7 @@ export function RequestRow({
             data-node-id={req.id}
             className="group relative flex items-center gap-0.5 py-1 pr-8 text-xs"
           >
-            <GrpcIcon variant={grpcIcon} className="flex-none" />
+            {grpcIcon !== "off" && <GrpcIcon variant={grpcIcon} className="flex-none" />}
             <RenameInput
               initial={req.name}
               onCommit={(name) => {
@@ -126,7 +126,7 @@ export function RequestRow({
             >
               {hint === "before" && <DropLine zone="before" />}
               {hint === "after" && <DropLine zone="after" />}
-              <GrpcIcon variant={grpcIcon} className="flex-none" />
+              {grpcIcon !== "off" && <GrpcIcon variant={grpcIcon} className="flex-none" />}
               <span className="min-w-0 flex-1 truncate text-left">
                 {req.name || req.method}
               </span>

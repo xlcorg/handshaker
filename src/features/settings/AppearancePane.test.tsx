@@ -124,4 +124,26 @@ describe("AppearancePane", () => {
     // Icon should now be circle
     expect(screen.getByLabelText("grpc").getAttribute("data-variant")).toBe("circle");
   });
+
+  it("selecting 'off' hides the request row icon but keeps the label", () => {
+    render(
+      <SidebarProvider>
+        <AppearancePane />
+        <RequestRow collectionId="c1" req={req("Test")} cb={makeCb()} />
+      </SidebarProvider>,
+    );
+
+    // Icon present at the default "solid".
+    expect(screen.getByLabelText("grpc")).toBeInTheDocument();
+
+    // Click the "off" option in the gRPC icon ToggleGroup.
+    const grpcTextEl = screen.getByText("gRPC icon");
+    const rowEl = grpcTextEl.closest("div.flex") as HTMLElement;
+    fireEvent.click(within(rowEl).getByLabelText("off"));
+
+    // pref is "off", icon gone, request label still rendered (text took the space).
+    expect(readPrefs().grpcIcon).toBe("off");
+    expect(screen.queryByLabelText("grpc")).toBeNull();
+    expect(screen.getByText("Test")).toBeInTheDocument();
+  });
 });
