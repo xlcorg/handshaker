@@ -8,7 +8,37 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 
 Активная фича — нет (между фичами).
 
-Последняя влитая — **Split direction toggle — кнопка в титлбаре + хоткей Alt+V/⌥⌘V**
+Последняя влитая — **gRPC error handling — структурные google.rpc-детали + regex-free
+классификация клиентских ошибок** (🎉 DONE 2026-06-27, ребейз+squash+ff в `main` `3ff5951`;
+план+спека `2026-06-26-grpc-error-handling*` в `archive/`) — две дорожки, сходятся в
+`ErrorView`/`ClientErrorView`/`ResponsePanel`. **(1) Серверные детали:** ядро декодирует
+`grpc-status-details-bin` (google.rpc richer error model) через `tonic-types` в serde-free
+DTO `StatusDetail` (`grpc/invoke/status_details.rs`, 10 стандартных типов; `ErrorDetail`
+`#[non_exhaustive]` ⇒ `filter_map`) → `UnaryOutcome.status_details` → зеркало
+`StatusDetailIpc` на `InvokeOutcomeIpc` → типизированный рендер `StatusDetails.tsx`;
+`status_message` = сырое сообщение сервера (без префикса кода). **(2) Клиентские ошибки без
+regex:** ядро `classify_connect_error`/`ConnectKind` (`grpc/error_class.rs`); `IpcError`
+получил `Transport{kind}` + `Cancelled` + `DeadlineExceeded{timeout_ms}` (сентинелы из строк
+в `race_cancel_timeout`); фронт `netDiagnostics.ts` мапит структурный `IpcError` →
+`ClientFault` (ноль regex), протянут через `actions.ts`/`model.ts` (`Step.error:
+ClientFault|null`)/`CallPanel`/`ResponsePanel`/`useDraftReflection`; `ClientErrorView` его
+потребляет. **Лицо ошибки** (дизайн «C» выбран брейнштормом + inline-макетами через
+`mcp__visualize`, докручен живьём): `RespMeta` держит однострочную сводку `5 NOT_FOUND ·
+1ms · 0B` (несёт числовой код), `ErrorView` центрирован в теле — якорь `AlertCircle` +
+сообщение сервера крупнее (`text-base`) + детали `google.rpc` ниже только когда есть (иначе
+приглушённая сноска); каждый факт — один раз (зеркало `ClientErrorView`). Subagent-driven
+(11 задач TDD + live-pass правки), spec+quality на каждой + финальное ревью = READY TO
+MERGE. **Ребейз на разошедшийся `main`** (фича split-direction) **чист** — `messages.ts`
+авто-смерж (disjoint регионы); **squash 18→1 коммит `3ff5951`**. Гейт (на squash-дереве):
+vitest 1132 · tsc · `cargo test --workspace` (core 205 · src-tauri 69 · integration) ·
+bindings no-drift. **Урок (gRPC-протокол):** C# `Status.DebugException` (3-й арг
+`Status`/`RpcException`) НЕ уходит по проводу — клиент-локально (`null` на клиенте); чтобы
+серверная инфа об ошибке доехала в `details`, сервер кладёт google.rpc в
+`grpc-status-details-bin` (`Grpc.StatusProto` `Google.Rpc.Status` + `.ToRpcException()`).
+Уроки — память `reference_tonic_types_status_details`,
+`project_required_ipc_field_breaks_fixtures`, `project_grpc_error_handling_feature`. Остаток
+— live WebView2-проход против сервера с реальными google.rpc-деталями.
+Предыдущая — **Split direction toggle — кнопка в титлбаре + хоткей Alt+V/⌥⌘V**
 (🎉 DONE 2026-06-26, ff в `main` `4cc5c0c`; план+спека `2026-06-26-split-direction-toggle*`
 в `archive/`) — прямой тоггл ориентации сплита request/response без захода в Settings (до
 этого `prefs.split` менялся только тумблером Settings → Appearance — анти-паттерн
@@ -35,37 +65,19 @@ KeyboardPane, lucide-класс `lucide-columns2` без дефиса). Гейт
 build. **Live-verified** в WebView2 (2026-06-26): флип раскладки кнопкой; хоткей на обеих
 ОС, вкл. русскую раскладку — физ. `KeyV`; AltGr+V не срабатывает; синхрон с тумблером
 Settings; переживает рестарт. Уроки — в памяти `project_claude_rules_dir`.
-Предыдущая — **Word-wrap toggle в контекстном меню + правый клик по ghost-хинту**
-(🎉 DONE 2026-06-26, ff в `main`; план+спека `2026-06-26-wordwrap-context-menu*` в
-`archive/`; ключевые коммиты `90018b6` (word-wrap) + `5910745` (ghost-fix)) — две
-связанные вещи. **(1) Word-wrap** — третья поверхность к тумблеру Settings и хоткею
-Alt+Z/⌥⌘Z: пункт ПКМ-меню в **обоих** редакторах тела с динамической подписью по
-состоянию (`Enable`/`Disable word wrap`). Чистый `bodyview/wordWrapAction.ts` (зеркало
-`foldActions.ts`) регистрирует одно действие `hs.toggleWordWrap` в группе `2_view`
-**без keybinding** (аккорд за оконным слушателем; global last-wins реестр не трогаем);
-динамика подписи (Monaco фиксирует label при регистрации) = dispose+re-add в
-`useEffect([prefs.wordWrap])`. Текст — в `lib/messages.ts` (`bodyview.menu.wordWrap`);
-тоггл пишет через новый модульный `setPref` (симметрия с `readPrefs` ⇒ стабильная
-идентичность для эффекта пере-навешивания). **(2) Правый клик по ghost-хинту** (баг,
-всплывший при live-тесте): Monaco **не открывает** меню над view-zone —
-`ContextMenuController._onContextMenu` гасит нативное меню (`preventDefault`) и
-early-return'ит для не-текстовых целей, так что ПКМ по ghost-скелету давал ноль меню.
-Первый фикс (DOM-листенер на ghost-узле) **не сработал** — Monaco кладёт оверлеи над
-зоной, событие до узла не доходит. Рабочий путь — подписка на **`editor.onContextMenu`**
-(Monaco эмитит его безусловно для каждого ПКМ, `mouseHandler.js:172`; то же событие
-потребляет встроенный контроллер): для цели `CONTENT_VIEW_ZONE` сами открываем меню у
-курсора через `getContribution("editor.contrib.contextmenu").showContextMenu({x,y})`
-(page-координаты; `bodyview/openContextMenu.ts`). Бэкенд/IPC/bindings не тронуты.
-Subagent-driven (4 задачи TDD, spec+quality + финальное ревью = READY TO MERGE);
-ghost-фикс — systematic-debugging (корень сверен по исходнику Monaco 0.55.1). Гейт:
-vitest 1120 · tsc · vite build. **Live-verified** в WebView2 (меню «появилось везде» в
-request body). Урок про Monaco view-zone — в памяти `project_monaco_viewzone_contextmenu`.
 
 Интеграционная ветка — `main`; фичи ведутся в отдельных worktree-ветках
 (`claude/*`) и вливаются в `main` fast-forward.
 
 ### Завершённые фичи (всё в `archive/`)
 
+- **Word-wrap toggle в контекстном меню + правый клик по ghost-хинту** (🎉 DONE
+  2026-06-26, ff в `main`; `2026-06-26-wordwrap-context-menu*` в `archive/`; коммиты
+  `90018b6` + `5910745`) — пункт ПКМ-меню word-wrap в **обоих** редакторах тела (динамич.
+  подпись Enable/Disable, без keybinding, dispose+re-add в `useEffect([prefs.wordWrap])`) +
+  фикс ПКМ по ghost view-zone подпиской на `editor.onContextMenu` (Monaco не открывает меню
+  над view-zone; DOM-листенер на узле бесполезен — оверлеи перехватывают). Урок —
+  `project_monaco_viewzone_contextmenu`.
 - **Прощение trailing comma в теле запроса при Send** (🎉 DONE 2026-06-25, ff в `main`
   `501f46e`; в `archive/`) — string-aware скраб `strip_trailing_commas(&str) → Cow<str>`
   в ядре (`grpc/invoke/lenient.rs`) убирает висячую запятую **только на проводе** перед
