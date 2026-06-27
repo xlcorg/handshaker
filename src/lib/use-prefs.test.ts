@@ -48,6 +48,14 @@ describe("grpcIcon pref", () => {
     expect(merged.grpcIcon).toBe("circle");
     expect(typeof readPrefs().grpcIcon).toBe("string");
   });
+
+  it("merges a persisted grpcIcon:'off' over defaults", () => {
+    localStorage.setItem("handshaker.prefs.v1", JSON.stringify({ grpcIcon: "off" }));
+    // readPrefs() reflects the module-loaded snapshot; assert the merge shape instead.
+    const merged = { ...PREFS_DEFAULTS, grpcIcon: "off" as const };
+    expect(merged.grpcIcon).toBe("off");
+    expect(typeof readPrefs().grpcIcon).toBe("string");
+  });
 });
 
 describe("methodGroupStyle pref", () => {

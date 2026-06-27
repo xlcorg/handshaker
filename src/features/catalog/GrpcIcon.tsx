@@ -1,8 +1,8 @@
 import { cn } from "@/lib/cn";
-import type { GrpcIconStyle } from "@/lib/use-prefs";
+import type { GrpcIconPref } from "@/lib/use-prefs";
 
 export interface GrpcIconProps {
-  variant: GrpcIconStyle;
+  variant: GrpcIconPref;
   className?: string;
 }
 

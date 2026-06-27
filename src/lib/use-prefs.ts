@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 
 export type SplitDir = "horizontal" | "vertical";
 export type GrpcIconStyle = "solid" | "letter" | "outline" | "circle";
+/** gRPC-icon preference: any of the visual styles, or `"off"` to hide the icon entirely. */
+export type GrpcIconPref = GrpcIconStyle | "off";
 /** How a service group header is visually separated from its methods in the MethodPicker dropdown. */
 export type MethodGroupStyle = "band" | "tree" | "weight" | "card" | "bar" | "chip" | "zebra";
 /** Color palette for `{{var}}` token highlighting (resolved vs unresolved/cycle).
@@ -21,7 +23,7 @@ export interface Prefs {
   zoom: number;
   /** Per-request deadline in ms, applied backend-side via tokio timeout. */
   requestTimeoutMs: number;
-  grpcIcon: GrpcIconStyle;
+  grpcIcon: GrpcIconPref;
   /** Service-group header style in the MethodPicker dropdown. */
   methodGroupStyle: MethodGroupStyle;
   /** Color palette for `{{var}}` token highlighting in editors. */
