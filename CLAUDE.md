@@ -22,8 +22,8 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 единственный потребитель `GrpcIcon` (MethodPicker/FocusView/breadcrumb рисуют другое),
 поэтому тоггл покрывает все поверхности. Бэкенд/IPC/bindings не тронуты. Subagent-driven
 (2 задачи TDD, spec+quality ревью на каждой + финальное ревью = READY TO MERGE). Гейт:
-vitest 1134 · tsc · vite build. Остаток — live WebView2-проход (off скрывает иконку и
-сдвигает текст; переживает рестарт).
+vitest 1134 · tsc · vite build. **Live-verified** в WebView2 (2026-06-27): `off` скрывает
+иконку и сдвигает текст; обратно возвращает выбранный стиль; переживает рестарт.
 Предыдущая — **gRPC error handling — структурные google.rpc-детали + regex-free
 классификация клиентских ошибок** (🎉 DONE 2026-06-27, ребейз+squash+ff в `main` `3ff5951`;
 план+спека `2026-06-26-grpc-error-handling*` в `archive/`) — две дорожки, сходятся в
