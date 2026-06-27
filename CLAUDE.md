@@ -8,7 +8,23 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 
 Активная фича — нет (между фичами).
 
-Последняя влитая — **gRPC error handling — структурные google.rpc-детали + regex-free
+Последняя влитая — **Выключение иконок gRPC — опция `off` в тогглере + сдвиг текста**
+(🎉 DONE 2026-06-27, ff в `main`; план+спека `2026-06-27-grpc-icon-toggle*` в `archive/`;
+коммиты `4d5928b` + `36e9c4b`) — pref `grpcIcon` расширен с `GrpcIconStyle` до
+`GrpcIconPref = GrpcIconStyle | "off"` (`use-prefs.ts`; дефолт `"solid"`, поведение по
+умолчанию не меняется); презентационный `GrpcIcon` остаётся чисто 4-вариантным
+(`variant: GrpcIconStyle`). Тогглер «gRPC icon» в Settings → Appearance получил опцию `off`
+первой (`off / solid / letter / outline / circle`). `RequestRow` гейтит **оба** места
+рендера (ветка rename + обычная строка) на `grpcIcon !== "off"` — проверка сужает значение
+обратно до `GrpcIconStyle`, так что `<GrpcIcon variant={grpcIcon}>` типобезопасен и `"off"`
+не протекает в компонент. Сдвиг текста — даром: иконка — flex-сосед лейбла с `gap-0.5`, при
+её отсутствии gap схлопывается, имя занимает место (правок CSS нет). `RequestRow` —
+единственный потребитель `GrpcIcon` (MethodPicker/FocusView/breadcrumb рисуют другое),
+поэтому тоггл покрывает все поверхности. Бэкенд/IPC/bindings не тронуты. Subagent-driven
+(2 задачи TDD, spec+quality ревью на каждой + финальное ревью = READY TO MERGE). Гейт:
+vitest 1134 · tsc · vite build. Остаток — live WebView2-проход (off скрывает иконку и
+сдвигает текст; переживает рестарт).
+Предыдущая — **gRPC error handling — структурные google.rpc-детали + regex-free
 классификация клиентских ошибок** (🎉 DONE 2026-06-27, ребейз+squash+ff в `main` `3ff5951`;
 план+спека `2026-06-26-grpc-error-handling*` в `archive/`) — две дорожки, сходятся в
 `ErrorView`/`ClientErrorView`/`ResponsePanel`. **(1) Серверные детали:** ядро декодирует
@@ -38,39 +54,17 @@ bindings no-drift. **Урок (gRPC-протокол):** C# `Status.DebugExcepti
 Уроки — память `reference_tonic_types_status_details`,
 `project_required_ipc_field_breaks_fixtures`, `project_grpc_error_handling_feature`. Остаток
 — live WebView2-проход против сервера с реальными google.rpc-деталями.
-Предыдущая — **Split direction toggle — кнопка в титлбаре + хоткей Alt+V/⌥⌘V**
-(🎉 DONE 2026-06-26, ff в `main` `4cc5c0c`; план+спека `2026-06-26-split-direction-toggle*`
-в `archive/`) — прямой тоггл ориентации сплита request/response без захода в Settings (до
-этого `prefs.split` менялся только тумблером Settings → Appearance — анти-паттерн
-Insomnia/Bruno; форма сверена с Postman: иконка + хоткей `⌥⌘V`). **Кнопка** в правом
-кластере титлбара между Toggle sidebar и Check for updates: иконка `Columns2`/`Rows2` по
-текущей ориентации (vertical=Left/Right → `Columns2`), стабильный aria-label + динамичный
-тултип «Switch to …» с чордом; `onClick` флипает `prefs.split` напрямую (`Titlebar.tsx`
-уже держит `usePrefs`; `CallPanel.tsx:65` реагирует через общий стор, маппит в orientation
-`ResizablePanelGroup`). **Хоткей** Alt+V (Win/Linux) / ⌥⌘V (macOS) — чистый
-`features/shell/splitDirection.ts` (зеркало `wordWrap.ts`: `isSplitToggleHotkey` по физ.
-`KeyV` + `nextSplit` + `useSplitDirectionHotkey`, capture-фаза + preventDefault/
-stopPropagation + e.repeat-гард, AltGr-гард; ⌥⌘ на маке, т.к. голый ⌥V печатает символ),
-подключён в `WorkflowApp` рядом с `useWordWrapHotkey`. **Все видимые строки — в
-`lib/messages.ts`** (новый namespace `shell.titlebar` + `shell.keyboard`; заодно
-централизованы инлайн-строки `Titlebar` и `KeyboardPane`, бренд «Handshaker» оставлен
-инлайн). Заведена коммитимая папка правил **`.claude/rules/`** (`.gitignore`: `.claude/*`
-+ `!.claude/rules/` — worktrees/локальный конфиг остаются игнорированы) с правилами
-`ui-strings.md` (строки → `messages.ts`, `paths`-скоуп на `src/**/*.{ts,tsx}`) и
-`archiving-completed-work.md`. Settings → Keyboard показывает шорткат; настройка
-персистится (localStorage `prefs.split`, переживает рестарт). Бэкенд/IPC/bindings не
-тронуты. Subagent-driven (TDD: helpers+hook · titlebar · keyboard; spec+quality ревью на
-каждой + финальное ревью ветки = READY TO MERGE; мелкие фиксы по ревью: scope-инг тестов
-KeyboardPane, lucide-класс `lucide-columns2` без дефиса). Гейт: vitest 1133 · tsc · vite
-build. **Live-verified** в WebView2 (2026-06-26): флип раскладки кнопкой; хоткей на обеих
-ОС, вкл. русскую раскладку — физ. `KeyV`; AltGr+V не срабатывает; синхрон с тумблером
-Settings; переживает рестарт. Уроки — в памяти `project_claude_rules_dir`.
-
 Интеграционная ветка — `main`; фичи ведутся в отдельных worktree-ветках
 (`claude/*`) и вливаются в `main` fast-forward.
 
 ### Завершённые фичи (всё в `archive/`)
 
+- **Split direction toggle — кнопка в титлбаре + хоткей Alt+V/⌥⌘V** (🎉 DONE 2026-06-26,
+  ff в `main` `4cc5c0c`; `2026-06-26-split-direction-toggle*` в `archive/`) — прямой тоггл
+  ориентации сплита request/response: кнопка `Columns2`/`Rows2` в правом кластере титлбара
+  (флипает `prefs.split` напрямую) + чистый `features/shell/splitDirection.ts` (физ. `KeyV`,
+  ⌥⌘ на маке) в `WorkflowApp`. Строки → `messages.ts`; заведена коммитимая `.claude/rules/`.
+  Live-verified в WebView2. Урок — `project_claude_rules_dir`.
 - **Word-wrap toggle в контекстном меню + правый клик по ghost-хинту** (🎉 DONE
   2026-06-26, ff в `main`; `2026-06-26-wordwrap-context-menu*` в `archive/`; коммиты
   `90018b6` + `5910745`) — пункт ПКМ-меню word-wrap в **обоих** редакторах тела (динамич.
