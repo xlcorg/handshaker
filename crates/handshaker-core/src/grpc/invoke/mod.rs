@@ -14,14 +14,20 @@ pub(crate) mod skeleton;
 pub mod schema;
 mod well_known;
 mod lenient;
+mod status_details;
 pub use schema::{
     build_message_schema_from_pool, EnumNode, EnumValueNode, FieldNode, FieldValueKind,
     MessageNode, MessageSchema, MessageSide,
 };
+pub use status_details::{
+    extract_status_details, FieldViolation, HelpLink, PreconditionViolation, QuotaViolation,
+    StatusDetail,
+};
 
 /// Outcome of one unary call. `status_code == 0` means success (`response_json` is `Some`).
 /// Any other code is a normal non-OK gRPC status (`response_json` is `None`); in that case
-/// `status_message` carries `{Code}: {message}` (e.g. `"NOT_FOUND: user does not exist"`).
+/// `status_message` carries the server's raw status message (e.g. `"user does not exist"`);
+/// the code itself is in `status_code`.
 ///
 /// Client-side failures (transport / encode / decode) are returned as `Err(CoreError)`,
 /// not as `UnaryOutcome` with non-zero `status_code`. See the design spec
@@ -33,6 +39,8 @@ pub struct UnaryOutcome {
     pub status_message: String,
     pub response_json: Option<String>,
     pub trailing_metadata: HashMap<String, String>,
+    /// Decoded google.rpc structured error details (empty on success / when none).
+    pub status_details: Vec<StatusDetail>,
     pub elapsed_ms: u64,
 }
 
@@ -311,6 +319,7 @@ mod tests {
             status_message: "OK".into(),
             response_json: Some(r#"{"id":"echo"}"#.into()),
             trailing_metadata: HashMap::new(),
+            status_details: Vec::new(),
             elapsed_ms: 42,
         };
         let t = FakeTransport::with_outcome(Ok(canned.clone()));
@@ -326,6 +335,7 @@ mod tests {
         assert_eq!(outcome.status_code, 0);
         assert_eq!(outcome.response_json.as_deref(), Some(r#"{"id":"echo"}"#));
         assert_eq!(outcome.elapsed_ms, 42);
+        assert!(outcome.status_details.is_empty());
 
         assert_eq!(
             captured.last_path.lock().await.as_deref(),

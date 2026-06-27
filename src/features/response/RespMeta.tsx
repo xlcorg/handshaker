@@ -20,6 +20,7 @@ export function RespMeta({ state, outcome }: RespMetaProps) {
       <span className={cn(base)}>
         <span className="flex items-center gap-1.5">
           <span className="h-1.5 w-1.5 rounded-full bg-destructive" />
+          <span className="tabular-nums text-muted-foreground">{outcome.status_code}</span>
           <span className="text-foreground font-medium">{statusName(outcome.status_code)}</span>
         </span>
         <span className="text-muted-foreground">·</span>

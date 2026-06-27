@@ -85,7 +85,7 @@ export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMetho
       varsResolve: varsResolverFor(step.collectionId),
     });
     if (auth.kind === "error") {
-      onPatch({ status: "error", outcome: null, error: auth.message, requestId: null });
+      onPatch({ status: "error", outcome: null, error: { kind: "auth", message: auth.message }, requestId: null });
       return;
     }
     const res = await sendStep(step, auth.kind === "header" ? auth.header : null, { requestId });

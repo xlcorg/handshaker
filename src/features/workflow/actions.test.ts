@@ -74,6 +74,7 @@ describe("sendStep", () => {
       status_message: "OK",
       response_json: '{"state":"OK"}',
       trailing_metadata: {},
+      status_details: [],
       elapsed_ms: 12,
     });
     const res = await sendStep({
@@ -95,7 +96,7 @@ describe("sendStep", () => {
   });
 
   it("returns error kind with the IpcError message on client failure", async () => {
-    vi.mocked(ipc.grpcInvokeOneshot).mockRejectedValue({ type: "Transport", message: "connection refused" });
+    vi.mocked(ipc.grpcInvokeOneshot).mockRejectedValue({ type: "Transport", kind: "Refused", message: "connection refused" });
     const res = await sendStep({
       address: "h:443",
       tls: true,
@@ -104,8 +105,7 @@ describe("sendStep", () => {
       requestJson: "{}",
       metadata: [],
     });
-    expect(res.kind).toBe("error");
-    if (res.kind === "error") expect(res.message).toContain("refused");
+    expect(res).toEqual({ kind: "error", fault: { kind: "refused", message: "connection refused" } });
   });
 
   it("falls back to the IpcError type for messageless variants", async () => {
@@ -119,7 +119,7 @@ describe("sendStep", () => {
       metadata: [],
     });
     expect(res.kind).toBe("error");
-    if (res.kind === "error") expect(res.message).toBe("NotConnected");
+    if (res.kind === "error") expect(res.fault).toEqual({ kind: "other", message: "NotConnected" });
   });
 
   it("omits disabled and empty-key metadata rows", async () => {
@@ -128,6 +128,7 @@ describe("sendStep", () => {
       status_message: "OK",
       response_json: "{}",
       trailing_metadata: {},
+      status_details: [],
       elapsed_ms: 1,
     });
     await sendStep({
@@ -157,7 +158,7 @@ describe("sendStep", () => {
       requestJson: "{}", metadata: [],
     });
     expect(res.kind).toBe("error");
-    if (res.kind === "error") expect(res.message).toContain("backend boom");
+    if (res.kind === "error") expect(res.fault.message).toContain("backend boom");
     expect(ipc.grpcInvokeOneshot).not.toHaveBeenCalled();
   });
 
@@ -200,7 +201,7 @@ describe("sendStep", () => {
     }));
     vi.mocked(ipc.grpcInvokeOneshot).mockResolvedValue({
       status_code: 0, status_message: "OK", response_json: "{}",
-      trailing_metadata: {}, elapsed_ms: 5,
+      trailing_metadata: {}, status_details: [], elapsed_ms: 5,
     });
     await sendStep({ address: "{{host}}", tls: true, service: "S", method: "M", requestJson: "{}", metadata: [] });
     expect(ipc.grpcInvokeOneshot).toHaveBeenCalledWith(
@@ -214,32 +215,32 @@ describe("sendStep", () => {
 
 describe("stepPatchFromSendResult", () => {
   it("ok with status 0 → ok", () => {
-    const outcome = { status_code: 0, status_message: "OK", response_json: "{}", trailing_metadata: {}, elapsed_ms: 1 };
+    const outcome = { status_code: 0, status_message: "OK", response_json: "{}", trailing_metadata: {}, status_details: [], elapsed_ms: 1 };
     expect(stepPatchFromSendResult({ kind: "ok", outcome })).toEqual({ status: "ok", outcome, error: null });
   });
   it("ok with non-zero status → error (grpc status), keeps outcome", () => {
-    const outcome = { status_code: 5, status_message: "NOT_FOUND", response_json: null, trailing_metadata: {}, elapsed_ms: 1 };
+    const outcome = { status_code: 5, status_message: "NOT_FOUND", response_json: null, trailing_metadata: {}, status_details: [], elapsed_ms: 1 };
     expect(stepPatchFromSendResult({ kind: "ok", outcome })).toEqual({ status: "error", outcome, error: null });
   });
   it("unresolved → error with variable list", () => {
     const p = stepPatchFromSendResult({ kind: "unresolved", unresolved: ["host", "id"], cycle: null });
     expect(p.status).toBe("error");
     expect(p.outcome).toBeNull();
-    expect(p.error).toBe("Unresolved variables: {{host}}, {{id}}");
+    expect(p.error).toEqual({ kind: "other", message: "Unresolved variables: {{host}}, {{id}}" });
   });
   it("unresolved with cycle → cycle message", () => {
     const p = stepPatchFromSendResult({ kind: "unresolved", unresolved: [], cycle: ["a", "b", "a"] });
-    expect(p.error).toBe("Variable cycle: a → b → a");
+    expect(p.error).toEqual({ kind: "other", message: "Variable cycle: a → b → a" });
   });
   it("error → error with message", () => {
-    expect(stepPatchFromSendResult({ kind: "error", message: "boom" })).toEqual({ status: "error", outcome: null, error: "boom" });
+    expect(stepPatchFromSendResult({ kind: "error", fault: { kind: "other", message: "boom" } })).toEqual({ status: "error", outcome: null, error: { kind: "other", message: "boom" } });
   });
 });
 
 describe("sendStep authHeader merge", () => {
   beforeEach(() => {
     vi.mocked(ipc.grpcInvokeOneshot).mockResolvedValue({
-      status_code: 0, status_message: "OK", response_json: "{}", trailing_metadata: {}, elapsed_ms: 1,
+      status_code: 0, status_message: "OK", response_json: "{}", trailing_metadata: {}, status_details: [], elapsed_ms: 1,
     });
   });
 
@@ -307,12 +308,12 @@ describe("resolveAuthHeader", () => {
 
 describe("shouldRecordExecuted", () => {
   it("records only calls that reached the server (kind 'ok')", () => {
-    const outcome = { status_code: 0, status_message: "OK", response_json: "{}", trailing_metadata: {}, elapsed_ms: 1 };
+    const outcome = { status_code: 0, status_message: "OK", response_json: "{}", trailing_metadata: {}, status_details: [], elapsed_ms: 1 };
     expect(shouldRecordExecuted({ kind: "ok", outcome })).toBe(true);
     // non-zero gRPC status still reached the server → recorded
-    const errOutcome = { status_code: 5, status_message: "NOT_FOUND", response_json: null, trailing_metadata: {}, elapsed_ms: 1 };
+    const errOutcome = { status_code: 5, status_message: "NOT_FOUND", response_json: null, trailing_metadata: {}, status_details: [], elapsed_ms: 1 };
     expect(shouldRecordExecuted({ kind: "ok", outcome: errOutcome })).toBe(true);
-    expect(shouldRecordExecuted({ kind: "error", message: "refused" })).toBe(false);
+    expect(shouldRecordExecuted({ kind: "error", fault: { kind: "other", message: "refused" } })).toBe(false);
     expect(shouldRecordExecuted({ kind: "unresolved", unresolved: ["x"], cycle: null })).toBe(false);
     expect(shouldRecordExecuted({ kind: "cancelled" })).toBe(false);
   });
@@ -321,7 +322,7 @@ describe("shouldRecordExecuted", () => {
 describe("buildExecutedStep", () => {
   it("freezes a fresh-id snapshot of the draft with the send patch applied", () => {
     const draft = newStep({ address: "h:443", tls: true, service: "S", method: "M" });
-    const outcome = { status_code: 0, status_message: "OK", response_json: "{}", trailing_metadata: {}, elapsed_ms: 7 };
+    const outcome = { status_code: 0, status_message: "OK", response_json: "{}", trailing_metadata: {}, status_details: [], elapsed_ms: 7 };
     const snap = buildExecutedStep(draft, { status: "ok", outcome, error: null, requestId: null });
     expect(snap.id).not.toBe(draft.id);     // distinct history entry
     expect(snap.requestId).toBeNull();
@@ -335,7 +336,7 @@ describe("buildExecutedStep", () => {
 describe("sendStep cancel/timeout wiring", () => {
   beforeEach(() => {
     vi.mocked(ipc.grpcInvokeOneshot).mockResolvedValue({
-      status_code: 0, status_message: "OK", response_json: "{}", trailing_metadata: {}, elapsed_ms: 1,
+      status_code: 0, status_message: "OK", response_json: "{}", trailing_metadata: {}, status_details: [], elapsed_ms: 1,
     });
   });
 
@@ -354,7 +355,7 @@ describe("sendStep cancel/timeout wiring", () => {
   });
 
   it("returns kind 'cancelled' when the backend reports a cancellation", async () => {
-    vi.mocked(ipc.grpcInvokeOneshot).mockRejectedValue({ type: "Transport", message: "request cancelled" });
+    vi.mocked(ipc.grpcInvokeOneshot).mockRejectedValue({ type: "Cancelled" });
     const res = await sendStep(
       { address: "h", tls: false, service: "S", method: "M", requestJson: "{}", metadata: [] },
       null,
@@ -365,10 +366,11 @@ describe("sendStep cancel/timeout wiring", () => {
   });
 
   it("does NOT treat a near-miss transport error containing 'cancel' as a cancellation", async () => {
-    // Only the exact backend sentinel resets to draft; an unrelated I/O error that merely
-    // contains "cancel" must surface as an error, not silently vanish.
+    // Only the exact backend `Cancelled` discriminator resets to draft; an unrelated I/O error
+    // that merely contains "cancel" in its message must surface as an error, not silently vanish.
     vi.mocked(ipc.grpcInvokeOneshot).mockRejectedValue({
       type: "Transport",
+      kind: "Other",
       message: "I/O operation has been canceled by the host",
     });
     const res = await sendStep(
@@ -377,7 +379,7 @@ describe("sendStep cancel/timeout wiring", () => {
       { requestId: "req-3", timeoutMs: 1000 },
     );
     expect(res.kind).toBe("error");
-    if (res.kind === "error") expect(res.message).toContain("canceled");
+    if (res.kind === "error") expect(res.fault.message).toContain("canceled");
   });
 
   it("generates distinct request ids across calls when none is provided", async () => {

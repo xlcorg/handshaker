@@ -217,6 +217,7 @@ describe("CallPanel collection-auth inheritance (originAuth)", () => {
     status_message: "OK",
     response_json: "{}",
     trailing_metadata: {},
+    status_details: [],
     elapsed_ms: 1,
   };
   const passthrough = (t: string): Promise<ResolutionReportIpc> =>
@@ -279,6 +280,7 @@ describe("CallPanel oauth2 token invalidation", () => {
       status_message: "UNAUTHENTICATED",
       response_json: null,
       trailing_metadata: {},
+      status_details: [],
       elapsed_ms: 0,
     };
     vi.mocked(grpcInvokeOneshot).mockResolvedValueOnce(unauthOutcome);

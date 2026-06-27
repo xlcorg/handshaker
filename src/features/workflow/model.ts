@@ -1,5 +1,6 @@
 import { newId } from "@/lib/ids";
 import type { InvokeOutcomeIpc, SavedAuthConfigIpc } from "@/ipc/bindings";
+import type { ClientFault } from "./netDiagnostics";
 
 export type ViewMode = "ledger" | "list" | "focus";
 export type StepStatus = "draft" | "sending" | "ok" | "error";
@@ -24,7 +25,7 @@ export interface Step {
   metadata: MetadataRow[];
   status: StepStatus;
   outcome: InvokeOutcomeIpc | null;
-  error: string | null; // client-side (non-gRPC) error message
+  error: ClientFault | null; // client-side (non-gRPC) failure, structured for the face
   requestId: string | null; // transient: in-flight invoke id while status === "sending"
 }
 

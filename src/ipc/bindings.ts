@@ -445,8 +445,10 @@ export type EnumValueIpc = { name: string; number: number }
 export type EnvironmentIpc = { name: string; variables: Partial<{ [key in string]: string }>; color: string | null }
 export type FieldNodeIpc = { json_name: string; proto_name: string; type_label: string; value_kind: FieldValueKindIpc; repeated: boolean; message_type: string | null; enum_type: string | null; oneof_group: string | null; number: number; optional: boolean }
 export type FieldValueKindIpc = "scalar" | "message" | "enum" | "map"
+export type FieldViolationIpc = { field: string; description: string }
 export type FolderIpc = { id: string; name: string; items: ItemIpc[]; expanded: boolean }
 export type GrpcTargetIpc = { address: string; tls: boolean; skip_verify: boolean }
+export type HelpLinkIpc = { description: string; url: string }
 /**
  * Result of applying an import (merge).
  */
@@ -455,14 +457,14 @@ export type ImportResultIpc = { collections_added: number; collections_updated: 
  * Result of inspecting an export file before applying it (no mutation).
  */
 export type ImportSummaryIpc = { collections_total: number; collections_existing: number; environments_total: number; environments_existing: number }
-export type InvokeOutcomeIpc = { status_code: number; status_message: string; response_json: string | null; trailing_metadata: Partial<{ [key in string]: string }>; 
+export type InvokeOutcomeIpc = { status_code: number; status_message: string; response_json: string | null; trailing_metadata: Partial<{ [key in string]: string }>; status_details: StatusDetailIpc[]; 
 /**
  * Elapsed time in milliseconds. Capped at u32::MAX (~49 days) for
  * TypeScript compatibility (specta forbids u64 / BigInt at the IPC boundary).
  */
 elapsed_ms: number }
 export type InvokeRequest = { service: string; method: string; request_json: string; metadata: Partial<{ [key in string]: string }> }
-export type IpcError = { type: "InvalidTarget"; message: string } | { type: "NotConnected" } | { type: "ReflectionDisabled"; hint: string } | { type: "Reflection"; message: string } | { type: "DescriptorBuild"; message: string } | { type: "ServiceNotFound"; service: string } | { type: "MethodNotFound"; service: string; method: string } | { type: "EncodeRequest"; message: string } | { type: "DecodeResponse"; message: string } | { type: "UnresolvedVariable"; name: string } | { type: "VariableCycle"; chain: string[] } | { type: "Transport"; message: string } | { type: "Auth"; message: string } | { type: "GrpcStatus"; code: number; message: string } | { type: "NotImplemented"; message: string } | { type: "Persistence"; message: string }
+export type IpcError = { type: "InvalidTarget"; message: string } | { type: "NotConnected" } | { type: "ReflectionDisabled"; hint: string } | { type: "Reflection"; message: string } | { type: "DescriptorBuild"; message: string } | { type: "ServiceNotFound"; service: string } | { type: "MethodNotFound"; service: string; method: string } | { type: "EncodeRequest"; message: string } | { type: "DecodeResponse"; message: string } | { type: "UnresolvedVariable"; name: string } | { type: "VariableCycle"; chain: string[] } | { type: "Transport"; kind: TransportKindIpc; message: string } | { type: "Cancelled" } | { type: "DeadlineExceeded"; timeout_ms: number } | { type: "Auth"; message: string } | { type: "GrpcStatus"; code: number; message: string } | { type: "NotImplemented"; message: string } | { type: "Persistence"; message: string }
 export type ItemIpc = ({ type: "folder" } & FolderIpc) | ({ type: "request" } & SavedRequestIpc)
 /**
  * Undo payload returned by `collection_delete_item`.
@@ -483,11 +485,22 @@ export type MethodEntryIpc = { name: string; path: string; input_message: string
  * `u32` (not u64) because specta forbids BigInt in generated TypeScript.
  */
 export type OAuth2TokenInfoIpc = { access_token: string; expires_in_secs: number }
+export type PreconditionViolationIpc = { kind: string; subject: string; description: string }
+export type QuotaViolationIpc = { subject: string; description: string }
 export type ResolutionReportIpc = { resolved: string; unresolved_vars: string[]; cycle_chain: string[] | null }
 export type SavedAuthConfigIpc = { kind: "none" } | { kind: "env_var"; env_var: string; header_name: string; prefix: string; environments?: string[] } | { kind: "oauth2_client_credentials"; token_url: string; client_id: string; client_secret: string; scopes: string[]; header_name?: string; prefix?: string; environments?: string[] }
 export type SavedRequestIpc = { id: string; name: string; address_template: string; service: string; method: string; body_template: string; metadata: MetadataRowIpc[]; auth: SavedAuthConfigIpc; tls_override: boolean | null; last_used_at: number | null; use_count: number }
 export type ServiceCatalogIpc = { services: ServiceEntryIpc[] }
 export type ServiceEntryIpc = { full_name: string; methods: MethodEntryIpc[] }
+/**
+ * Tagged-union mirror of `StatusDetail` (discriminator "type"), as the frontend narrows.
+ */
+export type StatusDetailIpc = { type: "ErrorInfo"; reason: string; domain: string; metadata: Partial<{ [key in string]: string }> } | { type: "BadRequest"; violations: FieldViolationIpc[] } | { type: "RetryInfo"; retry_delay_ms: number | null } | { type: "QuotaFailure"; violations: QuotaViolationIpc[] } | { type: "PreconditionFailure"; violations: PreconditionViolationIpc[] } | { type: "DebugInfo"; stack_entries: string[]; detail: string } | { type: "RequestInfo"; request_id: string; serving_data: string } | { type: "ResourceInfo"; resource_type: string; resource_name: string; owner: string; description: string } | { type: "Help"; links: HelpLinkIpc[] } | { type: "LocalizedMessage"; locale: string; message: string }
+/**
+ * Structured classification of a transport-connect failure. Lets the frontend
+ * narrow on a kind instead of regex-parsing the message string.
+ */
+export type TransportKindIpc = "Refused" | "Tls" | "Dns" | "Other"
 export type UiStateIpc = { sort_key: string | null; active_request: ActiveRequestRefIpc | null }
 /**
  * Optional resolve context for `vars_resolve`. All fields optional:

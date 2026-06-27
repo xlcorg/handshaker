@@ -1,8 +1,30 @@
 //! IPC-facing error. Tagged union with discriminator "type" — frontend type-narrows.
 
+use handshaker_core::grpc::ConnectKind;
 use handshaker_core::CoreError;
 use serde::Serialize;
 use specta::Type;
+
+/// Structured classification of a transport-connect failure. Lets the frontend
+/// narrow on a kind instead of regex-parsing the message string.
+#[derive(Debug, Serialize, Type, PartialEq)]
+pub enum TransportKindIpc {
+    Refused,
+    Tls,
+    Dns,
+    Other,
+}
+
+impl From<ConnectKind> for TransportKindIpc {
+    fn from(k: ConnectKind) -> Self {
+        match k {
+            ConnectKind::Refused => TransportKindIpc::Refused,
+            ConnectKind::Tls => TransportKindIpc::Tls,
+            ConnectKind::Dns => TransportKindIpc::Dns,
+            ConnectKind::Other => TransportKindIpc::Other,
+        }
+    }
+}
 
 #[derive(Debug, Serialize, Type)]
 #[serde(tag = "type")]
@@ -18,7 +40,9 @@ pub enum IpcError {
     DecodeResponse { message: String },
     UnresolvedVariable { name: String },
     VariableCycle { chain: Vec<String> },
-    Transport { message: String },
+    Transport { kind: TransportKindIpc, message: String },
+    Cancelled,
+    DeadlineExceeded { timeout_ms: u32 },
     Auth { message: String },
     GrpcStatus { code: i32, message: String },
     NotImplemented { message: String },
@@ -41,7 +65,10 @@ impl From<CoreError> for IpcError {
             CoreError::DecodeResponse(m) => IpcError::DecodeResponse { message: m },
             CoreError::UnresolvedVariable { name } => IpcError::UnresolvedVariable { name },
             CoreError::VariableCycle { chain } => IpcError::VariableCycle { chain },
-            CoreError::Transport(m) => IpcError::Transport { message: m },
+            CoreError::Transport(m) => IpcError::Transport {
+                kind: handshaker_core::grpc::classify_connect_error(&m).into(),
+                message: m,
+            },
             CoreError::Auth(m) => IpcError::Auth { message: m },
             CoreError::GrpcStatus { code, message } => IpcError::GrpcStatus { code, message },
             CoreError::NotImplemented(m) => IpcError::NotImplemented { message: m },
@@ -52,7 +79,7 @@ impl From<CoreError> for IpcError {
 
 #[cfg(test)]
 mod tests {
-    use super::IpcError;
+    use super::{IpcError, TransportKindIpc};
     use handshaker_core::CoreError;
 
     /// One-shot exhaustiveness check: every CoreError variant maps to the expected IpcError shape.
@@ -96,5 +123,26 @@ mod tests {
         // Tagged union with discriminator "type"
         assert!(json.contains(r#""type":"ServiceNotFound""#));
         assert!(json.contains(r#""service":"foo.Bar""#));
+    }
+
+    #[test]
+    fn transport_from_core_carries_connect_kind() {
+        let e: IpcError = handshaker_core::CoreError::Transport(
+            "connect `http://x`: tcp connect error: Connection refused".into(),
+        )
+        .into();
+        match e {
+            IpcError::Transport { kind, .. } => assert_eq!(kind, TransportKindIpc::Refused),
+            other => panic!("got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn cancelled_and_deadline_serialize_with_type_tag() {
+        assert!(serde_json::to_string(&IpcError::Cancelled)
+            .unwrap()
+            .contains(r#""type":"Cancelled""#));
+        let j = serde_json::to_string(&IpcError::DeadlineExceeded { timeout_ms: 30000 }).unwrap();
+        assert!(j.contains(r#""type":"DeadlineExceeded""#) && j.contains(r#""timeout_ms":30000"#), "{j}");
     }
 }

@@ -1,35 +1,94 @@
-export type TransportKind = "refused" | "tls" | "dns" | "timeout" | "cancelled" | "other";
+import type { IpcError } from "@/ipc/bindings";
 
-/**
- * Exact backend cancel sentinel (`IpcError::Transport { message }` fired by the cancel
- * `Notify`; see `grpc.rs` CANCELLED_MSG). Use this for the cancel CONTROL-FLOW decision
- * (reset to idle) — an exact match, not the fuzzy `/cancel/i` rule below, so an unrelated
- * transport error that merely contains "cancel" is never mistaken for a user cancel.
- */
-export const CANCELLED_SENTINEL = "request cancelled";
+/** Display face selector for a client-side (non-gRPC-status) failure. */
+export type FaultKind =
+  | "refused"
+  | "tls"
+  | "dns"
+  | "timeout"
+  | "cancelled"
+  | "encode"
+  | "decode"
+  | "auth"
+  | "other";
 
-/** True only for the exact backend cancel sentinel — the safe cancel discriminator. */
-export function isCancelSentinel(message: string): boolean {
-  return message === CANCELLED_SENTINEL;
+export interface ClientFault {
+  kind: FaultKind;
+  /** Raw, human-readable message for the footer. */
+  message: string;
 }
 
-export interface TransportDiagnosis {
-  kind: TransportKind;
-  hint: string;
+const HINT: Record<FaultKind, string> = {
+  refused:
+    "Nothing is listening at that address/port. Check the host, port, and that the server is running.",
+  tls: "TLS negotiation failed. Verify the scheme, the server certificate, or disable verification for self-signed certs.",
+  dns: "The hostname could not be resolved. Check the address for typos or your network/DNS.",
+  timeout:
+    "The server did not respond before the request deadline. Raise it in Settings → Network or check the server.",
+  cancelled: "Request was cancelled.",
+  encode: "The request body could not be encoded for this method. Check the JSON against the contract.",
+  decode:
+    "The server's response could not be decoded — the method's contract may be stale. Refresh reflection.",
+  auth: "Authentication could not be prepared. Check the auth configuration and its variables.",
+  other: "",
+};
+
+/** Actionable hint for a fault kind (empty string ⇒ no hint shown). */
+export function faultHint(kind: FaultKind): string {
+  return HINT[kind];
 }
 
-const RULES: { kind: Exclude<TransportKind, "other">; patterns: RegExp; hint: string }[] = [
-  { kind: "cancelled", patterns: /cancel/i, hint: "Request was cancelled." },
-  { kind: "timeout", patterns: /timed out|timeout|deadline/i, hint: "The server did not respond before the request deadline. Raise it in Settings → Network or check the server." },
-  { kind: "refused", patterns: /connection refused|econnrefused|refused/i, hint: "Nothing is listening at that address/port. Check the host, port, and that the server is running." },
-  { kind: "tls", patterns: /certificate|tls|ssl|handshake/i, hint: "TLS negotiation failed. Verify the scheme, the server certificate, or disable verification for self-signed certs." },
-  { kind: "dns", patterns: /\bdns\b|name resolution|failed to lookup|no such host/i, hint: "The hostname could not be resolved. Check the address for typos or your network/DNS." },
-];
+function isObj(e: unknown): e is Record<string, unknown> {
+  return typeof e === "object" && e !== null;
+}
 
-/** Map a raw client/transport error message to a friendly kind + actionable hint. */
-export function classifyTransportError(message: string): TransportDiagnosis {
-  for (const r of RULES) {
-    if (r.patterns.test(message)) return { kind: r.kind, hint: r.hint };
+/** True only for the backend's structured cancel error — the safe cancel discriminator. */
+export function isCancelError(e: unknown): boolean {
+  return isObj(e) && e.type === "Cancelled";
+}
+
+function transportKindToFault(kind: string): FaultKind {
+  switch (kind) {
+    case "Refused":
+      return "refused";
+    case "Tls":
+      return "tls";
+    case "Dns":
+      return "dns";
+    default:
+      return "other";
   }
-  return { kind: "other", hint: "" };
+}
+
+function ipcErrorMessage(e: IpcError): string {
+  if ("message" in e && typeof e.message === "string") return e.message;
+  if ("hint" in e && typeof e.hint === "string") return e.hint;
+  if ("name" in e && typeof e.name === "string") return `Unresolved variable: ${e.name}`;
+  if ("chain" in e && Array.isArray(e.chain)) return `Variable cycle: ${e.chain.join(" → ")}`;
+  return e.type;
+}
+
+function faultFromIpcError(e: IpcError): ClientFault {
+  switch (e.type) {
+    case "Transport":
+      return { kind: transportKindToFault(e.kind), message: e.message };
+    case "DeadlineExceeded":
+      return { kind: "timeout", message: `Request timed out after ${e.timeout_ms}ms` };
+    case "Cancelled":
+      return { kind: "cancelled", message: "Request cancelled" };
+    case "EncodeRequest":
+      return { kind: "encode", message: e.message };
+    case "DecodeResponse":
+      return { kind: "decode", message: e.message };
+    case "Auth":
+      return { kind: "auth", message: e.message };
+    default:
+      return { kind: "other", message: ipcErrorMessage(e) };
+  }
+}
+
+/** Map a thrown IPC error (or any throwable) to a display fault — no regex on messages. */
+export function faultFromUnknown(e: unknown): ClientFault {
+  if (isObj(e) && typeof e.type === "string") return faultFromIpcError(e as IpcError);
+  return { kind: "other", message: e instanceof Error ? e.message : String(e) };
 }

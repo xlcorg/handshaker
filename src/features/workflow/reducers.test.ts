@@ -37,7 +37,7 @@ describe("updateStep", () => {
   });
   it("ignores unknown id", () => {
     const wf = wfWith(1);
-    expect(updateStep(wf, "nope", { error: "x" }).steps[0].error).toBeNull();
+    expect(updateStep(wf, "nope", { error: { kind: "other", message: "x" } }).steps[0].error).toBeNull();
   });
 });
 

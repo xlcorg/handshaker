@@ -10,6 +10,7 @@ import { RespMeta, type RespState } from "./RespMeta";
 import { UnderlineTabs } from "@/components/ui/underline-tabs";
 import { ContractView } from "@/features/contract/ContractView";
 import type { InvokeOutcomeIpc, MessageSchemaIpc } from "@/ipc/bindings";
+import type { ClientFault } from "@/features/workflow/netDiagnostics";
 
 /** Editable-draft contract for the Contract tab. Omit/null → three tabs (history). */
 export interface ContractInfo {
@@ -21,8 +22,8 @@ export interface ContractInfo {
 export interface ResponsePanelProps {
   state: RespState;
   outcome: InvokeOutcomeIpc | null;
-  /** Client/transport error message (no gRPC outcome), shown in the Body tab. */
-  error?: string | null;
+  /** Client/transport fault (no gRPC outcome), shown in the Body tab. */
+  error?: ClientFault | null;
   /** Method contract for the Contract tab; omit/null → three tabs (history panels). */
   contract?: ContractInfo | null;
 }
@@ -120,7 +121,7 @@ export function ResponsePanel({ state, outcome, error, contract }: ResponsePanel
       )}
       {isError && !outcome && error && tab === "body" && (
         <div className="hs-fade-in flex min-h-0 flex-1 flex-col">
-          <ClientErrorView message={error} />
+          <ClientErrorView fault={error} />
         </div>
       )}
       {isError && outcome && tab === "trailers" && <KVTable rows={trailers} />}

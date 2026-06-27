@@ -5,7 +5,7 @@ import { resolveStepTemplates, type Resolver } from "./resolve";
 import { lastExecutedFor, responseSeedPatch } from "./lastExecuted";
 import { newId } from "@/lib/ids";
 import { readPrefs } from "@/lib/use-prefs";
-import { isCancelSentinel } from "./netDiagnostics";
+import { faultFromUnknown, isCancelError, type ClientFault } from "./netDiagnostics";
 
 export interface CallTargetInit {
   address: string;
@@ -160,7 +160,7 @@ export async function createStepFromMethod(
 
 export type SendResult =
   | { kind: "ok"; outcome: InvokeOutcomeIpc }
-  | { kind: "error"; message: string }
+  | { kind: "error"; fault: ClientFault }
   | { kind: "unresolved"; unresolved: string[]; cycle: string[] | null }
   | { kind: "cancelled" };
 
@@ -305,9 +305,8 @@ export async function sendStep(
     );
     return { kind: "ok", outcome };
   } catch (e) {
-    const message = errorToMessage(e);
-    if (isCancelSentinel(message)) return { kind: "cancelled" }; // exact sentinel, not fuzzy
-    return { kind: "error", message };
+    if (isCancelError(e)) return { kind: "cancelled" };
+    return { kind: "error", fault: faultFromUnknown(e) };
   }
 }
 
@@ -326,18 +325,15 @@ export function stepPatchFromSendResult(res: SendResult): Partial<Step> {
     return { status: res.outcome.status_code === 0 ? "ok" : "error", outcome: res.outcome, error: null };
   }
   if (res.kind === "unresolved") {
-    return {
-      status: "error",
-      outcome: null,
-      error: res.cycle
-        ? `Variable cycle: ${res.cycle.join(" → ")}`
-        : `Unresolved variables: ${res.unresolved.map((v) => `{{${v}}}`).join(", ")}`,
-    };
+    const message = res.cycle
+      ? `Variable cycle: ${res.cycle.join(" → ")}`
+      : `Unresolved variables: ${res.unresolved.map((v) => `{{${v}}}`).join(", ")}`;
+    return { status: "error", outcome: null, error: { kind: "other", message } };
   }
   if (res.kind === "cancelled") {
     return { status: "draft", outcome: null, error: null };
   }
-  return { status: "error", outcome: null, error: res.message };
+  return { status: "error", outcome: null, error: res.fault };
 }
 
 /** Whether a Send result represents a call that reached the server and should be

@@ -16,11 +16,11 @@ import type { InvokeOutcomeIpc, MessageSchemaIpc } from "@/ipc/bindings";
 
 const ok: InvokeOutcomeIpc = {
   status_code: 0, status_message: "OK",
-  response_json: `{"id":"echo"}`, trailing_metadata: {}, elapsed_ms: 5,
+  response_json: `{"id":"echo"}`, trailing_metadata: {}, status_details: [], elapsed_ms: 5,
 };
 const err: InvokeOutcomeIpc = {
-  status_code: 5, status_message: "NOT_FOUND: nope",
-  response_json: null, trailing_metadata: { "x-id": "1" }, elapsed_ms: 9,
+  status_code: 5, status_message: "nope",
+  response_json: null, trailing_metadata: { "x-id": "1" }, status_details: [], elapsed_ms: 9,
 };
 
 describe("ResponsePanel", () => {
@@ -47,15 +47,23 @@ describe("ResponsePanel", () => {
     }
   });
   it("shows a client/transport error in the Body tab when there is no gRPC outcome", () => {
-    render(<ResponsePanel state="error" outcome={null} error="connect `h:50023`: transport error" />);
+    render(
+      <ResponsePanel
+        state="error"
+        outcome={null}
+        error={{ kind: "other", message: "connect `h:50023`: transport error" }}
+      />,
+    );
     expect(screen.getByText(/transport error/i)).toBeInTheDocument();
     expect(screen.queryByTestId("monaco")).not.toBeInTheDocument();
   });
   it("renders the Postman-style error face for a non-OK status", () => {
     render(<ResponsePanel state="error" outcome={err} />);
-    // "NOT_FOUND" appears in both the RespMeta status pill (header) and the ErrorView face.
-    expect(screen.getAllByText("NOT_FOUND").length).toBeGreaterThan(0);
-    expect(screen.getByText("NOT_FOUND: nope")).toBeInTheDocument();
+    // "NOT_FOUND" shows exactly once — only in the RespMeta summary, no longer
+    // duplicated by an ErrorView header band.
+    expect(screen.getAllByText("NOT_FOUND")).toHaveLength(1);
+    // The message line shows the server's raw message (no code prefix).
+    expect(screen.getByText("nope")).toBeInTheDocument();
     expect(screen.queryByTestId("monaco")).not.toBeInTheDocument();
   });
 });

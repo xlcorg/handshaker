@@ -4,7 +4,7 @@ import type { ServiceCatalogIpc } from "@/ipc/bindings";
 import { resolveAddressSafe } from "./actions";
 import { newId } from "@/lib/ids";
 import { readPrefs } from "@/lib/use-prefs";
-import { isCancelSentinel } from "./netDiagnostics";
+import { isCancelError } from "./netDiagnostics";
 
 const DEBOUNCE_MS = 400;
 
@@ -72,7 +72,7 @@ export function useDraftReflection(
         const message = reflectErr(e);
         // A user cancel is quiet: keep the existing catalog, show no error banner. Any
         // other failure — including the deadline timeout — surfaces with a Retry.
-        if (!isCancelSentinel(message)) {
+        if (!isCancelError(e)) {
           setCatalog(null);
           setError(message);
         }

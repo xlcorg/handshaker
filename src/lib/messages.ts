@@ -66,10 +66,7 @@ export const messages = {
   },
   response: {
     error: {
-      detailsUnavailablePre:
-        "Structured details (google.rpc) aren't available yet — decoding the binary ",
-      detailsUnavailablePost:
-        " trailer in the backend is required. Trailing metadata is in the Trailers tab.",
+      noDetails: "No google.rpc details attached.",
     },
   },
   shell: {

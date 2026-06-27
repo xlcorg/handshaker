@@ -11,6 +11,7 @@ pub mod connection;
 pub mod contract;
 pub mod contract_cache;
 pub mod descriptor;
+pub mod error_class;
 pub mod file_contract_cache;
 pub mod invoke;
 pub mod reflection;
@@ -20,11 +21,13 @@ pub use catalog::{build_catalog, MethodEntry, ServiceCatalog, ServiceEntry};
 pub use connection::{GrpcConnection, GrpcTarget};
 pub use contract::activate;
 pub use contract_cache::{CachedContract, ContractCache, ContractKey, InMemoryContractCache};
+pub use error_class::{classify_connect_error, ConnectKind};
 pub use file_contract_cache::FileContractCache;
 pub use descriptor::build_pool;
 pub use invoke::{
     build_message_schema_from_pool, build_request_skeleton, build_request_skeleton_from_pool,
-    invoke_unary, EnumNode, EnumValueNode, FieldNode, FieldValueKind, MessageNode, MessageSchema,
-    MessageSide, UnaryOutcome,
+    extract_status_details, invoke_unary, EnumNode, EnumValueNode, FieldNode, FieldValueKind,
+    FieldViolation, HelpLink, MessageNode, MessageSchema, MessageSide, PreconditionViolation,
+    QuotaViolation, StatusDetail, UnaryOutcome,
 };
 pub use transport::{GrpcTransport, TonicChannel, TonicTransport};

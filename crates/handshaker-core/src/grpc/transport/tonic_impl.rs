@@ -2,6 +2,7 @@
 
 use crate::error::CoreError;
 use crate::grpc::connection::GrpcTarget;
+use crate::grpc::invoke::extract_status_details;
 use crate::grpc::transport::{DynamicCodec, GrpcTransport, TonicChannel};
 use crate::grpc::UnaryOutcome;
 use prost_reflect::DynamicMessage;
@@ -78,14 +79,16 @@ impl GrpcTransport for TonicTransport {
                     status_message: "OK".into(),
                     response_json: Some(json),
                     trailing_metadata: trailing,
+                    status_details: Vec::new(),
                     elapsed_ms,
                 })
             }
             Err(status) => Ok(UnaryOutcome {
                 status_code: status.code() as i32,
-                status_message: format!("{}: {}", status.code(), status.message()),
+                status_message: status.message().to_string(),
                 response_json: None,
                 trailing_metadata: metadata_to_map(status.metadata()),
+                status_details: extract_status_details(&status),
                 elapsed_ms,
             }),
         }

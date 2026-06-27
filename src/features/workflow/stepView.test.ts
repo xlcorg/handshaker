@@ -9,6 +9,7 @@ function outcome(code: number, ms = 12): InvokeOutcomeIpc {
     status_message: code === 0 ? "OK" : "ERR",
     response_json: "{}",
     trailing_metadata: {},
+    status_details: [],
     elapsed_ms: ms,
   };
 }
@@ -61,7 +62,7 @@ describe("summarizeStep", () => {
   });
 
   it("reports a client-side error (no outcome)", () => {
-    const step = { ...newStep(base), status: "error" as const, error: "refused" };
+    const step = { ...newStep(base), status: "error" as const, error: { kind: "other" as const, message: "refused" } };
     const s = summarizeStep(step, 0);
     expect(s.tone).toBe("error");
     expect(s.statusText).toBe("✕ error");

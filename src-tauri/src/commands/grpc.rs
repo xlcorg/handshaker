@@ -156,13 +156,6 @@ pub async fn grpc_message_schema(
     race_cancel_timeout(&state.in_flight, request_id, timeout_ms, work).await
 }
 
-/// Sentinel transport messages classified on the frontend (Transport(msg) reuse — see the
-/// Phase C decision). Kept as the C2<->C5/C6 contract.
-const CANCELLED_MSG: &str = "request cancelled";
-fn timed_out_msg(ms: u32) -> String {
-    format!("request timed out after {ms}ms")
-}
-
 /// Removes the in-flight registry entry on scope exit (success / timeout / cancel / panic).
 struct DeregisterGuard<'a> {
     map: &'a InFlight,
@@ -202,10 +195,10 @@ where
 
     tokio::select! {
         biased;
-        _ = notify.notified() => Err(IpcError::Transport { message: CANCELLED_MSG.to_string() }),
+        _ = notify.notified() => Err(IpcError::Cancelled),
         r = tokio::time::timeout(Duration::from_millis(timeout_ms as u64), work) => match r {
             Ok(inner) => inner,
-            Err(_) => Err(IpcError::Transport { message: timed_out_msg(timeout_ms) }),
+            Err(_) => Err(IpcError::DeadlineExceeded { timeout_ms }),
         },
     }
 }
@@ -308,8 +301,8 @@ mod tests {
             Ok::<i32, IpcError>(1)
         };
         match race_cancel_timeout(&m, "id2".to_string(), 50, work).await {
-            Err(IpcError::Transport { message }) => assert!(message.contains("timed out"), "{message}"),
-            other => panic!("expected timeout Transport, got {other:?}"),
+            Err(IpcError::DeadlineExceeded { timeout_ms }) => assert_eq!(timeout_ms, 50),
+            other => panic!("expected DeadlineExceeded, got {other:?}"),
         }
         assert!(m.lock().unwrap().is_empty(), "registry entry removed on timeout");
     }
@@ -370,9 +363,7 @@ mod tests {
 
         let (_a, b, _o) = tokio::join!(a_future, b_future, orchestrator);
         match b {
-            Err(IpcError::Transport { message }) => {
-                assert!(message.contains("cancelled"), "expected B cancelled, got: {message}")
-            }
+            Err(IpcError::Cancelled) => {}
             other => panic!("expected B cancelled, got {other:?}"),
         }
     }
@@ -400,8 +391,8 @@ mod tests {
             canceller,
         );
         match raced {
-            Err(IpcError::Transport { message }) => assert!(message.contains("cancelled"), "{message}"),
-            other => panic!("expected cancelled Transport, got {other:?}"),
+            Err(IpcError::Cancelled) => {}
+            other => panic!("expected cancelled, got {other:?}"),
         }
         assert!(m.lock().unwrap().is_empty(), "registry entry removed on cancel");
     }

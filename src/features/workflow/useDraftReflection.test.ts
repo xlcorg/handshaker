@@ -111,8 +111,8 @@ describe("useDraftReflection", () => {
   });
 
   it("treats a user cancel as quiet — clears loading, sets no error", async () => {
-    // The backend cancel Notify rejects the in-flight call with the exact sentinel.
-    vi.mocked(ipc.grpcRefreshContract).mockRejectedValue({ message: "request cancelled" });
+    // The backend cancel Notify rejects the in-flight call with the structured cancel error.
+    vi.mocked(ipc.grpcRefreshContract).mockRejectedValue({ type: "Cancelled" });
     const { result } = renderHook(() => useDraftReflection("h:443", false));
     await act(async () => { result.current.refresh(); });
     await waitFor(() => expect(result.current.loading).toBe(false));
