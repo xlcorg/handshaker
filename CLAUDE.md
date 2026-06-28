@@ -601,3 +601,26 @@ bindings no-drift. **Урок (gRPC-протокол):** C# `Status.DebugExcepti
 > — исполняй задача-за-задачей, subagent-driven.
 
 Режим — subagent-driven (дефолт, не спрашивать). За деталями агент читает баннер плана сам.
+
+## Agent skills
+
+Конфигурация для engineering-скиллов Matt Pocock (`triage`, `to-issues`, `to-prd`,
+`diagnosing-bugs`, `tdd`, `improve-codebase-architecture` и др.). Подробности — в
+`docs/agents/*.md`; здесь — однострочные сводки.
+
+### Issue tracker
+
+Задачи ведутся в GitHub Issues репо `xlcorg/handshaker` (через `gh` CLI); внешние PR
+**не** являются поверхностью triage. См. `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Канонический словарь labels (`needs-triage`, `needs-info`, `ready-for-agent`,
+`ready-for-human`, `wontfix`) — строки совпадают с именами ролей. См.
+`docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Multi-context: `CONTEXT-MAP.md` в корне указывает на по-контекстные `CONTEXT.md`
+(`handshaker-core` / `src-tauri` / `src`); ADR — в корневом и по-контекстных `docs/adr/`.
+См. `docs/agents/domain.md`.
