@@ -27,6 +27,7 @@ import { attachFoldActions, type FoldMenuEditor } from "./foldActions";
 import { attachWordWrapAction, type WordWrapMenuEditor } from "./wordWrapAction";
 import { forwardViewZoneContextMenu } from "./openContextMenu";
 import { shouldShowMinimap, minimapToggleOptions } from "./minimapGate";
+import type { SelectionRange } from "./selectValue";
 
 type Mode = "request" | "response";
 
@@ -148,6 +149,22 @@ export function BodyView({ mode, value, onChange, onSubmit, schema, varCandidate
     l.editor.getModel()?.setValue(r.text);
     if (view) l.editor.restoreViewState(view);
     paintBadges();
+  };
+
+  // Request only: turn a double-click value-selection range (char offsets) into a
+  // Monaco selection. Deferred to a microtask so it lands AFTER Monaco finishes its
+  // own double-click word-select — otherwise Monaco's selection clobbers ours.
+  const selectValueRange = (range: SelectionRange) => {
+    const l = live.current;
+    const model = l?.editor.getModel();
+    if (!l || !model) return;
+    queueMicrotask(() => {
+      const startPos = model.getPositionAt(range.start);
+      const endPos = model.getPositionAt(range.end);
+      l.editor.setSelection(
+        new l.monaco.Selection(startPos.lineNumber, startPos.column, endPos.lineNumber, endPos.column),
+      );
+    });
   };
 
   // Recompute the ghost skeleton NOW (cancelling any pending debounce).
@@ -357,6 +374,7 @@ export function BodyView({ mode, value, onChange, onSubmit, schema, varCandidate
         getSpans: () => live.current?.spans ?? [],
         getBadgeNodeIdAt: mode === "response" ? badgeNodeIdAt : undefined,
         onBadgeExpand: mode === "response" ? expandNode : undefined,
+        onSelectValue: mode === "request" ? selectValueRange : undefined,
       });
     },
     [mode, applyGhost],
