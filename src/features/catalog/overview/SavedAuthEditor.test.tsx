@@ -6,7 +6,7 @@ import type { SavedAuthConfigIpc } from "@/ipc/bindings";
 vi.mock("@/ipc/client", () => ({
   ipc: {
     envList: vi.fn().mockResolvedValue([{ name: "prod", variables: {}, color: null }]),
-    varsResolve: vi.fn(async (t: string) => ({ resolved: t, unresolved_vars: [], cycle_chain: null })),
+    varsResolve: vi.fn(async (t: string) => ({ resolved: t, unresolved_vars: [], cycle_chain: null, dynamic_vars: [] })),
     authOauth2FetchToken: vi
       .fn()
       .mockResolvedValue({ access_token: "eyJhbGciOiJSUzI1NiJ9.payload.signature", expires_in_secs: 840 }),

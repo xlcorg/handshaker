@@ -216,6 +216,11 @@ where
 /// Expand built-in dynamic variables (`{{$guid}}`, …) in the request body and each
 /// metadata VALUE, in place. Per-occurrence: each `{{$name}}` gets a fresh value.
 /// Metadata keys are left untouched. Generic over the generator for testability.
+///
+/// Note: the auth header is injected into `metadata` upstream (frontend `sendStep`)
+/// before this runs, so an auth value literally containing `{{$guid}}` would also be
+/// expanded. That's benign (real IdP tokens carry no `{{}}`); auth-FIELD resolution
+/// (oauth2 config) remains a separate, out-of-scope concern.
 fn expand_request_builtins(
     request: &mut InvokeRequest,
     gen: &impl handshaker_core::vars::builtins::BuiltinGenerator,

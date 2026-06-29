@@ -8,7 +8,7 @@ vi.mock("@/ipc/client", () => ({
     envActiveSet: vi.fn(),
     envDelete: vi.fn(),
     envReorder: vi.fn(),
-    varsResolve: vi.fn(async (t: string) => ({ resolved: t, unresolved_vars: [], cycle_chain: null })),
+    varsResolve: vi.fn(async (t: string) => ({ resolved: t, unresolved_vars: [], cycle_chain: null, dynamic_vars: [] })),
   },
 }));
 
