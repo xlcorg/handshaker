@@ -247,7 +247,9 @@ export function VarHighlightInput({
                   ? undefined
                   : tokenStates[seg.varName] === "error"
                     ? "vh-error"
-                    : "vh-resolved",
+                    : tokenStates[seg.varName] === "dynamic"
+                      ? "vh-dynamic"
+                      : "vh-resolved",
               )}
             >
               {seg.text}

@@ -432,6 +432,7 @@ body {
 }
 .vh-resolved   { background: var(--vh-resolved-bg); color: var(--vh-resolved-fg); }
 .vh-error      { background: var(--vh-error-bg);    color: var(--vh-error-fg); }
+.vh-dynamic    { background: rgb(168 143 230 / .14); color: #a88fe6; }
 .vh-error-text { color: var(--vh-error-fg); }
 .vh-dot-resolved { background: var(--vh-resolved-fg); }
 .vh-dot-error    { background: var(--vh-error-fg); }

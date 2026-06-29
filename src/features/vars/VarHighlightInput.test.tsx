@@ -77,6 +77,21 @@ describe("VarHighlightInput", () => {
     expect(onChange).toHaveBeenCalledWith("h:1");
   });
 
+  it("paints a builtin token as dynamic", async () => {
+    const resolver = vi.fn(async (t: string) => ({
+      resolved: t,
+      unresolved_vars: [] as string[],
+      cycle_chain: null,
+      dynamic_vars: t.includes("$guid") ? ["$guid"] : [],
+    }));
+    const { container } = r(
+      <VarHighlightInput value="{{$guid}}" onChange={() => {}} resolver={resolver} />,
+    );
+    await waitFor(() =>
+      expect(container.querySelector(".vh-dynamic")).not.toBeNull(),
+    );
+  });
+
   it("keeps the input focused (no remount) when a resolved field is cleared", async () => {
     // Regression: the field used to flip its root element between <Tooltip>{field}</Tooltip>
     // (resolved value present) and a bare <div> (empty value), which remounts the <input>

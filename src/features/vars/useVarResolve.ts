@@ -5,7 +5,7 @@ import type { ResolutionReportIpc } from "@/ipc/bindings";
 const DEBOUNCE_MS = 300;
 
 /** Per-token resolve state for highlight coloring. */
-export type VarTokenState = "resolved" | "error";
+export type VarTokenState = "resolved" | "error" | "dynamic";
 
 /** Detects a `{{name}}` placeholder. Mirrors the core `VAR_RE` (`\{\{([^{}]+)\}\}`):
  *  the name is any non-empty run of non-brace chars, so dots/slashes/hyphens count. */
@@ -76,7 +76,11 @@ export function useTokenResolveStates(
         names.map((n) =>
           resolve(`{{${n}}}`)
             .then((r): VarTokenState =>
-              r.cycle_chain != null || r.unresolved_vars.length > 0 ? "error" : "resolved",
+              r.cycle_chain != null || r.unresolved_vars.length > 0
+                ? "error"
+                : r.dynamic_vars.length > 0
+                  ? "dynamic"
+                  : "resolved",
             )
             .catch((): VarTokenState => "error"),
         ),
