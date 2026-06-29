@@ -22,6 +22,8 @@ export function isBuiltinName(name: string): boolean {
  *  `value` slot (shown as the candidate preview / detail). */
 export const BUILTIN_CANDIDATES: VarCandidate[] = BUILTIN_NAMES.map((name) => ({
   name,
-  value: messages.vars.builtin.desc[name] ?? "",
+  // Typed indexing: `desc` is `as const` with exactly the BUILTIN_NAMES keys, so a name
+  // added here without a matching description fails to compile (no silent empty preview).
+  value: messages.vars.builtin.desc[name],
   origin: "builtin",
 }));

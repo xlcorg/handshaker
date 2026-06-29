@@ -66,7 +66,7 @@ export function VarSuggestDropdown({ items, total, active, listboxId, onPick, le
               c.origin === "env"
                 ? "bg-ok/15 text-ok"
                 : c.origin === "builtin"
-                  ? "bg-accent text-accent-foreground"
+                  ? "bg-info/15 text-info" // semi-transparent ⇒ stays legible on the active row's bg-accent
                   : "bg-warn/15 text-warn",
             )}
           >

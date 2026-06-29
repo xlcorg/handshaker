@@ -82,7 +82,9 @@ export const messages = {
     builtin: {
       /** Tag shown on a builtin candidate (origin is "builtin" in data). */
       tag: "dynamic",
-      /** name → one-line description (shown as the candidate preview). */
+      /** name → one-line description (shown as the candidate preview). Keys must cover
+       *  every BUILTIN_NAMES entry — `as const` makes a missing key fail to compile at
+       *  the indexing site in features/vars/builtins.ts. */
       desc: {
         $guid: "v4 GUID · generated on send",
         $guid7: "v7 GUID (time-ordered) · generated on send",
@@ -90,7 +92,7 @@ export const messages = {
         $unixMs: "Unix time, milliseconds · generated on send",
         $isoTimestamp: "ISO-8601 UTC · generated on send",
         $randomInt: "Random integer 0–1000 · generated on send",
-      } as Record<string, string>,
+      },
     },
   },
   response: {
