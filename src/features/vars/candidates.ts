@@ -1,4 +1,6 @@
-export type VarOrigin = "env" | "collection";
+import { BUILTIN_CANDIDATES } from "./builtins";
+
+export type VarOrigin = "env" | "collection" | "builtin";
 
 export interface VarCandidate {
   name: string;
@@ -36,5 +38,6 @@ export function buildVarCandidates(env: VarMap, collection: VarMap): VarCandidat
       ? { name, value, origin: "env", overrides: true }
       : { name, value, origin: "env" });
   }
+  out.push(...BUILTIN_CANDIDATES);
   return out;
 }

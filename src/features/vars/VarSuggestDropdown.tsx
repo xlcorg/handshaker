@@ -63,10 +63,14 @@ export function VarSuggestDropdown({ items, total, active, listboxId, onPick, le
           <span
             className={cn(
               "shrink-0 rounded px-1.5 py-px text-[10px]",
-              c.origin === "env" ? "bg-ok/15 text-ok" : "bg-warn/15 text-warn",
+              c.origin === "env"
+                ? "bg-ok/15 text-ok"
+                : c.origin === "builtin"
+                  ? "bg-accent text-accent-foreground"
+                  : "bg-warn/15 text-warn",
             )}
           >
-            {c.origin}
+            {c.origin === "builtin" ? messages.vars.builtin.tag : c.origin}
           </span>
           {c.overrides ? <span className="shrink-0 text-[10px] text-muted-foreground/55">overrides</span> : null}
         </li>

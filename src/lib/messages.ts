@@ -79,6 +79,19 @@ export const messages = {
     suggest: {
       moreResults: (count: number) => `…${count} more — keep typing`,
     },
+    builtin: {
+      /** Tag shown on a builtin candidate (origin is "builtin" in data). */
+      tag: "dynamic",
+      /** name → one-line description (shown as the candidate preview). */
+      desc: {
+        $guid: "v4 GUID · generated on send",
+        $guid7: "v7 GUID (time-ordered) · generated on send",
+        $timestamp: "Unix time, seconds · generated on send",
+        $unixMs: "Unix time, milliseconds · generated on send",
+        $isoTimestamp: "ISO-8601 UTC · generated on send",
+        $randomInt: "Random integer 0–1000 · generated on send",
+      } as Record<string, string>,
+    },
   },
   response: {
     error: {
