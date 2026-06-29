@@ -1,6 +1,6 @@
 import type { CollectionIpc, SavedRequestIpc } from "@/ipc/bindings";
 import { fuzzyMatch } from "./fuzzy";
-import { flattenRequests, rankRequests, rankCollections } from "./palette";
+import { flattenRequests, rankRequests, rankCollections, methodLabel } from "./palette";
 
 export type PaletteRow =
   | { kind: "collection"; value: string; collection: CollectionIpc; indices: number[] }
@@ -11,6 +11,7 @@ export type PaletteRow =
       collectionName: string;
       request: SavedRequestIpc;
       indices: number[];
+      methodIndices: number[];
     }
   | { kind: "overview"; value: string; collectionId: string; collectionName: string };
 
@@ -37,11 +38,11 @@ export interface DeriveInput {
   limits: PaletteLimits;
 }
 
-/** Fuzzy-match indices of `query` against a display `name` (empty when no match/empty query). */
-function nameIndices(query: string, name: string): number[] {
+/** Fuzzy-match indices of `query` against a display `target` (empty when no match/empty query). */
+function matchIndices(query: string, target: string): number[] {
   const q = query.trim();
   if (!q) return [];
-  const m = fuzzyMatch(q, name);
+  const m = fuzzyMatch(q, target);
   return m.matched ? m.indices : [];
 }
 
@@ -69,7 +70,8 @@ export function derivePaletteResults(input: DeriveInput): PaletteResult {
       collectionId: h.collectionId,
       collectionName: h.collectionName,
       request: h.request,
-      indices: nameIndices(query, h.request.name),
+      indices: matchIndices(query, h.request.name),
+      methodIndices: matchIndices(query, methodLabel(h.request)),
     }));
     if (query.trim() === "") {
       groups.push({
@@ -90,7 +92,8 @@ export function derivePaletteResults(input: DeriveInput): PaletteResult {
         collectionId: h.collectionId,
         collectionName: h.collectionName,
         request: h.request,
-        indices: nameIndices(query, h.request.name),
+        indices: matchIndices(query, h.request.name),
+        methodIndices: matchIndices(query, methodLabel(h.request)),
       }));
     if (colRows.length > 0) groups.push({ heading: "Collections", rows: colRows });
     if (reqRows.length > 0) groups.push({ heading: "Requests", rows: reqRows });
