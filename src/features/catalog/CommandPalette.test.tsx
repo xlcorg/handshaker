@@ -116,4 +116,29 @@ describe("CommandPalette", () => {
     await user.keyboard("{Backspace}");
     expect(screen.getByPlaceholderText(/collections and requests/i)).toBeInTheDocument();
   });
+
+  it("renders the service/method subtitle on request rows", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    setup();
+    await type(user, "edo-attorney");
+    await user.keyboard("{Tab}"); // drill into c1; method query resets to "" → subtitles unhighlighted
+    expect(screen.getByText("edo.attorney.v1.Letters/Search")).toBeInTheDocument();
+    expect(screen.getByText("edo.attorney.v1.Letters/GetStatus")).toBeInTheDocument();
+  });
+
+  it("shows the per-row collection name in flat mode", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    setup();
+    await type(user, "search"); // request rows r1 + r2, both in edo-attorney-letters; no collection row, no chip
+    expect(screen.getAllByText("edo-attorney-letters").length).toBe(2);
+  });
+
+  it("hides the per-row collection name in scoped mode", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    setup();
+    await type(user, "edo-attorney");
+    await user.keyboard("{Tab}"); // scope chip now shows the collection name…
+    await user.keyboard("search"); // …and method rows must NOT repeat it
+    expect(screen.getAllByText("edo-attorney-letters").length).toBe(1);
+  });
 });

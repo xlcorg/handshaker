@@ -18,6 +18,7 @@ import {
   completionFor,
   type PaletteRow,
 } from "./paletteModel";
+import { methodLabel } from "./palette";
 
 export interface CommandPaletteProps {
   open: boolean;
@@ -47,7 +48,7 @@ function Highlighted({ text, indices }: { text: string; indices: number[] }) {
   );
 }
 
-function RowView({ row }: { row: PaletteRow }) {
+function RowView({ row, showCollection }: { row: PaletteRow; showCollection: boolean }) {
   if (row.kind === "overview") {
     return (
       <span className="text-muted-foreground">
@@ -67,10 +68,19 @@ function RowView({ row }: { row: PaletteRow }) {
   }
   return (
     <span className="flex w-full items-center gap-2">
-      <span className="truncate font-medium">
-        <Highlighted text={row.request.name} indices={row.indices} />
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate font-medium">
+          <Highlighted text={row.request.name} indices={row.indices} />
+        </span>
+        <span className="truncate font-mono text-[11px] text-muted-foreground">
+          <Highlighted text={methodLabel(row.request)} indices={row.methodIndices} />
+        </span>
       </span>
-      <span className="ml-auto truncate font-mono text-[11px] text-muted-foreground">{row.collectionName}</span>
+      {showCollection && (
+        <span className="flex-none truncate font-mono text-[11px] text-muted-foreground">
+          {row.collectionName}
+        </span>
+      )}
     </span>
   );
 }
@@ -182,7 +192,7 @@ export function CommandPalette({
             {result.groups.map((g, gi) => {
               const items = g.rows.map((row) => (
                 <CommandItem key={row.value} value={row.value} onSelect={() => activate(row)}>
-                  <RowView row={row} />
+                  <RowView row={row} showCollection={scope === null} />
                 </CommandItem>
               ));
               return (
