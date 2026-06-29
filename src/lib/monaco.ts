@@ -152,6 +152,9 @@ export const EDITOR_OPTIONS = {
   glyphMargin: false,
   folding: false,
   renderLineHighlight: "none",
+  // No muted box around the word under the caret on a plain click — Monaco's
+  // textual word-highlighter reads as a stray selection in a JSON body editor.
+  occurrencesHighlight: "off",
   guides: { indentation: false },
   overviewRulerBorder: false,
   hideCursorInOverviewRuler: true,
