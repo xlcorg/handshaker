@@ -101,10 +101,10 @@ describe("rankCollections", () => {
 });
 
 describe("methodLabel", () => {
-  it("joins service and method with a slash (gRPC path style)", () => {
+  it("joins the short service name and method with a slash (method-picker trimming)", () => {
     const hits = flattenRequests([
       col("c1", "Orders", [req("r1", "GetOrder", { service: "ord.v1.OrderService", method: "GetOrder" })]),
     ]);
-    expect(methodLabel(hits[0].request)).toBe("ord.v1.OrderService/GetOrder");
+    expect(methodLabel(hits[0].request)).toBe("OrderService/GetOrder");
   });
 });

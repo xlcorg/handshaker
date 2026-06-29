@@ -122,8 +122,8 @@ describe("CommandPalette", () => {
     setup();
     await type(user, "edo-attorney");
     await user.keyboard("{Tab}"); // drill into c1; method query resets to "" → subtitles unhighlighted
-    expect(screen.getByText("edo.attorney.v1.Letters/Search")).toBeInTheDocument();
-    expect(screen.getByText("edo.attorney.v1.Letters/GetStatus")).toBeInTheDocument();
+    expect(screen.getByText("Letters/Search")).toBeInTheDocument();
+    expect(screen.getByText("Letters/GetStatus")).toBeInTheDocument();
   });
 
   it("shows the per-row collection name in flat mode", async () => {
