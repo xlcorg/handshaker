@@ -1,6 +1,12 @@
 import type { CollectionIpc, ItemIpc, SavedRequestIpc } from "@/ipc/bindings";
 import { fuzzyMatch } from "./fuzzy";
 
+/** Displayed gRPC identity of a saved request: `package.Service/Method`. Single source
+ *  for both the palette subtitle text and its highlight indices, so they line up. */
+export function methodLabel(request: SavedRequestIpc): string {
+  return `${request.service}/${request.method}`;
+}
+
 export interface RequestHit {
   collectionId: string;
   collectionName: string;

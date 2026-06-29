@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { CollectionIpc, ItemIpc, SavedRequestIpc } from "@/ipc/bindings";
-import { flattenRequests, rankRequests, rankCollections } from "./palette";
+import { flattenRequests, rankRequests, rankCollections, methodLabel } from "./palette";
 
 function req(id: string, name: string, over: Partial<SavedRequestIpc> = {}): ItemIpc {
   return {
@@ -97,5 +97,14 @@ describe("rankCollections", () => {
     const out = rankCollections("orders", tree);
     expect(out[0].collection.id).toBe("c3");
     expect(out[0].indices.length).toBe(6);
+  });
+});
+
+describe("methodLabel", () => {
+  it("joins service and method with a slash (gRPC path style)", () => {
+    const hits = flattenRequests([
+      col("c1", "Orders", [req("r1", "GetOrder", { service: "ord.v1.OrderService", method: "GetOrder" })]),
+    ]);
+    expect(methodLabel(hits[0].request)).toBe("ord.v1.OrderService/GetOrder");
   });
 });
