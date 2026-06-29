@@ -1,10 +1,12 @@
 # Command Palette — richer request rows (design)
 
-> **Статус:** 📝 SPEC — дизайн утверждён, реализация не начата.
-> **Ветка:** `claude/beautiful-jones-6d5269` (worktree).
+> **Статус:** ✅ CODE-COMPLETE — реализация влита в ветку, гейт зелёный, финальное
+> ревью = READY TO MERGE; остаток — живой WebView2-проход + ff-merge в `main` (за юзером).
+> **Ветка:** `claude/beautiful-jones-6d5269` (worktree); 5 коммитов `e6add85..9600300`.
 > **Бэкенд/IPC/bindings:** не затрагиваются (рендер по уже загруженному `cat.tree`,
-> данные уже есть в `SavedRequestIpc`). Гейт фичи = `vitest` + `tsc` + `vite build`.
-> **План реализации:** будет создан skill'ом `writing-plans` после ревью этой спеки.
+> данные уже есть в `SavedRequestIpc`). Гейт: `vitest` 1163 · `tsc -b` · `vite build` — все зелёные.
+> **План реализации:** `docs/superpowers/plans/2026-06-29-command-palette-richer-rows.md`
+> (исполнен subagent-driven: 5 задач TDD, spec+quality ревью на каждой + финальное ревью).
 
 ## Проблема / цель
 

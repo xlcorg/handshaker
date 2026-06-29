@@ -1,5 +1,7 @@
 # Command Palette — richer request rows Implementation Plan
 
+> **Status:** ✅ DONE — all 5 tasks implemented + committed (`e6add85..9600300`), gate green (vitest 1163 · tsc -b · vite build), final review = READY TO MERGE. Remaining: live WebView2 pass + ff-merge to `main`.
+>
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Give command-palette request results a second line showing the fully-qualified gRPC `service/method`, with match-highlighting on both lines and the collection name shown on the right only in flat (non-scoped) mode.
