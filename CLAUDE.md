@@ -21,7 +21,7 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 не зовётся, открытие запроса не переписывает сохранённое состояние раскрытия. Цель к строке через
 существующий `data-node-id` (+`CSS.escape`), `treeRef` на контейнере `role="tree"`. Бэкенд/IPC/
 bindings не тронуты. TDD (4 теста). Гейт: vitest **1166** · `tsc -b` · `pnpm build` — зелёные.
-Остаток — живой WebView2-проход (за юзером). **Урок:** reveal-on-open должен быть идемпотентным по
+**Live-verified** в WebView2 (2026-06-30). **Урок:** reveal-on-open должен быть идемпотентным по
 id (ref-гард), иначе перезагруз каталога дерётся с ручным сворачиванием пользователя; см.
 [[project_command_palette_quick_search]].
 
