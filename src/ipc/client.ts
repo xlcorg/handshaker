@@ -101,8 +101,9 @@ export async function grpcInvokeOneshot(
   // (so concurrent calls never collide on a shared key); 30_000ms is the pref default.
   requestId = newId(),
   timeoutMs = 30_000,
+  maxMessageBytes = 16 * 1024 * 1024,
 ): Promise<InvokeOutcomeIpc> {
-  const r = await commands.grpcInvokeOneshot(target, req, requestId, timeoutMs);
+  const r = await commands.grpcInvokeOneshot(target, req, requestId, timeoutMs, maxMessageBytes);
   if (r.status === "error") throw r.error;
   return r.data;
 }

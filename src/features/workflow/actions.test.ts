@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { setPref } from "@/lib/use-prefs";
 
 vi.mock("@/ipc/client", () => ({
   grpcBuildRequestSkeleton: vi.fn(),
@@ -92,6 +93,7 @@ describe("sendStep", () => {
       { service: "S", method: "M", request_json: "{}", metadata: { x: "1" } },
       expect.any(String),
       expect.any(Number),
+      expect.any(Number),
     );
   });
 
@@ -147,6 +149,7 @@ describe("sendStep", () => {
       { address: "h:443", tls: true, skip_verify: false },
       { service: "S", method: "M", request_json: "{}", metadata: { keep: "1" } },
       expect.any(String),
+      expect.any(Number),
       expect.any(Number),
     );
   });
@@ -209,6 +212,7 @@ describe("sendStep", () => {
       expect.objectContaining({ service: "S", method: "M" }),
       expect.any(String),
       expect.any(Number),
+      expect.any(Number),
     );
   });
 });
@@ -256,6 +260,7 @@ describe("sendStep authHeader merge", () => {
         metadata: { x: "1", authorization: "Bearer {{notresolved}}" } },
       expect.any(String),
       expect.any(Number),
+      expect.any(Number),
     );
   });
 
@@ -265,6 +270,7 @@ describe("sendStep authHeader merge", () => {
       { address: "h:443", tls: true, skip_verify: false },
       { service: "S", method: "M", request_json: "{}", metadata: {} },
       expect.any(String),
+      expect.any(Number),
       expect.any(Number),
     );
   });
@@ -351,7 +357,25 @@ describe("sendStep cancel/timeout wiring", () => {
       { service: "S", method: "M", request_json: "{}", metadata: {} },
       "req-1",
       12345,
+      expect.any(Number),
     );
+  });
+
+  it("passes the maxMessageBytes pref to grpcInvokeOneshot", async () => {
+    setPref("maxMessageBytes", 0); // Unlimited
+    await sendStep(
+      { address: "h:443", tls: true, service: "S", method: "M", requestJson: "{}", metadata: [] },
+      null,
+      { requestId: "req-mb", timeoutMs: 1000 },
+    );
+    expect(ipc.grpcInvokeOneshot).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.anything(),
+      "req-mb",
+      1000,
+      0,
+    );
+    setPref("maxMessageBytes", 16 * 1024 * 1024); // restore default for other tests
   });
 
   it("returns kind 'cancelled' when the backend reports a cancellation", async () => {
