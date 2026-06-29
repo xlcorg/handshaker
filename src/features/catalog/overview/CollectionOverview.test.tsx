@@ -119,6 +119,7 @@ describe("CollectionOverview", () => {
       resolved: "https://api.example.com",
       unresolved_vars: [],
       cycle_chain: null,
+      dynamic_vars: [],
     });
     const p = props({ collection: collection({ variables: { "uri-root": "{{notes-api-root}}" } }) });
     r(<CollectionOverview {...p} />);
@@ -140,6 +141,7 @@ describe("CollectionOverview", () => {
       resolved: "{{notes-api-root}}",
       unresolved_vars: ["notes-api-root"],
       cycle_chain: null,
+      dynamic_vars: [],
     });
     const p = props({ collection: collection({ variables: { "uri-root": "{{notes-api-root}}" } }) });
     r(<CollectionOverview {...p} />);
@@ -155,6 +157,7 @@ describe("CollectionOverview", () => {
       resolved: "https://api.example.com",
       unresolved_vars: [],
       cycle_chain: null,
+      dynamic_vars: [],
     });
     act(() => bumpEnvRevision());
     await waitFor(() =>

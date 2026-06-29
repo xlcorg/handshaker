@@ -7,8 +7,8 @@ import type { VarCandidate } from "./candidates";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { VarHighlightInput } from "./VarHighlightInput";
 
-const ok = (resolved: string) => async () => ({ resolved, unresolved_vars: [], cycle_chain: null });
-const unresolved = (names: string[]) => async () => ({ resolved: "", unresolved_vars: names, cycle_chain: null });
+const ok = (resolved: string) => async () => ({ resolved, unresolved_vars: [], cycle_chain: null, dynamic_vars: [] });
+const unresolved = (names: string[]) => async () => ({ resolved: "", unresolved_vars: names, cycle_chain: null, dynamic_vars: [] });
 
 // VarHighlightInput renders a Radix Tooltip once a resolve report arrives, so renders
 // need a TooltipProvider ancestor (supplied globally in main.tsx).
@@ -56,6 +56,7 @@ describe("VarHighlightInput", () => {
       resolved: "{{notes-api-root}}/v1",
       unresolved_vars: ["notes-api-root"],
       cycle_chain: null,
+      dynamic_vars: [],
     }));
     r(<VarHighlightInput value="{{uri-root}}/v1" onChange={() => {}} resolver={resolver} ariaLabel="addr" />);
     await waitFor(() => expect(screen.getByText("{{uri-root}}").className).toContain("vh-error"));

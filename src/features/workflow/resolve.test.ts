@@ -11,7 +11,7 @@ function fakeResolver(table: Record<string, string>) {
       unresolved.push(name);
       return `{{${name}}}`;
     });
-    return { resolved, unresolved_vars: unresolved, cycle_chain: null };
+    return { resolved, unresolved_vars: unresolved, cycle_chain: null, dynamic_vars: [] };
   };
 }
 
@@ -43,8 +43,8 @@ describe("resolveStepTemplates", () => {
   it("reports the first cycle chain and is not ok", async () => {
     const resolver = async (tpl: string): Promise<ResolutionReportIpc> =>
       tpl.includes("{{a}}")
-        ? { resolved: tpl, unresolved_vars: [], cycle_chain: ["a", "b", "a"] }
-        : { resolved: tpl, unresolved_vars: [], cycle_chain: null };
+        ? { resolved: tpl, unresolved_vars: [], cycle_chain: ["a", "b", "a"], dynamic_vars: [] }
+        : { resolved: tpl, unresolved_vars: [], cycle_chain: null, dynamic_vars: [] };
     const r = await resolveStepTemplates(
       { address: "{{a}}", requestJson: "{}", metadata: [] },
       resolver,

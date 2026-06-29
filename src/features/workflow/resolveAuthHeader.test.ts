@@ -6,6 +6,7 @@ const report = (resolved: string, unresolved: string[] = []): ResolutionReportIp
   resolved,
   unresolved_vars: unresolved,
   cycle_chain: null,
+  dynamic_vars: [],
 });
 
 const okCreds: AuthCredentialsIpc = { header_name: "authorization", header_value: "Bearer T" };

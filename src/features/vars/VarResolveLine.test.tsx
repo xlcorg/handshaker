@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { VarResolveLine, hasVars } from "./VarResolveLine";
 
 const report = (over: Partial<{ resolved: string; unresolved_vars: string[]; cycle_chain: string[] | null }> = {}) => ({
-  resolved: "ok", unresolved_vars: [], cycle_chain: null, ...over,
+  resolved: "ok", unresolved_vars: [], cycle_chain: null, dynamic_vars: [], ...over,
 });
 
 async function flushDebounce() {

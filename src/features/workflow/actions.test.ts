@@ -23,6 +23,7 @@ beforeEach(() => {
     resolved: tpl,
     unresolved_vars: [],
     cycle_chain: null,
+    dynamic_vars: [],
   }));
 });
 
@@ -168,7 +169,7 @@ describe("sendStep", () => {
   it("sendStep blocks on unresolved variables and does not invoke", async () => {
     vi.mocked(ipc.varsResolve).mockImplementation(async (tpl: string) => {
       const m = [...tpl.matchAll(/\{\{([^{}]+)\}\}/g)].map((x) => x[1]);
-      return { resolved: tpl, unresolved_vars: m, cycle_chain: null };
+      return { resolved: tpl, unresolved_vars: m, cycle_chain: null, dynamic_vars: [] };
     });
     const res = await sendStep({
       address: "{{host}}", tls: false, service: "S", method: "M",
@@ -200,7 +201,7 @@ describe("sendStep", () => {
   it("sendStep invokes with resolved address + metadata when all vars resolve", async () => {
     vi.mocked(ipc.varsResolve).mockImplementation(async (tpl: string) => ({
       resolved: tpl.replace("{{host}}", "api.internal"),
-      unresolved_vars: [], cycle_chain: null,
+      unresolved_vars: [], cycle_chain: null, dynamic_vars: [],
     }));
     vi.mocked(ipc.grpcInvokeOneshot).mockResolvedValue({
       status_code: 0, status_message: "OK", response_json: "{}",
@@ -277,7 +278,7 @@ describe("sendStep authHeader merge", () => {
 });
 
 describe("resolveAuthHeader", () => {
-  const passthroughVars = async (t: string) => ({ resolved: t, unresolved_vars: [], cycle_chain: null });
+  const passthroughVars = async (t: string) => ({ resolved: t, unresolved_vars: [], cycle_chain: null, dynamic_vars: [] });
 
   it("returns kind 'none' when auth.kind is none (no resolve call)", async () => {
     const r = await resolveAuthHeader({ kind: "none" }, null, {
@@ -452,7 +453,7 @@ describe("buildRequestSkeletonSafe", () => {
   it("resolves {{var}} in the address before building the skeleton (mirrors Send)", async () => {
     vi.mocked(ipc.varsResolve).mockImplementation(async (tpl: string) => ({
       resolved: tpl.replace("{{host}}", "api.internal"),
-      unresolved_vars: [], cycle_chain: null,
+      unresolved_vars: [], cycle_chain: null, dynamic_vars: [],
     }));
     vi.mocked(ipc.grpcBuildRequestSkeleton).mockResolvedValue("{}");
     await buildRequestSkeletonSafe({ address: "{{host}}:443", tls: true }, "p.S", "M");

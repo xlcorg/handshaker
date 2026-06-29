@@ -20,7 +20,7 @@ beforeEach(() => {
   vi.mocked(ipc.grpcCancel).mockResolvedValue(undefined as never);
   // Passthrough: address with no vars resolves to itself.
   vi.mocked(ipc.varsResolve).mockImplementation(async (tpl: string) => ({
-    resolved: tpl, unresolved_vars: [], cycle_chain: null,
+    resolved: tpl, unresolved_vars: [], cycle_chain: null, dynamic_vars: [],
   }));
 });
 afterEach(() => vi.useRealTimers());
@@ -43,7 +43,7 @@ describe("useDraftReflection", () => {
   it("resolves {{var}} in the address before reflecting (mirrors Send)", async () => {
     vi.useFakeTimers();
     vi.mocked(ipc.varsResolve).mockImplementation(async (tpl: string) => ({
-      resolved: tpl.replace("{{host}}", "api.internal"), unresolved_vars: [], cycle_chain: null,
+      resolved: tpl.replace("{{host}}", "api.internal"), unresolved_vars: [], cycle_chain: null, dynamic_vars: [],
     }));
     renderHook(() => useDraftReflection("{{host}}:443", true));
     await act(async () => { await vi.advanceTimersByTimeAsync(400); });

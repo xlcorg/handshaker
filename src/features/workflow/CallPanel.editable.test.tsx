@@ -221,7 +221,7 @@ describe("CallPanel collection-auth inheritance (originAuth)", () => {
     elapsed_ms: 1,
   };
   const passthrough = (t: string): Promise<ResolutionReportIpc> =>
-    Promise.resolve({ resolved: t, unresolved_vars: [], cycle_chain: null });
+    Promise.resolve({ resolved: t, unresolved_vars: [], cycle_chain: null, dynamic_vars: [] });
 
   it("sends with the collection's oauth2 header when the step auth is none", async () => {
     vi.mocked(varsResolve).mockImplementation(passthrough);
@@ -269,7 +269,7 @@ describe("CallPanel collection-auth inheritance (originAuth)", () => {
 describe("CallPanel oauth2 token invalidation", () => {
   it("invalidates the oauth2 token cache when a send returns UNAUTHENTICATED (16)", async () => {
     const passthrough = (t: string): Promise<ResolutionReportIpc> =>
-      Promise.resolve({ resolved: t, unresolved_vars: [], cycle_chain: null });
+      Promise.resolve({ resolved: t, unresolved_vars: [], cycle_chain: null, dynamic_vars: [] });
     vi.mocked(varsResolve).mockImplementation(passthrough);
     vi.mocked(authResolve).mockResolvedValue({
       header_name: "authorization",

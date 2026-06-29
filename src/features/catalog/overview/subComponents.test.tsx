@@ -49,6 +49,7 @@ describe("overview sub-components (ports)", () => {
       resolved: "https://api.example.com",
       unresolved_vars: [],
       cycle_chain: null,
+      dynamic_vars: [],
     }));
     r(
       <VariablesBlock
