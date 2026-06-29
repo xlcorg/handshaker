@@ -213,6 +213,20 @@ where
     }
 }
 
+/// Expand built-in dynamic variables (`{{$guid}}`, …) in the request body and each
+/// metadata VALUE, in place. Per-occurrence: each `{{$name}}` gets a fresh value.
+/// Metadata keys are left untouched. Generic over the generator for testability.
+fn expand_request_builtins(
+    request: &mut InvokeRequest,
+    gen: &impl handshaker_core::vars::builtins::BuiltinGenerator,
+) {
+    use handshaker_core::vars::builtins::expand_builtins;
+    request.request_json = expand_builtins(&request.request_json, gen);
+    for v in request.metadata.values_mut() {
+        *v = expand_builtins(v, gen);
+    }
+}
+
 /// One-shot unary invoke: activate (channel required) → invoke → drop.
 ///
 /// Non-OK gRPC status arrives in `InvokeOutcomeIpc.status_code`, NOT as `Err`.
@@ -232,6 +246,8 @@ pub async fn grpc_invoke_oneshot(
     let cache = state.contract_cache.clone();
     let max_bytes = resolve_max_message_size(max_message_bytes);
     let work = async move {
+        let mut request = request;
+        expand_request_builtins(&mut request, &handshaker_core::vars::builtins::SystemBuiltins);
         let transport = Arc::new(TonicTransport::new());
         let conn = activate(target, transport, cache.as_ref()).await?;
         let outcome = invoke_unary(
@@ -418,5 +434,31 @@ mod tests {
             other => panic!("expected cancelled, got {other:?}"),
         }
         assert!(m.lock().unwrap().is_empty(), "registry entry removed on cancel");
+    }
+
+    use handshaker_core::vars::builtins::BuiltinGenerator;
+    use crate::ipc::invoke::InvokeRequest;
+
+    struct FakeGen;
+    impl BuiltinGenerator for FakeGen {
+        fn generate(&self, name: &str) -> Option<String> {
+            match name {
+                "$guid" => Some("GUID".into()),
+                _ => None,
+            }
+        }
+    }
+
+    #[test]
+    fn expands_builtins_in_body_and_metadata() {
+        let mut req = InvokeRequest {
+            service: "s".into(),
+            method: "m".into(),
+            request_json: r#"{"id":"{{$guid}}","k":"{{kept}}"}"#.into(),
+            metadata: HashMap::from([("x-id".into(), "{{$guid}}".into())]),
+        };
+        expand_request_builtins(&mut req, &FakeGen);
+        assert_eq!(req.request_json, r#"{"id":"GUID","k":"{{kept}}"}"#);
+        assert_eq!(req.metadata.get("x-id").unwrap(), "GUID");
     }
 }
