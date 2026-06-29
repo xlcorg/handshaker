@@ -95,4 +95,17 @@ export const messages = {
         split === "horizontal" ? "Switch to left / right layout" : "Switch to top / bottom layout",
     },
   },
+  settings: {
+    network: {
+      timeoutsGroup: "Timeouts",
+      requestDeadline: "Request deadline",
+      requestDeadlineHint: "Per-request deadline; the call is cancelled if it exceeds this.",
+      seconds: "s",
+      messageSizeGroup: "Message size",
+      maxMessageSize: "Max message size",
+      maxMessageSizeHint: "Largest gRPC response accepted; bigger replies are rejected.",
+      unlimited: "Unlimited",
+      unlimitedHint: "No limit — guards nothing against very large replies.",
+    },
+  },
 } as const;

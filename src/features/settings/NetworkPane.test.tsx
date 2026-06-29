@@ -17,6 +17,17 @@ function setDeadlineMs(ms: number) {
   render(<Probe />);
 }
 
+function setMaxBytes(b: number) {
+  function Probe() {
+    const [, setPref] = usePrefs();
+    useEffect(() => {
+      setPref("maxMessageBytes", b);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    return null;
+  }
+  render(<Probe />);
+}
+
 describe("NetworkPane request deadline", () => {
   beforeEach(() => setDeadlineMs(30000));
 
@@ -39,5 +50,27 @@ describe("NetworkPane request deadline", () => {
     await user.type(input, "0");
     await user.tab();
     expect(readPrefs().requestTimeoutMs).toBe(1000);
+  });
+});
+
+describe("NetworkPane max message size", () => {
+  beforeEach(() => setMaxBytes(16 * 1024 * 1024));
+
+  it("commits the Unlimited stop (0) when the slider goes to the end", async () => {
+    const user = userEvent.setup();
+    render(<NetworkPane />);
+    const slider = screen.getByRole("slider", { name: /max message size/i });
+    slider.focus();
+    await user.keyboard("{End}");
+    expect(readPrefs().maxMessageBytes).toBe(0);
+  });
+
+  it("commits 1 MiB when the slider goes to the start", async () => {
+    const user = userEvent.setup();
+    render(<NetworkPane />);
+    const slider = screen.getByRole("slider", { name: /max message size/i });
+    slider.focus();
+    await user.keyboard("{Home}");
+    expect(readPrefs().maxMessageBytes).toBe(1 * 1024 * 1024);
   });
 });
