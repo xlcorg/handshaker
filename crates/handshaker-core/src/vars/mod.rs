@@ -50,6 +50,9 @@ pub struct ResolutionReport {
     /// When substitution did not converge within `MAX_PASSES`, the detected cycle chain
     /// formatted like `["a", "b", "a"]` (start node repeated at end).
     pub cycle_chain: Option<Vec<String>>,
+    /// Recognized built-in tokens (`$`-prefixed, known set), first-appearance order,
+    /// deduped. NOT substituted — left literal `{{$name}}` for send-time expansion.
+    pub dynamic_vars: Vec<String>,
 }
 
 #[inline]
@@ -75,7 +78,7 @@ pub fn resolve_template_with_diagnostics(
         }
     }
 
-    let unresolved_vars = collect_unresolved(&current);
+    let (unresolved_vars, dynamic_vars) = collect_remaining(&current);
 
     let cycle_chain = if !converged && !unresolved_vars.is_empty() {
         detect_cycle(&unresolved_vars, vars)
@@ -93,6 +96,7 @@ pub fn resolve_template_with_diagnostics(
         resolved: current,
         unresolved_vars: final_unresolved,
         cycle_chain,
+        dynamic_vars,
     }
 }
 
@@ -167,16 +171,22 @@ fn substitute_once(input: &str, vars: &VariableSet<'_>) -> (String, bool) {
     (out, changed)
 }
 
-/// Collect remaining `{{name}}` matches, deduplicated, in first-appearance order.
-fn collect_unresolved(s: &str) -> Vec<String> {
-    let mut out: Vec<String> = Vec::new();
+/// Split remaining `{{name}}` matches into (non-builtin unresolved, builtin dynamic),
+/// each deduplicated in first-appearance order.
+fn collect_remaining(s: &str) -> (Vec<String>, Vec<String>) {
+    let mut unresolved: Vec<String> = Vec::new();
+    let mut dynamic: Vec<String> = Vec::new();
     for caps in VAR_RE.captures_iter(s) {
-        let name = caps.get(1).unwrap().as_str().to_string();
-        if !out.contains(&name) {
-            out.push(name);
+        let name = caps.get(1).unwrap().as_str();
+        if builtins::is_builtin(name) {
+            if !dynamic.iter().any(|n| n == name) {
+                dynamic.push(name.to_string());
+            }
+        } else if !unresolved.iter().any(|n| n == name) {
+            unresolved.push(name.to_string());
         }
     }
-    out
+    (unresolved, dynamic)
 }
 
 #[cfg(test)]
@@ -410,5 +420,69 @@ mod tests {
         assert_eq!(r.resolved, "https://api.example.com/v1/notes");
         assert!(r.unresolved_vars.is_empty());
         assert!(r.cycle_chain.is_none());
+    }
+
+    #[test]
+    fn builtin_is_recognized_not_unresolved() {
+        let env = map(&[]);
+        let coll = map(&[]);
+        let r = resolve_template_with_diagnostics("{{$guid}}", &vs(&env, &coll));
+        assert_eq!(r.resolved, "{{$guid}}"); // left literal — expanded later, on send
+        assert!(r.unresolved_vars.is_empty());
+        assert_eq!(r.dynamic_vars, vec!["$guid".to_string()]);
+        assert!(r.cycle_chain.is_none());
+    }
+
+    #[test]
+    fn unknown_dollar_name_is_unresolved_not_dynamic() {
+        let env = map(&[]);
+        let coll = map(&[]);
+        let r = resolve_template_with_diagnostics("{{$nope}}", &vs(&env, &coll));
+        assert_eq!(r.unresolved_vars, vec!["$nope".to_string()]);
+        assert!(r.dynamic_vars.is_empty());
+    }
+
+    #[test]
+    fn mixed_user_and_builtin() {
+        let env = map(&[("host", "api.dev")]);
+        let coll = map(&[]);
+        let r = resolve_template_with_diagnostics(
+            "{{host}}/{{$guid}}/{{missing}}",
+            &vs(&env, &coll),
+        );
+        assert_eq!(r.resolved, "api.dev/{{$guid}}/{{missing}}");
+        assert_eq!(r.unresolved_vars, vec!["missing".to_string()]);
+        assert_eq!(r.dynamic_vars, vec!["$guid".to_string()]);
+    }
+
+    #[test]
+    fn user_var_named_dollar_guid_wins_over_builtin() {
+        // A defined `$guid` is substituted in the pass loop, so it never reaches
+        // builtin classification — user wins, dynamic_vars empty.
+        let env = map(&[("$guid", "USERVALUE")]);
+        let coll = map(&[]);
+        let r = resolve_template_with_diagnostics("{{$guid}}", &vs(&env, &coll));
+        assert_eq!(r.resolved, "USERVALUE");
+        assert!(r.dynamic_vars.is_empty());
+        assert!(r.unresolved_vars.is_empty());
+    }
+
+    #[test]
+    fn builtin_dedup_first_appearance() {
+        let env = map(&[]);
+        let coll = map(&[]);
+        let r = resolve_template_with_diagnostics(
+            "{{$guid}} {{$timestamp}} {{$guid}}",
+            &vs(&env, &coll),
+        );
+        assert_eq!(r.dynamic_vars, vec!["$guid".to_string(), "$timestamp".to_string()]);
+    }
+
+    #[test]
+    fn resolve_string_does_not_error_on_builtin() {
+        let env = map(&[]);
+        let coll = map(&[]);
+        let s = resolve_string("id={{$guid}}", &vs(&env, &coll)).unwrap();
+        assert_eq!(s, "id={{$guid}}"); // left literal for send-time expansion
     }
 }
