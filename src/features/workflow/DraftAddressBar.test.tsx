@@ -95,6 +95,7 @@ describe("DraftAddressBar", () => {
       resolved: "localhost:5002",
       unresolved_vars: [],
       cycle_chain: null,
+      dynamic_vars: [],
     }));
     r(
       <DraftAddressBar
@@ -111,6 +112,7 @@ describe("DraftAddressBar", () => {
       resolved: "{{host}}",
       unresolved_vars: ["host"],
       cycle_chain: null,
+      dynamic_vars: [],
     }));
     r(
       <DraftAddressBar
