@@ -74,7 +74,7 @@ function RowView({ row, showCollection }: { row: PaletteRow; showCollection: boo
           <Highlighted text={row.request.name} indices={row.indices} />
         </span>
         <span className="truncate font-mono text-[11px] text-muted-foreground">
-          <Highlighted text={methodLabel(row.request)} indices={row.methodIndices} />
+          {methodLabel(row.request)}
         </span>
       </span>
       {showCollection && (

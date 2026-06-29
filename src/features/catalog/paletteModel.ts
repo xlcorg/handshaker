@@ -1,7 +1,7 @@
 import type { CollectionIpc, SavedRequestIpc } from "@/ipc/bindings";
 import { messages } from "@/lib/messages";
 import { fuzzyMatch } from "./fuzzy";
-import { flattenRequests, rankRequests, rankCollections, methodLabel } from "./palette";
+import { flattenRequests, rankRequests, rankCollections } from "./palette";
 
 export type PaletteRow =
   | { kind: "collection"; value: string; collection: CollectionIpc; indices: number[] }
@@ -12,7 +12,6 @@ export type PaletteRow =
       collectionName: string;
       request: SavedRequestIpc;
       indices: number[];
-      methodIndices: number[];
     }
   | { kind: "overview"; value: string; collectionId: string; collectionName: string };
 
@@ -72,7 +71,6 @@ export function derivePaletteResults(input: DeriveInput): PaletteResult {
       collectionName: h.collectionName,
       request: h.request,
       indices: matchIndices(query, h.request.name),
-      methodIndices: matchIndices(query, methodLabel(h.request)),
     }));
     if (query.trim() === "") {
       groups.push({
@@ -94,7 +92,6 @@ export function derivePaletteResults(input: DeriveInput): PaletteResult {
         collectionName: h.collectionName,
         request: h.request,
         indices: matchIndices(query, h.request.name),
-        methodIndices: matchIndices(query, methodLabel(h.request)),
       }));
     if (colRows.length > 0) groups.push({ heading: messages.palette.groupCollections, rows: colRows });
     if (reqRows.length > 0) groups.push({ heading: messages.palette.groupRequests, rows: reqRows });

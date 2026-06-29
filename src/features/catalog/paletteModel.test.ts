@@ -92,23 +92,3 @@ describe("completionFor", () => {
     expect(completionFor(overviewRow)).toBeNull();
   });
 });
-
-describe("derivePaletteResults — method indices", () => {
-  it("highlights the service/method label when the query matches it (flat)", () => {
-    // service "edo.attorney.v1.Letters" → short label "Letters/Search".
-    // "letters" matches the short service segment, so the subtitle must carry indices.
-    const r = derivePaletteResults({ tree: TREE, scope: null, query: "letters", limits: LIMITS });
-    const reqRow = r.rows.find((row) => row.kind === "request");
-    expect(reqRow?.kind).toBe("request");
-    if (reqRow?.kind === "request") expect(reqRow.methodIndices.length).toBeGreaterThan(0);
-  });
-
-  it("leaves method indices empty for an empty query (scoped)", () => {
-    const r = derivePaletteResults({
-      tree: TREE, scope: { id: "c1", name: "edo-attorney-letters" }, query: "", limits: LIMITS,
-    });
-    const reqRow = r.rows.find((row) => row.kind === "request");
-    expect(reqRow?.kind).toBe("request");
-    if (reqRow?.kind === "request") expect(reqRow.methodIndices).toEqual([]);
-  });
-});

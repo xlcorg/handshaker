@@ -3,8 +3,7 @@ import { shortService } from "@/features/shell/SelectedMethod";
 import { fuzzyMatch } from "./fuzzy";
 
 /** Displayed gRPC identity of a saved request: `Service/Method` using the short service
- *  name (last dotted segment) — same trimming as the method-picker dropdown. Single source
- *  for both the palette subtitle text and its highlight indices, so they line up. */
+ *  name (last dotted segment) — same trimming as the method-picker dropdown. */
 export function methodLabel(request: SavedRequestIpc): string {
   return `${shortService(request.service)}/${request.method}`;
 }
