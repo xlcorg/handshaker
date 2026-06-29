@@ -401,6 +401,59 @@ describe("CollectionTree persisted expansion", () => {
   });
 });
 
+describe("CollectionTree reveals the active request", () => {
+  // All three containers (collection c1 → folder f1 → request "deep") start collapsed,
+  // so "deep" is hidden until the active-request reveal opens its ancestor path.
+  const collapsedTree = () => [col("c1", [folder("f1", [req("deep")])])];
+
+  it("opening a request expands its ancestor collection + folders to reveal it", () => {
+    setup({ collections: collapsedTree(), filterActive: false, activeItemId: "deep" });
+    expect(screen.getByText("deep")).toBeTruthy();
+  });
+
+  it("revealing is transient — it never persists expansion via onSetExpanded", () => {
+    const onSetExpanded = vi.fn();
+    setup({ collections: collapsedTree(), filterActive: false, activeItemId: "deep", onSetExpanded });
+    expect(screen.getByText("deep")).toBeTruthy();
+    expect(onSetExpanded).not.toHaveBeenCalled();
+  });
+
+  it("scrolls the revealed active row into view", () => {
+    const scrolled: Element[] = [];
+    const spy = vi
+      .spyOn(Element.prototype, "scrollIntoView")
+      .mockImplementation(function (this: Element) {
+        scrolled.push(this);
+      });
+    try {
+      setup({ collections: collapsedTree(), filterActive: false, activeItemId: "deep" });
+      const row = document.querySelector('[data-node-id="deep"]');
+      expect(row).toBeTruthy();
+      expect(scrolled).toContain(row);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("a later collections reload does not re-expand an ancestor the user collapsed", () => {
+    // Reveal fires once per activeItemId, so a manual collapse must survive a reload
+    // (e.g. an autosave round-trip that hands the tree a fresh-but-equal collections array).
+    const props = () => makeProps({ collections: [col("c1", [req("deep")])], filterActive: false, activeItemId: "deep" });
+    const { rerender } = renderWithSidebar(<CollectionTree {...props()} />);
+    expect(screen.getByText("deep")).toBeTruthy(); // revealed on open
+
+    fireEvent.click(screen.getByLabelText("toggle-collection")); // user collapses c1
+    expect(screen.queryByText("deep")).toBeNull();
+
+    rerender(
+      <SidebarProvider>
+        <CollectionTree {...props()} />
+      </SidebarProvider>,
+    );
+    expect(screen.queryByText("deep")).toBeNull(); // stays collapsed — no re-reveal
+  });
+});
+
 describe("CollectionTree expand/collapse all handle", () => {
   function efolder(id: string, items: ItemIpc[], expanded: boolean): Extract<ItemIpc, { type: "folder" }> {
     return { type: "folder", id, name: id, items, expanded };

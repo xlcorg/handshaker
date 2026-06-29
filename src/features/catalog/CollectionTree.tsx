@@ -60,6 +60,9 @@ export const CollectionTree = forwardRef<CollectionTreeHandle, CollectionTreePro
   const [drag, setDrag] = useState<DragData | null>(null);
   const [dropHint, setDropHint] = useState<{ id: string; zone: DropZone } | null>(null);
   const seededRef = useRef(false);
+  const revealedRef = useRef<string | null>(null);
+  const scrolledRef = useRef<string | null>(null);
+  const treeRef = useRef<HTMLDivElement>(null);
   const autoExpandRef = useRef<{ id: string | null; timer: ReturnType<typeof setTimeout> | null }>({
     id: null,
     timer: null,
@@ -86,7 +89,44 @@ export const CollectionTree = forwardRef<CollectionTreeHandle, CollectionTreePro
     if (path) setOpen((prev) => new Set([...prev, ...path]));
   }, [editingId, collections]);
 
+  // Reveal the active request — e.g. one opened from the command palette — by opening its
+  // ancestor collection + folders. Mirrors the editingId reveal, but guarded so it fires
+  // once per activeItemId: a later collections reload (an autosave round-trip hands us a
+  // fresh array) must not re-expand a folder the user has since collapsed. Transient only
+  // (never calls onSetExpanded) — opening a request must not rewrite saved expand state.
+  useEffect(() => {
+    const id = props.activeItemId;
+    if (!id) {
+      revealedRef.current = null;
+      return;
+    }
+    if (revealedRef.current === id) return;
+    const path = pathToItem(collections, id);
+    if (!path) return; // not in the tree yet (e.g. collections still loading)
+    revealedRef.current = id;
+    setOpen((prev) => {
+      if (path.every((p) => prev.has(p))) return prev; // already open — skip the re-render
+      return new Set([...prev, ...path]);
+    });
+  }, [props.activeItemId, collections]);
+
   const visible = useMemo(() => flattenVisible(collections, effectiveOpen), [collections, effectiveOpen]);
+
+  // Once the reveal has rendered the active row, scroll it into view (an off-screen open
+  // from the palette should jump to the row). Guarded so it scrolls once per activeItemId.
+  useEffect(() => {
+    const id = props.activeItemId;
+    if (!id) {
+      scrolledRef.current = null;
+      return;
+    }
+    if (scrolledRef.current === id) return;
+    if (!visible.some((n) => n.id === id)) return; // wait until the row is revealed
+    const el = treeRef.current?.querySelector<HTMLElement>(`[data-node-id="${CSS.escape(id)}"]`);
+    if (!el) return;
+    scrolledRef.current = id;
+    el.scrollIntoView({ block: "nearest" });
+  }, [props.activeItemId, visible]);
 
   // Drop keyboard focus if the focused node is no longer visible (collapsed/filtered out).
   useEffect(() => {
@@ -280,6 +320,7 @@ export const CollectionTree = forwardRef<CollectionTreeHandle, CollectionTreePro
     <>
       <ScrollArea className="min-h-0 flex-1">
         <div
+          ref={treeRef}
           role="tree"
           tabIndex={0}
           aria-label="collections-tree"
