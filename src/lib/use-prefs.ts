@@ -32,6 +32,8 @@ export interface Prefs {
   bodyHints: boolean;
   /** Перенос длинных строк в редакторах тела запроса/ответа. Off → гориз. скролл. */
   wordWrap: boolean;
+  /** Max gRPC message size in bytes for invoke (recv+encode). `0` = unlimited. */
+  maxMessageBytes: number;
 }
 
 export const PREFS_DEFAULTS: Prefs = {
@@ -46,6 +48,7 @@ export const PREFS_DEFAULTS: Prefs = {
   varHighlight: "indigo",
   bodyHints: true,
   wordWrap: false,
+  maxMessageBytes: 16 * 1024 * 1024,
 };
 
 export const ZOOM_MIN = 0.5;
@@ -63,6 +66,37 @@ export const TIMEOUT_MIN_MS = 1000;
 export function clampTimeoutMs(ms: number): number {
   if (!Number.isFinite(ms)) return TIMEOUT_MIN_MS;
   return Math.max(TIMEOUT_MIN_MS, Math.round(ms));
+}
+
+export const BYTES_PER_MIB = 1024 * 1024;
+
+/** Slider stops, ascending. The last entry `0` is the sentinel for "Unlimited". */
+export const MESSAGE_SIZE_STOPS: number[] = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
+  .map((mib) => mib * BYTES_PER_MIB)
+  .concat(0);
+
+/** Index of the stop matching `bytes`. Order matters: NaN → 0 (min), then `0`/negative →
+ *  the Unlimited (last) stop, then a finite size → the nearest finite stop (so a
+ *  foreign/old pref still lands on a valid stop for display). */
+export function stopIndexFor(bytes: number): number {
+  if (Number.isNaN(bytes)) return 0;
+  if (bytes <= 0) return MESSAGE_SIZE_STOPS.length - 1;
+  let best = 0;
+  let bestDiff = Infinity;
+  for (let i = 0; i < MESSAGE_SIZE_STOPS.length - 1; i++) {
+    const diff = Math.abs(MESSAGE_SIZE_STOPS[i] - bytes);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      best = i;
+    }
+  }
+  return best;
+}
+
+/** Human-readable size for a FINITE byte count (the Unlimited case is the caller's job). */
+export function formatMessageSize(bytes: number): string {
+  const mib = bytes / BYTES_PER_MIB;
+  return mib >= 1024 ? `${mib / 1024} GiB` : `${mib} MiB`;
 }
 
 const STORAGE_KEY = "handshaker.prefs.v1";

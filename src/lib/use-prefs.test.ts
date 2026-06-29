@@ -1,5 +1,14 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { PREFS_DEFAULTS, clampTimeoutMs, readPrefs, setPref } from "./use-prefs";
+import {
+  PREFS_DEFAULTS,
+  clampTimeoutMs,
+  readPrefs,
+  setPref,
+  MESSAGE_SIZE_STOPS,
+  BYTES_PER_MIB,
+  stopIndexFor,
+  formatMessageSize,
+} from "./use-prefs";
 
 describe("requestTimeoutMs pref", () => {
   it("defaults to 30000 ms", () => {
@@ -147,5 +156,29 @@ describe("setPref (module-level setter)", () => {
     setPref("wordWrap", !before);
     expect(readPrefs().wordWrap).toBe(!before);
     setPref("wordWrap", before); // restore shared module-level state
+  });
+});
+
+describe("maxMessageBytes pref + helpers", () => {
+  it("defaults to 16 MiB", () => {
+    expect(PREFS_DEFAULTS.maxMessageBytes).toBe(16 * 1024 * 1024);
+  });
+
+  it("has 12 stops, last is 0 (unlimited), index 4 is 16 MiB", () => {
+    expect(MESSAGE_SIZE_STOPS).toHaveLength(12);
+    expect(MESSAGE_SIZE_STOPS[MESSAGE_SIZE_STOPS.length - 1]).toBe(0);
+    expect(MESSAGE_SIZE_STOPS[4]).toBe(16 * BYTES_PER_MIB);
+  });
+
+  it("stopIndexFor: finite → nearest, 0 → last, NaN → 0", () => {
+    expect(stopIndexFor(16 * BYTES_PER_MIB)).toBe(4);
+    expect(stopIndexFor(20 * BYTES_PER_MIB)).toBe(4); // closer to 16 than 32
+    expect(stopIndexFor(0)).toBe(11);
+    expect(stopIndexFor(Number.NaN)).toBe(0);
+  });
+
+  it("formatMessageSize: MiB and GiB units", () => {
+    expect(formatMessageSize(16 * BYTES_PER_MIB)).toBe("16 MiB");
+    expect(formatMessageSize(1024 * BYTES_PER_MIB)).toBe("1 GiB");
   });
 });
