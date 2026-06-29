@@ -107,6 +107,17 @@ describe("CommandPalette", () => {
     expect(screen.getByPlaceholderText(/methods in edo-attorney-letters/i)).toHaveValue("Search");
   });
 
+  it("Tab completes the arrow-selected request, not the first in the list", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    setup();
+    await type(user, "edo-attorney");
+    await user.keyboard("{Tab}"); // drill into c1
+    await user.keyboard("sea"); // scoped: Search, SearchByInn
+    await user.keyboard("{ArrowDown}"); // move selection to the 2nd row
+    await user.keyboard("{Tab}"); // complete the *selected* row
+    expect(screen.getByPlaceholderText(/methods in edo-attorney-letters/i)).toHaveValue("SearchByInn");
+  });
+
   it("Backspace on an empty input pops the scope", async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     setup();
