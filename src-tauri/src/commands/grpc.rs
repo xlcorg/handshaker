@@ -23,6 +23,16 @@ use crate::ipc::{
 };
 use crate::state::{AppState, InFlight};
 
+/// Map the IPC byte limit to tonic's `usize`. The sentinel `0` means "no limit"
+/// (the slider's Unlimited stop) → `usize::MAX`; any finite value passes through.
+pub(crate) fn resolve_max_message_size(raw: u32) -> usize {
+    if raw == 0 {
+        usize::MAX
+    } else {
+        raw as usize
+    }
+}
+
 /// Stable string key for the `ContractUpdated` event. Mirrors `ContractKey`'s
 /// key-space (address + tls only; `skip_verify` is intentionally excluded —
 /// it does not change the contract).
@@ -216,9 +226,11 @@ pub async fn grpc_invoke_oneshot(
     request: InvokeRequest,
     request_id: String,
     timeout_ms: u32,
+    max_message_bytes: u32,
 ) -> Result<InvokeOutcomeIpc, IpcError> {
     let target = target.into_core()?;
     let cache = state.contract_cache.clone();
+    let max_bytes = resolve_max_message_size(max_message_bytes);
     let work = async move {
         let transport = Arc::new(TonicTransport::new());
         let conn = activate(target, transport, cache.as_ref()).await?;
@@ -228,6 +240,7 @@ pub async fn grpc_invoke_oneshot(
             &request.method,
             &request.request_json,
             request.metadata,
+            max_bytes,
         )
         .await?;
         Ok::<InvokeOutcomeIpc, IpcError>(outcome.into())
@@ -366,6 +379,16 @@ mod tests {
             Err(IpcError::Cancelled) => {}
             other => panic!("expected B cancelled, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn resolve_max_message_size_maps_zero_to_unlimited() {
+        assert_eq!(resolve_max_message_size(0), usize::MAX);
+    }
+
+    #[test]
+    fn resolve_max_message_size_passes_finite_value_through() {
+        assert_eq!(resolve_max_message_size(16 * 1024 * 1024), 16 * 1024 * 1024usize);
     }
 
     #[tokio::test]

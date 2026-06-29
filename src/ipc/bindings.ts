@@ -90,9 +90,9 @@ async grpcMessageSchema(target: GrpcTargetIpc, service: string, method: string, 
  * `Err` is only for client-side failures (transport / encode / decode).
  * The descriptor pool is reused from the `ContractCache` when present; only the channel is opened fresh per call.
  */
-async grpcInvokeOneshot(target: GrpcTargetIpc, request: InvokeRequest, requestId: string, timeoutMs: number) : Promise<Result<InvokeOutcomeIpc, IpcError>> {
+async grpcInvokeOneshot(target: GrpcTargetIpc, request: InvokeRequest, requestId: string, timeoutMs: number, maxMessageBytes: number) : Promise<Result<InvokeOutcomeIpc, IpcError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("grpc_invoke_oneshot", { target, request, requestId, timeoutMs }) };
+    return { status: "ok", data: await TAURI_INVOKE("grpc_invoke_oneshot", { target, request, requestId, timeoutMs, maxMessageBytes }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
