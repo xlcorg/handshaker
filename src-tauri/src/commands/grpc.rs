@@ -302,8 +302,10 @@ mod tests {
         assert_ne!(target_key(&a), target_key(&b));
     }
 
+    use crate::ipc::invoke::InvokeRequest;
     use crate::ipc::IpcError;
     use crate::state::InFlight;
+    use handshaker_core::vars::builtins::BuiltinGenerator;
     use std::collections::HashMap;
     use std::time::Duration;
 
@@ -435,9 +437,6 @@ mod tests {
         }
         assert!(m.lock().unwrap().is_empty(), "registry entry removed on cancel");
     }
-
-    use handshaker_core::vars::builtins::BuiltinGenerator;
-    use crate::ipc::invoke::InvokeRequest;
 
     struct FakeGen;
     impl BuiltinGenerator for FakeGen {

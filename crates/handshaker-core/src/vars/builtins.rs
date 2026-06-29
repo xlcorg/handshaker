@@ -97,6 +97,11 @@ fn civil_from_days(z: i64) -> (i64, u32, u32) {
 /// Replace EACH `{{$name}}` occurrence with a freshly generated value (per-occurrence).
 /// Non-builtin `{{…}}` (and any text) is copied verbatim. Pure given `gen`.
 pub fn expand_builtins(s: &str, gen: &impl BuiltinGenerator) -> String {
+    // Fast path: no `{{` ⇒ no var tokens ⇒ nothing to expand. Skips a regex scan + alloc
+    // on the common invoke-path case (most bodies/metadata carry no `{{$builtin}}`).
+    if !s.contains("{{") {
+        return s.to_owned();
+    }
     let mut out = String::with_capacity(s.len());
     let mut last = 0;
     for caps in VAR_RE.captures_iter(s) {
