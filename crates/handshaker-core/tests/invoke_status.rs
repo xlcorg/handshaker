@@ -26,6 +26,7 @@ async fn server_not_found_appears_as_status_code_5() {
         "Send",
         r#"{"id":"x"}"#,
         HashMap::new(),
+        usize::MAX,
     )
     .await
     .expect("invoke (status != OK is Ok, not Err)");

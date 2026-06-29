@@ -55,7 +55,7 @@ async fn live_target_reflects_and_invokes_first_unary_method() {
     let skeleton = build_request_skeleton(&conn, &svc_name, &method_name).expect("skeleton");
     println!("[invoke_live] skeleton = {skeleton}");
 
-    match invoke_unary(&conn, &svc_name, &method_name, &skeleton, HashMap::new()).await {
+    match invoke_unary(&conn, &svc_name, &method_name, &skeleton, HashMap::new(), usize::MAX).await {
         Ok(outcome) => {
             println!(
                 "[invoke_live] outcome: status={} ({}), ms={}",

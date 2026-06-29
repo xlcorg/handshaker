@@ -22,6 +22,7 @@ async fn echo_send_returns_pong_with_echoed_id() {
         "Send",
         r#"{"id":"hello"}"#,
         HashMap::new(),
+        usize::MAX,
     )
     .await
     .expect("invoke");

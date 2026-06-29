@@ -30,6 +30,7 @@ async fn trailing_metadata_is_captured() {
         "Send",
         r#"{"id":"trail"}"#,
         HashMap::new(),
+        usize::MAX,
     )
     .await
     .expect("invoke");

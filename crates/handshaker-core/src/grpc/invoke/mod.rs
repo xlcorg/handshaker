@@ -98,6 +98,7 @@ pub async fn invoke_unary(
     method: &str,
     request_json: &str,
     metadata: HashMap<String, String>,
+    max_message_bytes: usize,
 ) -> Result<UnaryOutcome, CoreError> {
     let svc = connection
         .pool
@@ -140,7 +141,7 @@ pub async fn invoke_unary(
 
     connection
         .transport
-        .unary_dynamic(connection.channel.clone(), path, codec, request_msg, metadata)
+        .unary_dynamic(connection.channel.clone(), path, codec, request_msg, metadata, max_message_bytes)
         .await
 }
 
@@ -213,6 +214,7 @@ mod tests {
         outcome: Mutex<Option<Result<UnaryOutcome, CoreError>>>,
         last_path: Mutex<Option<String>>,
         last_metadata: Mutex<Option<HashMap<String, String>>>,
+        last_max_bytes: Mutex<Option<usize>>,
     }
 
     impl FakeTransport {
@@ -239,9 +241,11 @@ mod tests {
             _codec: DynamicCodec,
             _request: DynamicMessage,
             metadata: HashMap<String, String>,
+            max_message_bytes: usize,
         ) -> Result<UnaryOutcome, CoreError> {
             *self.last_path.lock().await = Some(method_path);
             *self.last_metadata.lock().await = Some(metadata);
+            *self.last_max_bytes.lock().await = Some(max_message_bytes);
             self.outcome.lock().await.take().expect("outcome set")
         }
     }
@@ -279,7 +283,7 @@ mod tests {
     async fn unknown_service_returns_service_not_found() {
         let t = FakeTransport::with_outcome(Err(CoreError::NotImplemented("unreached".into())));
         let conn = fake_connection(t);
-        let err = invoke_unary(&conn, "no.Such", "Send", "{}", HashMap::new())
+        let err = invoke_unary(&conn, "no.Such", "Send", "{}", HashMap::new(), usize::MAX)
             .await
             .unwrap_err();
         assert!(
@@ -292,7 +296,7 @@ mod tests {
     async fn unknown_method_returns_method_not_found() {
         let t = FakeTransport::with_outcome(Err(CoreError::NotImplemented("unreached".into())));
         let conn = fake_connection(t);
-        let err = invoke_unary(&conn, "test.Echo", "Nope", "{}", HashMap::new())
+        let err = invoke_unary(&conn, "test.Echo", "Nope", "{}", HashMap::new(), usize::MAX)
             .await
             .unwrap_err();
         assert!(
@@ -306,7 +310,7 @@ mod tests {
     async fn invalid_json_returns_encode_request() {
         let t = FakeTransport::with_outcome(Err(CoreError::NotImplemented("unreached".into())));
         let conn = fake_connection(t);
-        let err = invoke_unary(&conn, "test.Echo", "Send", "not json {", HashMap::new())
+        let err = invoke_unary(&conn, "test.Echo", "Send", "not json {", HashMap::new(), usize::MAX)
             .await
             .unwrap_err();
         assert!(matches!(err, CoreError::EncodeRequest(_)), "got {err:?}");
@@ -329,7 +333,7 @@ mod tests {
         let mut metadata = HashMap::new();
         metadata.insert("x-request-id".into(), "abc".into());
 
-        let outcome = invoke_unary(&conn, "test.Echo", "Send", r#"{"id":"hi"}"#, metadata)
+        let outcome = invoke_unary(&conn, "test.Echo", "Send", r#"{"id":"hi"}"#, metadata, usize::MAX)
             .await
             .expect("invoke");
         assert_eq!(outcome.status_code, 0);
@@ -351,6 +355,31 @@ mod tests {
                 .get("x-request-id")
                 .map(String::as_str),
             Some("abc")
+        );
+    }
+
+    #[tokio::test]
+    async fn forwards_max_message_bytes_to_transport() {
+        let canned = UnaryOutcome {
+            status_code: 0,
+            status_message: "OK".into(),
+            response_json: Some("{}".into()),
+            trailing_metadata: HashMap::new(),
+            status_details: Vec::new(),
+            elapsed_ms: 1,
+        };
+        let t = FakeTransport::with_outcome(Ok(canned));
+        let captured = t.clone();
+        let conn = fake_connection(t);
+
+        invoke_unary(&conn, "test.Echo", "Send", r#"{"id":"x"}"#, HashMap::new(), 8 * 1024 * 1024)
+            .await
+            .expect("invoke");
+
+        assert_eq!(
+            *captured.last_max_bytes.lock().await,
+            Some(8 * 1024 * 1024),
+            "invoke_unary must forward the byte limit to the transport"
         );
     }
 }
