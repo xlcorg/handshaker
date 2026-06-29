@@ -11,6 +11,7 @@ import {
   CommandItem,
 } from "@/components/ui/command";
 import { Kbd } from "@/components/ui/kbd";
+import { messages } from "@/lib/messages";
 import type { CollectionIpc, SavedRequestIpc } from "@/ipc/bindings";
 import {
   derivePaletteResults,
@@ -62,7 +63,7 @@ function RowView({ row, showCollection }: { row: PaletteRow; showCollection: boo
         <span className="truncate">
           <Highlighted text={row.collection.name} indices={row.indices} />
         </span>
-        <span className="ml-auto flex-none text-[11px] text-muted-foreground">⇥ drill in</span>
+        <span className="ml-auto flex-none text-[11px] text-muted-foreground">⇥ {messages.palette.drillIn}</span>
       </span>
     );
   }
@@ -156,10 +157,10 @@ export function CommandPalette({
   }
 
   const emptyHint = scope
-    ? `No methods in ${scope.name}`
+    ? messages.palette.emptyScoped(scope.name)
     : query.trim() === ""
-      ? "Start typing to find a collection or method"
-      : "No matches";
+      ? messages.palette.emptyFlat
+      : messages.palette.emptyNoMatch;
 
   return (
     <Dialog
@@ -169,15 +170,13 @@ export function CommandPalette({
       }}
     >
       <DialogContent showCloseButton={false} className="overflow-hidden gap-0 p-0 sm:max-w-xl">
-        <DialogTitle className="sr-only">Command palette</DialogTitle>
-        <DialogDescription className="sr-only">
-          Search collections and saved requests by name, then open one.
-        </DialogDescription>
+        <DialogTitle className="sr-only">{messages.palette.title}</DialogTitle>
+        <DialogDescription className="sr-only">{messages.palette.description}</DialogDescription>
         <Command shouldFilter={false} onValueChange={setHighlighted} onKeyDown={onKeyDown}>
           <CommandInput
             value={query}
             onValueChange={setQuery}
-            placeholder={scope ? `Search methods in ${scope.name}…` : "Search collections and requests…"}
+            placeholder={scope ? messages.palette.searchScoped(scope.name) : messages.palette.searchFlat}
             prefix={
               scope ? (
                 <span className="flex flex-none items-center gap-1 rounded bg-accent px-1.5 py-0.5 text-xs font-medium text-foreground">
@@ -204,13 +203,13 @@ export function CommandPalette({
           </CommandList>
           <div className="flex items-center gap-3 border-t px-3 py-2 text-[11px] text-muted-foreground">
             <span className="flex items-center gap-1">
-              <Kbd>⇥</Kbd> drill / complete
+              <Kbd>⇥</Kbd> {messages.palette.footerDrill}
             </span>
             <span className="flex items-center gap-1">
-              <Kbd>↵</Kbd> open
+              <Kbd>↵</Kbd> {messages.palette.footerOpen}
             </span>
             <span className="flex items-center gap-1">
-              <Kbd>esc</Kbd> close
+              <Kbd>esc</Kbd> {messages.palette.footerClose}
             </span>
           </div>
         </Command>

@@ -1,4 +1,5 @@
 import type { CollectionIpc, SavedRequestIpc } from "@/ipc/bindings";
+import { messages } from "@/lib/messages";
 import { fuzzyMatch } from "./fuzzy";
 import { flattenRequests, rankRequests, rankCollections, methodLabel } from "./palette";
 
@@ -79,7 +80,7 @@ export function derivePaletteResults(input: DeriveInput): PaletteResult {
         rows: [{ kind: "overview", value: "", collectionId: scope.id, collectionName: scope.name }],
       });
     }
-    if (requestRows.length > 0) groups.push({ heading: `${scope.name} · methods`, rows: requestRows });
+    if (requestRows.length > 0) groups.push({ heading: messages.palette.groupMethods(scope.name), rows: requestRows });
   } else if (query.trim() !== "") {
     const colRows: PaletteRow[] = rankCollections(query, tree)
       .slice(0, limits.collections)
@@ -95,8 +96,8 @@ export function derivePaletteResults(input: DeriveInput): PaletteResult {
         indices: matchIndices(query, h.request.name),
         methodIndices: matchIndices(query, methodLabel(h.request)),
       }));
-    if (colRows.length > 0) groups.push({ heading: "Collections", rows: colRows });
-    if (reqRows.length > 0) groups.push({ heading: "Requests", rows: reqRows });
+    if (colRows.length > 0) groups.push({ heading: messages.palette.groupCollections, rows: colRows });
+    if (reqRows.length > 0) groups.push({ heading: messages.palette.groupRequests, rows: reqRows });
   }
 
   let i = 0;
