@@ -40,7 +40,7 @@ regex = "1"
 indexmap = { version = "2", features = ["serde"] }
 
 # Plan #6 — Collections
-uuid = { version = "1", features = ["v7", "serde"] }
+uuid = { version = "1", features = ["v4", "v7", "serde"] }
 tempfile = "3"
 
 # OAuth2 token fetch — rustls TLS, no OpenSSL dependency.

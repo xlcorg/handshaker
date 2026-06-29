@@ -16,6 +16,8 @@ use regex::Regex;
 
 use crate::error::CoreError;
 
+pub mod builtins;
+
 /// Cap on substitution passes; beyond this we assume a cycle (see §4).
 pub const MAX_PASSES: usize = 4;
 
