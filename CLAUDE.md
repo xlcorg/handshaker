@@ -8,7 +8,31 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 
 Активная фича — нет (между фичами).
 
-Последняя влитая — **Выключение иконок gRPC — опция `off` в тогглере + сдвиг текста**
+Последняя влитая — **Двойной клик выделяет значение в теле запроса**
+(🎉 DONE 2026-06-29, ff в `main` `5d0b7b0`; план+спека `2026-06-29-body-value-dblclick-select*`
+в `archive/`) — в редакторе тела **запроса** простой (без модификаторов) двойной клик по
+JSON-значению выделяет значение целиком одним жестом, чтобы сразу набрать замену. **Строка**
+→ внутренний текст **без кавычек** (`{start+1, end-1}`; набор замены оставляет кавычки ⇒
+JSON валиден; пустая `""` → каретка между кавычек); **number/boolean/null** → весь токен;
+**object/array/ключ/пунктуация** → оверрайда нет (дефолтный word-select Monaco).
+Ctrl/Cmd+двойной клик зарезервирован (существующий rich-copy), Shift/Alt — жесты Monaco.
+**Только редактор запроса** (ответ read-only, не тронут). Чистое ядро `bodyview/selectValue.ts`
+(`valueSelectionAt(tree, spans, offset)` поверх уже живущих `live.tree`/`live.spans`) + ветка
+без-модификаторного двойного клика в существующем `attachBodyController` (`onSelectValue`-dep,
+`editorLike` расширен `altKey`/`shiftKey`) + request-only проводка в `BodyView`
+(`selectValueRange` мапит офсеты в Monaco `Selection`, `queueMicrotask`-defer чтобы лечь
+ПОСЛЕ собственного word-select Monaco). Невалидный JSON в процессе правки ⇒ `spans` пуст ⇒
+молчаливый фолбэк. Бэкенд/IPC/bindings не тронуты. Subagent-driven (3 задачи TDD, spec+quality
+ревью на каждой + финальное ревью = READY TO MERGE). Гейт: `pnpm lint` (tsc) · `pnpm build` ·
+vitest bodyview 187 (+15 новых: 11 `selectValue` + 4 `controller`), **0 новых падений** vs
+базлайн (48 предсуществующих падений в несвязанных prefs/settings/shell — `localStorage`
+undefined под jsdom25 — есть и на `main`). **Остаток — live WebView2-проход.** **Урок:**
+primary-чекаут был завален repo-wide CRLF-churn (529 файлов, working CRLF vs committed LF) +
+сломан его `node_modules` (`@rollup/rollup-linux-x64-gnu` отсутствует) — фича делалась и
+тестилась в свежем worktree (LF, рабочий install); churn дискарднут по явному разрешению
+юзера перед ff.
+
+Предыдущая — **Выключение иконок gRPC — опция `off` в тогглере + сдвиг текста**
 (🎉 DONE 2026-06-27, ff в `main`; план+спека `2026-06-27-grpc-icon-toggle*` в `archive/`;
 коммиты `4d5928b` + `36e9c4b`) — pref `grpcIcon` расширен с `GrpcIconStyle` до
 `GrpcIconPref = GrpcIconStyle | "off"` (`use-prefs.ts`; дефолт `"solid"`, поведение по
@@ -24,41 +48,22 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 (2 задачи TDD, spec+quality ревью на каждой + финальное ревью = READY TO MERGE). Гейт:
 vitest 1134 · tsc · vite build. **Live-verified** в WebView2 (2026-06-27): `off` скрывает
 иконку и сдвигает текст; обратно возвращает выбранный стиль; переживает рестарт.
-Предыдущая — **gRPC error handling — структурные google.rpc-детали + regex-free
-классификация клиентских ошибок** (🎉 DONE 2026-06-27, ребейз+squash+ff в `main` `3ff5951`;
-план+спека `2026-06-26-grpc-error-handling*` в `archive/`) — две дорожки, сходятся в
-`ErrorView`/`ClientErrorView`/`ResponsePanel`. **(1) Серверные детали:** ядро декодирует
-`grpc-status-details-bin` (google.rpc richer error model) через `tonic-types` в serde-free
-DTO `StatusDetail` (`grpc/invoke/status_details.rs`, 10 стандартных типов; `ErrorDetail`
-`#[non_exhaustive]` ⇒ `filter_map`) → `UnaryOutcome.status_details` → зеркало
-`StatusDetailIpc` на `InvokeOutcomeIpc` → типизированный рендер `StatusDetails.tsx`;
-`status_message` = сырое сообщение сервера (без префикса кода). **(2) Клиентские ошибки без
-regex:** ядро `classify_connect_error`/`ConnectKind` (`grpc/error_class.rs`); `IpcError`
-получил `Transport{kind}` + `Cancelled` + `DeadlineExceeded{timeout_ms}` (сентинелы из строк
-в `race_cancel_timeout`); фронт `netDiagnostics.ts` мапит структурный `IpcError` →
-`ClientFault` (ноль regex), протянут через `actions.ts`/`model.ts` (`Step.error:
-ClientFault|null`)/`CallPanel`/`ResponsePanel`/`useDraftReflection`; `ClientErrorView` его
-потребляет. **Лицо ошибки** (дизайн «C» выбран брейнштормом + inline-макетами через
-`mcp__visualize`, докручен живьём): `RespMeta` держит однострочную сводку `5 NOT_FOUND ·
-1ms · 0B` (несёт числовой код), `ErrorView` центрирован в теле — якорь `AlertCircle` +
-сообщение сервера крупнее (`text-base`) + детали `google.rpc` ниже только когда есть (иначе
-приглушённая сноска); каждый факт — один раз (зеркало `ClientErrorView`). Subagent-driven
-(11 задач TDD + live-pass правки), spec+quality на каждой + финальное ревью = READY TO
-MERGE. **Ребейз на разошедшийся `main`** (фича split-direction) **чист** — `messages.ts`
-авто-смерж (disjoint регионы); **squash 18→1 коммит `3ff5951`**. Гейт (на squash-дереве):
-vitest 1132 · tsc · `cargo test --workspace` (core 205 · src-tauri 69 · integration) ·
-bindings no-drift. **Урок (gRPC-протокол):** C# `Status.DebugException` (3-й арг
-`Status`/`RpcException`) НЕ уходит по проводу — клиент-локально (`null` на клиенте); чтобы
-серверная инфа об ошибке доехала в `details`, сервер кладёт google.rpc в
-`grpc-status-details-bin` (`Grpc.StatusProto` `Google.Rpc.Status` + `.ToRpcException()`).
-Уроки — память `reference_tonic_types_status_details`,
-`project_required_ipc_field_breaks_fixtures`, `project_grpc_error_handling_feature`. Остаток
-— live WebView2-проход против сервера с реальными google.rpc-деталями.
 Интеграционная ветка — `main`; фичи ведутся в отдельных worktree-ветках
 (`claude/*`) и вливаются в `main` fast-forward.
 
 ### Завершённые фичи (всё в `archive/`)
 
+- **gRPC error handling — структурные google.rpc-детали + regex-free классификация
+  клиентских ошибок** (🎉 DONE 2026-06-27, ребейз+squash+ff в `main` `3ff5951`;
+  `2026-06-26-grpc-error-handling*` в `archive/`) — ядро декодирует `grpc-status-details-bin`
+  (google.rpc) через `tonic-types` в serde-free `StatusDetail` → `UnaryOutcome.status_details`
+  → `StatusDetailIpc`/`InvokeOutcomeIpc` → `StatusDetails.tsx`; клиентские ошибки без regex
+  (`classify_connect_error`/`ConnectKind`, `IpcError::Transport/Cancelled/DeadlineExceeded`) →
+  `netDiagnostics.ts` → `ClientFault` → `ClientErrorView`; «лицо ошибки» — центрированный
+  `ErrorView` + однострочная сводка `5 NOT_FOUND · 1ms · 0B` в `RespMeta`. **Урок:** C#
+  `Status.DebugException` НЕ уходит по проводу — сервер кладёт google.rpc в
+  `grpc-status-details-bin`. Память — `reference_tonic_types_status_details`,
+  `project_grpc_error_handling_feature`.
 - **Split direction toggle — кнопка в титлбаре + хоткей Alt+V/⌥⌘V** (🎉 DONE 2026-06-26,
   ff в `main` `4cc5c0c`; `2026-06-26-split-direction-toggle*` в `archive/`) — прямой тоггл
   ориентации сплита request/response: кнопка `Columns2`/`Rows2` в правом кластере титлбара

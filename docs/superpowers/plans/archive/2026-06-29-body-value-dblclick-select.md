@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript · React · Monaco · Vitest. Pure frontend — no backend/IPC/bindings changes.
 
-**Status banner:** 📝 PLANNED 2026-06-29. Spec: `docs/superpowers/specs/2026-06-29-body-value-dblclick-select-design.md`. Branch: `claude/*` worktree off `main`, ff into `main` at finish.
+**Status banner:** 🎉 DONE 2026-06-29 (ff в `main` `5d0b7b0`; план+спека в `archive/`). Spec: `docs/superpowers/specs/archive/2026-06-29-body-value-dblclick-select-design.md`. Subagent-driven (3 задачи TDD, spec+quality ревью на каждой + финальное ревью = READY TO MERGE). Гейт: `pnpm lint` (tsc) · `pnpm build` (tsc+vite) · vitest bodyview 187 зелёных, +15 новых тестов (11 `selectValue` + 4 `controller`), **0 новых падений** относительно базлайна (48 предсуществующих падений в несвязанных prefs/settings/shell-файлах — `localStorage` undefined под jsdom25 — есть и на `main`, не наша зона). **Остаток — live WebView2-проход** (двойной клик по строковому значению выделяет внутренний текст без кавычек, набор заменяет чисто; number/bool/null — весь токен; пустая строка — каретка между кавычек; Ctrl+двойной клик по-прежнему копирует; в ответе без изменений). **Урок:** primary-чекаут юзера был завален repo-wide CRLF-churn (529 файлов, working CRLF vs committed LF) + его node_modules сломан (`@rollup/rollup-linux-x64-gnu` отсутствует) — фича верифицировалась в свежем worktree (LF, рабочий install); churn дискарднут по явному разрешению перед ff.
 
 **Gate (whole feature):** `pnpm test` (vitest, current baseline 1134 — expect +~12) · `pnpm lint` (tsc) · `pnpm build` (tsc + vite). Then live WebView2 pass.
 
