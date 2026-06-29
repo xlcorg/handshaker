@@ -31,8 +31,9 @@ src-tauri 71) · vitest 1157 · `pnpm build` (tsc+vite) · bindings no-drift. **
 `tonic::client::Grpc::new(channel)` по умолчанию режет приём на 4 MiB
 (`DEFAULT_MAX_RECV_MESSAGE_SIZE`); поднять — `.max_decoding_message_size(usize)` /
 `.max_encoding_message_size(usize)` на билдере; `usize::MAX` ≈ без лимита; превышение приходит
-как gRPC-статус `OUT_OF_RANGE (11)`. Остаток — live WebView2-проход (>4 MiB при дефолте
-проходит; слайдер→1 MiB даёт OUT_OF_RANGE 11; →Unlimited проходит; выбор переживает рестарт).
+как gRPC-статус `OUT_OF_RANGE (11)`. **Live-verified** в WebView2 (2026-06-29): >4 MiB при
+дефолте проходит; слайдер→1 MiB даёт OUT_OF_RANGE 11; →Unlimited проходит; выбор переживает
+рестарт.
 
 Предыдущая — **Двойной клик выделяет значение в теле запроса**
 (🎉 DONE 2026-06-29, ff в `main` `5d0b7b0`; план+спека `2026-06-29-body-value-dblclick-select*`

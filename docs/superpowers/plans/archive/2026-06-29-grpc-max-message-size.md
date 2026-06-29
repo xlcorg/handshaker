@@ -19,9 +19,9 @@ discrete slider snapping to power-of-two stops (`1…1024 MiB`, last stop = Unli
 **Status banner:** 🎉 DONE 2026-06-29 · rebased + ff to `main` `045f7ba` (6 impl commits
 `7ba4769`→`045f7ba`) · all 6 tasks subagent-driven TDD, spec+quality review each + final
 review = READY TO MERGE · gate: `cargo test --workspace` (core 206 · src-tauri 71) · vitest
-1157 · `pnpm build` (tsc + vite) · bindings no-drift. **Remaining:** live WebView2 pass
-(response >4 MiB succeeds at default 16 MiB; slider→1 MiB fails with OUT_OF_RANGE 11;
-slider→Unlimited succeeds; choice survives restart). Spec:
+1157 · `pnpm build` (tsc + vite) · bindings no-drift. **Live-verified** in WebView2
+(2026-06-29): response >4 MiB succeeds at default 16 MiB; slider→1 MiB fails with
+OUT_OF_RANGE 11; slider→Unlimited succeeds; choice survives restart. Spec:
 `docs/superpowers/specs/archive/2026-06-29-grpc-max-message-size-design.md`
 
 ---
