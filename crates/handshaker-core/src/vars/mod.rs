@@ -52,6 +52,8 @@ pub struct ResolutionReport {
     pub cycle_chain: Option<Vec<String>>,
     /// Recognized built-in tokens (`$`-prefixed, known set), first-appearance order,
     /// deduped. NOT substituted — left literal `{{$name}}` for send-time expansion.
+    /// Populated independently of `cycle_chain`: a cycling template may still reference
+    /// built-ins, so this stays non-empty even when `unresolved_vars` is cleared.
     pub dynamic_vars: Vec<String>,
 }
 
@@ -178,12 +180,15 @@ fn collect_remaining(s: &str) -> (Vec<String>, Vec<String>) {
     let mut dynamic: Vec<String> = Vec::new();
     for caps in VAR_RE.captures_iter(s) {
         let name = caps.get(1).unwrap().as_str();
-        if builtins::is_builtin(name) {
-            if !dynamic.iter().any(|n| n == name) {
-                dynamic.push(name.to_string());
-            }
-        } else if !unresolved.iter().any(|n| n == name) {
-            unresolved.push(name.to_string());
+        // Route to the matching bucket (builtins → dynamic, else → unresolved), then
+        // dedup once — clearer than two mirrored `if-push` arms.
+        let bucket = if builtins::is_builtin(name) {
+            &mut dynamic
+        } else {
+            &mut unresolved
+        };
+        if !bucket.iter().any(|n| n == name) {
+            bucket.push(name.to_string());
         }
     }
     (unresolved, dynamic)
@@ -476,6 +481,18 @@ mod tests {
             &vs(&env, &coll),
         );
         assert_eq!(r.dynamic_vars, vec!["$guid".to_string(), "$timestamp".to_string()]);
+    }
+
+    #[test]
+    fn builtin_alongside_cycling_vars_still_reported() {
+        // A cycle clears unresolved_vars, but a builtin in the same template must still
+        // be reported — dynamic_vars is independent of cycle state.
+        let env = map(&[("a", "{{b}}"), ("b", "{{a}}")]);
+        let coll = map(&[]);
+        let r = resolve_template_with_diagnostics("{{$guid}}/{{a}}", &vs(&env, &coll));
+        assert!(r.cycle_chain.is_some());
+        assert!(r.unresolved_vars.is_empty()); // cleared by cycle
+        assert_eq!(r.dynamic_vars, vec!["$guid".to_string()]); // still reported
     }
 
     #[test]
