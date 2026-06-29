@@ -8,7 +8,29 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 
 Активная фича — нет (между фичами).
 
-Последняя влитая — **Конфигурируемый лимит размера gRPC-сообщения — слайдер в Settings →
+Последняя влитая — **Командная палитра — богатые строки результатов запросов**
+(🎉 DONE 2026-06-29, ff в `main` `87230b1`; план+спека
+`2026-06-29-command-palette-richer-rows*` в `archive/`) — строка результата-**запроса** в
+палитре (`Ctrl/Cmd+K|P`) получила вторую строку: жирное имя над приглушённым моно-подзаголовком
+`Service/Method` (короткое имя сервиса — последний сегмент после точки, как в триггере дропдауна
+выбора метода, через общий `shortService`); имя коллекции справа — **только в плоском режиме**
+(в scope-чипе уже показано). Источник подзаголовка — чистый `methodLabel(request)` в `palette.ts`
+(`shortService(service) + "/" + method`). **Подсветка совпадений — только на строке имени**,
+подзаголовок без подсветки (по фидбеку; ставшая мёртвой обвязка `methodIndices` убрана из модели).
+Строки палитры централизованы в `messages.ts` (`palette`-namespace) по правилу ui-strings; футер
+`⇥` сокращён до `complete`. **Багфикс `87230b1`:** Tab дозаполнял ПЕРВЫЙ ряд, а не выбранный
+стрелками — `onValueChange` у cmdk ненадёжно отражает клавиатурную навигацию; читаем выбранный ряд
+**прямо из DOM** (cmdk ставит `data-selected` на `Command.Item` — тот же источник, что у его Enter
+через `getSelectedItem`) через свой `data-row-value`-атрибут + `rootRef` на обёртке
+`<div className="contents">` (shadcn-обёртка `Command` ref не форвардит). Бэкенд/IPC/bindings не
+тронуты (рендер по `cat.tree`, данные из `SavedRequestIpc`). Subagent-driven (5 задач TDD,
+spec+quality ревью на каждой + финальное ревью = READY TO MERGE) + точечные правки по живому
+фидбеку. Гейт: vitest **1162** · `tsc -b` · `pnpm build` — зелёные. Остаток — живой
+WebView2-проход (за юзером). **Урок (cmdk):** не полагайся на `onValueChange` для текущего
+выделения при навигации стрелками — читай `[data-slot="command-item"][data-selected="true"]` из
+DOM; см. [[project_command_palette_quick_search]].
+
+Предыдущая — **Конфигурируемый лимит размера gRPC-сообщения — слайдер в Settings →
 Network** (🎉 DONE 2026-06-29, rebase+ff в `main` `045f7ba`; план+спека
 `2026-06-29-grpc-max-message-size*` в `archive/`) — ответы крупнее дефолтных tonic 4 MiB
 больше не падают с `Error, decoded message length too large` (это дефолтный
@@ -35,40 +57,18 @@ src-tauri 71) · vitest 1157 · `pnpm build` (tsc+vite) · bindings no-drift. **
 дефолте проходит; слайдер→1 MiB даёт OUT_OF_RANGE 11; →Unlimited проходит; выбор переживает
 рестарт.
 
-Предыдущая — **Двойной клик выделяет значение в теле запроса**
-(🎉 DONE 2026-06-29, ff в `main` `5d0b7b0`; план+спека `2026-06-29-body-value-dblclick-select*`
-в `archive/`) — в редакторе тела **запроса** простой (без модификаторов) двойной клик по
-JSON-значению выделяет значение целиком одним жестом, чтобы сразу набрать замену. **Строка**
-→ внутренний текст **без кавычек** (`{start+1, end-1}`; набор замены оставляет кавычки ⇒
-JSON валиден; пустая `""` → каретка между кавычек); **number/boolean/null** → весь токен;
-**object/array/ключ/пунктуация** → оверрайда нет (дефолтный word-select Monaco).
-Ctrl/Cmd+двойной клик зарезервирован (существующий rich-copy), Shift/Alt — жесты Monaco.
-**Только редактор запроса** (ответ read-only, не тронут). Чистое ядро `bodyview/selectValue.ts`
-(`valueSelectionAt(tree, spans, offset)` поверх уже живущих `live.tree`/`live.spans`) + ветка
-без-модификаторного двойного клика в существующем `attachBodyController` (`onSelectValue`-dep,
-`editorLike` расширен `altKey`/`shiftKey`) + request-only проводка в `BodyView`
-(`selectValueRange` мапит офсеты в Monaco `Selection`, `queueMicrotask`-defer чтобы лечь
-ПОСЛЕ собственного word-select Monaco). Невалидный JSON в процессе правки ⇒ `spans` пуст ⇒
-молчаливый фолбэк. Бэкенд/IPC/bindings не тронуты. Subagent-driven (3 задачи TDD, spec+quality
-ревью на каждой + финальное ревью = READY TO MERGE). Гейт: `pnpm lint` (tsc) · `pnpm build` ·
-vitest bodyview 187 (+15 новых: 11 `selectValue` + 4 `controller`), **0 новых падений** vs
-базлайн (48 предсуществующих падений в несвязанных prefs/settings/shell — `localStorage`
-undefined под jsdom25 — есть и на `main`). **Live-verified** в WebView2 (2026-06-29):
-двойной клик → значение целиком, тройной → строка (стандарт Monaco), одиночный → каретка.
-**Live-pass follow-up `574405b`:** одиночный клик рисовал muted-бокс вокруг слова под кареткой
-(textual word-highlighter Monaco, `occurrencesHighlight` — НЕ наша фича: одиночный клик =
-detail 1, фича гейтит detail 2) — выключен `occurrencesHighlight: "off"` в `EDITOR_OPTIONS`
-(`monaco.ts`, рядом с уже выключенным `renderLineHighlight`). **Урок:**
-primary-чекаут был завален repo-wide CRLF-churn (529 файлов, working CRLF vs committed LF) +
-сломан его `node_modules` (`@rollup/rollup-linux-x64-gnu` отсутствует) — фича делалась и
-тестилась в свежем worktree (LF, рабочий install); churn дискарднут по явному разрешению
-юзера перед ff.
-
 Интеграционная ветка — `main`; фичи ведутся в отдельных worktree-ветках
 (`claude/*`) и вливаются в `main` fast-forward.
 
 ### Завершённые фичи (всё в `archive/`)
 
+- **Двойной клик выделяет значение в теле запроса** (🎉 DONE 2026-06-29, ff в `main` `5d0b7b0`;
+  `2026-06-29-body-value-dblclick-select*` в `archive/`) — без-модификаторный двойной клик по
+  JSON-значению в редакторе **запроса** выделяет значение целиком (строка → текст без кавычек;
+  number/bool/null → весь токен; ключ/пунктуация → дефолт Monaco). Чистое ядро
+  `bodyview/selectValue.ts` + request-only проводка в `BodyView` (`queueMicrotask`-defer ПОСЛЕ
+  word-select Monaco). Live-pass `574405b`: выключен `occurrencesHighlight` (одиночный клик
+  рисовал muted-бокс). Бэкенд не тронут. Live-verified в WebView2.
 - **Выключение иконок gRPC — опция `off` в тогглере + сдвиг текста** (🎉 DONE 2026-06-27,
   ff в `main`; `2026-06-27-grpc-icon-toggle*` в `archive/`; коммиты `4d5928b` + `36e9c4b`) —
   pref `grpcIcon` расширен `GrpcIconStyle → GrpcIconPref = GrpcIconStyle | "off"` (дефолт
