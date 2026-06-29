@@ -52,10 +52,11 @@ fn unix_secs() -> u64 {
         .unwrap_or(0)
 }
 
-fn unix_millis() -> u128 {
+fn unix_millis() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis())
+        // u64 millis saturates ~584M years from epoch — plenty; keeps parity with unix_secs.
+        .map(|d| d.as_millis() as u64)
         .unwrap_or(0)
 }
 
@@ -78,6 +79,8 @@ fn iso8601_utc(secs: u64) -> String {
 
 /// Days since 1970-01-01 → (year, month, day). Howard Hinnant's `civil_from_days`
 /// (http://howardhinnant.github.io/date_algorithms.html), valid for the full range.
+/// Callers here pass `z >= 0` (the only caller, [`iso8601_utc`], receives `u64` seconds),
+/// so the negative-day branch is unreachable in practice but kept for algorithm fidelity.
 fn civil_from_days(z: i64) -> (i64, u32, u32) {
     let z = z + 719_468;
     let era = (if z >= 0 { z } else { z - 146_096 }) / 146_097;
@@ -135,7 +138,10 @@ mod tests {
     fn is_builtin_known_and_unknown() {
         assert!(is_builtin("$guid"));
         assert!(is_builtin("$guid7"));
+        assert!(is_builtin("$timestamp"));
+        assert!(is_builtin("$unixMs"));
         assert!(is_builtin("$isoTimestamp"));
+        assert!(is_builtin("$randomInt"));
         assert!(!is_builtin("$foo")); // $-prefixed but not a known builtin
         assert!(!is_builtin("guid")); // no $-prefix → user var
         assert!(!is_builtin("host"));
@@ -169,9 +175,9 @@ mod tests {
     #[test]
     fn system_timestamps_and_randomint() {
         let secs: u64 = SystemBuiltins.generate("$timestamp").unwrap().parse().unwrap();
-        let ms: u128 = SystemBuiltins.generate("$unixMs").unwrap().parse().unwrap();
+        let ms: u64 = SystemBuiltins.generate("$unixMs").unwrap().parse().unwrap();
         assert!(secs > 1_700_000_000); // sanity: after 2023
-        assert!(ms >= secs as u128 * 1000); // ms is finer-grained
+        assert!(ms >= secs * 1000); // ms is finer-grained
         let n: u32 = SystemBuiltins.generate("$randomInt").unwrap().parse().unwrap();
         assert!(n <= 1000);
         assert!(SystemBuiltins.generate("$nope").is_none());
@@ -183,5 +189,7 @@ mod tests {
         assert_eq!(iso8601_utc(86_400), "1970-01-02T00:00:00Z");
         assert_eq!(iso8601_utc(1_609_459_200), "2021-01-01T00:00:00Z");
         assert_eq!(iso8601_utc(1_609_459_200 + 3661), "2021-01-01T01:01:01Z");
+        assert_eq!(iso8601_utc(68_169_600), "1972-02-29T00:00:00Z"); // first post-epoch leap day
+        assert_eq!(iso8601_utc(951_782_400), "2000-02-29T00:00:00Z"); // 400-year leap (century)
     }
 }
