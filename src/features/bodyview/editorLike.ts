@@ -8,7 +8,7 @@ export interface ModelLike {
 }
 
 export interface EditorMouseEventLike {
-  event: { ctrlKey: boolean; metaKey: boolean; detail: number; browserEvent: { preventDefault(): void } };
+  event: { ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean; detail: number; browserEvent: { preventDefault(): void } };
   target: { element: HTMLElement | null; position: PositionLike | null };
 }
 

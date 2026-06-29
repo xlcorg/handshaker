@@ -20,7 +20,7 @@ function fakeEditor(text: string) {
   const fire = (offset: number, over: Partial<EditorMouseEventLike["event"]> & { element?: HTMLElement | null }) => {
     const { element = null, ...ev } = over;
     handler?.({
-      event: { ctrlKey: false, metaKey: false, detail: 1, browserEvent: { preventDefault: vi.fn() }, ...ev },
+      event: { ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, detail: 1, browserEvent: { preventDefault: vi.fn() }, ...ev },
       target: { element, position: { lineNumber: 1, column: offset + 1 } },
     });
   };
@@ -78,5 +78,48 @@ describe("attachBodyController", () => {
     const handle = attachBodyController(editor, { getTree: () => parsed.tree, getSpans: () => parsed.spans });
     handle.dispose();
     expect(dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it("selects the value on a plain double-click", () => {
+    const text = `{"name":"hello world"}`;
+    const parsed = parseWithSpans(text)!;
+    const onSelectValue = vi.fn();
+    const { editor, fire } = fakeEditor(text);
+    attachBodyController(editor, { getTree: () => parsed.tree, getSpans: () => parsed.spans, onSelectValue });
+    fire(text.indexOf("hello"), { detail: 2 });
+    expect(onSelectValue).toHaveBeenCalledTimes(1);
+    const range = onSelectValue.mock.calls[0][0];
+    expect(text.slice(range.start, range.end)).toBe("hello world");
+  });
+
+  it("does not select a value on Shift or Alt double-click", () => {
+    const text = `{"name":"hello world"}`;
+    const parsed = parseWithSpans(text)!;
+    const onSelectValue = vi.fn();
+    const { editor, fire } = fakeEditor(text);
+    attachBodyController(editor, { getTree: () => parsed.tree, getSpans: () => parsed.spans, onSelectValue });
+    fire(text.indexOf("hello"), { detail: 2, shiftKey: true });
+    fire(text.indexOf("hello"), { detail: 2, altKey: true });
+    expect(onSelectValue).not.toHaveBeenCalled();
+  });
+
+  it("does not fire onSelectValue on Ctrl+double-click (that path copies)", () => {
+    const text = `{"name":"hello world"}`;
+    const parsed = parseWithSpans(text)!;
+    const onSelectValue = vi.fn();
+    const { editor, fire } = fakeEditor(text);
+    attachBodyController(editor, { getTree: () => parsed.tree, getSpans: () => parsed.spans, onSelectValue });
+    fire(text.indexOf("hello"), { detail: 2, ctrlKey: true });
+    expect(onSelectValue).not.toHaveBeenCalled();
+  });
+
+  it("does not select on a double-click that lands on a key", () => {
+    const text = `{"name":"Ada"}`;
+    const parsed = parseWithSpans(text)!;
+    const onSelectValue = vi.fn();
+    const { editor, fire } = fakeEditor(text);
+    attachBodyController(editor, { getTree: () => parsed.tree, getSpans: () => parsed.spans, onSelectValue });
+    fire(text.indexOf("name"), { detail: 2 });
+    expect(onSelectValue).not.toHaveBeenCalled();
   });
 });
