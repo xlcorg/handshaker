@@ -203,7 +203,7 @@ export function CommandPalette({
           </CommandList>
           <div className="flex items-center gap-3 border-t px-3 py-2 text-[11px] text-muted-foreground">
             <span className="flex items-center gap-1">
-              <Kbd>⇥</Kbd> {messages.palette.footerDrill}
+              <Kbd>⇥</Kbd> {messages.palette.footerComplete}
             </span>
             <span className="flex items-center gap-1">
               <Kbd>↵</Kbd> {messages.palette.footerOpen}

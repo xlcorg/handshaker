@@ -58,7 +58,7 @@ export const messages = {
     emptyFlat: "Start typing to find a collection or method",
     emptyNoMatch: "No matches",
     drillIn: "drill in",
-    footerDrill: "drill / complete",
+    footerComplete: "complete",
     footerOpen: "open",
     footerClose: "close",
   },
