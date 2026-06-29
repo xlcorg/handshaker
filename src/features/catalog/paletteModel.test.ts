@@ -108,6 +108,7 @@ describe("derivePaletteResults — method indices", () => {
       tree: TREE, scope: { id: "c1", name: "edo-attorney-letters" }, query: "", limits: LIMITS,
     });
     const reqRow = r.rows.find((row) => row.kind === "request");
+    expect(reqRow?.kind).toBe("request");
     if (reqRow?.kind === "request") expect(reqRow.methodIndices).toEqual([]);
   });
 });
