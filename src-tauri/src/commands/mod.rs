@@ -2,6 +2,7 @@ pub mod auth;
 pub mod base64;
 pub mod bundle;
 pub mod collection;
+pub mod dialog;
 pub mod env;
 pub mod events;
 pub mod grpc;

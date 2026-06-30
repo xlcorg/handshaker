@@ -3,6 +3,7 @@
 
 use handshaker_core::base64::{classify, decode_lenient, suggested_extension};
 
+use crate::commands::dialog::save_bytes_via_dialog;
 use crate::ipc::base64::Base64InspectIpc;
 
 /// Testable core of `base64_inspect`. Err = input is not valid base64.
@@ -17,43 +18,6 @@ fn inspect_impl(input: &str) -> Result<Base64InspectIpc, String> {
 #[specta::specta]
 pub async fn base64_inspect(input: String) -> Result<Base64InspectIpc, String> {
     inspect_impl(&input)
-}
-
-/// Open a native Save-As dialog and write `bytes` to the chosen file.
-/// Ok(Some(path)) = saved; Ok(None) = cancelled; Err = dialog/write failure.
-///
-/// Async-command-safe: a non-blocking dialog (callback + oneshot) rather than
-/// `blocking_save_file`, which must NOT run on the main thread.
-///
-/// No extension filter is set on purpose: decoded content is arbitrary (json /
-/// txt / png / pdf / raw base64 …), and on macOS a filter LOCKS the extension —
-/// `NSSavePanel` greys out every other type and force-appends the filter's first
-/// extension, so the user can't pick their own (rfd docs; tauri-plugin-dialog
-/// guidance is to drop the filter for "any extension"). `default_name` still
-/// carries the suggested extension, so it's a suggestion, not a cage.
-async fn save_bytes_via_dialog(
-    app: &tauri::AppHandle,
-    default_name: &str,
-    bytes: &[u8],
-) -> Result<Option<String>, String> {
-    use tauri_plugin_dialog::DialogExt;
-
-    let (tx, rx) = tokio::sync::oneshot::channel();
-    app.dialog()
-        .file()
-        .set_file_name(default_name)
-        .save_file(move |path| {
-            let _ = tx.send(path);
-        });
-
-    match rx.await.map_err(|e| e.to_string())? {
-        Some(file_path) => {
-            let path = file_path.into_path().map_err(|e| e.to_string())?;
-            std::fs::write(&path, bytes).map_err(|e| e.to_string())?;
-            Ok(Some(path.to_string_lossy().into_owned()))
-        }
-        None => Ok(None),
-    }
 }
 
 /// Decode a base64 string and write the DECODED bytes to a user-picked file.
