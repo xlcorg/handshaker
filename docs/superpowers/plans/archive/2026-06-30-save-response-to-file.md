@@ -10,6 +10,13 @@
 
 **Spec:** `docs/superpowers/specs/2026-06-30-save-response-to-file-design.md`
 
+**Статус:** 🎉 DONE — 9 TDD-задач + 3 live-полировки реализованы; гейт зелёный
+(vitest **1193** · `tsc -b` · `vite build` · `cargo test --workspace` · bindings
+no-drift); влито в `main` ff 2026-06-30. **Живой WebView2-проход ещё НЕ пройден.**
+Отклонения от плана (live-фидбек): пункт меню вынесен в **свою группу** под
+Collapse/Expand all; **иконка Download в шапке убрана** (остались меню + Ctrl/Cmd+S);
+**имя файла упрощено** до `response-<localstamp>.json` (без метода).
+
 ---
 
 ## File Structure
