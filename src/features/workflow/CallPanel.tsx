@@ -45,10 +45,17 @@ interface CallPanelProps {
   originAuth?: SavedAuthConfigIpc;
   /** Variables of the draft's origin collection — feeds {{var}} autocomplete. */
   originVars?: Partial<Record<string, string>>;
+  /** Origin-bound only: a method was just picked. (prev, next) carry the service/method
+   *  before and after the switch — lets the owner auto-rename the saved request when its
+   *  name still tracks the old method. */
+  onMethodSelected?: (
+    prev: { service: string; method: string },
+    next: { service: string; method: string },
+  ) => void;
 }
 
 /** The editable, sendable surface for one step — reused by Focus(draft)/List/Ledger. */
-export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMethod, originAuth, originVars }: CallPanelProps) {
+export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMethod, originAuth, originVars, onMethodSelected }: CallPanelProps) {
   const [prefs, setPref] = usePrefs();
   const activeWf = useActiveWorkflow();
   // Re-resolve the address preview when the active env's identity or contents change
@@ -168,15 +175,19 @@ export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMetho
       onTls={(tls) => onPatch({ tls })}
       onRefresh={refreshContract}
       onReflectCancel={reflection.cancel}
-      onSelectMethod={(m) =>
-        void applyMethodSelection(
-          onPatch,
-          { address: step.address, tls: step.tls, collectionId: step.collectionId },
-          { requestJson: step.requestJson, service: step.service, method: step.method },
-          m,
-          workflowStore.activeWorkflow().steps,
-        )
-      }
+      onSelectMethod={(m) => {
+          // Snapshot the pre-switch method BEFORE applyMethodSelection patches the draft,
+          // so the owner can decide whether the saved name still tracked it.
+          const prev = { service: step.service, method: step.method };
+          void applyMethodSelection(
+            onPatch,
+            { address: step.address, tls: step.tls, collectionId: step.collectionId },
+            { requestJson: step.requestJson, service: step.service, method: step.method },
+            m,
+            workflowStore.activeWorkflow().steps,
+          );
+          onMethodSelected?.(prev, { service: m.service, method: m.method });
+        }}
       onSend={onSend}
       onCancel={onCancel}
       onQuickAdd={onQuickAddMethod}
