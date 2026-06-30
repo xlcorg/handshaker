@@ -248,6 +248,6 @@ function ResponseSlot({
           : "idle";
 
   return (
-    <ResponsePanel state={respState} outcome={step.outcome} error={step.error} contract={contract} method={step.method} />
+    <ResponsePanel state={respState} outcome={step.outcome} error={step.error} contract={contract} />
   );
 }

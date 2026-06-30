@@ -29,13 +29,11 @@ export interface ResponsePanelProps {
   error?: ClientFault | null;
   /** Method contract for the Contract tab; omit/null → three tabs (history panels). */
   contract?: ContractInfo | null;
-  /** Short method name (e.g. "GetUser") — seeds the default save filename. */
-  method?: string;
 }
 
 type ResponseTab = "body" | "trailers" | "headers" | "contract";
 
-export function ResponsePanel({ state, outcome, error, contract, method }: ResponsePanelProps) {
+export function ResponsePanel({ state, outcome, error, contract }: ResponsePanelProps) {
   const [tab, setTab] = useState<ResponseTab>("body");
   // Sending always pulls the view to Body — that's where the response lands.
   // Until then the default is Body; Contract is an explicit click away.
@@ -75,7 +73,7 @@ export function ResponsePanel({ state, outcome, error, contract, method }: Respo
   // Ctrl/Cmd+S hotkey and the body context-menu action (Save response to file).
   const body = state === "success" && outcome?.response_json != null ? outcome.response_json : null;
   const onSaveBody = () => {
-    if (body !== null) void saveResponseToFile(body, method ?? "");
+    if (body !== null) void saveResponseToFile(body);
   };
   const onKeyDown = (e: ReactKeyboardEvent) => {
     if (body !== null && isSaveResponseHotkey(e, isMacOS)) {

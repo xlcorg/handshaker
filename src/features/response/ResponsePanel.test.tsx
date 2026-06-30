@@ -138,14 +138,14 @@ describe("ResponsePanel save-to-file", () => {
   beforeEach(() => mSave.mockClear());
 
   it("has no Save icon in the header (save is via context menu + Ctrl/Cmd+S)", () => {
-    render(<ResponsePanel state="success" outcome={ok} method="Search" />);
+    render(<ResponsePanel state="success" outcome={ok} />);
     expect(screen.queryByLabelText("Save response to file")).toBeNull();
   });
 
   it("Ctrl+S saves the body when one is present", () => {
-    render(<ResponsePanel state="success" outcome={ok} method="Search" />);
+    render(<ResponsePanel state="success" outcome={ok} />);
     fireEvent.keyDown(screen.getByTestId("monaco"), { key: "s", code: "KeyS", ctrlKey: true });
-    expect(mSave).toHaveBeenCalledWith(ok.response_json, "Search");
+    expect(mSave).toHaveBeenCalledWith(ok.response_json);
   });
 
   it("Ctrl+S does nothing when there is no body (error response)", () => {
