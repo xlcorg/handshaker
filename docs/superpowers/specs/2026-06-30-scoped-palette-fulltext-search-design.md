@@ -1,11 +1,16 @@
 # Command Palette — полнотекстовый поиск внутри выбранной коллекции (design)
 
-> **Статус:** 📝 SPEC — дизайн утверждён на брейншторме, реализации ещё нет.
+> **Статус:** ✅ CODE-COMPLETE — реализация на ветке, гейт зелёный, spec+quality
+> ревью пройдены (READY TO MERGE). Остаток — живой WebView2-проход + ff-merge в `main`
+> (за юзером; выбрано «keep as-is»).
+> **Ветка:** `claude/priceless-pasteur-738467` (worktree); код `5567df4` + правка
+> комментария `b1369e0` (поверх spec `422fbcb` / plan `5958570`).
 > **Бэкенд/IPC/bindings:** не затрагиваются (всё в чистом ядре `paletteModel.ts`,
 > данные уже в загруженном `cat.tree` / `SavedRequestIpc`).
-> **План реализации:** будет создан skill `writing-plans` после ревью спеки.
-> **Гейт:** `vitest` · `tsc -b` · `vite build` (бэкенд не трогаем → `cargo`/
-> bindings-no-drift не нужны).
+> **План реализации:** `docs/superpowers/plans/2026-06-30-scoped-palette-fulltext-search.md`
+> (исполнен subagent-driven: 1 задача TDD, spec+quality ревью = APPROVED).
+> **Гейт:** `vitest` **1168** · `tsc -b` · `vite build` — зелёные (бэкенд не трогаем →
+> `cargo`/bindings-no-drift не нужны).
 
 ## Проблема / цель
 

@@ -1,5 +1,9 @@
 # Scoped Command-Palette Full-Text Search — Implementation Plan
 
+> **Статус:** ✅ DONE — Task 1 реализован (`5567df4` + `b1369e0`), гейт зелёный
+> (vitest 1168 · `tsc -b` · `vite build`), spec+quality ревью = APPROVED. Не влито
+> (выбрано «keep as-is»); остаток — живой WebView2-проход + ff-merge в `main`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** In the command palette's scoped mode (after `Tab` into a collection), search the full request text — `name + service + method + address` — exactly like flat mode, instead of matching the request name only.
