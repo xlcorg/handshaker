@@ -2,7 +2,18 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Status:** READY TO IMPLEMENT · ветка `claude/reverent-nightingale-ed10e9` · спека `docs/superpowers/specs/2026-06-29-dynamic-builtin-vars-design.md`
+**Status:** 🎉 DONE 2026-06-30 · rebase+ff в `main` `0ba7bfa` · спека `docs/superpowers/specs/archive/2026-06-29-dynamic-builtin-vars-design.md`
+
+Реализована subagent-driven (6 задач TDD, spec+quality ревью на каждой + финальное ревью =
+READY TO MERGE). 6 билтинов `$guid/$guid7/$timestamp/$unixMs/$isoTimestamp/$randomInt`, генерация
+один раз в `grpc_invoke_oneshot` через инъектируемый `BuiltinGenerator`; ядро лишь распознаёт их
+(`dynamic_vars`), пользовательская переменная того же имени побеждает. Только фича `v4` у `uuid`;
+ISO-8601 вручную (Хиннант), `$randomInt` из байтов v4-UUID — без новых крейтов. Два UI-фоллоуапа по
+живому фидбеку (`653ce89`+`a667f2a`+`0ba7bfa`): подсветка `{{$var}}` фиолетовым и в редакторе тела
+(Monarch-токен `variable.dynamic`) + отключение rainbow bracket-pair colorization на уровне языка
+(`colorizedBracketPairs:[]`). Ребейз на `da56d0b` чист (единственный пересекающийся `messages.ts`
+смержился автоматически — разные namespace). Гейт: cargo (core 219 · src-tauri 73 · doctest) ·
+vitest 1170 · pnpm build (tsc+vite) · bindings no-drift. Остаток — live WebView2-проход.
 
 **Goal:** Шаблоны `{{var}}` получают 6 встроенных подстановок (`$guid`, `$guid7`, `$timestamp`, `$unixMs`, `$isoTimestamp`, `$randomInt`), которые при отправке заменяются сгенерированным значением; в превью они подсвечиваются как «динамические» и предлагаются автокомплитом.
 
