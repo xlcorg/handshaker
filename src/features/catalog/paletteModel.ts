@@ -58,12 +58,9 @@ export function derivePaletteResults(input: DeriveInput): PaletteResult {
 
   if (scope) {
     const col = tree.find((c) => c.id === scope.id);
-    // In scoped mode match only against request name (not full haystack) so that
-    // e.g. "sea" doesn't match "GetStatus" via the service string.
-    const allHits = col ? rankRequests(query, flattenRequests([col])) : [];
-    const hits = query.trim()
-      ? allHits.filter((h) => fuzzyMatch(query.trim(), h.request.name).matched)
-      : allHits;
+    // Scoped mode matches the same full haystack as flat mode (name + service +
+    // method + address) — just limited to the one collection's requests.
+    const hits = col ? rankRequests(query, flattenRequests([col])) : [];
     const requestRows: PaletteRow[] = hits.map((h) => ({
       kind: "request",
       value: "",

@@ -67,7 +67,29 @@ describe("derivePaletteResults — scoped", () => {
     const ids = r.rows.map((row) => (row.kind === "request" ? row.request.id : ""));
     expect(ids).toContain("r1");
     expect(ids).toContain("r2");
-    expect(ids).not.toContain("r3");
+  });
+
+  it("matches full text (service/method/address), ranking name hits above service-only hits", () => {
+    const r = derivePaletteResults({ tree: TREE, scope, query: "sea", limits: LIMITS });
+    const ids = r.rows
+      .filter((row) => row.kind === "request")
+      .map((row) => (row.kind === "request" ? row.request.id : ""));
+    // "sea" hits r1/r2 by name and r3 only via its service/address haystack.
+    expect(ids).toContain("r3");
+    // Name matches still rank above the service-only match.
+    expect(ids.indexOf("r1")).toBeLessThan(ids.indexOf("r3"));
+    expect(ids.indexOf("r2")).toBeLessThan(ids.indexOf("r3"));
+  });
+
+  it("finds requests by a service-name fragment in scoped mode", () => {
+    const r = derivePaletteResults({ tree: TREE, scope, query: "letters", limits: LIMITS });
+    const ids = r.rows
+      .filter((row) => row.kind === "request")
+      .map((row) => (row.kind === "request" ? row.request.id : ""));
+    // "letters" appears only in the shared service edo.attorney.v1.Letters, in no request name.
+    expect(ids).toContain("r1");
+    expect(ids).toContain("r2");
+    expect(ids).toContain("r3");
   });
 });
 
