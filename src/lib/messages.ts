@@ -99,6 +99,16 @@ export const messages = {
     error: {
       noDetails: "No google.rpc details attached.",
     },
+    save: {
+      /** Context-menu item — trailing ellipsis signals a dialog opens. */
+      toFileMenu: "Save response to file…",
+      /** Header-icon tooltip — no ellipsis. */
+      toFileTooltip: "Save response to file",
+      /** Success-toast action button (reveal-in-folder). */
+      showInFolder: "Show in folder",
+      savedTo: (path: string) => `Saved to ${path}`,
+      failed: "Couldn't save",
+    },
   },
   shell: {
     keyboard: {
