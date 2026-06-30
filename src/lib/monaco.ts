@@ -38,6 +38,14 @@ const setupPromise = (async () => {
   // `--syntax-str` (green) tokens can be themed separately. Lookahead detects
   // a closing quote followed by `:` (= an object key); without lookahead,
   // Monarch tokenizes left-to-right and can't tell yet.
+  //
+  // Dynamic built-ins (`{{$guid7}}`, `{{$timestamp}}`, …) carry a leading `$`,
+  // which the user-var rule's charset excludes — so without a dedicated rule
+  // they'd fall through to plain-string coloring. A separate `variable.dynamic`
+  // token (placed BEFORE the user-var rule in each state) paints any `{{$ident}}`
+  // violet, mirroring the `.vh-dynamic` highlight in the plain `{{var}}` inputs.
+  // Like the user-var rule, this colors the reference syntactically (any `$`
+  // name), independent of whether the core recognizes that built-in.
   monaco.languages.register({ id: "json-with-vars" });
   registerBodyCompletion(monaco);
 
@@ -72,6 +80,7 @@ const setupPromise = (async () => {
   monaco.languages.setMonarchTokensProvider("json-with-vars", {
     tokenizer: {
       root: [
+        [/\{\{\$[a-zA-Z][a-zA-Z0-9_\-]*\}\}/, "variable.dynamic"],
         [/\{\{[a-zA-Z_][a-zA-Z0-9_\-]*\}\}/, "variable.template"],
         // Lookahead: opening quote followed by anything-then-quote-then-colon = a key.
         [/"(?=(?:[^"\\]|\\.)*"\s*:)/, { token: "string.key.quote", next: "@stringKey" }],
@@ -82,6 +91,7 @@ const setupPromise = (async () => {
         [/[ \t\r\n]+/, "white"],
       ],
       string: [
+        [/\{\{\$[a-zA-Z][a-zA-Z0-9_\-]*\}\}/, "variable.dynamic"],
         [/\{\{[a-zA-Z_][a-zA-Z0-9_\-]*\}\}/, "variable.template"],
         [/[^"\\{]+/, "string"],
         [/\\./, "string.escape"],
@@ -89,6 +99,7 @@ const setupPromise = (async () => {
         [/"/, { token: "string.quote", next: "@pop" }],
       ],
       stringKey: [
+        [/\{\{\$[a-zA-Z][a-zA-Z0-9_\-]*\}\}/, "variable.dynamic"],
         [/\{\{[a-zA-Z_][a-zA-Z0-9_\-]*\}\}/, "variable.template"],
         [/[^"\\]+/, "string.key"],
         [/\\./, "string.key.escape"],
@@ -113,6 +124,9 @@ const setupPromise = (async () => {
       { token: "keyword", foreground: "DBB470" },
       { token: "delimiter", foreground: "737373" },
       { token: "variable.template", foreground: "DBB470", fontStyle: "bold" },
+      // Dynamic built-in `{{$…}}` — violet, matching `.vh-dynamic` (#a88fe6) in
+      // the plain `{{var}}` inputs so the two surfaces speak the same color.
+      { token: "variable.dynamic", foreground: "A88FE6", fontStyle: "bold" },
     ],
     colors: {
       "editor.background": "#0A0A0A",
