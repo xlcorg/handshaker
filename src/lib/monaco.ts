@@ -170,6 +170,14 @@ export const EDITOR_OPTIONS = {
   // textual word-highlighter reads as a stray selection in a JSON body editor.
   occurrencesHighlight: "off",
   guides: { indentation: false },
+  // No rainbow bracket-pair coloring. Monaco defaults it ON (since ~0.36) and
+  // overlays depth-based colors on every `{}`/`[]` — which (a) overrides the
+  // theme's muted-grey `delimiter` (#737373), clashing with the minimal dark
+  // look, and (b) two-tones the `{{ }}` of a `{{var}}`/`{{$builtin}}` placeholder
+  // (the braces aren't a string token, so the colorizer no longer skips them),
+  // breaking the "placeholder is one colored unit" reading. Off → braces inside
+  // a placeholder take the token color, structural JSON braces stay muted grey.
+  bracketPairColorization: { enabled: false },
   overviewRulerBorder: false,
   hideCursorInOverviewRuler: true,
   // 14px vertical bar (VS Code default) is a real mouse target; the thin 8px bar
