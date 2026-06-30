@@ -10,11 +10,16 @@ vi.mock("./CallPanel", () => ({
     originAuth,
     onQuickAddMethod,
     onExecuted,
+    onMethodSelected,
   }: {
-    step: { method: string };
+    step: { service: string; method: string };
     originAuth?: { kind: string };
     onQuickAddMethod?: (service: string, method: string) => void;
     onExecuted?: (executed: unknown) => void;
+    onMethodSelected?: (
+      prev: { service: string; method: string },
+      next: { service: string; method: string },
+    ) => void;
   }) => (
     <div>
       <div>CALL:{step.method}</div>
@@ -24,6 +29,18 @@ vi.mock("./CallPanel", () => ({
       <button type="button" onClick={() => onExecuted?.(step)}>
         fire-executed
       </button>
+      {/* Simulate a method switch: prev = current step method, next = a different method. */}
+      <button
+        type="button"
+        onClick={() =>
+          onMethodSelected?.(
+            { service: step.service, method: step.method },
+            { service: step.service, method: "DeleteX" },
+          )
+        }
+      >
+        fire-method-selected
+      </button>
     </div>
   ),
 }));
@@ -32,9 +49,17 @@ const cat = vi.hoisted(() => ({
   tree: [] as CollectionIpc[],
   duplicateItem: vi.fn(),
   bumpUsage: vi.fn(() => Promise.resolve()),
+  renameItem: vi.fn(() => Promise.resolve()),
+  moveItem: vi.fn(() => Promise.resolve()),
 }));
 vi.mock("@/features/catalog/CatalogProvider", () => ({
-  useCatalog: () => ({ tree: cat.tree, duplicateItem: cat.duplicateItem, bumpUsage: cat.bumpUsage }),
+  useCatalog: () => ({
+    tree: cat.tree,
+    duplicateItem: cat.duplicateItem,
+    bumpUsage: cat.bumpUsage,
+    renameItem: cat.renameItem,
+    moveItem: cat.moveItem,
+  }),
 }));
 
 const mockPatchUiState = vi.fn();
@@ -57,6 +82,8 @@ beforeEach(() => {
   cat.duplicateItem.mockReset();
   mockPatchUiState.mockReset();
   cat.bumpUsage.mockClear();
+  cat.renameItem.mockClear();
+  cat.moveItem.mockClear();
 });
 
 describe("FocusView Save affordance", () => {
@@ -235,5 +262,68 @@ describe("FocusView Save affordance", () => {
     renderFV();
     await user.click(screen.getByRole("button", { name: "fire-executed" }));
     expect(cat.bumpUsage).not.toHaveBeenCalled();
+  });
+});
+
+describe("FocusView auto-rename on method change", () => {
+  function boundTreeWithName(name: string): CollectionIpc[] {
+    return [
+      {
+        id: "c1", name: "Notes", default_tls: false, skip_tls_verify: false,
+        pinned: false, description: null, created_at: 0, variables: {}, auth: { kind: "none" },
+        expanded: false,
+        items: [
+          {
+            type: "request", id: "r1", name, address_template: "h:443",
+            service: "p.S", method: "GetX", body_template: "{}", metadata: [],
+            auth: { kind: "none" }, tls_override: null, last_used_at: null, use_count: 0,
+          },
+        ],
+      },
+    ];
+  }
+
+  it("renames an origin-bound request to the new method when its name still tracks the old method", async () => {
+    const user = userEvent.setup();
+    cat.tree = boundTreeWithName("GetX"); // == auto-name of the old method
+    workflowStore.setDraft(
+      newStep({ address: "h:443", tls: false, service: "p.S", method: "GetX" }),
+      { collectionId: "c1", requestId: "r1" },
+    );
+    renderFV();
+    await user.click(screen.getByRole("button", { name: "fire-method-selected" }));
+    expect(cat.renameItem).toHaveBeenCalledWith("c1", "r1", "DeleteX");
+  });
+
+  it("leaves a customized name untouched on method change", async () => {
+    const user = userEvent.setup();
+    cat.tree = boundTreeWithName("My favorite call");
+    workflowStore.setDraft(
+      newStep({ address: "h:443", tls: false, service: "p.S", method: "GetX" }),
+      { collectionId: "c1", requestId: "r1" },
+    );
+    renderFV();
+    await user.click(screen.getByRole("button", { name: "fire-method-selected" }));
+    expect(cat.renameItem).not.toHaveBeenCalled();
+  });
+
+  it("does not rename for an unbound draft (no saved request to rename)", async () => {
+    const user = userEvent.setup();
+    workflowStore.setDraft(newStep({ address: "h:443", tls: false, service: "p.S", method: "GetX" }));
+    renderFV();
+    await user.click(screen.getByRole("button", { name: "fire-method-selected" }));
+    expect(cat.renameItem).not.toHaveBeenCalled();
+  });
+
+  it("never moves the request between folders on method change", async () => {
+    const user = userEvent.setup();
+    cat.tree = boundTreeWithName("GetX");
+    workflowStore.setDraft(
+      newStep({ address: "h:443", tls: false, service: "p.S", method: "GetX" }),
+      { collectionId: "c1", requestId: "r1" },
+    );
+    renderFV();
+    await user.click(screen.getByRole("button", { name: "fire-method-selected" }));
+    expect(cat.moveItem).not.toHaveBeenCalled();
   });
 });

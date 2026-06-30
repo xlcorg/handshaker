@@ -6,6 +6,8 @@ import { draftBreadcrumb } from "./draftHeader";
 import { useCatalog } from "@/features/catalog/CatalogProvider";
 import { openSavedRequest } from "@/features/catalog/actions";
 import { patchUiState } from "@/features/catalog/uiState";
+import { findSavedRequest } from "@/features/catalog/treeNav";
+import { isAutoName, suggestSaveTarget } from "@/features/catalog/grouping";
 import { Tooltip } from "@/components/ui/tooltip";
 import type { Step } from "./model";
 import { compactFocusRing } from "@/lib/focusRing";
@@ -22,7 +24,7 @@ export function FocusView({ onRequestSave, onQuickAddMethod }: FocusViewProps = 
   const draft = useDraft();
   const origin = useDraftOrigin();
   const dirty = useDraftDirty();
-  const { tree, duplicateItem, bumpUsage } = useCatalog();
+  const { tree, duplicateItem, bumpUsage, renameItem } = useCatalog();
 
   // Origin-bound drafts autosave, so duplicating never loses edits — no discard guard.
   async function duplicate() {
@@ -33,6 +35,22 @@ export function FocusView({ onRequestSave, onQuickAddMethod }: FocusViewProps = 
     void patchUiState({ active_request: { collection_id: origin.collectionId, item_id: item.id } });
     toast.success(messages.workflow.focus.duplicatedAs(item.name));
   }
+
+  // Figma-style autoRename: when the method changes on an origin-bound request whose name
+  // is still the auto-derived one (== the OLD method's name), refresh it to the NEW method's
+  // name. A customized name is left untouched. Name only — never moves the request's folder.
+  // The breadcrumb + tree reflect it live (pathNamesToItem reads the catalog).
+  const handleMethodSelected = (
+    prev: { service: string; method: string },
+    next: { service: string; method: string },
+  ) => {
+    if (!origin) return;
+    const saved = findSavedRequest(tree, origin.collectionId, origin.requestId);
+    if (!saved || !isAutoName(saved.name, prev.service, prev.method)) return;
+    const newName = suggestSaveTarget(next.service, next.method).requestName;
+    if (newName === saved.name) return; // no-op if the auto-name is unchanged
+    void renameItem(origin.collectionId, origin.requestId, newName).catch(() => {});
+  };
 
   // Auth of the origin collection — CallPanel falls back to it when the step's own
   // auth is none (request-level auth has no editor; collections carry the config).
@@ -123,6 +141,7 @@ export function FocusView({ onRequestSave, onQuickAddMethod }: FocusViewProps = 
             // draft has no target collection, so the «+» is hidden rather than silently
             // landing the method in some arbitrary collection.
             onQuickAddMethod={origin ? onQuickAddMethod : undefined}
+            onMethodSelected={origin ? handleMethodSelected : undefined}
             originAuth={originAuth}
             originVars={originVars}
           />
