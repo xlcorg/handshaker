@@ -27,6 +27,14 @@ export function suggestSaveTarget(service: string, method: string): SaveTarget {
   };
 }
 
+/** True when `name` is still the auto-derived request name for `service`/`method` —
+ *  i.e. it equals `suggestSaveTarget(...).requestName` and the user never renamed it.
+ *  Mirrors `isPristineBody`: a stateless "is this still the default?" check, so a method
+ *  switch can refresh the name only while the user hasn't taken ownership of it. */
+export function isAutoName(name: string, service: string, method: string): boolean {
+  return name === suggestSaveTarget(service, method).requestName;
+}
+
 export interface SaveLocation {
   collectionId: string;
   collectionName: string;

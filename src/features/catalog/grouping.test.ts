@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { suggestSaveTarget, findSavedLocations } from "./grouping";
+import { suggestSaveTarget, findSavedLocations, isAutoName } from "./grouping";
 import type { CollectionIpc, ItemIpc, SavedRequestIpc } from "@/ipc/bindings";
 
 describe("suggestSaveTarget", () => {
@@ -68,6 +68,26 @@ function col(over: Partial<CollectionIpc> = {}): CollectionIpc {
     ...over,
   };
 }
+
+describe("isAutoName", () => {
+  it("true when the name equals the method's auto-derived request name", () => {
+    expect(isAutoName("Create", "notes.v1.NotesApiService", "Create")).toBe(true);
+  });
+
+  it("false when the name was customized away from the method", () => {
+    expect(isAutoName("Create user", "notes.v1.NotesApiService", "Create")).toBe(false);
+  });
+
+  it("depends only on the method short name, not the service", () => {
+    // suggestSaveTarget.requestName ignores the service entirely.
+    expect(isAutoName("Delete", "a.b.FooService", "Delete")).toBe(true);
+    expect(isAutoName("Delete", "totally.different.Svc", "Delete")).toBe(true);
+  });
+
+  it("treats a whitespace mismatch as a customized name", () => {
+    expect(isAutoName("Create ", "x.S", "Create")).toBe(false);
+  });
+});
 
 describe("findSavedLocations", () => {
   const match = { service: "pkg.v1.Svc", method: "GetX", address: "localhost:5002" };
