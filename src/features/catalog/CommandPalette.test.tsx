@@ -152,4 +152,26 @@ describe("CommandPalette", () => {
     await user.keyboard("search"); // …and method rows must NOT repeat it
     expect(screen.getAllByText("edo-attorney-letters").length).toBe(1);
   });
+
+  it("anchors near the top and grows downward (not vertically centered)", () => {
+    setup();
+    // Radix portals the dialog to document.body, so query the document, not the
+    // render container (screen.getByRole can't match it by data-slot).
+    const content = document.querySelector('[data-slot="dialog-content"]');
+    expect(content).not.toBeNull();
+    const cls = content!.className;
+    // Pinned to the top, vertical centering removed.
+    expect(cls).toContain("top-[12vh]");
+    expect(cls).toContain("translate-y-0");
+    expect(cls).not.toContain("top-[50%]");
+    expect(cls).not.toContain("translate-y-[-50%]");
+    // Horizontal centering preserved.
+    expect(cls).toContain("translate-x-[-50%]");
+
+    const list = document.querySelector('[data-slot="command-list"]');
+    expect(list).not.toBeNull();
+    const listCls = list!.className;
+    expect(listCls).toContain("max-h-[min(360px,60vh)]");
+    expect(listCls).not.toContain("max-h-[360px]");
+  });
 });

@@ -194,9 +194,11 @@ export function CommandPalette({
         if (!o) onClose();
       }}
     >
+      {/* Override the shared Dialog's vertical centering: pin near the top so the
+          result list grows downward only instead of expanding from the center. */}
       <DialogContent
         showCloseButton={false}
-        className="overflow-hidden gap-0 p-0 sm:max-w-xl"
+        className="top-[12vh] translate-y-0 overflow-hidden gap-0 p-0 sm:max-w-xl"
       >
         <DialogTitle className="sr-only">{messages.palette.title}</DialogTitle>
         <DialogDescription className="sr-only">
@@ -221,7 +223,7 @@ export function CommandPalette({
                 ) : undefined
               }
             />
-            <CommandList>
+            <CommandList className="max-h-[min(360px,60vh)]">
               <CommandEmpty>{emptyHint}</CommandEmpty>
               {result.groups.map((g, gi) => {
                 const items = g.rows.map((row) => (
