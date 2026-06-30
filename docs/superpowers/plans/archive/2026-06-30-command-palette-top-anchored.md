@@ -2,7 +2,7 @@
 
 > **Статус:** 🎉 DONE — Task 1 реализован, гейт зелёный (vitest **1175** · `tsc -b` · `vite build`),
 > spec+quality ревью = APPROVED. Ребейз на `main` (`e2e1691`) + squash 4 коммитов + ff в `main`.
-> Остаток — живой WebView2-проход.
+> **Live-verified в WebView2 (2026-06-30).**
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

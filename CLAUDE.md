@@ -24,7 +24,7 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 DOM-узлы и базовые центрирующие вытеснены; spec+quality ревью = APPROVED, code-quality симулировал
 twMerge-мердж). При вливании — ребейз на актуальный `main` (`e2e1691`: v0.2.22 + fix env-scrollbar,
 не пересекались) + **сквош 4 коммитов в 1**. Гейт: vitest **1175** · `tsc -b` · `vite build` —
-зелёные. Остаток — живой WebView2-проход. **Урок (twMerge):** чтобы локально переопределить
+зелёные. **Live-verified** в WebView2 (2026-06-30). **Урок (twMerge):** чтобы локально переопределить
 центрирование общего `Dialog`, передай конфликтующие классы (`top-*`/`translate-y-*`) в `className`
 call-site — twMerge выкинет базовые; см. [[project_radix_slot_no_twmerge]].
 

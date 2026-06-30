@@ -1,7 +1,7 @@
 # Command Palette — прибить к верху, убрать рост вверх-вниз (design)
 
 > **Статус:** 🎉 DONE — реализовано; ребейз на `main` (`e2e1691`) + squash 4 коммитов в 1 + ff в
-> `main`. Гейт зелёный, spec+quality ревью пройдены. Остаток — живой WebView2-проход.
+> `main`. Гейт зелёный, spec+quality ревью пройдены. **Live-verified в WebView2 (2026-06-30).**
 > **Ветка:** `claude/priceless-pasteur-738467` (worktree).
 > **Бэкенд/IPC/bindings:** не затрагиваются (чистый фронт, CSS-классы).
 > **Гейт:** `vitest` **1175** · `tsc -b` · `vite build` — зелёные. `cargo`/bindings-no-drift не нужны.
