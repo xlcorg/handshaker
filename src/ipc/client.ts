@@ -316,6 +316,12 @@ export async function base64SaveEncoded(input: string): Promise<string | null> {
   return r.data;
 }
 
+export async function fileSaveText(text: string, defaultName: string): Promise<string | null> {
+  const r = await commands.fileSaveText(text, defaultName);
+  if (r.status === "error") throw r.error;
+  return r.data;
+}
+
 export const ipc = {
   appVersion,
   startupRecoveryTake,
@@ -358,4 +364,5 @@ export const ipc = {
   base64Inspect,
   base64Save,
   base64SaveEncoded,
+  fileSaveText,
 };

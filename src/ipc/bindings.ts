@@ -202,6 +202,19 @@ async base64SaveEncoded(input: string) : Promise<Result<string | null, string>> 
     else return { status: "error", error: e  as any };
 }
 },
+/**
+ * Write arbitrary UTF-8 `text` (verbatim — no newline transformation) to a
+ * user-picked file via the native Save-As dialog. Ok(Some(path)) = saved;
+ * Ok(None) = cancelled; Err = dialog/write failure.
+ */
+async fileSaveText(text: string, defaultName: string) : Promise<Result<string | null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("file_save_text", { text, defaultName }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async authResolve(config: SavedAuthConfigIpc) : Promise<Result<AuthCredentialsIpc | null, IpcError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("auth_resolve", { config }) };
