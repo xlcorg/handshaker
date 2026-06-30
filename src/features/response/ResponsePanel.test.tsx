@@ -1,13 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render as rtlRender, screen, act, fireEvent } from "@testing-library/react";
-import React from "react";
-import { TooltipProvider } from "@/components/ui/tooltip";
-
-// ResponsePanel uses <Tooltip> (which needs TooltipProvider). Using the `wrapper`
-// option ensures that rerender() calls also get the provider.
-function render(ui: React.ReactElement) {
-  return rtlRender(ui, { wrapper: ({ children }) => <TooltipProvider>{children}</TooltipProvider> });
-}
+import { render, screen, act, fireEvent } from "@testing-library/react";
 
 vi.mock("@/lib/monaco", () => ({
   MonacoEditor: ({ value, options }: { value: string; options?: { readOnly?: boolean } }) => (
@@ -145,17 +137,8 @@ describe("ResponsePanel save-to-file", () => {
   const mSave = vi.mocked(saveResponseToFile);
   beforeEach(() => mSave.mockClear());
 
-  it("shows a Save icon on a successful response and saves on click", () => {
+  it("has no Save icon in the header (save is via context menu + Ctrl/Cmd+S)", () => {
     render(<ResponsePanel state="success" outcome={ok} method="Search" />);
-    const btn = screen.getByLabelText("Save response to file");
-    fireEvent.click(btn);
-    expect(mSave).toHaveBeenCalledWith(ok.response_json, "Search");
-  });
-
-  it("hides the Save icon when idle or on an error with no body", () => {
-    const { rerender } = render(<ResponsePanel state="idle" outcome={null} />);
-    expect(screen.queryByLabelText("Save response to file")).toBeNull();
-    rerender(<ResponsePanel state="error" outcome={err} />);
     expect(screen.queryByLabelText("Save response to file")).toBeNull();
   });
 
@@ -163,5 +146,11 @@ describe("ResponsePanel save-to-file", () => {
     render(<ResponsePanel state="success" outcome={ok} method="Search" />);
     fireEvent.keyDown(screen.getByTestId("monaco"), { key: "s", code: "KeyS", ctrlKey: true });
     expect(mSave).toHaveBeenCalledWith(ok.response_json, "Search");
+  });
+
+  it("Ctrl+S does nothing when there is no body (error response)", () => {
+    const { container } = render(<ResponsePanel state="error" outcome={err} />);
+    fireEvent.keyDown(container.firstChild as Element, { key: "s", code: "KeyS", ctrlKey: true });
+    expect(mSave).not.toHaveBeenCalled();
   });
 });
