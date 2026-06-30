@@ -81,6 +81,12 @@ function ValueCell({
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const [focused, setFocused] = useState(false);
+  // True only when the content is genuinely taller than the cap — the one case a
+  // scrollbar is actually wanted. Keeping overflow:auto on otherwise lets a
+  // spurious scrollbar appear: `scrollHeight` is integer-rounded, so under a
+  // fractional webview zoom factor the box ends up ~1px short of its own content
+  // and a vertical (then, via the CSS overflow-x→auto rule, horizontal) bar shows.
+  const [overflowing, setOverflowing] = useState(false);
 
   // Grow to fit (capped) while focused; collapse back to the one-row CSS height
   // when blurred. Re-runs on value changes so typing keeps the height in sync.
@@ -89,9 +95,12 @@ function ValueCell({
     if (!el) return;
     if (focused) {
       el.style.height = "auto";
-      el.style.height = `${Math.min(el.scrollHeight, VALUE_MAX_PX)}px`;
+      const full = el.scrollHeight;
+      el.style.height = `${Math.min(full, VALUE_MAX_PX)}px`;
+      setOverflowing(full > VALUE_MAX_PX);
     } else {
       el.style.height = "";
+      setOverflowing(false);
     }
   }, [focused, value]);
 
@@ -109,8 +118,14 @@ function ValueCell({
       className={cn(
         CELL_INPUT_CLASS,
         "resize-none py-2 align-top",
+        // When the value fits under the cap the box is sized exactly to it, so no
+        // scrollbar is needed (overflow-hidden clips the sub-pixel zoom remainder
+        // invisibly). Only when it overflows do we scroll — vertically only;
+        // overflow-x is pinned hidden so it can't compute to `auto` and add a bar.
         focused
-          ? "overflow-y-auto whitespace-pre-wrap break-all"
+          ? overflowing
+            ? "overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-all"
+            : "overflow-hidden whitespace-pre-wrap break-all"
           : "overflow-hidden whitespace-nowrap",
       )}
     />

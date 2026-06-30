@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { VariablesTable } from "./VariablesTable";
@@ -26,6 +26,29 @@ describe("VariablesTable", () => {
     render(<VariablesTable value={{ token: "abc123" }} onChange={() => {}} />);
     const valueEl = screen.getByDisplayValue("abc123");
     expect(valueEl.tagName).toBe("TEXTAREA");
+  });
+
+  it("a focused value that fits does not enable a scrollbar (zoom-rounding guard)", () => {
+    render(<VariablesTable value={{ token: "abc123" }} onChange={() => {}} />);
+    const valueEl = screen.getByDisplayValue("abc123");
+    fireEvent.focus(valueEl);
+    // Content fits under the cap → the box is sized exactly to the content, so we
+    // must NOT leave overflow:auto on (under a fractional webview zoom factor
+    // scrollHeight rounds down by ~1px and a spurious vertical scrollbar appears).
+    expect(valueEl.className).toContain("overflow-hidden");
+    expect(valueEl.className).not.toContain("overflow-y-auto");
+  });
+
+  it("a focused value taller than the cap scrolls vertically only (no horizontal bar)", () => {
+    render(<VariablesTable value={{ token: "abc123" }} onChange={() => {}} />);
+    const valueEl = screen.getByDisplayValue("abc123");
+    // jsdom has no layout (scrollHeight === 0); force the over-the-cap branch.
+    Object.defineProperty(valueEl, "scrollHeight", { configurable: true, get: () => 999 });
+    fireEvent.focus(valueEl);
+    expect(valueEl.className).toContain("overflow-y-auto");
+    // break-all wrapping means a horizontal scrollbar is never wanted; pin
+    // overflow-x hidden so it can't compute to `auto` (CSS spec) and add a bar.
+    expect(valueEl.className).toContain("overflow-x-hidden");
   });
 
   it("keeps the key cell a single-line input", () => {
