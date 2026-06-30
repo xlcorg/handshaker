@@ -36,6 +36,7 @@ tauri-plugin-updater = { workspace = true }
 tauri-plugin-process = { workspace = true }
 tauri-plugin-decorum = { workspace = true }
 tauri-plugin-dialog = { workspace = true }
+tauri-plugin-opener = { workspace = true }
 tauri-specta = { workspace = true }
 specta = { workspace = true, features = ["indexmap"] }
 specta-typescript = { workspace = true }
