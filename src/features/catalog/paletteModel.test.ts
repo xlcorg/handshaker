@@ -74,7 +74,7 @@ describe("derivePaletteResults — scoped", () => {
     const ids = r.rows
       .filter((row) => row.kind === "request")
       .map((row) => (row.kind === "request" ? row.request.id : ""));
-    // "sea" hits r1/r2 by name and r3 only via its service/address haystack.
+    // "sea" hits r1/r2 by name; r3 matches only via its service string (subsequence through the haystack).
     expect(ids).toContain("r3");
     // Name matches still rank above the service-only match.
     expect(ids.indexOf("r1")).toBeLessThan(ids.indexOf("r3"));
