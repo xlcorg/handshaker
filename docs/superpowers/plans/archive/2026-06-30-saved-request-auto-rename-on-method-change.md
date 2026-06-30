@@ -1,5 +1,7 @@
 # Умное авто-переименование сохранённого запроса при смене метода — Implementation Plan
 
+**Статус:** 🎉 DONE 2026-06-30 — все 3 задачи реализованы, 2-стадийное ревью + финальное = READY TO MERGE, rebase+ff в `main` `08e1ed3`, live-verified в WebView2. Гейт на интегрированном результате: vitest **1201** · `tsc -b` · `vite build`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Когда у сохранённого (origin-bound) запроса меняют gRPC-метод, обновлять его имя в коллекции на имя нового метода — но только если имя всё ещё авто-выведенное (его не переименовывали вручную).

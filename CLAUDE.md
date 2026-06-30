@@ -8,7 +8,31 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 
 Активная фича — нет (между фичами).
 
-Последняя влитая — **Сохранение тела ответа в файл** (🎉 DONE 2026-06-30, ff в `main`;
+Последняя влитая — **Умное авто-переименование сохранённого запроса при смене метода**
+(🎉 DONE 2026-06-30, rebase+ff в `main` `08e1ed3`; план+спека
+`2026-06-30-saved-request-auto-rename-on-method-change*` в `archive/`) — при смене gRPC-метода
+у **origin-bound** (сохранённого) запроса его имя в коллекции авто-обновляется на имя нового
+метода, но **только если имя всё ещё авто-выведенное** (== имя старого метода, его не
+переименовывали вручную); кастомное имя не трогается, несохранённый черновик — no-op, папка не
+двигается. Паттерн — Figma `autoRename` **без** persistent-флага: чистый stateless-предикат
+`isAutoName(name, service, method) = name === suggestSaveTarget(service, method).requestName`
+(зеркало `isPristineBody`) в `grouping.ts`. Проводка: `CallPanel` отдаёт `onMethodSelected(prev,
+next)` после `applyMethodSelection` (snapshot `prev` ДО патча), `FocusView` читает живое имя через
+`findSavedRequest`, проверяет `isAutoName` по **старому** методу и зовёт существующий `renameItem`
+на авто-имя **нового** (имя в дереве/брэдкрамбе обновляется живьём; reuse тоста `Renamed to "…"`).
+Бэкенд/IPC/bindings не тронуты — чистый фронт. Ресёрч UX: Postman/Insomnia/Bruno держат имя
+независимым (авто-имя — частый запрос пользователей), Kreya тоже; «золотая середина» —
+Figma `autoRename` (имя следует за содержимым, пока вручную не переименовали). Subagent-driven
+(3 TDD-задачи, 2-стадийное ревью каждой + финальное = READY TO MERGE). **При вливании `main` ушёл
+вперёд** (влита save-response `9b23785`) → ребейз ветки на новый `main` (чисто — файлы
+непересекающиеся) + после ребейза `pnpm install` (main добавил dep `@tauri-apps/plugin-opener`) →
+ff. Гейт на интегрированном результате: vitest **1201** · `tsc -b` · `vite build` — зелёные.
+**Live-verified** в WebView2 (2026-06-30). Память — [[project_saved_request_auto_rename_done]].
+**Урок:** авто-следование имени за методом — stateless-предикат «совпадает ли с дефолтом» (как
+`isPristineBody`), без денормализованного флага; ребейз поверх ушедшего `main` с новой
+зависимостью требует `pnpm install` перед гейтом (`tsc` падает на отсутствующем модуле).
+
+Предыдущая — **Сохранение тела ответа в файл** (🎉 DONE 2026-06-30, ff в `main`;
 план+спека `2026-06-30-save-response-to-file*` в `archive/`; **живой WebView2-проход ещё
 НЕ пройден**) — тело успешного gRPC-ответа сохраняется в файл через **две** точки входа:
 пункт контекстного меню вьюера ответа «Save response to file…» (в своей
@@ -29,31 +53,16 @@ MERGE) + 3 live-полировки (своя группа меню по best-pra
 folder в Tauri 2 — `tauri-plugin-opener` `revealItemInDir`; контекстное меню группируй по
 категории с дивайдерами (NN/g), а не сваливай в одну группу.
 
-Предыдущая — **Командная палитра — прибита к верху (рост только вниз)**
-(🎉 DONE 2026-06-30, squash+ff в `main`; план+спека `2026-06-30-command-palette-top-anchored*`
-в `archive/`) — палитра (`Ctrl/Cmd+K|P`) больше не «прыгает» при наборе. Жила в общем
-вертикально-центрированном `Dialog` (`top-[50%] translate-y-[-50%]`), поэтому по мере роста
-списка результатов высота прибавлялась **в обе стороны** от центра и поле ввода дёргалось. Теперь
-палитра **прибита к верху** (canonical — VS Code/Linear/Raycast/Superhuman): поле ввода неподвижно,
-список растёт только вниз и скроллится на пределе. Правка чисто-CSS, один файл (`CommandPalette.tsx`):
-на `DialogContent` палитры локальный override `top-[12vh] translate-y-0` (вытесняет базовые
-`top-[50%]`/`translate-y-[-50%]` через twMerge — `cn = twMerge(clsx)`, последний класс группы
-побеждает; горизонтальное центрирование `left-[50%] translate-x-[-50%]` цело), на `CommandList` —
-кап `max-h-[min(360px,60vh)]` (защита от выезда за нижний край на низком окне Tauri). Общий
-`dialog.tsx`/`command.tsx` НЕ тронуты (override только на call-site палитры). Бэкенд/IPC/bindings не
-тронуты. Subagent-driven (1 задача TDD: рендер-тест проверяет, что override-классы реально сели на
-DOM-узлы и базовые центрирующие вытеснены; spec+quality ревью = APPROVED, code-quality симулировал
-twMerge-мердж). При вливании — ребейз на актуальный `main` (`e2e1691`: v0.2.22 + fix env-scrollbar,
-не пересекались) + **сквош 4 коммитов в 1**. Гейт: vitest **1175** · `tsc -b` · `vite build` —
-зелёные. **Live-verified** в WebView2 (2026-06-30). **Урок (twMerge):** чтобы локально переопределить
-центрирование общего `Dialog`, передай конфликтующие классы (`top-*`/`translate-y-*`) в `className`
-call-site — twMerge выкинет базовые; см. [[project_radix_slot_no_twmerge]].
-
 Интеграционная ветка — `main`; фичи ведутся в отдельных worktree-ветках
 (`claude/*`) и вливаются в `main` fast-forward.
 
 ### Завершённые фичи (всё в `archive/`)
 
+- **Командная палитра — прибита к верху (рост только вниз)** (🎉 DONE 2026-06-30, squash+ff в
+  `main`; `2026-06-30-command-palette-top-anchored*` в `archive/`) — палитра (`Ctrl/Cmd+K|P`)
+  прибита к верху (`top-[12vh] translate-y-0` override через twMerge на call-site
+  `CommandPalette.tsx`): поле ввода неподвижно, список растёт только вниз. Урок —
+  [[project_radix_slot_no_twmerge]].
 - **Командная палитра — полнотекстовый поиск в коллекции** (🎉 DONE 2026-06-30,
   rebase+ff в `main`; `2026-06-30-scoped-palette-fulltext-search*` в `archive/`) — в
   scope-режиме палитры поиск матчит полный haystack (`имя + service.method + address`),
