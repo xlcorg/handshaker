@@ -1,6 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useBusyDelay } from "@/lib/use-busy-delay";
-import { Activity } from "lucide-react";
+import { Activity, Download } from "lucide-react";
 import { ResponseBody } from "./ResponseBody";
 import { EmptyState } from "./EmptyState";
 import { ErrorView } from "./ErrorView";
@@ -11,6 +11,11 @@ import { UnderlineTabs } from "@/components/ui/underline-tabs";
 import { ContractView } from "@/features/contract/ContractView";
 import type { InvokeOutcomeIpc, MessageSchemaIpc } from "@/ipc/bindings";
 import type { ClientFault } from "@/features/workflow/netDiagnostics";
+import { Tooltip } from "@/components/ui/tooltip";
+import { messages } from "@/lib/messages";
+import { isMacOS } from "@/lib/platform";
+import { saveResponseToFile } from "./saveResponse";
+import { isSaveResponseHotkey } from "./saveHotkey";
 
 /** Editable-draft contract for the Contract tab. Omit/null → three tabs (history). */
 export interface ContractInfo {
@@ -26,11 +31,13 @@ export interface ResponsePanelProps {
   error?: ClientFault | null;
   /** Method contract for the Contract tab; omit/null → three tabs (history panels). */
   contract?: ContractInfo | null;
+  /** Short method name (e.g. "GetUser") — seeds the default save filename. */
+  method?: string;
 }
 
 type ResponseTab = "body" | "trailers" | "headers" | "contract";
 
-export function ResponsePanel({ state, outcome, error, contract }: ResponsePanelProps) {
+export function ResponsePanel({ state, outcome, error, contract, method }: ResponsePanelProps) {
   const [tab, setTab] = useState<ResponseTab>("body");
   // Sending always pulls the view to Body — that's where the response lands.
   // Until then the default is Body; Contract is an explicit click away.
@@ -66,8 +73,21 @@ export function ResponsePanel({ state, outcome, error, contract }: ResponsePanel
   // Backend doesn't surface initial-metadata yet; headers stays empty until it does.
   const headers: KVRow[] = [];
 
+  // The full pretty body, available only on a successful response. Drives the
+  // header Save icon, the Ctrl/Cmd+S hotkey, and the body context-menu action.
+  const body = state === "success" && outcome?.response_json != null ? outcome.response_json : null;
+  const onSaveBody = () => {
+    if (body !== null) void saveResponseToFile(body, method ?? "");
+  };
+  const onKeyDown = (e: ReactKeyboardEvent) => {
+    if (body !== null && isSaveResponseHotkey(e, isMacOS)) {
+      e.preventDefault();
+      onSaveBody();
+    }
+  };
+
   return (
-    <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-background relative">
+    <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-background relative" onKeyDown={onKeyDown}>
       <div
         ref={headerRef}
         className="h-10 flex-none flex items-center gap-2.5 px-3.5 border-b border-border relative z-10 bg-background/85 backdrop-blur-sm"
@@ -84,6 +104,18 @@ export function ResponsePanel({ state, outcome, error, contract }: ResponsePanel
           ]}
         />
         <div className="ml-auto flex items-center gap-2.5">
+          {body !== null && (
+            <Tooltip content={messages.response.save.toFileTooltip} side="bottom">
+              <button
+                type="button"
+                onClick={onSaveBody}
+                aria-label={messages.response.save.toFileTooltip}
+                className="grid size-6 place-items-center rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                <Download size={14} />
+              </button>
+            </Tooltip>
+          )}
           <RespMeta state={state} outcome={outcome} />
         </div>
         {showProgress && (
@@ -109,7 +141,7 @@ export function ResponsePanel({ state, outcome, error, contract }: ResponsePanel
       )}
       {state === "success" && outcome && tab === "body" && outcome.response_json !== null && (
         <div className="hs-fade-in flex min-h-0 flex-1 flex-col">
-          <ResponseBody json={outcome.response_json} />
+          <ResponseBody json={outcome.response_json} onSaveBody={onSaveBody} />
         </div>
       )}
       {state === "success" && outcome && tab === "trailers" && <KVTable rows={trailers} />}
