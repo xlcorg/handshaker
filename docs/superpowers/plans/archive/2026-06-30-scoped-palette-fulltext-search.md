@@ -1,8 +1,8 @@
 # Scoped Command-Palette Full-Text Search — Implementation Plan
 
-> **Статус:** ✅ DONE — Task 1 реализован (`5567df4` + `b1369e0`), гейт зелёный
-> (vitest 1168 · `tsc -b` · `vite build`), spec+quality ревью = APPROVED. Не влито
-> (выбрано «keep as-is»); остаток — живой WebView2-проход + ff-merge в `main`.
+> **Статус:** 🎉 DONE — Task 1 реализован (после ребейза `fa84179`), гейт зелёный
+> (vitest 1172 · `tsc -b` · `vite build`), spec+quality ревью = APPROVED. Rebase на
+> актуальный `main` (`d968f73`) + ff в `main`; остаток — живой WebView2-проход.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
