@@ -15,9 +15,15 @@ export interface SaveMenuEditor {
   addAction(descriptor: SaveActionDescriptor): DisposableLike;
 }
 
-// Same group as Collapse/Expand all ("1_folding"), ordered after them (order 3),
-// so "Save response to file…" sits with the document-wide actions at the top.
-const GROUP_FOLDING = "1_folding";
+// Own divider-separated group, sorted AFTER the fold group ("1_folding") and
+// BEFORE word-wrap ("2_view") and the value copy/save groups ("9_*"). Result:
+// "Save response to file…" renders directly below Collapse/Expand all (adjacent,
+// near the top — it's a primary action), but in its OWN group so the export
+// action is visually separated from the fold (view) actions. This follows
+// context-menu best practice: group commands by task category and divide groups
+// with separators (NN/g; mirrors VS Code, which never mixes fold and file
+// actions in one section).
+const GROUP_SAVE = "1_save";
 
 /** Register "Save response to file…" as a document-wide right-click action in the
  *  response editor. No precondition (always available) and NO keybinding — the
@@ -28,8 +34,8 @@ export function attachSaveResponseAction(editor: SaveMenuEditor, onSave: () => v
   return editor.addAction({
     id: "hs.saveResponse",
     label: messages.response.save.toFileMenu,
-    contextMenuGroupId: GROUP_FOLDING,
-    contextMenuOrder: 3,
+    contextMenuGroupId: GROUP_SAVE,
+    contextMenuOrder: 1,
     run: () => onSave(),
   });
 }
