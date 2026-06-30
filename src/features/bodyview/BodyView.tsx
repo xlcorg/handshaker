@@ -17,6 +17,7 @@ import type { VarCandidate } from "@/features/vars/candidates";
 import { GhostZone, computeGhostLines } from "./ghost";
 import { computeUnknownFieldMarkers } from "./validate";
 import { attachDecodeActions, type DecodeEditorLike } from "./decodeActions";
+import { messages } from "@/lib/messages";
 import { copyToClipboard } from "@/lib/clipboard";
 import { toastSnippet } from "./copyValue";
 import { base64Save, base64SaveEncoded } from "@/ipc/client";
@@ -24,6 +25,7 @@ import { toast } from "sonner";
 import { installContextMenuCleanup } from "./contextMenuCleanup";
 import { copyDecodedBase64 } from "./copyDecoded";
 import { attachFoldActions, type FoldMenuEditor } from "./foldActions";
+import { attachSaveResponseAction, type SaveMenuEditor } from "./saveAction";
 import { attachWordWrapAction, type WordWrapMenuEditor } from "./wordWrapAction";
 import { forwardViewZoneContextMenu } from "./openContextMenu";
 import { shouldShowMinimap, minimapToggleOptions } from "./minimapGate";
@@ -43,6 +45,8 @@ export interface BodyViewProps {
   schema?: MessageSchemaIpc | null;
   /** Variable candidates for `{{`-autocomplete — request mode only. */
   varCandidates?: VarCandidate[];
+  /** Response mode only: save the FULL body to a file (context-menu action). */
+  onSaveBody?: () => void;
 }
 
 interface Live {
@@ -57,6 +61,8 @@ interface Live {
   decode: DisposableLike | null;
   /** Collapse/Expand-all context-menu actions (response only). */
   fold: DisposableLike | null;
+  /** Save-response-to-file context-menu action (response only). */
+  save: DisposableLike | null;
   /** Word-wrap toggle context-menu action (both modes). */
   wrap: DisposableLike | null;
   /** Forwards a right-click on a view zone (the ghost hint) to the editor menu. */
@@ -75,7 +81,7 @@ interface Live {
   minimapSubs: DisposableLike[];
 }
 
-export function BodyView({ mode, value, onChange, onSubmit, schema, varCandidates }: BodyViewProps) {
+export function BodyView({ mode, value, onChange, onSubmit, schema, varCandidates, onSaveBody }: BodyViewProps) {
   const [prefs] = usePrefs();
   const live = useRef<Live | null>(null);
   // Ref so the Monaco command (bound once in onMount) always calls the freshest handler.
@@ -85,6 +91,8 @@ export function BodyView({ mode, value, onChange, onSubmit, schema, varCandidate
   schemaRef.current = schema;
   const varCandidatesRef = useRef(varCandidates);
   varCandidatesRef.current = varCandidates;
+  const onSaveBodyRef = useRef(onSaveBody);
+  onSaveBodyRef.current = onSaveBody;
 
   // --- response rendering ------------------------------------------------
   const renderResponse = (text: string) => {
@@ -225,13 +233,14 @@ export function BodyView({ mode, value, onChange, onSubmit, schema, varCandidate
       live.current?.controller?.dispose();
       live.current?.decode?.dispose();
       live.current?.fold?.dispose();
+      live.current?.save?.dispose();
       live.current?.wrap?.dispose();
       live.current?.ctxMenu?.dispose();
       live.current?.typeSub?.dispose();
       live.current?.minimapSubs?.forEach((d) => d.dispose());
       live.current = {
         editor, monaco, tree: null, spans: [], badges: [],
-        decorations: null, expanded: new Set(), controller: null, decode: null, fold: null, wrap: null, ctxMenu: null, typeSub: null,
+        decorations: null, expanded: new Set(), controller: null, decode: null, fold: null, save: null, wrap: null, ctxMenu: null, typeSub: null,
         ghost: null, ghostTimer: null,
         lineCount: editor.getModel()?.getLineCount() ?? 1,
         lastText: editor.getValue(),
@@ -331,9 +340,9 @@ export function BodyView({ mode, value, onChange, onSubmit, schema, varCandidate
         const reportSave = (run: Promise<string | null>) =>
           void run
             .then((p) => {
-              if (p) toast.success(`Saved to ${p}`);
+              if (p) toast.success(messages.response.save.savedTo(p));
             })
-            .catch((e) => toast.error(typeof e === "string" ? e : "Couldn't save"));
+            .catch((e) => toast.error(typeof e === "string" ? e : messages.response.save.failed));
         live.current.decode = attachDecodeActions(editor as unknown as DecodeEditorLike, {
           getTree: () => live.current?.tree ?? null,
           getSpans: () => live.current?.spans ?? [],
@@ -349,6 +358,10 @@ export function BodyView({ mode, value, onChange, onSubmit, schema, varCandidate
         // Collapse all / Expand all live in the right-click menu (document-wide
         // fold actions), beside the decode/copy items.
         live.current.fold = attachFoldActions(editor as unknown as FoldMenuEditor);
+        live.current.save = attachSaveResponseAction(
+          editor as unknown as SaveMenuEditor,
+          () => onSaveBodyRef.current?.(),
+        );
       }
       // Monaco intercepts Ctrl/Cmd+Enter (inserts a newline by default), so the
       // window-level Send shortcut never sees it while the editor has focus.
@@ -385,6 +398,7 @@ export function BodyView({ mode, value, onChange, onSubmit, schema, varCandidate
     live.current?.controller?.dispose();
     live.current?.decode?.dispose();
     live.current?.fold?.dispose();
+    live.current?.save?.dispose();
     live.current?.wrap?.dispose();
     live.current?.ctxMenu?.dispose();
     live.current?.typeSub?.dispose();
