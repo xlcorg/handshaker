@@ -316,4 +316,17 @@ mod tests {
 
         std::env::remove_var("HS_TEST_PROD_TOKEN");
     }
+
+    #[test]
+    fn resolves_unbound_draft_with_no_collection() {
+        // No collection: empty collection vars, no collection auth, verify on (skip=false).
+        let active = env("prod", &[("host", "api:443")]);
+        let mut req = base_request();
+        req.address_template = "{{host}}".into();
+        req.body_template = "{}".into();
+        let eff = resolve_request(&req, None, Some(&active)).unwrap();
+        assert_eq!(eff.target.address, "api:443");
+        assert!(!eff.target.skip_verify);
+        assert!(eff.auth.is_none());
+    }
 }
