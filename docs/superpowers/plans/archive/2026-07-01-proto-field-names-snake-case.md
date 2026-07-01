@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Статус:** 🎉 DONE 2026-07-01 — все 7 задач влиты в `main` (`ce0bf00`, ff). Гейт: `cargo test --workspace` 319 · vitest 1214 · `tsc -b` · `vite build` · bindings no-drift. Живой WebView2-проход ещё НЕ пройден.
+
 **Goal:** Unify field naming to snake_case (proto names) across the request skeleton, autocomplete, ghost hints, and response viewer so every surface matches the Contract tab.
 
 **Architecture:** Emitters of a field name (skeleton, response serializer, autocomplete insert, ghost hint) switch to the proto name (snake_case); readers of body text (autocomplete path descent + present-check, ghost present-check, validate) recognize BOTH the proto name and the proto3-JSON camelCase name. This mirrors the wire deserializer, which emits canonical camelCase but accepts both — we flip the emit direction toward the contract. A single frontend helper `fieldName.ts` holds the invariant.

@@ -6,19 +6,35 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 
 ## Active work
 
-Активная фича — **имена полей в теле = proto-имена (snake_case), как в контракте**
-(план `docs/superpowers/plans/2026-07-01-proto-field-names-snake-case.md`, спека рядом в
-`specs/`). Статус: SPEC+PLAN готовы, реализация не начата. Смысл: скелет запроса,
-автокомплит, ghost-хинты и вьюер ответа сейчас показывают camelCase (`taxRegistrationCode`),
-а Contract-таб — snake_case (`tax_registration_code`); приводим всё к snake_case (proto-имена).
-Инвариант — «пишем snake_case, распознаём обе формы» (зеркало проводного proto3-JSON
-десериализатора): чистый хелпер `src/features/bodyview/fieldName.ts`
-(`bodyFieldKey`/`matchesField`/`fieldPresent`) + 2 точки бэка (`skeleton.rs` `json_name()→name()`,
-`tonic_impl.rs` `use_proto_field_name(true)`) + 3 фронт-правки (`completion.ts`, `ghost.ts`,
-`validate.ts`). Легаси camelCase-тела шлются как раньше (десериализатор принимает оба) и не
-дают ложных unknown/дублей. IPC/bindings/Contract-таб не тронуты. Subagent-driven, TDD (7 задач).
+Активная фича — нет (между фичами).
 
-Последняя влитая — **Умное авто-переименование сохранённого запроса при смене метода**
+Последняя влитая — **Имена полей в теле = proto-имена (snake_case), как в контракте**
+(🎉 DONE 2026-07-01, ff в `main` `ce0bf00`; план+спека
+`2026-07-01-proto-field-names-snake-case*` в `archive/`; **живой WebView2-проход ещё НЕ
+пройден**) — скелет запроса, автокомплит, ghost-хинты («Field hints») и вьюер ответа раньше
+показывали proto3-JSON camelCase (`taxRegistrationCode`), а Contract-таб — snake_case
+(`tax_registration_code`); теперь все поверхности эмитят proto-имя (snake_case), как в контракте.
+Инвариант — **«пишем snake_case, распознаём обе формы»** (зеркало проводного proto3-JSON
+десериализатора, который наоборот эмитит canonical camelCase, но принимает оба). Эмиттеры:
+`skeleton.rs` (`field.json_name()`→`field.name()`), сериализатор ответа `tonic_impl.rs`
+(`SerializeOptions::use_proto_field_name(true)`), автокомплит-вставка и ghost-хинт (через
+`bodyFieldKey`). Читатели текста узнают обе формы через общий чистый хелпер
+`src/features/bodyview/fieldName.ts` (`bodyFieldKey`/`matchesField`/`fieldPresent`):
+`completion.ts` (descendSchema + present-дедуп + valueField), `ghost.ts` (missing-дифф),
+`validate.ts` (known-field). Легаси camelCase-тела шлются как раньше (десериализатор запроса
+не тронут — принимает оба) и не дают ложных «unknown field»/дублей хинта. IPC/bindings/Contract-
+таб/десериализатор не тронуты; `FieldNodeIpc` уже нёс оба имени ⇒ ноль дрейфа bindings. Ресёрч:
+Postman для gRPC-запросов требует snake_case (camelCase — открытый feature-request), grpcurl
+принимает оба (JSON-вывод camelCase, `-format=text` snake); для клиента с Contract-табом «золотая
+середина» — зеркалить `.proto`. Subagent-driven (6 TDD-задач + 7-я гейт, 2-стадийное ревью каждой
++ финальное opus-ревью = READY TO MERGE). Гейт: `cargo test --workspace` **319** · vitest **1214**
+· `tsc -b` · `vite build` · bindings no-drift — зелёные. Память —
+[[project_proto_field_names_snake_case_done]]. **Урок:** при смене имён полей грепай и `src/`-юнит-
+тесты, И крейтовый `crates/*/tests/` интеграционный каталог — план, картировавший только юнит-
+тесты, прошёл per-task гейты, но `cargo test --workspace` упал на стейл-ассерте `traceId` в
+`invoke_skeleton.rs` (интеграционные тесты — гейт-only surface, юнит-грепом не ловятся).
+
+Предыдущая — **Умное авто-переименование сохранённого запроса при смене метода**
 (🎉 DONE 2026-06-30, rebase+ff в `main` `08e1ed3`; план+спека
 `2026-06-30-saved-request-auto-rename-on-method-change*` в `archive/`) — при смене gRPC-метода
 у **origin-bound** (сохранённого) запроса его имя в коллекции авто-обновляется на имя нового
@@ -42,32 +58,17 @@ ff. Гейт на интегрированном результате: vitest **
 `isPristineBody`), без денормализованного флага; ребейз поверх ушедшего `main` с новой
 зависимостью требует `pnpm install` перед гейтом (`tsc` падает на отсутствующем модуле).
 
-Предыдущая — **Сохранение тела ответа в файл** (🎉 DONE 2026-06-30, ff в `main`;
-план+спека `2026-06-30-save-response-to-file*` в `archive/`; **живой WebView2-проход ещё
-НЕ пройден**) — тело успешного gRPC-ответа сохраняется в файл через **две** точки входа:
-пункт контекстного меню вьюера ответа «Save response to file…» (в своей
-группе-разделителе прямо под Collapse/Expand all) и хоткей **Ctrl/Cmd+S** (при фокусе в
-ответе; предикат по физической клавише `e.code`, panel-level `onKeyDown` + `preventDefault`
-гасит «save page» WebView2 — НЕ Monaco `addCommand`, он global/last-wins). Сохраняется
-**полный** `outcome.response_json` (pretty, НЕ элидированный текст редактора) в файл
-`response-<localstamp>.json`; затем тост с кнопкой **«Show in folder»** (`revealItemInDir`
-из нового `tauri-plugin-opener`, permission `opener:allow-reveal-item-in-dir`, desktop-only).
-Бэкенд: общий `save_bytes_via_dialog` вынесен в `commands/dialog.rs` + обобщённая IPC-команда
-`file_save_text(text, default_name)` (UTF-8 verbatim, без extension-фильтра — macOS
-`NSSavePanel` иначе лочит расширение); `base64_save*` переиспользуют хелпер. Чистое ядро
-фронта: `responseFileName(now)` + `saveResponseToFile(text)` (общий для меню и хоткея).
-Subagent-driven (9 TDD-задач, 2-стадийное ревью каждой + финальное opus-ревью = READY TO
-MERGE) + 3 live-полировки (своя группа меню по best-practice NN/g; убрана иконка Download из
-шапки; имя файла упрощено до `response+timestamp`). Гейт: vitest **1193** · `tsc -b` ·
-`vite build` · `cargo test --workspace` · bindings no-drift — зелёные. **Урок:** reveal-in-
-folder в Tauri 2 — `tauri-plugin-opener` `revealItemInDir`; контекстное меню группируй по
-категории с дивайдерами (NN/g), а не сваливай в одну группу.
-
 Интеграционная ветка — `main`; фичи ведутся в отдельных worktree-ветках
 (`claude/*`) и вливаются в `main` fast-forward.
 
 ### Завершённые фичи (всё в `archive/`)
 
+- **Сохранение тела ответа в файл** (🎉 DONE 2026-06-30, ff в `main`;
+  `2026-06-30-save-response-to-file*` в `archive/`; живой WebView2-проход не пройден) — тело
+  успешного ответа → файл через пункт меню вьюера «Save response to file…» и хоткей Ctrl/Cmd+S
+  (panel-level `onKeyDown`, НЕ Monaco addCommand); полный `response_json` →
+  `response-<timestamp>.json` + тост «Show in folder» (`tauri-plugin-opener` `revealItemInDir`).
+  Урок: reveal-in-folder — `revealItemInDir`; меню группируй по категории дивайдерами (NN/g).
 - **Командная палитра — прибита к верху (рост только вниз)** (🎉 DONE 2026-06-30, squash+ff в
   `main`; `2026-06-30-command-palette-top-anchored*` в `archive/`) — палитра (`Ctrl/Cmd+K|P`)
   прибита к верху (`top-[12vh] translate-y-0` override через twMerge на call-site
