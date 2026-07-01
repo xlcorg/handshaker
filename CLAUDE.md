@@ -6,7 +6,17 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 
 ## Active work
 
-Активная фича — нет (между фичами).
+Активная фича — **имена полей в теле = proto-имена (snake_case), как в контракте**
+(план `docs/superpowers/plans/2026-07-01-proto-field-names-snake-case.md`, спека рядом в
+`specs/`). Статус: SPEC+PLAN готовы, реализация не начата. Смысл: скелет запроса,
+автокомплит, ghost-хинты и вьюер ответа сейчас показывают camelCase (`taxRegistrationCode`),
+а Contract-таб — snake_case (`tax_registration_code`); приводим всё к snake_case (proto-имена).
+Инвариант — «пишем snake_case, распознаём обе формы» (зеркало проводного proto3-JSON
+десериализатора): чистый хелпер `src/features/bodyview/fieldName.ts`
+(`bodyFieldKey`/`matchesField`/`fieldPresent`) + 2 точки бэка (`skeleton.rs` `json_name()→name()`,
+`tonic_impl.rs` `use_proto_field_name(true)`) + 3 фронт-правки (`completion.ts`, `ghost.ts`,
+`validate.ts`). Легаси camelCase-тела шлются как раньше (десериализатор принимает оба) и не
+дают ложных unknown/дублей. IPC/bindings/Contract-таб не тронуты. Subagent-driven, TDD (7 задач).
 
 Последняя влитая — **Умное авто-переименование сохранённого запроса при смене метода**
 (🎉 DONE 2026-06-30, rebase+ff в `main` `08e1ed3`; план+спека
