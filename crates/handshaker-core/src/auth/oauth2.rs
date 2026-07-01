@@ -251,6 +251,36 @@ impl Default for Oauth2TokenProvider {
     }
 }
 
+/// Seam: materialize an OAuth2 header from an already-resolved config. Two adapters:
+/// the real cached provider and a test fake (oauth resolve tests run without network).
+#[async_trait::async_trait]
+pub trait TokenSource: Send + Sync {
+    async fn header_for(&self, cfg: &OAuth2ClientCredentialsConfig) -> Result<AuthCredentials, CoreError>;
+    fn invalidate(&self, cfg: &OAuth2ClientCredentialsConfig);
+}
+
+#[async_trait::async_trait]
+impl TokenSource for Oauth2TokenProvider {
+    async fn header_for(&self, cfg: &OAuth2ClientCredentialsConfig) -> Result<AuthCredentials, CoreError> {
+        Oauth2TokenProvider::header_for(self, cfg).await
+    }
+    fn invalidate(&self, cfg: &OAuth2ClientCredentialsConfig) {
+        Oauth2TokenProvider::invalidate(self, cfg);
+    }
+}
+
+/// A fixed-header token source — for tests and any caller that already holds a token.
+pub struct StaticTokenSource {
+    pub header: AuthCredentials,
+}
+#[async_trait::async_trait]
+impl TokenSource for StaticTokenSource {
+    async fn header_for(&self, _cfg: &OAuth2ClientCredentialsConfig) -> Result<AuthCredentials, CoreError> {
+        Ok(self.header.clone())
+    }
+    fn invalidate(&self, _cfg: &OAuth2ClientCredentialsConfig) {}
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -477,5 +507,17 @@ mod tests {
         let cfg = cfg_at(format!("{}/token", server.uri()));
         let resp = provider.force_fetch(&cfg).await.unwrap();
         assert_eq!(resp.expires_in_secs, u32::MAX as u64);
+    }
+
+    #[tokio::test]
+    async fn provider_satisfies_token_source_trait() {
+        let provider = Oauth2TokenProvider::new();
+        let c = cfg();
+        provider.seed_for_test(&c, "abc", Duration::from_secs(600));
+        let src: &dyn TokenSource = &provider;
+        let creds = src.header_for(&c).await.unwrap();
+        assert_eq!(creds.header_value, "Bearer abc");
+        src.invalidate(&c);
+        assert!(!provider.has_cached_for_test(&c));
     }
 }

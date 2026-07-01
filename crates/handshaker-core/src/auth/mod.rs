@@ -16,6 +16,8 @@ use crate::error::CoreError;
 
 pub mod oauth2;
 
+pub use oauth2::{StaticTokenSource, TokenSource};
+
 /// Whether an auth config scoped to `environments` is active under `active_env`.
 /// Empty list ⇒ always active. Otherwise the active env name must be listed
 /// ("No environment" ⇒ `None` ⇒ not listed ⇒ inactive).
