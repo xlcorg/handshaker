@@ -3,6 +3,7 @@ import type * as Monaco from "monaco-editor";
 import { scalarWktShape } from "@/lib/wellKnown";
 import { filterCandidates, openVarToken } from "@/features/vars/varContext";
 import type { VarCandidate } from "@/features/vars/candidates";
+import { bodyFieldKey, matchesField, fieldPresent } from "./fieldName";
 
 // ---------------------------------------------------------------------------
 // Cursor context — a schema-blind scanner over the text before the cursor.
@@ -217,7 +218,7 @@ export function descendSchema(schema: MessageSchemaIpc, path: string[]): Descent
 
   let i = 0;
   while (i < path.length) {
-    const field = node.fields.find((fl) => fl.json_name === path[i]);
+    const field = node.fields.find((fl) => matchesField(fl, path[i]));
     if (!field) return null;
     if (field.value_kind === "map") {
       if (i + 1 >= path.length) return { kind: "map", field };
@@ -310,18 +311,18 @@ export function buildKeySuggestions(
   // oneof are invalid protobuf JSON.
   const takenOneofs = new Set<string>();
   for (const fl of d.node.fields) {
-    if (fl.oneof_group && presentKeys.has(fl.json_name)) takenOneofs.add(fl.oneof_group);
+    if (fl.oneof_group && fieldPresent(fl, presentKeys)) takenOneofs.add(fl.oneof_group);
   }
   return d.node.fields
     .filter(
       (field) =>
-        !presentKeys.has(field.json_name) &&
+        !fieldPresent(field, presentKeys) &&
         (!field.oneof_group || !takenOneofs.has(field.oneof_group)),
     )
     .map((field, i) => ({
-      label: field.json_name,
+      label: bodyFieldKey(field),
       detail: field.type_label,
-      insertText: `"${field.json_name}": ${scaffold(field)}`,
+      insertText: `"${bodyFieldKey(field)}": ${scaffold(field)}`,
       kind: keyKind(field),
       isSnippet: true,
       // A scalar WKT inserts a complete scalar — no nested level to re-trigger into.
@@ -340,7 +341,8 @@ export function buildValueSuggestions(schema: MessageSchemaIpc, ctx: CompletionC
   if (d.kind === "map") {
     field = d.field; // value type of the map
   } else {
-    field = d.node.fields.find((fl) => fl.json_name === ctx.valueField);
+    const vf = ctx.valueField;
+    field = vf === undefined ? undefined : d.node.fields.find((fl) => matchesField(fl, vf));
   }
   if (!field) return [];
 

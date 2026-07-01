@@ -8,6 +8,7 @@ import {
   insertionColumns,
   separatorAfter,
   buildVarSuggestions,
+  buildKeySuggestions,
 } from "./completion";
 import type { VarCandidate } from "@/features/vars/candidates";
 
@@ -363,5 +364,64 @@ describe("scalar well-known types (atomic in schema, bare scalar on insert)", ()
     expect(s.insertText).toContain("{");
     expect(s.triggerNext).toBe(true);
     expect(descendSchema(WKT, ["addr"])?.kind).toBe("message");
+  });
+});
+
+// A schema whose fields have DIFFERENT proto (snake_case) and JSON (camelCase) names.
+const SNAKE_SCHEMA: MessageSchemaIpc = {
+  root: "t.M",
+  enums: [],
+  messages: [
+    {
+      full_name: "t.M",
+      fields: [
+        {
+          json_name: "taxRegistrationCode", proto_name: "tax_registration_code",
+          type_label: "string", value_kind: "scalar", repeated: false,
+          message_type: null, enum_type: null, oneof_group: null, number: 1, optional: false,
+        },
+        {
+          json_name: "billingAddress", proto_name: "billing_address",
+          type_label: "Address", value_kind: "message", repeated: false,
+          message_type: "t.Address", enum_type: null, oneof_group: null, number: 2, optional: false,
+        },
+      ],
+    },
+    {
+      full_name: "t.Address",
+      fields: [
+        {
+          json_name: "postalCode", proto_name: "postal_code",
+          type_label: "string", value_kind: "scalar", repeated: false,
+          message_type: null, enum_type: null, oneof_group: null, number: 1, optional: false,
+        },
+      ],
+    },
+  ],
+};
+
+describe("proto snake_case field names", () => {
+  it("inserts the snake_case (proto) name, not camelCase", () => {
+    const s = computeSuggestions(SNAKE_SCHEMA, "{\n  ");
+    const tax = s.find((x) => x.label === "tax_registration_code");
+    expect(tax).toBeDefined();
+    expect(tax!.insertText).toBe('"tax_registration_code": "$0"');
+    expect(s.map((x) => x.label)).not.toContain("taxRegistrationCode");
+  });
+
+  it("descendSchema resolves a path segment given in EITHER name form", () => {
+    const viaSnake = descendSchema(SNAKE_SCHEMA, ["billing_address"]);
+    const viaCamel = descendSchema(SNAKE_SCHEMA, ["billingAddress"]);
+    expect(viaCamel).toEqual(viaSnake);
+    expect(viaCamel?.kind).toBe("message");
+    // Nested key completion works through the legacy camelCase path.
+    const nested = buildKeySuggestions(SNAKE_SCHEMA, { path: ["billingAddress"], where: "key" });
+    expect(nested.map((x) => x.label)).toContain("postal_code");
+  });
+
+  it("does not re-offer a field already present under its camelCase form", () => {
+    const present = new Set(["taxRegistrationCode"]);
+    const s = buildKeySuggestions(SNAKE_SCHEMA, { path: [], where: "key" }, present);
+    expect(s.map((x) => x.label)).not.toContain("tax_registration_code");
   });
 });
