@@ -96,6 +96,10 @@ pub struct EffectiveRequest {
     pub body_json: String,
     pub metadata: HashMap<String, String>,
     pub auth: Option<AuthCredentials>,
+    /// The resolved OAuth2 config whose token materialized `auth`, if any. The Send
+    /// command uses it to invalidate the token cache on a 16 UNAUTHENTICATED. `None`
+    /// for None/EnvVar auth.
+    pub invalidate_oauth: Option<crate::auth::OAuth2ClientCredentialsConfig>,
 }
 
 impl Item {

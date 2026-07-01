@@ -1,7 +1,7 @@
 //! Auth-resolution IPC commands. `None`/`EnvVar` resolve synchronously in core;
 //! `OAuth2` routes through the session token provider (`AppState::oauth2_provider`).
 
-use handshaker_core::auth::{resolve_auth, SavedAuthConfig};
+use handshaker_core::auth::{materialize_env_var, SavedAuthConfig};
 use tauri::State;
 
 use crate::ipc::auth::{AuthCredentialsIpc, OAuth2TokenInfoIpc};
@@ -20,7 +20,8 @@ impl AppState {
                 let creds = self.oauth2_provider.header_for(&c).await?;
                 Ok(Some(AuthCredentialsIpc::from_core(creds)))
             }
-            other => Ok(resolve_auth(&other)?.map(AuthCredentialsIpc::from_core)),
+            SavedAuthConfig::None => Ok(None),
+            SavedAuthConfig::EnvVar(c) => Ok(Some(AuthCredentialsIpc::from_core(materialize_env_var(&c)?))),
         }
     }
 

@@ -3,10 +3,11 @@
 //! Secret handling differs per auth kind: an `EnvVar` config names an OS
 //! environment variable (read at resolve time, never persisted as plaintext —
 //! master §4 line 143), whereas OAuth2 client-credentials fields (including
-//! `client_secret`) are `{{var}}` templates resolved by the frontend before
-//! reaching the async token provider. Sync `resolve_auth` handles `None`/`EnvVar`;
-//! its OAuth2 arm returns `CoreError::NotImplemented` (the live path is
-//! `oauth2::Oauth2TokenProvider`).
+//! `client_secret`) are `{{var}}` templates resolved in core before reaching
+//! the async token provider (see `collections::resolve::resolve_request`).
+//! `materialize_env_var` handles the `EnvVar` case synchronously; OAuth2
+//! materializes through the async `TokenSource` seam — there is no sync
+//! `resolve_auth` for it.
 
 use std::collections::HashMap;
 
@@ -122,27 +123,14 @@ impl AuthByEnv {
     }
 }
 
-/// Resolve a single `SavedAuthConfig` to concrete credentials.
-/// - `None` → `Ok(None)` (unauthenticated).
-/// - `EnvVar` → reads `std::env`; missing var → `CoreError::Auth`.
-/// - `OAuth2ClientCredentials` → `CoreError::NotImplemented` (deferred).
-pub fn resolve_auth(config: &SavedAuthConfig) -> Result<Option<AuthCredentials>, CoreError> {
-    match config {
-        SavedAuthConfig::None => Ok(None),
-        SavedAuthConfig::EnvVar(c) => {
-            let secret = std::env::var(&c.env_var)
-                .map_err(|_| CoreError::Auth(format!("env var `{}` not set", c.env_var)))?;
-            Ok(Some(AuthCredentials {
-                header_name: c.header_name.clone(),
-                header_value: format!("{}{}", c.prefix, secret),
-            }))
-        }
-        SavedAuthConfig::OAuth2ClientCredentials(_) => {
-            // Sync resolution is not supported; the live path goes through
-            // `auth::oauth2::Oauth2TokenProvider` (async) via the IPC command.
-            Err(CoreError::NotImplemented("oauth2 token fetch".into()))
-        }
-    }
+/// Read the secret named by `cfg.env_var` from the OS env and build `prefix + secret`.
+pub fn materialize_env_var(cfg: &EnvVarAuthConfig) -> Result<AuthCredentials, CoreError> {
+    let secret = std::env::var(&cfg.env_var)
+        .map_err(|_| CoreError::Auth(format!("env var `{}` not set", cfg.env_var)))?;
+    Ok(AuthCredentials {
+        header_name: cfg.header_name.clone(),
+        header_value: format!("{}{}", cfg.prefix, secret),
+    })
 }
 
 #[cfg(test)]
@@ -150,22 +138,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn none_resolves_to_no_credentials() {
-        assert_eq!(resolve_auth(&SavedAuthConfig::None).unwrap(), None);
-    }
-
-    #[test]
     fn env_var_reads_secret_and_applies_prefix() {
         // Unique var name to avoid cross-test contamination.
         let var = "HANDSHAKER_TEST_AUTH_TASK3";
         std::env::set_var(var, "s3cr3t");
-        let cfg = SavedAuthConfig::EnvVar(EnvVarAuthConfig {
+        let cfg = EnvVarAuthConfig {
             env_var: var.to_string(),
             header_name: "authorization".to_string(),
             prefix: "Bearer ".to_string(),
             environments: vec![],
-        });
-        let creds = resolve_auth(&cfg).unwrap().unwrap();
+        };
+        let creds = materialize_env_var(&cfg).unwrap();
         assert_eq!(creds.header_name, "authorization");
         assert_eq!(creds.header_value, "Bearer s3cr3t");
         std::env::remove_var(var);
@@ -173,30 +156,16 @@ mod tests {
 
     #[test]
     fn env_var_missing_is_auth_error() {
-        let cfg = SavedAuthConfig::EnvVar(EnvVarAuthConfig {
+        let cfg = EnvVarAuthConfig {
             env_var: "HANDSHAKER_DEFINITELY_UNSET_VAR_XYZ".to_string(),
             header_name: "authorization".to_string(),
             prefix: "Bearer ".to_string(),
             environments: vec![],
-        });
-        match resolve_auth(&cfg).unwrap_err() {
+        };
+        match materialize_env_var(&cfg).unwrap_err() {
             CoreError::Auth(m) => assert!(m.contains("not set")),
             other => panic!("expected Auth, got {other:?}"),
         }
-    }
-
-    #[test]
-    fn oauth2_is_not_implemented() {
-        let cfg = SavedAuthConfig::OAuth2ClientCredentials(OAuth2ClientCredentialsConfig {
-            token_url: "https://idp/token".into(),
-            client_id: "cid".into(),
-            client_secret: "SECRET".into(),
-            scopes: vec![],
-            header_name: "authorization".into(),
-            prefix: "Bearer ".into(),
-            environments: vec![],
-        });
-        assert!(matches!(resolve_auth(&cfg).unwrap_err(), CoreError::NotImplemented(_)));
     }
 
     #[test]
