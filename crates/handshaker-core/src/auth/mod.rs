@@ -23,6 +23,28 @@ pub fn auth_active_for_env(environments: &[String], active_env: Option<&str>) ->
     environments.is_empty() || active_env.is_some_and(|e| environments.iter().any(|x| x == e))
 }
 
+/// Pure pick: nearest active non-`None` config wins along request → collection.
+/// A config scoped to environments not including `active_env` is skipped (treated
+/// as absent). Returns the winning config by reference, or `None` (unauthenticated).
+/// This is the single home of the auth-pick rule — UI asks via IPC, never re-derives.
+pub fn pick_auth_config<'a>(
+    request_auth: &'a SavedAuthConfig,
+    collection_auth: Option<&'a SavedAuthConfig>,
+    active_env: Option<&str>,
+) -> Option<&'a SavedAuthConfig> {
+    for cfg in [Some(request_auth), collection_auth].into_iter().flatten() {
+        let envs: &[String] = match cfg {
+            SavedAuthConfig::None => continue,
+            SavedAuthConfig::EnvVar(c) => &c.environments,
+            SavedAuthConfig::OAuth2ClientCredentials(c) => &c.environments,
+        };
+        if auth_active_for_env(envs, active_env) {
+            return Some(cfg);
+        }
+    }
+    None
+}
+
 fn default_auth_header_name() -> String {
     "authorization".to_string()
 }
@@ -231,5 +253,49 @@ mod tests {
         assert!(auth_active_for_env(&prod, Some("prod")));
         assert!(!auth_active_for_env(&prod, Some("dev")));
         assert!(!auth_active_for_env(&prod, None)); // "No environment"
+    }
+
+    #[test]
+    fn pick_prefers_request_over_collection() {
+        let req = SavedAuthConfig::EnvVar(EnvVarAuthConfig {
+            env_var: "R".into(), header_name: "authorization".into(),
+            prefix: "Bearer ".into(), environments: vec![],
+        });
+        let coll = SavedAuthConfig::EnvVar(EnvVarAuthConfig {
+            env_var: "C".into(), header_name: "authorization".into(),
+            prefix: "Bearer ".into(), environments: vec![],
+        });
+        let picked = pick_auth_config(&req, Some(&coll), Some("prod")).unwrap();
+        match picked {
+            SavedAuthConfig::EnvVar(c) => assert_eq!(c.env_var, "R"),
+            other => panic!("expected request env_var, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn pick_falls_back_to_collection_when_request_none() {
+        let coll = SavedAuthConfig::EnvVar(EnvVarAuthConfig {
+            env_var: "C".into(), header_name: "authorization".into(),
+            prefix: "Bearer ".into(), environments: vec![],
+        });
+        let picked = pick_auth_config(&SavedAuthConfig::None, Some(&coll), None).unwrap();
+        assert!(matches!(picked, SavedAuthConfig::EnvVar(c) if c.env_var == "C"));
+    }
+
+    #[test]
+    fn pick_gates_scoped_config_out_of_other_env() {
+        let coll = SavedAuthConfig::EnvVar(EnvVarAuthConfig {
+            env_var: "C".into(), header_name: "authorization".into(),
+            prefix: "Bearer ".into(), environments: vec!["prod".into()],
+        });
+        assert!(pick_auth_config(&SavedAuthConfig::None, Some(&coll), Some("dev")).is_none());
+        assert!(pick_auth_config(&SavedAuthConfig::None, Some(&coll), None).is_none()); // "No environment"
+        assert!(pick_auth_config(&SavedAuthConfig::None, Some(&coll), Some("prod")).is_some());
+    }
+
+    #[test]
+    fn pick_none_everywhere_is_none() {
+        assert!(pick_auth_config(&SavedAuthConfig::None, Some(&SavedAuthConfig::None), Some("prod")).is_none());
+        assert!(pick_auth_config(&SavedAuthConfig::None, None, Some("prod")).is_none());
     }
 }
