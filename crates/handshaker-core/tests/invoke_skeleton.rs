@@ -22,7 +22,7 @@ async fn skeleton_for_echo_with_deps() {
     // PingX { h: Header { trace_id }, id }
     assert_eq!(v["id"], serde_json::json!(""));
     assert!(v["h"].is_object(), "h must be nested Header object");
-    assert_eq!(v["h"]["traceId"], serde_json::json!(""));
+    assert_eq!(v["h"]["trace_id"], serde_json::json!(""));
 }
 
 #[tokio::test]
