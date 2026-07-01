@@ -41,7 +41,7 @@ fn build_message(desc: &MessageDescriptor, depth: usize, visiting: &mut HashSet<
         } else {
             default_for_kind(&field.kind(), depth, visiting)
         };
-        obj.insert(field.json_name().to_string(), value);
+        obj.insert(field.name().to_string(), value);
     }
     visiting.remove(&name);
     Value::Object(obj)
@@ -385,6 +385,34 @@ mod tests {
             result.is_ok(),
             "Int64Value skeleton `{json}` must deserialize, got: {:?}",
             result.err()
+        );
+    }
+
+    #[test]
+    fn skeleton_uses_proto_snake_case_field_names() {
+        // A multi-word proto field: json_name() would camelCase it to
+        // `taxRegistrationCode`, but the skeleton must mirror the .proto (and the
+        // Contract tab) with the snake_case proto name.
+        let m = msg("M", vec![scalar_field("tax_registration_code", 1, Ty::String)]);
+        let pool = pool_with(FileDescriptorSet {
+            file: vec![FileDescriptorProto {
+                name: Some("t.proto".into()),
+                package: Some("t".into()),
+                syntax: Some("proto3".into()),
+                message_type: vec![m],
+                ..Default::default()
+            }],
+        });
+        let desc = pool.get_message_by_name("t.M").unwrap();
+        let v = build_default_json_skeleton(&desc);
+        let obj = v.as_object().expect("object");
+        assert!(
+            obj.contains_key("tax_registration_code"),
+            "snake_case proto key expected: {v}"
+        );
+        assert!(
+            !obj.contains_key("taxRegistrationCode"),
+            "camelCase key must be gone: {v}"
         );
     }
 }
