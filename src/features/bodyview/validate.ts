@@ -2,6 +2,7 @@ import type { MessageSchemaIpc } from "@/ipc/bindings";
 import { parseWithSpans, repairTrailingCommas } from "./parse";
 import { descendSchema } from "./completion";
 import type { JsonNode, JsonTree } from "./jsonTree";
+import { matchesField } from "./fieldName";
 
 /** Object-key segments from root *down to but not including* this node's own key —
  *  i.e. the path its enclosing context sits at, as `descendSchema` expects.
@@ -59,13 +60,14 @@ export function computeUnknownFieldMarkers(
   for (const id of parsed.tree.order) {
     const node = parsed.tree.nodes[id];
     if (node.key === null) continue; // root or array element
+    const key = node.key;
     const d = descendSchema(schema, pathTo(parsed.tree, node));
     if (!d || d.kind === "map") continue; // unknown context, or arbitrary map keys
-    if (d.node.fields.some((fl) => fl.json_name === node.key)) continue;
+    if (d.node.fields.some((fl) => matchesField(fl, key))) continue;
     const span = spanByNode.get(id);
     if (!span) continue;
-    const range = keyRangeBefore(text, span.start, node.key) ?? { start: span.start, end: span.end };
-    out.push({ ...range, message: `"${node.key}" is not a field of ${d.node.full_name}` });
+    const range = keyRangeBefore(text, span.start, key) ?? { start: span.start, end: span.end };
+    out.push({ ...range, message: `"${key}" is not a field of ${d.node.full_name}` });
   }
   return out;
 }

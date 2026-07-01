@@ -81,4 +81,25 @@ describe("computeUnknownFieldMarkers", () => {
     const ms = computeUnknownFieldMarkers('{ "bogus": 1, }', SCHEMA)!;
     expect(ms).toHaveLength(1);
   });
+
+  it("recognizes a known field addressed by its camelCase (proto3-JSON) name", () => {
+    const schema: MessageSchemaIpc = {
+      root: "t.Req",
+      enums: [],
+      messages: [
+        {
+          full_name: "t.Req",
+          fields: [f("taxRegistrationCode", "string", "scalar", { proto_name: "tax_registration_code" })],
+        },
+      ],
+    };
+    // Legacy body uses camelCase → must NOT be flagged as unknown.
+    expect(computeUnknownFieldMarkers('{ "taxRegistrationCode": "x" }', schema)).toEqual([]);
+    // The snake_case proto form is also recognized.
+    expect(computeUnknownFieldMarkers('{ "tax_registration_code": "x" }', schema)).toEqual([]);
+    // A genuinely unknown key still flags.
+    const ms = computeUnknownFieldMarkers('{ "bogus": 1 }', schema)!;
+    expect(ms).toHaveLength(1);
+    expect(ms[0].message).toBe('"bogus" is not a field of t.Req');
+  });
 });
