@@ -175,3 +175,27 @@ describe("GhostZone", () => {
     expect(node.innerHTML).not.toContain("<b>");
   });
 });
+
+describe("computeGhostLines — proto snake_case names", () => {
+  const SNAKE: MessageSchemaIpc = {
+    root: "t.Req",
+    enums: [],
+    messages: [
+      {
+        full_name: "t.Req",
+        fields: [f("taxRegistrationCode", "string", "scalar", { proto_name: "tax_registration_code" })],
+      },
+    ],
+  };
+
+  it("renders the hint line with the snake_case proto name", () => {
+    expect(computeGhostLines("{\n}", SNAKE)).toEqual({
+      afterLine: 1,
+      lines: ['  "tax_registration_code": string'],
+    });
+  });
+
+  it("treats a present camelCase key as satisfying the field (no duplicate hint)", () => {
+    expect(computeGhostLines('{\n  "taxRegistrationCode": "x"\n}', SNAKE)).toBeNull();
+  });
+});

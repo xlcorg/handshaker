@@ -1,10 +1,11 @@
 import type { MessageSchemaIpc } from "@/ipc/bindings";
+import { bodyFieldKey, fieldPresent } from "./fieldName";
 import { parseWithSpans, repairTrailingCommas } from "./parse";
 
 export interface GhostBlock {
   /** 1-based line the zone is inserted AFTER (the last top-level entry / the `{`). */
   afterLine: number;
-  /** Rendered ghost lines, already indented: `  "jsonName": TypeLabel`. */
+  /** Rendered ghost lines, already indented: `  "protoName": TypeLabel`. */
   lines: string[];
 }
 
@@ -26,8 +27,12 @@ export function computeGhostLines(text: string, schema: MessageSchemaIpc): Ghost
   const rootMsg = schema.messages.find((m) => m.full_name === schema.root);
   if (!rootMsg) return null;
 
-  const present = new Set(root.childIds.map((id) => parsed.tree.nodes[id]?.key));
-  const missing = rootMsg.fields.filter((fl) => !present.has(fl.json_name));
+  const present = new Set(
+    root.childIds
+      .map((id) => parsed.tree.nodes[id]?.key)
+      .filter((k): k is string => typeof k === "string"),
+  );
+  const missing = rootMsg.fields.filter((fl) => !fieldPresent(fl, present));
   if (missing.length === 0) return null;
 
   const spanByNode = new Map(parsed.spans.map((s) => [s.nodeId, s]));
@@ -51,7 +56,7 @@ export function computeGhostLines(text: string, schema: MessageSchemaIpc): Ghost
   // itself between the user's typing position and the code above it.
   return {
     afterLine: Math.max(contentLine, closeLine - 1),
-    lines: missing.map((fl) => `  "${fl.json_name}": ${fl.type_label}`),
+    lines: missing.map((fl) => `  "${bodyFieldKey(fl)}": ${fl.type_label}`),
   };
 }
 
