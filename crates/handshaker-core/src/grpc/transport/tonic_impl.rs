@@ -2,7 +2,7 @@
 
 use crate::error::CoreError;
 use crate::grpc::connection::GrpcTarget;
-use crate::grpc::invoke::extract_status_details;
+use crate::grpc::invoke::{extract_status_details, CallOptions};
 use crate::grpc::transport::{DynamicCodec, GrpcTransport, TonicChannel};
 use crate::grpc::UnaryOutcome;
 use prost_reflect::DynamicMessage;
@@ -52,11 +52,11 @@ impl GrpcTransport for TonicTransport {
         request_codec: DynamicCodec,
         request: DynamicMessage,
         metadata: HashMap<String, String>,
-        max_message_bytes: usize,
+        opts: CallOptions,
     ) -> Result<UnaryOutcome, CoreError> {
         let mut grpc = tonic::client::Grpc::new(channel)
-            .max_decoding_message_size(max_message_bytes)
-            .max_encoding_message_size(max_message_bytes);
+            .max_decoding_message_size(opts.max_message_bytes)
+            .max_encoding_message_size(opts.max_message_bytes);
         grpc.ready()
             .await
             .map_err(|e| CoreError::Transport(format!("channel not ready: {}", error_chain(&e))))?;
@@ -230,7 +230,7 @@ mod tests {
                 codec,
                 request,
                 HashMap::new(),
-                16 * 1024 * 1024,
+                CallOptions { max_message_bytes: 16 * 1024 * 1024 },
             )
             .await
             .expect("dead channel returns Ok(UnaryOutcome), not Err");

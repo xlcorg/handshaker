@@ -8,6 +8,7 @@ pub mod codec;
 
 use crate::error::CoreError;
 use crate::grpc::connection::GrpcTarget;
+use crate::grpc::invoke::CallOptions;
 
 /// Re-export so callers don't reach into `tonic::transport` directly.
 pub type TonicChannel = tonic::transport::Channel;
@@ -24,7 +25,7 @@ pub trait GrpcTransport: Send + Sync {
     /// - `request_codec` — `DynamicCodec` with both descriptors.
     /// - `request` — already-parsed DynamicMessage (JSON parsing is invoke_unary's job).
     /// - `metadata` — ASCII keys; binary (`-bin` suffix) is rejected as `EncodeRequest`.
-    /// - `max_message_bytes` — max decode/encode message size in bytes (usize::MAX = unlimited).
+    /// - `opts` — per-call invoke options (e.g. max decode/encode message size).
     ///
     /// Returns `UnaryOutcome` for ALL gRPC responses, including non-OK status.
     /// `Err(CoreError)` only for client-side failures (channel ready fail, encode/decode).
@@ -35,7 +36,7 @@ pub trait GrpcTransport: Send + Sync {
         request_codec: DynamicCodec,
         request: prost_reflect::DynamicMessage,
         metadata: std::collections::HashMap<String, String>,
-        max_message_bytes: usize,
+        opts: CallOptions,
     ) -> Result<crate::grpc::UnaryOutcome, CoreError>;
 }
 
@@ -56,8 +57,8 @@ mod tests {
         request_codec: crate::grpc::transport::DynamicCodec,
         request: prost_reflect::DynamicMessage,
         metadata: std::collections::HashMap<String, String>,
-        max_message_bytes: usize,
+        opts: CallOptions,
     ) -> Result<crate::grpc::UnaryOutcome, crate::error::CoreError> {
-        t.unary_dynamic(channel, method_path, request_codec, request, metadata, max_message_bytes).await
+        t.unary_dynamic(channel, method_path, request_codec, request, metadata, opts).await
     }
 }

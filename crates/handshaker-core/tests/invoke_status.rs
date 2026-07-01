@@ -2,7 +2,7 @@ mod common;
 
 use handshaker_core::grpc::connection::GrpcTarget;
 use handshaker_core::grpc::contract::activate;
-use handshaker_core::grpc::invoke::invoke_unary;
+use handshaker_core::grpc::invoke::{invoke_unary, CallOptions};
 use handshaker_core::grpc::transport::TonicTransport;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -26,7 +26,7 @@ async fn server_not_found_appears_as_status_code_5() {
         "Send",
         r#"{"id":"x"}"#,
         HashMap::new(),
-        usize::MAX,
+        CallOptions { max_message_bytes: usize::MAX },
     )
     .await
     .expect("invoke (status != OK is Ok, not Err)");

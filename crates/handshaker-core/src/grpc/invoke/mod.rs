@@ -24,6 +24,14 @@ pub use status_details::{
     StatusDetail,
 };
 
+/// Per-call invoke options — one growing value threaded UI→transport instead of
+/// positional params. `request_id` is NOT here (cancel key, separate lifecycle).
+#[derive(Debug, Clone, Copy)]
+pub struct CallOptions {
+    /// Max decode/encode message size in bytes (`usize::MAX` = unlimited).
+    pub max_message_bytes: usize,
+}
+
 /// Outcome of one unary call. `status_code == 0` means success (`response_json` is `Some`).
 /// Any other code is a normal non-OK gRPC status (`response_json` is `None`); in that case
 /// `status_message` carries the server's raw status message (e.g. `"user does not exist"`);
@@ -98,7 +106,7 @@ pub async fn invoke_unary(
     method: &str,
     request_json: &str,
     metadata: HashMap<String, String>,
-    max_message_bytes: usize,
+    opts: CallOptions,
 ) -> Result<UnaryOutcome, CoreError> {
     let svc = connection
         .pool
@@ -141,7 +149,7 @@ pub async fn invoke_unary(
 
     connection
         .transport
-        .unary_dynamic(connection.channel.clone(), path, codec, request_msg, metadata, max_message_bytes)
+        .unary_dynamic(connection.channel.clone(), path, codec, request_msg, metadata, opts)
         .await
 }
 
@@ -241,11 +249,11 @@ mod tests {
             _codec: DynamicCodec,
             _request: DynamicMessage,
             metadata: HashMap<String, String>,
-            max_message_bytes: usize,
+            opts: CallOptions,
         ) -> Result<UnaryOutcome, CoreError> {
             *self.last_path.lock().await = Some(method_path);
             *self.last_metadata.lock().await = Some(metadata);
-            *self.last_max_bytes.lock().await = Some(max_message_bytes);
+            *self.last_max_bytes.lock().await = Some(opts.max_message_bytes);
             self.outcome.lock().await.take().expect("outcome set")
         }
     }
@@ -283,7 +291,7 @@ mod tests {
     async fn unknown_service_returns_service_not_found() {
         let t = FakeTransport::with_outcome(Err(CoreError::NotImplemented("unreached".into())));
         let conn = fake_connection(t);
-        let err = invoke_unary(&conn, "no.Such", "Send", "{}", HashMap::new(), usize::MAX)
+        let err = invoke_unary(&conn, "no.Such", "Send", "{}", HashMap::new(), CallOptions { max_message_bytes: usize::MAX })
             .await
             .unwrap_err();
         assert!(
@@ -296,7 +304,7 @@ mod tests {
     async fn unknown_method_returns_method_not_found() {
         let t = FakeTransport::with_outcome(Err(CoreError::NotImplemented("unreached".into())));
         let conn = fake_connection(t);
-        let err = invoke_unary(&conn, "test.Echo", "Nope", "{}", HashMap::new(), usize::MAX)
+        let err = invoke_unary(&conn, "test.Echo", "Nope", "{}", HashMap::new(), CallOptions { max_message_bytes: usize::MAX })
             .await
             .unwrap_err();
         assert!(
@@ -310,7 +318,7 @@ mod tests {
     async fn invalid_json_returns_encode_request() {
         let t = FakeTransport::with_outcome(Err(CoreError::NotImplemented("unreached".into())));
         let conn = fake_connection(t);
-        let err = invoke_unary(&conn, "test.Echo", "Send", "not json {", HashMap::new(), usize::MAX)
+        let err = invoke_unary(&conn, "test.Echo", "Send", "not json {", HashMap::new(), CallOptions { max_message_bytes: usize::MAX })
             .await
             .unwrap_err();
         assert!(matches!(err, CoreError::EncodeRequest(_)), "got {err:?}");
@@ -333,7 +341,7 @@ mod tests {
         let mut metadata = HashMap::new();
         metadata.insert("x-request-id".into(), "abc".into());
 
-        let outcome = invoke_unary(&conn, "test.Echo", "Send", r#"{"id":"hi"}"#, metadata, usize::MAX)
+        let outcome = invoke_unary(&conn, "test.Echo", "Send", r#"{"id":"hi"}"#, metadata, CallOptions { max_message_bytes: usize::MAX })
             .await
             .expect("invoke");
         assert_eq!(outcome.status_code, 0);
@@ -372,7 +380,7 @@ mod tests {
         let captured = t.clone();
         let conn = fake_connection(t);
 
-        invoke_unary(&conn, "test.Echo", "Send", r#"{"id":"x"}"#, HashMap::new(), 8 * 1024 * 1024)
+        invoke_unary(&conn, "test.Echo", "Send", r#"{"id":"x"}"#, HashMap::new(), CallOptions { max_message_bytes: 8 * 1024 * 1024 })
             .await
             .expect("invoke");
 
