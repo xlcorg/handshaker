@@ -26,6 +26,11 @@ pub enum CoreError {
     UnresolvedVariable { name: String },
     #[error("variable cycle: chain {chain:?}")]
     VariableCycle { chain: Vec<String> },
+    /// Resolve pipeline gathered every unresolved `{{var}}` at once (deduped, encounter
+    /// order) plus a cycle chain if one was detected. Unlike `UnresolvedVariable`, this
+    /// is the whole diagnosis, not the first failure.
+    #[error("resolve failed: unresolved {unresolved:?}, cycle {cycle:?}")]
+    ResolveFailed { unresolved: Vec<String>, cycle: Option<Vec<String>> },
     #[error("transport error: {0}")]
     Transport(String),
     #[error("auth error: {0}")]

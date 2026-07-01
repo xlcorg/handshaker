@@ -5,19 +5,20 @@
 
 use std::collections::HashMap;
 
-use crate::auth::{auth_active_for_env, resolve_auth, SavedAuthConfig};
+use crate::auth::{pick_auth_config, resolve_auth};
 use crate::env::Environment;
 use crate::error::CoreError;
 use crate::grpc::GrpcTarget;
-use crate::vars::{resolve_string, VariableSet};
+use crate::vars::{resolve_template_with_diagnostics, VariableSet};
 
 use super::{Collection, EffectiveRequest, SavedRequest};
 
-/// Resolve one request. The `Collection` is passed separately; folders carry no
-/// auth, so no folder chain is needed. `active_env` is `None` for "No environment".
+/// Resolve one request. `collection` is `None` for an unbound draft (no collection
+/// vars, no collection auth, TLS defaults `false`/`false`). `active_env` is `None`
+/// for "No environment".
 pub fn resolve_request(
     request: &SavedRequest,
-    collection: &Collection,
+    collection: Option<&Collection>,
     active_env: Option<&Environment>,
 ) -> Result<EffectiveRequest, CoreError> {
     // --- 1. Variables (priority env > collection) ---
@@ -26,27 +27,38 @@ pub fn resolve_request(
     let env_vars: HashMap<String, String> = active_env
         .map(|e| e.variables.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
         .unwrap_or_default();
-    let collection_vars: HashMap<String, String> =
-        collection.variables.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+    let collection_vars: HashMap<String, String> = collection
+        .map(|c| c.variables.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+        .unwrap_or_default();
     let vars = VariableSet { env: &env_vars, collection: &collection_vars };
 
-    let address = resolve_string(&request.address_template, &vars)?;
-    let body_json = resolve_string(&request.body_template, &vars)?;
+    let mut acc = ResolveAcc::default();
+    let address = acc.take(&request.address_template, &vars);
+    let body_json = acc.take(&request.body_template, &vars);
     let mut metadata = HashMap::with_capacity(request.metadata.len());
     for row in &request.metadata {
         if !row.enabled {
             continue; // disabled rows are not sent
         }
         // Keys are literal; only values are templated. Last enabled row wins on dup key.
-        metadata.insert(row.key.clone(), resolve_string(&row.value, &vars)?);
+        metadata.insert(row.key.clone(), acc.take(&row.value, &vars));
+    }
+    if let Some(err) = acc.into_failure() {
+        return Err(err);
     }
 
     // --- 2. TLS ---
-    let tls = request.tls_override.unwrap_or(collection.default_tls);
-    let target = GrpcTarget::new(address, tls, collection.skip_tls_verify)?;
+    let default_tls = collection.map_or(false, |c| c.default_tls);
+    let skip_verify = collection.map_or(false, |c| c.skip_tls_verify);
+    let tls = request.tls_override.unwrap_or(default_tls);
+    let target = GrpcTarget::new(address, tls, skip_verify)?;
 
     // --- 3. Auth (nearest active config: request → collection; folders carry none) ---
-    let auth = resolve_auth_chain(request, collection, active_env.map(|e| e.name.as_str()))?;
+    let collection_auth = collection.map(|c| &c.auth);
+    let auth = match pick_auth_config(&request.auth, collection_auth, active_env.map(|e| e.name.as_str())) {
+        Some(cfg) => resolve_auth(cfg)?, // sync path unchanged in this slice
+        None => None,
+    };
 
     Ok(EffectiveRequest {
         target,
@@ -58,31 +70,40 @@ pub fn resolve_request(
     })
 }
 
-/// Nearest active non-`None` config wins: request first, then collection. A config
-/// scoped to environments that excludes `active_env` is skipped (treated as absent).
-fn resolve_auth_chain(
-    request: &SavedRequest,
-    collection: &Collection,
-    active_env: Option<&str>,
-) -> Result<Option<crate::auth::AuthCredentials>, CoreError> {
-    for cfg in [&request.auth, &collection.auth] {
-        let envs: &[String] = match cfg {
-            SavedAuthConfig::None => continue,
-            SavedAuthConfig::EnvVar(c) => &c.environments,
-            SavedAuthConfig::OAuth2ClientCredentials(c) => &c.environments,
-        };
-        if !auth_active_for_env(envs, active_env) {
-            continue;
+/// Accumulates unresolved vars (deduped, encounter order) + first cycle across fields.
+#[derive(Default)]
+struct ResolveAcc {
+    unresolved: Vec<String>,
+    cycle: Option<Vec<String>>,
+}
+
+impl ResolveAcc {
+    fn take(&mut self, template: &str, vars: &VariableSet<'_>) -> String {
+        let report = resolve_template_with_diagnostics(template, vars);
+        for v in report.unresolved_vars {
+            if !self.unresolved.iter().any(|n| n == &v) {
+                self.unresolved.push(v);
+            }
         }
-        return resolve_auth(cfg);
+        if self.cycle.is_none() {
+            self.cycle = report.cycle_chain;
+        }
+        report.resolved
     }
-    Ok(None)
+
+    fn into_failure(self) -> Option<CoreError> {
+        if self.cycle.is_some() || !self.unresolved.is_empty() {
+            Some(CoreError::ResolveFailed { unresolved: self.unresolved, cycle: self.cycle })
+        } else {
+            None
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::auth::EnvVarAuthConfig;
+    use crate::auth::{EnvVarAuthConfig, SavedAuthConfig};
     use crate::collections::ids::{CollectionId, ItemId};
     use crate::collections::MetadataRow;
     use uuid::Uuid;
@@ -146,7 +167,7 @@ mod tests {
             value: "{{uid}}".into(),
             enabled: true,
         }];
-        let eff = resolve_request(&req, &coll, Some(&active)).unwrap();
+        let eff = resolve_request(&req, Some(&coll), Some(&active)).unwrap();
         assert_eq!(eff.target.address, "api:443"); // env wins
         assert_eq!(eff.body_json, r#"{"id":"cuid"}"#); // collection fills uid
         assert_eq!(eff.metadata.get("x-trace"), Some(&"cuid".to_string()));
@@ -161,24 +182,31 @@ mod tests {
             MetadataRow { key: "on".into(), value: "1".into(), enabled: true },
             MetadataRow { key: "off".into(), value: "2".into(), enabled: false },
         ];
-        let eff = resolve_request(&req, &coll, Some(&active)).unwrap();
+        let eff = resolve_request(&req, Some(&coll), Some(&active)).unwrap();
         assert_eq!(eff.metadata.get("on"), Some(&"1".to_string()));
         assert!(eff.metadata.get("off").is_none());
     }
 
     #[test]
-    fn unresolved_variable_errors() {
-        let coll = base_collection(&[]);
+    fn resolve_failure_reports_all_unresolved_at_once() {
+        let coll = base_collection(&[]); // nothing defined
         let active = env("prod", &[]);
-        let req = base_request(); // {{host}} unresolved
-        match resolve_request(&req, &coll, Some(&active)).unwrap_err() {
-            CoreError::UnresolvedVariable { name } => assert!(name == "host" || name == "uid"),
-            other => panic!("expected UnresolvedVariable, got {other:?}"),
+        let mut req = base_request();
+        req.address_template = "{{host}}".into();
+        req.body_template = r#"{"id":"{{uid}}","x":"{{host}}"}"#.into();
+        req.metadata = vec![MetadataRow { key: "k".into(), value: "{{tok}}".into(), enabled: true }];
+        match resolve_request(&req, Some(&coll), Some(&active)).unwrap_err() {
+            CoreError::ResolveFailed { unresolved, cycle } => {
+                assert_eq!(cycle, None);
+                // deduped, encounter order across address, body, metadata
+                assert_eq!(unresolved, vec!["host".to_string(), "uid".to_string(), "tok".to_string()]);
+            }
+            other => panic!("expected ResolveFailed, got {other:?}"),
         }
     }
 
     #[test]
-    fn variable_cycle_errors() {
+    fn resolve_failure_reports_cycle() {
         let mut coll = base_collection(&[]);
         coll.variables.insert("a".into(), "{{b}}".into());
         coll.variables.insert("b".into(), "{{a}}".into());
@@ -186,10 +214,22 @@ mod tests {
         let mut req = base_request();
         req.address_template = "{{a}}".into();
         req.body_template = "{}".into();
-        assert!(matches!(
-            resolve_request(&req, &coll, Some(&active)).unwrap_err(),
-            CoreError::VariableCycle { .. }
-        ));
+        match resolve_request(&req, Some(&coll), Some(&active)).unwrap_err() {
+            CoreError::ResolveFailed { cycle: Some(chain), .. } => {
+                assert_eq!(chain.first(), chain.last());
+            }
+            other => panic!("expected ResolveFailed cycle, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn builtin_in_body_is_not_unresolved() {
+        let coll = base_collection(&[("host", "h:1")]);
+        let active = env("prod", &[]);
+        let mut req = base_request();
+        req.body_template = r#"{"id":"{{$guid}}"}"#.into();
+        let eff = resolve_request(&req, Some(&coll), Some(&active)).unwrap();
+        assert_eq!(eff.body_json, r#"{"id":"{{$guid}}"}"#); // left literal for send-time expansion
     }
 
     #[test]
@@ -199,7 +239,7 @@ mod tests {
         let active = env("prod", &[]);
         let mut req = base_request();
         req.tls_override = Some(true);
-        let eff = resolve_request(&req, &coll, Some(&active)).unwrap();
+        let eff = resolve_request(&req, Some(&coll), Some(&active)).unwrap();
         assert!(eff.target.tls);
     }
 
@@ -212,7 +252,7 @@ mod tests {
         let mut req = base_request();
         req.auth = env_var_auth(var);
         let active = env("prod", &[]);
-        let eff = resolve_request(&req, &coll, Some(&active)).unwrap();
+        let eff = resolve_request(&req, Some(&coll), Some(&active)).unwrap();
         assert_eq!(eff.auth.unwrap().header_value, "Bearer rtoken");
         std::env::remove_var(var);
     }
@@ -225,7 +265,7 @@ mod tests {
         coll.auth = env_var_auth(var);
         let req = base_request(); // no auth on request → collection's used
         let active = env("prod", &[]);
-        let eff = resolve_request(&req, &coll, Some(&active)).unwrap();
+        let eff = resolve_request(&req, Some(&coll), Some(&active)).unwrap();
         assert_eq!(eff.auth.unwrap().header_value, "Bearer ctoken");
         std::env::remove_var(var);
     }
@@ -235,7 +275,7 @@ mod tests {
         let coll = base_collection(&[("host", "h:1"), ("uid", "u")]);
         let active = env("prod", &[]);
         let req = base_request();
-        let eff = resolve_request(&req, &coll, Some(&active)).unwrap();
+        let eff = resolve_request(&req, Some(&coll), Some(&active)).unwrap();
         assert!(eff.auth.is_none());
     }
 
@@ -244,7 +284,7 @@ mod tests {
         // host comes from collection; no env → env map empty.
         let coll = base_collection(&[("host", "h:1"), ("uid", "u")]);
         let req = base_request();
-        let eff = resolve_request(&req, &coll, None).unwrap();
+        let eff = resolve_request(&req, Some(&coll), None).unwrap();
         assert_eq!(eff.target.address, "h:1");
         assert!(eff.auth.is_none());
     }
@@ -268,10 +308,10 @@ mod tests {
         let prod = env("prod", &[]);
 
         // dev ⇒ gated out ⇒ no auth header.
-        let eff_dev = resolve_request(&request, &collection, Some(&dev)).unwrap();
+        let eff_dev = resolve_request(&request, Some(&collection), Some(&dev)).unwrap();
         assert!(eff_dev.auth.is_none());
         // prod ⇒ active ⇒ header present.
-        let eff_prod = resolve_request(&request, &collection, Some(&prod)).unwrap();
+        let eff_prod = resolve_request(&request, Some(&collection), Some(&prod)).unwrap();
         assert_eq!(eff_prod.auth.unwrap().header_value, "Bearer secret");
 
         std::env::remove_var("HS_TEST_PROD_TOKEN");

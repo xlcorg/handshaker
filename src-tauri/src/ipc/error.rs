@@ -73,6 +73,15 @@ impl From<CoreError> for IpcError {
             CoreError::GrpcStatus { code, message } => IpcError::GrpcStatus { code, message },
             CoreError::NotImplemented(m) => IpcError::NotImplemented { message: m },
             CoreError::Persistence(m) => IpcError::Persistence { message: m },
+            // Temporary: the real `UnresolvedVars` IpcError variant lands in Slice 5
+            // (`src-tauri/src/ipc/error.rs`), once the live Send path routes through
+            // `resolve_request`. For now, map onto the existing shape so the tree builds.
+            CoreError::ResolveFailed { unresolved, cycle } => match cycle {
+                Some(chain) => IpcError::VariableCycle { chain },
+                None => IpcError::UnresolvedVariable {
+                    name: unresolved.into_iter().next().unwrap_or_default(),
+                },
+            },
         }
     }
 }
@@ -104,9 +113,10 @@ mod tests {
             CoreError::GrpcStatus { code: 1, message: "m".into() },
             CoreError::NotImplemented("n".into()),
             CoreError::Persistence("p".into()),
+            CoreError::ResolveFailed { unresolved: vec!["v".into()], cycle: None },
         ];
 
-        assert_eq!(cases.len(), 16, "Update this test when CoreError variants change");
+        assert_eq!(cases.len(), 17, "Update this test when CoreError variants change");
 
         for c in cases {
             // Smoke test: From impl must succeed for every variant. If a future CoreError variant
