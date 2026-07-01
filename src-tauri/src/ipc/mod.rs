@@ -14,6 +14,6 @@ pub mod vars;
 pub use auth::AuthCredentialsIpc;
 pub use catalog::ServiceCatalogIpc;
 pub use error::IpcError;
-pub use invoke::{InvokeOutcomeIpc, InvokeRequest};
+pub use invoke::{CallOptionsIpc, InvokeOutcomeIpc, InvokeRequest};
 pub use schema::{MessageSchemaIpc, MessageSideIpc};
 pub use target::GrpcTargetIpc;

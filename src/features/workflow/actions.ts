@@ -292,6 +292,7 @@ export async function sendStep(
   const requestId = opts?.requestId ?? newId();
   const timeoutMs = opts?.timeoutMs ?? readPrefs().requestTimeoutMs;
   const maxMessageBytes = opts?.maxMessageBytes ?? readPrefs().maxMessageBytes;
+  const callOptions = { timeout_ms: timeoutMs, max_message_bytes: maxMessageBytes };
   try {
     const r = await resolveStepTemplates(step, varsResolverFor(step.collectionId));
     if (!r.ok) return { kind: "unresolved", unresolved: r.unresolved, cycle: r.cycle };
@@ -302,8 +303,7 @@ export async function sendStep(
       { address: r.request.address, tls: step.tls, skip_verify: false },
       { service: step.service, method: step.method, request_json: r.request.requestJson, metadata },
       requestId,
-      timeoutMs,
-      maxMessageBytes,
+      callOptions,
     );
     return { kind: "ok", outcome };
   } catch (e) {

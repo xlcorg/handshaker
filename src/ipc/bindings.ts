@@ -90,9 +90,9 @@ async grpcMessageSchema(target: GrpcTargetIpc, service: string, method: string, 
  * `Err` is only for client-side failures (transport / encode / decode).
  * The descriptor pool is reused from the `ContractCache` when present; only the channel is opened fresh per call.
  */
-async grpcInvokeOneshot(target: GrpcTargetIpc, request: InvokeRequest, requestId: string, timeoutMs: number, maxMessageBytes: number) : Promise<Result<InvokeOutcomeIpc, IpcError>> {
+async grpcInvokeOneshot(target: GrpcTargetIpc, request: InvokeRequest, requestId: string, opts: CallOptionsIpc) : Promise<Result<InvokeOutcomeIpc, IpcError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("grpc_invoke_oneshot", { target, request, requestId, timeoutMs, maxMessageBytes }) };
+    return { status: "ok", data: await TAURI_INVOKE("grpc_invoke_oneshot", { target, request, requestId, opts }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -440,6 +440,11 @@ mime: string | null;
  */
 extension: string | null }
 export type Base64KindIpc = "json" | "text" | "binary"
+/**
+ * Per-call invoke options, as they cross the wire. `request_id` is NOT here — it's a
+ * separate `grpc_invoke_oneshot` param (cancel key, distinct lifecycle from call options).
+ */
+export type CallOptionsIpc = { timeout_ms: number; max_message_bytes: number }
 export type CollectionIpc = { id: string; name: string; items: ItemIpc[]; variables: Partial<{ [key in string]: string }>; auth: SavedAuthConfigIpc; default_tls: boolean; skip_tls_verify: boolean; pinned: boolean; description: string | null; created_at: number; expanded: boolean }
 /**
  * Lightweight list entry (id + name only) for `collection_list`.

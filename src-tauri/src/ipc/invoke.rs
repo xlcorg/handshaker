@@ -18,6 +18,14 @@ pub struct InvokeRequest {
     pub metadata: HashMap<String, String>,
 }
 
+/// Per-call invoke options, as they cross the wire. `request_id` is NOT here — it's a
+/// separate `grpc_invoke_oneshot` param (cancel key, distinct lifecycle from call options).
+#[derive(Debug, Deserialize, Type)]
+pub struct CallOptionsIpc {
+    pub timeout_ms: u32,
+    pub max_message_bytes: u32,
+}
+
 #[derive(Debug, Serialize, Type)]
 pub struct FieldViolationIpc {
     pub field: String,

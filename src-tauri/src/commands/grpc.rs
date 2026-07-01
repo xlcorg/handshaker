@@ -11,15 +11,15 @@ use tokio::sync::Notify;
 
 use handshaker_core::grpc::{
     activate, build_message_schema_from_pool, build_request_skeleton_from_pool, invoke_unary,
-    ContractKey, GrpcTarget, TonicTransport,
+    CallOptions, ContractKey, GrpcTarget, TonicTransport,
 };
 use tauri::{AppHandle, State};
 use tauri_specta::Event;
 
 use crate::commands::events::ContractUpdated;
 use crate::ipc::{
-    GrpcTargetIpc, InvokeOutcomeIpc, InvokeRequest, IpcError, MessageSchemaIpc, MessageSideIpc,
-    ServiceCatalogIpc,
+    CallOptionsIpc, GrpcTargetIpc, InvokeOutcomeIpc, InvokeRequest, IpcError, MessageSchemaIpc,
+    MessageSideIpc, ServiceCatalogIpc,
 };
 use crate::state::{AppState, InFlight};
 
@@ -244,12 +244,12 @@ pub async fn grpc_invoke_oneshot(
     target: GrpcTargetIpc,
     request: InvokeRequest,
     request_id: String,
-    timeout_ms: u32,
-    max_message_bytes: u32,
+    opts: CallOptionsIpc,
 ) -> Result<InvokeOutcomeIpc, IpcError> {
     let target = target.into_core()?;
     let cache = state.contract_cache.clone();
-    let max_bytes = resolve_max_message_size(max_message_bytes);
+    let timeout_ms = opts.timeout_ms;
+    let call_opts = CallOptions { max_message_bytes: resolve_max_message_size(opts.max_message_bytes) };
     let work = async move {
         let mut request = request;
         expand_request_builtins(&mut request, &handshaker_core::vars::builtins::SystemBuiltins);
@@ -261,7 +261,7 @@ pub async fn grpc_invoke_oneshot(
             &request.method,
             &request.request_json,
             request.metadata,
-            max_bytes,
+            call_opts,
         )
         .await?;
         Ok::<InvokeOutcomeIpc, IpcError>(outcome.into())
@@ -412,6 +412,12 @@ mod tests {
     #[test]
     fn resolve_max_message_size_passes_finite_value_through() {
         assert_eq!(resolve_max_message_size(16 * 1024 * 1024), 16 * 1024 * 1024usize);
+    }
+
+    #[test]
+    fn call_options_ipc_maps_zero_bytes_to_unlimited() {
+        let core = CallOptions { max_message_bytes: resolve_max_message_size(0) };
+        assert_eq!(core.max_message_bytes, usize::MAX);
     }
 
     #[tokio::test]

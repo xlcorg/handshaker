@@ -93,8 +93,7 @@ describe("sendStep", () => {
       { address: "h:443", tls: true, skip_verify: false },
       { service: "S", method: "M", request_json: "{}", metadata: { x: "1" } },
       expect.any(String),
-      expect.any(Number),
-      expect.any(Number),
+      { timeout_ms: expect.any(Number), max_message_bytes: expect.any(Number) },
     );
   });
 
@@ -150,8 +149,7 @@ describe("sendStep", () => {
       { address: "h:443", tls: true, skip_verify: false },
       { service: "S", method: "M", request_json: "{}", metadata: { keep: "1" } },
       expect.any(String),
-      expect.any(Number),
-      expect.any(Number),
+      { timeout_ms: expect.any(Number), max_message_bytes: expect.any(Number) },
     );
   });
 
@@ -212,8 +210,7 @@ describe("sendStep", () => {
       { address: "api.internal", tls: true, skip_verify: false },
       expect.objectContaining({ service: "S", method: "M" }),
       expect.any(String),
-      expect.any(Number),
-      expect.any(Number),
+      { timeout_ms: expect.any(Number), max_message_bytes: expect.any(Number) },
     );
   });
 });
@@ -260,8 +257,7 @@ describe("sendStep authHeader merge", () => {
       { service: "S", method: "M", request_json: "{}",
         metadata: { x: "1", authorization: "Bearer {{notresolved}}" } },
       expect.any(String),
-      expect.any(Number),
-      expect.any(Number),
+      { timeout_ms: expect.any(Number), max_message_bytes: expect.any(Number) },
     );
   });
 
@@ -271,8 +267,7 @@ describe("sendStep authHeader merge", () => {
       { address: "h:443", tls: true, skip_verify: false },
       { service: "S", method: "M", request_json: "{}", metadata: {} },
       expect.any(String),
-      expect.any(Number),
-      expect.any(Number),
+      { timeout_ms: expect.any(Number), max_message_bytes: expect.any(Number) },
     );
   });
 });
@@ -357,8 +352,7 @@ describe("sendStep cancel/timeout wiring", () => {
       { address: "h:443", tls: true, skip_verify: false },
       { service: "S", method: "M", request_json: "{}", metadata: {} },
       "req-1",
-      12345,
-      expect.any(Number),
+      { timeout_ms: 12345, max_message_bytes: expect.any(Number) },
     );
   });
 
@@ -373,8 +367,7 @@ describe("sendStep cancel/timeout wiring", () => {
       expect.anything(),
       expect.anything(),
       "req-mb",
-      1000,
-      0,
+      { timeout_ms: 1000, max_message_bytes: 0 },
     );
     setPref("maxMessageBytes", 16 * 1024 * 1024); // restore default for other tests
   });

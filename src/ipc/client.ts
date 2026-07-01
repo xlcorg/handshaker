@@ -5,6 +5,7 @@ import type {
   ServiceCatalogIpc,
   InvokeRequest,
   InvokeOutcomeIpc,
+  CallOptionsIpc,
   EnvironmentIpc,
   ResolutionReportIpc,
   VarsResolveCtxIpc,
@@ -96,14 +97,13 @@ export async function grpcInvokeOneshot(
   target: GrpcTargetIpc,
   req: InvokeRequest,
   // The workflow Send path passes an explicit request id (for cancel) and the
-  // user's deadline pref. Defaults serve callers with no cancel/timeout surface
+  // user's timeout+size options. Defaults serve callers with no cancel/options surface
   // (the legacy invoke UI): a fresh id keeps each call's registry entry unique
-  // (so concurrent calls never collide on a shared key); 30_000ms is the pref default.
+  // (so concurrent calls never collide on a shared key); the opts default mirrors the pref defaults.
   requestId = newId(),
-  timeoutMs = 30_000,
-  maxMessageBytes = 16 * 1024 * 1024,
+  opts: CallOptionsIpc = { timeout_ms: 30_000, max_message_bytes: 16 * 1024 * 1024 },
 ): Promise<InvokeOutcomeIpc> {
-  const r = await commands.grpcInvokeOneshot(target, req, requestId, timeoutMs, maxMessageBytes);
+  const r = await commands.grpcInvokeOneshot(target, req, requestId, opts);
   if (r.status === "error") throw r.error;
   return r.data;
 }
