@@ -26,9 +26,9 @@ pub struct MessageNode {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct FieldNode {
-    /// Key as it appears in the JSON body (matches the skeleton: `field.json_name()`).
+    /// The field's proto3-JSON (lowerCamelCase) name.
     pub json_name: String,
-    /// snake_case proto name (for the future contract view; unused by completion).
+    /// The proto (snake_case) field name — as in the `.proto` and the Contract tab.
     pub proto_name: String,
     /// Human label, e.g. `string`, `repeated Address`, `map<string, int32>`, `Status`.
     pub type_label: String,

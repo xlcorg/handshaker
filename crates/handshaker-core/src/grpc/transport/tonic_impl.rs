@@ -122,11 +122,16 @@ fn inject_ascii_metadata(
 /// (`""` / `0` / `false` / empty). For a gRPC debugging tool that hides newly-added or
 /// zero-valued response fields entirely — Postman / grpcurl show them. We override with
 /// `skip_default_fields(false)` so the response view always shows the full message shape.
+/// We also set `use_proto_field_name(true)` so field names come out as the proto
+/// (snake_case) names — matching Handshaker's Contract tab and request body — instead
+/// of the canonical proto3-JSON lowerCamelCase.
 /// See <https://docs.rs/prost-reflect/latest/prost_reflect/struct.SerializeOptions.html>.
 fn message_to_pretty_json(msg: &DynamicMessage) -> Result<String, CoreError> {
     let mut buf = Vec::new();
     let mut serializer = serde_json::Serializer::pretty(&mut buf);
-    let options = prost_reflect::SerializeOptions::new().skip_default_fields(false);
+    let options = prost_reflect::SerializeOptions::new()
+        .skip_default_fields(false)
+        .use_proto_field_name(true);
     msg.serialize_with_options(&mut serializer, &options)
         .map_err(|e| CoreError::DecodeResponse(e.to_string()))?;
     String::from_utf8(buf).map_err(|e| CoreError::DecodeResponse(e.to_string()))
@@ -388,5 +393,54 @@ mod tests {
         assert!(json.contains("\"id\""), "default string field must appear: {json}");
         assert!(json.contains("\"done\""), "default bool field must appear: {json}");
         assert!(json.contains("\"count\""), "default int field must appear: {json}");
+    }
+
+    /// The response viewer mirrors the .proto (and the Contract tab): a multi-word
+    /// field serializes as its snake_case proto name, NOT canonical camelCase.
+    #[test]
+    fn response_json_uses_proto_snake_case_field_names() {
+        use prost::Message as _;
+        use prost_reflect::{DescriptorPool, DynamicMessage};
+        use prost_types::{
+            field_descriptor_proto::Type as Ty, DescriptorProto, FieldDescriptorProto,
+            FileDescriptorProto, FileDescriptorSet,
+        };
+
+        // message Company { string tax_registration_code = 1; }
+        let company = DescriptorProto {
+            name: Some("Company".into()),
+            field: vec![FieldDescriptorProto {
+                name: Some("tax_registration_code".into()),
+                number: Some(1),
+                r#type: Some(Ty::String as i32),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let file = FileDescriptorProto {
+            name: Some("t.proto".into()),
+            package: Some("test".into()),
+            syntax: Some("proto3".into()),
+            message_type: vec![company],
+            ..Default::default()
+        };
+        let set = FileDescriptorSet { file: vec![file] };
+        let mut buf = Vec::new();
+        set.encode(&mut buf).unwrap();
+        let mut pool = DescriptorPool::new();
+        pool.add_file_descriptor_set(FileDescriptorSet::decode(&buf[..]).unwrap())
+            .unwrap();
+        let desc = pool.get_message_by_name("test.Company").unwrap();
+
+        let msg = DynamicMessage::new(desc);
+        let json = message_to_pretty_json(&msg).expect("serialize");
+        assert!(
+            json.contains("\"tax_registration_code\""),
+            "snake_case proto key expected: {json}"
+        );
+        assert!(
+            !json.contains("taxRegistrationCode"),
+            "camelCase key must be gone: {json}"
+        );
     }
 }
