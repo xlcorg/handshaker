@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use tokio::sync::Notify;
 
-use handshaker_core::auth::TokenSource;
+use handshaker_core::auth::{OAuth2ClientCredentialsConfig, TokenSource};
 use handshaker_core::collections::{resolve_request, ItemId, SavedRequest};
 use handshaker_core::grpc::{
     activate, build_message_schema_from_pool, build_request_skeleton_from_pool, invoke_unary,
@@ -235,6 +235,21 @@ fn expand_request_builtins(
     }
 }
 
+/// On UNAUTHENTICATED (gRPC 16), drop the cached OAuth2 token so the next Send
+/// fetches a fresh one (no auto-retry — design choice). No-op for other statuses
+/// or when the effective auth wasn't OAuth2.
+fn invalidate_on_unauthenticated(
+    tokens: &dyn TokenSource,
+    status_code: i32,
+    oauth_config: Option<&OAuth2ClientCredentialsConfig>,
+) {
+    if status_code == 16 {
+        if let Some(cfg) = oauth_config {
+            tokens.invalidate(cfg);
+        }
+    }
+}
+
 /// Live Send: resolve the draft through the core `resolve_request` pipeline (vars,
 /// auth pick + materialize, TLS), then activate + invoke. Replaces the old
 /// `grpc_invoke_oneshot`, which took an already-resolved `InvokeRequest` (the
@@ -315,11 +330,7 @@ pub(crate) async fn grpc_send_impl(
     };
 
     // On 16 UNAUTHENTICATED drop the cached oauth token; next Send fetches fresh. No retry.
-    if outcome.status_code == 16 {
-        if let Some(cfg) = invalidate {
-            state.oauth2_provider.invalidate(&cfg);
-        }
-    }
+    invalidate_on_unauthenticated(&state.oauth2_provider, outcome.status_code, invalidate.as_ref());
     Ok(outcome)
 }
 
@@ -555,5 +566,61 @@ mod tests {
         expand_request_builtins(&mut req, &FakeGen);
         assert_eq!(req.request_json, r#"{"id":"GUID","k":"{{kept}}"}"#);
         assert_eq!(req.metadata.get("x-id").unwrap(), "GUID");
+    }
+
+    struct RecordingTokens {
+        invalidated: std::sync::Mutex<Vec<String>>,
+    }
+    impl RecordingTokens {
+        fn new() -> Self {
+            Self { invalidated: std::sync::Mutex::new(Vec::new()) }
+        }
+    }
+    #[async_trait::async_trait]
+    impl handshaker_core::auth::TokenSource for RecordingTokens {
+        async fn header_for(
+            &self,
+            _cfg: &OAuth2ClientCredentialsConfig,
+        ) -> Result<handshaker_core::auth::AuthCredentials, handshaker_core::error::CoreError> {
+            unreachable!("header_for not exercised by these tests")
+        }
+        fn invalidate(&self, cfg: &OAuth2ClientCredentialsConfig) {
+            self.invalidated.lock().unwrap().push(cfg.client_id.clone());
+        }
+    }
+
+    fn oauth_cfg(client_id: &str) -> OAuth2ClientCredentialsConfig {
+        OAuth2ClientCredentialsConfig {
+            token_url: "https://idp/token".into(),
+            client_id: client_id.into(),
+            client_secret: "shh".into(),
+            scopes: vec![],
+            header_name: "authorization".into(),
+            prefix: "Bearer ".into(),
+            environments: vec![],
+        }
+    }
+
+    #[test]
+    fn invalidate_on_unauthenticated_invalidates_when_status_16_and_oauth_config_present() {
+        let tokens = RecordingTokens::new();
+        let cfg = oauth_cfg("client-a");
+        invalidate_on_unauthenticated(&tokens, 16, Some(&cfg));
+        assert_eq!(tokens.invalidated.lock().unwrap().as_slice(), ["client-a"]);
+    }
+
+    #[test]
+    fn invalidate_on_unauthenticated_is_noop_without_oauth_config() {
+        let tokens = RecordingTokens::new();
+        invalidate_on_unauthenticated(&tokens, 16, None);
+        assert!(tokens.invalidated.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn invalidate_on_unauthenticated_is_noop_for_non_16_status() {
+        let tokens = RecordingTokens::new();
+        let cfg = oauth_cfg("client-b");
+        invalidate_on_unauthenticated(&tokens, 0, Some(&cfg));
+        assert!(tokens.invalidated.lock().unwrap().is_empty());
     }
 }

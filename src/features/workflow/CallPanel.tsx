@@ -96,7 +96,7 @@ export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMetho
     // resolves vars, picks request-vs-collection auth, and materializes/invalidates the
     // oauth2 token via the core pipeline. No frontend auth resolution left to do here.
     const res = await sendStep(
-      { ...step, auth: step.auth },
+      step,
       { envName: activeWf.envName },
       { requestId },
     );
