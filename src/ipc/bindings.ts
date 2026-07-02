@@ -33,7 +33,7 @@ async startupRecoveryTake() : Promise<Result<string[], IpcError>> {
  * 
  * The reflecting path (miss only — a hit returns instantly with nothing to abort)
  * runs under `race_cancel_timeout`, so it honors the caller's deadline and can be
- * cancelled by `grpc_cancel(request_id)`, exactly like `grpc_invoke_oneshot`.
+ * cancelled by `grpc_cancel(request_id)`, exactly like `grpc_send`.
  */
 async grpcDescribe(target: GrpcTargetIpc, requestId: string, timeoutMs: number) : Promise<Result<ServiceCatalogIpc, IpcError>> {
     try {
@@ -83,16 +83,9 @@ async grpcMessageSchema(target: GrpcTargetIpc, service: string, method: string, 
     else return { status: "error", error: e  as any };
 }
 },
-/**
- * One-shot unary invoke: activate (channel required) → invoke → drop.
- * 
- * Non-OK gRPC status arrives in `InvokeOutcomeIpc.status_code`, NOT as `Err`.
- * `Err` is only for client-side failures (transport / encode / decode).
- * The descriptor pool is reused from the `ContractCache` when present; only the channel is opened fresh per call.
- */
-async grpcInvokeOneshot(target: GrpcTargetIpc, request: InvokeRequest, requestId: string, opts: CallOptionsIpc) : Promise<Result<InvokeOutcomeIpc, IpcError>> {
+async grpcSend(draft: SendDraftIpc, ctx: SendCtxIpc, requestId: string, opts: CallOptionsIpc) : Promise<Result<InvokeOutcomeIpc, IpcError>> {
     try {
-    return { status: "ok", data: await TAURI_INVOKE("grpc_invoke_oneshot", { target, request, requestId, opts }) };
+    return { status: "ok", data: await TAURI_INVOKE("grpc_send", { draft, ctx, requestId, opts }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -450,7 +443,7 @@ extension: string | null }
 export type Base64KindIpc = "json" | "text" | "binary"
 /**
  * Per-call invoke options, as they cross the wire. `request_id` is NOT here — it's a
- * separate `grpc_invoke_oneshot` param (cancel key, distinct lifecycle from call options).
+ * separate `grpc_send` param (cancel key, distinct lifecycle from call options).
  */
 export type CallOptionsIpc = { timeout_ms: number; max_message_bytes: number }
 export type CollectionIpc = { id: string; name: string; items: ItemIpc[]; variables: Partial<{ [key in string]: string }>; auth: SavedAuthConfigIpc; default_tls: boolean; skip_tls_verify: boolean; pinned: boolean; description: string | null; created_at: number; expanded: boolean }
@@ -489,7 +482,6 @@ export type InvokeOutcomeIpc = { status_code: number; status_message: string; re
  * TypeScript compatibility (specta forbids u64 / BigInt at the IPC boundary).
  */
 elapsed_ms: number }
-export type InvokeRequest = { service: string; method: string; request_json: string; metadata: Partial<{ [key in string]: string }> }
 export type IpcError = { type: "InvalidTarget"; message: string } | { type: "NotConnected" } | { type: "ReflectionDisabled"; hint: string } | { type: "Reflection"; message: string } | { type: "DescriptorBuild"; message: string } | { type: "ServiceNotFound"; service: string } | { type: "MethodNotFound"; service: string; method: string } | { type: "EncodeRequest"; message: string } | { type: "DecodeResponse"; message: string } | { type: "UnresolvedVariable"; name: string } | { type: "VariableCycle"; chain: string[] } | { type: "UnresolvedVars"; unresolved: string[]; cycle: string[] | null } | { type: "Transport"; kind: TransportKindIpc; message: string } | { type: "Cancelled" } | { type: "DeadlineExceeded"; timeout_ms: number } | { type: "Auth"; message: string } | { type: "GrpcStatus"; code: number; message: string } | { type: "NotImplemented"; message: string } | { type: "Persistence"; message: string }
 export type ItemIpc = ({ type: "folder" } & FolderIpc) | ({ type: "request" } & SavedRequestIpc)
 /**
@@ -522,6 +514,12 @@ export type SavedRequestIpc = { id: string; name: string; address_template: stri
  * `auth_effective` (Slice 4) and `grpc_send` (Slice 5).
  */
 export type SendCtxIpc = { collection_id: string | null; env_name: string | null }
+/**
+ * Raw, unresolved request draft as it lives in the frontend step — the input to
+ * `grpc_send`. Templates (address/body/metadata values) are resolved via
+ * `resolve_request` against the collection + active environment carried in `SendCtxIpc`.
+ */
+export type SendDraftIpc = { address_template: string; tls: boolean; service: string; method: string; body_template: string; metadata: MetadataRowIpc[]; auth: SavedAuthConfigIpc }
 export type ServiceCatalogIpc = { services: ServiceEntryIpc[] }
 export type ServiceEntryIpc = { full_name: string; methods: MethodEntryIpc[] }
 /**

@@ -2,24 +2,27 @@
 //!
 //! Lazy connect-on-Send model (plan-06b): no held connection. The `ContractCache`
 //! holds pools/catalogs between calls; a `GrpcConnection` lives only for the duration
-//! of one `grpc_invoke_oneshot` (or a `grpc_describe` cache miss) and is dropped after.
+//! of one `grpc_send` (or a `grpc_describe` cache miss) and is dropped after.
 
 use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::sync::Notify;
 
+use handshaker_core::auth::TokenSource;
+use handshaker_core::collections::{resolve_request, ItemId, SavedRequest};
 use handshaker_core::grpc::{
     activate, build_message_schema_from_pool, build_request_skeleton_from_pool, invoke_unary,
     CallOptions, ContractKey, GrpcTarget, TonicTransport,
 };
 use tauri::{AppHandle, State};
 use tauri_specta::Event;
+use uuid::Uuid;
 
 use crate::commands::events::ContractUpdated;
 use crate::ipc::{
     CallOptionsIpc, GrpcTargetIpc, InvokeOutcomeIpc, InvokeRequest, IpcError, MessageSchemaIpc,
-    MessageSideIpc, ServiceCatalogIpc,
+    MessageSideIpc, SendCtxIpc, SendDraftIpc, ServiceCatalogIpc,
 };
 use crate::state::{AppState, InFlight};
 
@@ -46,7 +49,7 @@ fn target_key(t: &GrpcTarget) -> String {
 ///
 /// The reflecting path (miss only — a hit returns instantly with nothing to abort)
 /// runs under `race_cancel_timeout`, so it honors the caller's deadline and can be
-/// cancelled by `grpc_cancel(request_id)`, exactly like `grpc_invoke_oneshot`.
+/// cancelled by `grpc_cancel(request_id)`, exactly like `grpc_send`.
 #[tauri::command]
 #[specta::specta]
 pub async fn grpc_describe(
@@ -232,41 +235,104 @@ fn expand_request_builtins(
     }
 }
 
-/// One-shot unary invoke: activate (channel required) → invoke → drop.
+/// Live Send: resolve the draft through the core `resolve_request` pipeline (vars,
+/// auth pick + materialize, TLS), then activate + invoke. Replaces the old
+/// `grpc_invoke_oneshot`, which took an already-resolved `InvokeRequest` (the
+/// now-deleted TS mirror did the resolving; that job now belongs to core).
 ///
 /// Non-OK gRPC status arrives in `InvokeOutcomeIpc.status_code`, NOT as `Err`.
-/// `Err` is only for client-side failures (transport / encode / decode).
-/// The descriptor pool is reused from the `ContractCache` when present; only the channel is opened fresh per call.
-#[tauri::command]
-#[specta::specta]
-pub async fn grpc_invoke_oneshot(
-    state: State<'_, AppState>,
-    target: GrpcTargetIpc,
-    request: InvokeRequest,
+/// `Err` covers resolve failure (`UnresolvedVars`) and client-side failures
+/// (transport / encode / decode). On a 16 UNAUTHENTICATED outcome with an OAuth2
+/// auth pick, the cached token is invalidated so the next Send fetches fresh — no
+/// automatic retry.
+pub(crate) async fn grpc_send_impl(
+    state: &AppState,
+    draft: SendDraftIpc,
+    ctx: SendCtxIpc,
     request_id: String,
     opts: CallOptionsIpc,
 ) -> Result<InvokeOutcomeIpc, IpcError> {
-    let target = target.into_core()?;
-    let cache = state.contract_cache.clone();
+    // Read collection + active env from the stores (ctx carries references, not data).
+    let collection = ctx
+        .collection_id
+        .as_deref()
+        .and_then(|id| crate::ipc::collection::parse_collection_id(id).ok())
+        .and_then(|cid| state.collection_store.get(cid));
+    let active_env = ctx.env_name.as_deref().and_then(|n| state.env_store.get(n));
+
+    // Build a SavedRequest view over the draft; the UI toggle is the tls override.
+    let saved = SavedRequest {
+        id: ItemId(Uuid::nil()),
+        name: String::new(),
+        address_template: draft.address_template,
+        service: draft.service.clone(),
+        method: draft.method.clone(),
+        body_template: draft.body_template,
+        metadata: draft.metadata.into_iter().map(|r| r.into_core()).collect(),
+        auth: draft.auth.into_core(),
+        tls_override: Some(draft.tls),
+        last_used_at: None,
+        use_count: 0,
+    };
+
+    let tokens: &dyn TokenSource = &state.oauth2_provider;
+    let eff = resolve_request(&saved, collection.as_ref(), active_env.as_ref(), tokens).await?;
+
+    // Assemble InvokeRequest: effective body + metadata + auth header.
+    let mut metadata = eff.metadata;
+    if let Some(creds) = &eff.auth {
+        metadata.insert(creds.header_name.clone(), creds.header_value.clone());
+    }
+    let mut request = InvokeRequest {
+        service: eff.service,
+        method: eff.method,
+        request_json: eff.body_json,
+        metadata,
+    };
+    let invalidate = eff.invalidate_oauth;
     let timeout_ms = opts.timeout_ms;
     let call_opts = CallOptions { max_message_bytes: resolve_max_message_size(opts.max_message_bytes) };
-    let work = async move {
-        let mut request = request;
-        expand_request_builtins(&mut request, &handshaker_core::vars::builtins::SystemBuiltins);
-        let transport = Arc::new(TonicTransport::new());
-        let conn = activate(target, transport, cache.as_ref()).await?;
-        let outcome = invoke_unary(
-            &conn,
-            &request.service,
-            &request.method,
-            &request.request_json,
-            request.metadata,
-            call_opts,
-        )
-        .await?;
-        Ok::<InvokeOutcomeIpc, IpcError>(outcome.into())
+    let target = eff.target;
+    let cache = state.contract_cache.clone();
+
+    let outcome = {
+        let work = async move {
+            expand_request_builtins(&mut request, &handshaker_core::vars::builtins::SystemBuiltins);
+            let transport = Arc::new(TonicTransport::new());
+            let conn = activate(target, transport, cache.as_ref()).await?;
+            let outcome = invoke_unary(
+                &conn,
+                &request.service,
+                &request.method,
+                &request.request_json,
+                request.metadata,
+                call_opts,
+            )
+            .await?;
+            Ok::<InvokeOutcomeIpc, IpcError>(outcome.into())
+        };
+        race_cancel_timeout(&state.in_flight, request_id, timeout_ms, work).await?
     };
-    race_cancel_timeout(&state.in_flight, request_id, timeout_ms, work).await
+
+    // On 16 UNAUTHENTICATED drop the cached oauth token; next Send fetches fresh. No retry.
+    if outcome.status_code == 16 {
+        if let Some(cfg) = invalidate {
+            state.oauth2_provider.invalidate(&cfg);
+        }
+    }
+    Ok(outcome)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn grpc_send(
+    state: State<'_, AppState>,
+    draft: SendDraftIpc,
+    ctx: SendCtxIpc,
+    request_id: String,
+    opts: CallOptionsIpc,
+) -> Result<InvokeOutcomeIpc, IpcError> {
+    grpc_send_impl(&state, draft, ctx, request_id, opts).await
 }
 
 /// Fire the cancel `Notify` for an in-flight `request_id`. No-op if unknown (already
@@ -307,12 +373,31 @@ mod tests {
         assert_ne!(target_key(&a), target_key(&b));
     }
 
-    use crate::ipc::invoke::InvokeRequest;
-    use crate::ipc::IpcError;
+    use crate::ipc::collection::SavedAuthConfigIpc;
+    use crate::ipc::invoke::{InvokeRequest, SendDraftIpc};
+    use crate::ipc::{IpcError, SendCtxIpc};
     use crate::state::InFlight;
     use handshaker_core::vars::builtins::BuiltinGenerator;
     use std::collections::HashMap;
     use std::time::Duration;
+
+    #[tokio::test]
+    async fn grpc_send_unresolved_var_returns_unresolved_vars_error() {
+        let state = AppState::default(); // empty stores ⇒ {{host}} unresolvable
+        let draft = SendDraftIpc {
+            address_template: "{{host}}".into(), tls: false,
+            service: "pkg.Svc".into(), method: "Do".into(),
+            body_template: "{}".into(), metadata: vec![],
+            auth: SavedAuthConfigIpc::None,
+        };
+        let opts = CallOptionsIpc { timeout_ms: 1000, max_message_bytes: 0 };
+        let err = grpc_send_impl(&state, draft, SendCtxIpc { collection_id: None, env_name: None },
+            "rid".into(), opts).await.unwrap_err();
+        match err {
+            IpcError::UnresolvedVars { unresolved, .. } => assert_eq!(unresolved, vec!["host"]),
+            other => panic!("got {other:?}"),
+        }
+    }
 
     fn empty_in_flight() -> InFlight {
         std::sync::Mutex::new(HashMap::new())

@@ -19,7 +19,7 @@ pub struct InvokeRequest {
 }
 
 /// Per-call invoke options, as they cross the wire. `request_id` is NOT here — it's a
-/// separate `grpc_invoke_oneshot` param (cancel key, distinct lifecycle from call options).
+/// separate `grpc_send` param (cancel key, distinct lifecycle from call options).
 #[derive(Debug, Deserialize, Type)]
 pub struct CallOptionsIpc {
     pub timeout_ms: u32,
@@ -33,6 +33,20 @@ pub struct CallOptionsIpc {
 pub struct SendCtxIpc {
     pub collection_id: Option<String>,
     pub env_name: Option<String>,
+}
+
+/// Raw, unresolved request draft as it lives in the frontend step — the input to
+/// `grpc_send`. Templates (address/body/metadata values) are resolved via
+/// `resolve_request` against the collection + active environment carried in `SendCtxIpc`.
+#[derive(Debug, Deserialize, Type)]
+pub struct SendDraftIpc {
+    pub address_template: String,
+    pub tls: bool,
+    pub service: String,
+    pub method: String,
+    pub body_template: String,
+    pub metadata: Vec<crate::ipc::collection::MetadataRowIpc>,
+    pub auth: crate::ipc::collection::SavedAuthConfigIpc,
 }
 
 #[derive(Debug, Serialize, Type)]
