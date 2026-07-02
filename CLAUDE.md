@@ -8,7 +8,53 @@ Workspace: `crates/handshaker-core` (OS-независимое ядро) · `src
 
 Активная фича — нет (между фичами).
 
-Последняя влитая — **Имена полей в теле = proto-имена (snake_case), как в контракте**
+Последняя влитая — **Один резолв-пайплайн: боевой Send через ядровый `resolve_request`**
+(🎉 DONE 2026-07-02, ff в `main`; план+спека `2026-07-02-single-resolve-pipeline*` в
+`archive/`, ADR-0001; **живой WebView2-проход ещё НЕ пройден**) — резолв-пайплайн
+(переменные → TLS → metadata → auth) существовал **дважды**: полностью протестированный
+ядровый `resolve_request` с **нулём боевых вызовов** (мёртвый код по deletion-тесту) и боевое
+непротестированное TS-зеркало `pickEffectiveAuth`/`resolveAuthHeader`/`resolveStepTemplates`
+в `actions.ts`, синхронизируемое с ядром только комментариями «Mirrors core». Класс багов
+«UI решил одно, ядро умеет другое» уже дал 2 инцидента (16 UNAUTHENTICATED на каждом вызове;
+`skip_tls_verify` молча игнорировался — UI давал флаг, боевой путь хардкодил `false`). Теперь
+по **ADR-0001** резолв живёт **только в ядре**: фронт шлёт сырые шаблоны + ctx-ссылки
+(`collection_id?`/`env_name?`) и не держит копий правил — **даже для показа**. Ядро:
+`resolve_request` стал **async**, принимает `Option<&Collection>` (unbound draft = пустые
+collection-vars, verify по умолчанию) + `&dyn TokenSource` (шов OAuth2-токена: боевой
+`Oauth2TokenProvider` + фейк `StaticTokenSource`); auth расколот на чистый sync
+**`pick_auth_config`** (выбор конфига по цепочке request→collection с env-гейтом) и async
+**materialize** (конфиг→заголовок; EnvVar — OS-энв, OAuth2 — через token source; `{{var}}`
+oauth-полей резолвятся **ДО** источника ⇒ ключ токен-кэша стабилен); заглушка
+`NotImplemented("oauth2")` мертва; типизированный `ResolveFailure { unresolved, cycle }` —
+полный дедупнутый список в порядке встречи, не «первая ошибка». `CallOptions { timeout_ms,
+max_message_bytes }` — одно растущее значение от UI до транспорта вместо позиционной россыпи
+(`request_id` остаётся отдельно — ключ отмены). IPC: **`grpc_send`** заменил
+`grpc_invoke_oneshot` на месте (владеет цепочкой резолв → экспансия билтинов → `invoke_unary`
+внутри существующей `race_cancel_timeout`); на **16 UNAUTHENTICATED** инвалидирует токен-кэш
+(извлечён тестируемый `invalidate_on_unauthenticated`, авторетрая нет); новый
+`IpcError::UnresolvedVars` несёт `ResolveFailure`; новая **`auth_effective(step_auth, ctx)`** —
+«какой auth действует» для Auth-таба и снапшота истории (UI не считает pick сам). Фронт:
+`sendStep` ужат до «собрать черновик + вызвать `grpc_send` + маппинг ошибок»; удалены вместе
+с тестами `pickEffectiveAuth`/`resolveAuthHeader`/`resolveStepTemplates`/`resolve.ts` +
+invalidate-хэндл; новый async-хук `useEffectiveAuth` (перечитывается по env-ревизии/смене
+origin, stale-гард `cancelled`). Поведенческий фикс: `collection.skip_tls_verify` реально
+заработал — на Send (слайс #5) и на reflection/message-schema (слайс #6:
+`useDraftReflection`/`useMessageSchema`). `resolveAddressSafe` и редакторные `{{var}}`-оверлеи
+(`vars_resolve`) не тронуты (адрес нужен фронту до Send). Bindings дрейфят осознанно (новые
+команды/типы, уход `grpc_invoke_oneshot`), дрейф закоммичен, no-drift-гейт зелёный после регена.
+Subagent-driven (6 вертикальных слайсов = issues #1–#6, 2-стадийное ревью каждого + финальное
+opus-ревью всей ветки = READY TO MERGE; одна Important-находка «16→invalidate без покрытия»
+закрыта фикс-агентом +3 теста). Гейт на `17749e2`: `cargo test --workspace` **334** (вкл.
+крейтовый `tests/` — урок traceId) · vitest **1152** (48 pre-existing localStorage-падений в
+нетронутых файлах, **0 внесённых фичей**) · `tsc -b` · `vite build` · bindings no-drift —
+зелёные. Non-blocking follow-up'ы: (1) OAuth2 token fetch вне invoke-гонки (как раньше, не
+регресс); (2) history-снапшот auth async, самокорректируется на ре-Send. Память —
+[[project_single_resolve_pipeline_done]]. **Урок:** протестированный, но никем не вызываемый
+пайплайн — мёртвый код (deletion-тест ловит); «маленький локальный резолв в UI для
+отзывчивости» — это воскрешение зеркала, отзывчивость решается ревизией по смене env, а не
+второй реализацией правила (ADR-0001 — «одно правило, один дом»).
+
+Предыдущая — **Имена полей в теле = proto-имена (snake_case), как в контракте**
 (🎉 DONE 2026-07-01, ff в `main` `ce0bf00`; план+спека
 `2026-07-01-proto-field-names-snake-case*` в `archive/`; **живой WebView2-проход ещё НЕ
 пройден**) — скелет запроса, автокомплит, ghost-хинты («Field hints») и вьюер ответа раньше
@@ -34,35 +80,21 @@ Postman для gRPC-запросов требует snake_case (camelCase — о
 тесты, прошёл per-task гейты, но `cargo test --workspace` упал на стейл-ассерте `traceId` в
 `invoke_skeleton.rs` (интеграционные тесты — гейт-only surface, юнит-грепом не ловятся).
 
-Предыдущая — **Умное авто-переименование сохранённого запроса при смене метода**
-(🎉 DONE 2026-06-30, rebase+ff в `main` `08e1ed3`; план+спека
-`2026-06-30-saved-request-auto-rename-on-method-change*` в `archive/`) — при смене gRPC-метода
-у **origin-bound** (сохранённого) запроса его имя в коллекции авто-обновляется на имя нового
-метода, но **только если имя всё ещё авто-выведенное** (== имя старого метода, его не
-переименовывали вручную); кастомное имя не трогается, несохранённый черновик — no-op, папка не
-двигается. Паттерн — Figma `autoRename` **без** persistent-флага: чистый stateless-предикат
-`isAutoName(name, service, method) = name === suggestSaveTarget(service, method).requestName`
-(зеркало `isPristineBody`) в `grouping.ts`. Проводка: `CallPanel` отдаёт `onMethodSelected(prev,
-next)` после `applyMethodSelection` (snapshot `prev` ДО патча), `FocusView` читает живое имя через
-`findSavedRequest`, проверяет `isAutoName` по **старому** методу и зовёт существующий `renameItem`
-на авто-имя **нового** (имя в дереве/брэдкрамбе обновляется живьём; reuse тоста `Renamed to "…"`).
-Бэкенд/IPC/bindings не тронуты — чистый фронт. Ресёрч UX: Postman/Insomnia/Bruno держат имя
-независимым (авто-имя — частый запрос пользователей), Kreya тоже; «золотая середина» —
-Figma `autoRename` (имя следует за содержимым, пока вручную не переименовали). Subagent-driven
-(3 TDD-задачи, 2-стадийное ревью каждой + финальное = READY TO MERGE). **При вливании `main` ушёл
-вперёд** (влита save-response `9b23785`) → ребейз ветки на новый `main` (чисто — файлы
-непересекающиеся) + после ребейза `pnpm install` (main добавил dep `@tauri-apps/plugin-opener`) →
-ff. Гейт на интегрированном результате: vitest **1201** · `tsc -b` · `vite build` — зелёные.
-**Live-verified** в WebView2 (2026-06-30). Память — [[project_saved_request_auto_rename_done]].
-**Урок:** авто-следование имени за методом — stateless-предикат «совпадает ли с дефолтом» (как
-`isPristineBody`), без денормализованного флага; ребейз поверх ушедшего `main` с новой
-зависимостью требует `pnpm install` перед гейтом (`tsc` падает на отсутствующем модуле).
-
 Интеграционная ветка — `main`; фичи ведутся в отдельных worktree-ветках
 (`claude/*`) и вливаются в `main` fast-forward.
 
 ### Завершённые фичи (всё в `archive/`)
 
+- **Умное авто-переименование сохранённого запроса при смене метода** (🎉 DONE
+  2026-06-30, rebase+ff в `main` `08e1ed3`;
+  `2026-06-30-saved-request-auto-rename-on-method-change*` в `archive/`) — у
+  **origin-bound** (сохранённого) запроса имя в коллекции авто-следует за именем нового
+  метода, но **только если имя всё ещё авто-выведенное** (== имя старого метода, вручную
+  не переименовано); кастомное имя/несохранённый черновик — no-op, папка не двигается.
+  Stateless-предикат `isAutoName` (зеркало `isPristineBody`) в `grouping.ts`;
+  `CallPanel.onMethodSelected(prev,next)` → `FocusView` зовёт существующий `renameItem`.
+  Чистый фронт (бэкенд/IPC/bindings не тронуты). Live-verified в WebView2. Память —
+  [[project_saved_request_auto_rename_done]].
 - **Сохранение тела ответа в файл** (🎉 DONE 2026-06-30, ff в `main`;
   `2026-06-30-save-response-to-file*` в `archive/`; живой WebView2-проход не пройден) — тело
   успешного ответа → файл через пункт меню вьюера «Save response to file…» и хоткей Ctrl/Cmd+S
