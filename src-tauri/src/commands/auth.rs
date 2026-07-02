@@ -52,8 +52,9 @@ impl AppState {
 
     /// "Which auth wins" — the single core pick (`pick_auth_config`), fed the
     /// request-level auth plus the collection's auth (looked up via `ctx.collection_id`)
-    /// and the active-env name from `ctx`. Mirrors the TS `pickEffectiveAuth` copy
-    /// (until Slice 5 removes it) so the Auth tab and history snapshot agree with core.
+    /// and the active-env name from `ctx`. The Auth tab and history snapshot (and, since
+    /// Slice 5, `grpc_send` itself via `resolve_request`) all agree with this one pick —
+    /// the TS `pickEffectiveAuth` copy it used to mirror is gone.
     pub async fn auth_effective_impl(
         &self,
         step_auth: SavedAuthConfigIpc,
