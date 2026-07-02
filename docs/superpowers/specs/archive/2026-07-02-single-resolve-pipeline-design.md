@@ -1,8 +1,9 @@
 # Спека — один резолв-пайплайн: боевой Send через ядровый `resolve_request`
 
-**Статус:** 📐 дизайн утверждён (архитектурное ревью + grilling 2026-07-01/02;
-ADR — [`docs/adr/0001-send-resolves-in-core.md`](../../adr/0001-send-resolves-in-core.md)).
-План — `docs/superpowers/plans/2026-07-02-single-resolve-pipeline.md`.
+**Статус:** 🎉 DONE 2026-07-02 (реализовано, ff в `main`; план —
+`docs/superpowers/plans/archive/2026-07-02-single-resolve-pipeline.md`, статус-баннер
+там — источник истины). Дизайн утверждён архитектурным ревью + grilling 2026-07-01/02;
+ADR — [`docs/adr/0001-send-resolves-in-core.md`](../../../adr/0001-send-resolves-in-core.md).
 **Тип:** бэкенд (core + IPC) + фронтенд (удаление TS-зеркала). **Bindings дрейфят
 осознанно** (новые команды `grpc_send`/`auth_effective`, уход `grpc_invoke_oneshot`) —
 дрейф коммитится, no-drift-гейт проверяется на финале.

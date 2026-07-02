@@ -1,5 +1,16 @@
 # Single Resolve Pipeline — Implementation Plan
 
+> **Статус:** 🎉 DONE 2026-07-02 — все 6 слайсов (issues #1–#6) реализованы и
+> отревьюены subagent-driven (TDD, spec+quality-ревью каждого слайса + финальное
+> opus-ревью всей ветки = READY TO MERGE); code-complete `17749e2`, влито в `main`
+> fast-forward. Гейт на `17749e2`: `cargo test --workspace` **334** (вкл. крейтовый
+> `tests/`-каталог) · vitest **1152** (48 pre-existing localStorage-падений в
+> нетронутых файлах, 0 внесённых фичей) · `tsc -b` · `vite build` · bindings no-drift
+> — зелёные. **Живой WebView2-проход ещё НЕ пройден** (OIDC + self-signed + unbound
+> draft + unresolved-`{{var}}`). Non-blocking follow-up'ы: (1) OAuth2 token fetch вне
+> invoke-гонки (как раньше); (2) history-снапшот auth async, самокорректируется на
+> ре-Send.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Route the live gRPC Send path through the core `resolve_request` pipeline, deleting the untested TypeScript mirror (`pickEffectiveAuth`/`resolveAuthHeader`/`resolveOauthConfig`/`resolveStepTemplates`) so one tested resolver owns variables, TLS, metadata, and auth.
