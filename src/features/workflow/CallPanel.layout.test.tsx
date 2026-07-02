@@ -7,6 +7,7 @@ vi.mock("@/features/invoke/BodyEditor", () => ({
 }));
 vi.mock("@/ipc/client", () => ({
   authResolve: vi.fn().mockResolvedValue(null),
+  authEffective: vi.fn().mockResolvedValue({ kind: "none" }),
   grpcDescribe: vi.fn().mockResolvedValue({ services: [] }),
   grpcRefreshContract: vi.fn().mockResolvedValue({ services: [] }),
   grpcBuildRequestSkeleton: vi.fn().mockResolvedValue("{}"),

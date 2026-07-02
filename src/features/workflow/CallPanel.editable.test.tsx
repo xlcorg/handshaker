@@ -6,6 +6,7 @@ vi.mock("@/features/invoke/BodyEditor", () => ({
 }));
 vi.mock("@/ipc/client", () => ({
   authResolve: vi.fn().mockResolvedValue(null),
+  authEffective: vi.fn().mockResolvedValue({ kind: "none" }),
   authInvalidate: vi.fn().mockResolvedValue(undefined),
   grpcDescribe: vi.fn().mockResolvedValue({ services: [] }),
   grpcRefreshContract: vi.fn().mockResolvedValue({ services: [] }),
@@ -24,7 +25,7 @@ import { CallPanel } from "./CallPanel";
 import { newStep } from "./model";
 import { messages } from "@/lib/messages";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { grpcMessageSchema, grpcRefreshContract, authInvalidate, authResolve, varsResolve, grpcInvokeOneshot } from "@/ipc/client";
+import { grpcMessageSchema, grpcRefreshContract, authEffective, authInvalidate, authResolve, varsResolve, grpcInvokeOneshot } from "@/ipc/client";
 import type { MessageSchemaIpc, InvokeOutcomeIpc, ResolutionReportIpc } from "@/ipc/bindings";
 
 const draft = newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "GetX" });
@@ -201,7 +202,7 @@ describe("CallPanel reflection refresh", () => {
   });
 });
 
-describe("CallPanel collection-auth inheritance (originAuth)", () => {
+describe("CallPanel collection-auth inheritance (auth_effective)", () => {
   const collectionOauth = {
     kind: "oauth2_client_credentials" as const,
     token_url: "https://idp/token",
@@ -229,6 +230,9 @@ describe("CallPanel collection-auth inheritance (originAuth)", () => {
       header_name: "authorization",
       header_value: "Bearer T",
     });
+    // Backend's `auth_effective` pick: step auth is none, so the collection's oauth2
+    // config wins (mirrors core `pick_auth_config` inheritance).
+    vi.mocked(authEffective).mockResolvedValue(collectionOauth);
     vi.mocked(grpcInvokeOneshot).mockResolvedValueOnce(okOutcome);
     const onExecuted = vi.fn();
 
@@ -236,9 +240,12 @@ describe("CallPanel collection-auth inheritance (originAuth)", () => {
     const inheritDraft = newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "GetInherit" });
     render(
       <TooltipProvider>
-        <CallPanel step={inheritDraft} onPatch={() => {}} onExecuted={onExecuted} editable originAuth={collectionOauth} />
+        <CallPanel step={inheritDraft} onPatch={() => {}} onExecuted={onExecuted} editable />
       </TooltipProvider>,
     );
+    // Wait for the async effective-auth fetch to resolve (and CallPanel to re-render
+    // with it) before sending — the send hotkey reads the latest `effectiveAuth`.
+    await waitFor(() => expect(authEffective).toHaveBeenCalled());
     fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
 
     await waitFor(() => expect(grpcInvokeOneshot).toHaveBeenCalledTimes(1));
@@ -253,15 +260,16 @@ describe("CallPanel collection-auth inheritance (originAuth)", () => {
     );
   });
 
-  it("shows the inherited collection config in the Auth tab", () => {
+  it("shows the inherited collection config in the Auth tab", async () => {
+    vi.mocked(authEffective).mockResolvedValue(collectionOauth);
     const inheritDraft = newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "GetAuthTab" });
     render(
       <TooltipProvider>
-        <CallPanel step={inheritDraft} onPatch={() => {}} editable originAuth={collectionOauth} />
+        <CallPanel step={inheritDraft} onPatch={() => {}} editable />
       </TooltipProvider>,
     );
     fireEvent.click(screen.getByRole("tab", { name: "Auth" }));
-    expect(screen.getByText(/oauth2_client_credentials/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/oauth2_client_credentials/)).toBeInTheDocument());
     expect(screen.getByText(/https:\/\/idp\/token/)).toBeInTheDocument();
   });
 });
@@ -302,12 +310,16 @@ describe("CallPanel oauth2 token invalidation", () => {
       method: "GetAuth",
       auth: oauth2Auth,
     });
+    // Backend's `auth_effective` pick: the step's own oauth2 config wins.
+    vi.mocked(authEffective).mockResolvedValue(oauth2Auth);
 
     render(
       <TooltipProvider>
         <CallPanel step={draftWithOauth} onPatch={() => {}} editable />
       </TooltipProvider>,
     );
+    // Wait for the async effective-auth fetch to resolve before sending.
+    await waitFor(() => expect(authEffective).toHaveBeenCalled());
 
     // Trigger send via Ctrl+Enter
     fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });

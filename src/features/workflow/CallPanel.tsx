@@ -5,9 +5,9 @@ import { AddressBar } from "./AddressBar";
 import { DraftAddressBar } from "./DraftAddressBar";
 import { useDraftReflection } from "./useDraftReflection";
 import { useMessageSchema } from "./useMessageSchema";
+import { useEffectiveAuth } from "./useEffectiveAuth";
 import { RequestTabs } from "./RequestTabs";
 import {
-  pickEffectiveAuth,
   resolveAuthHeader,
   sendStep,
   stepPatchFromSendResult,
@@ -41,7 +41,10 @@ interface CallPanelProps {
   editable?: boolean;
   /** One-click save of a method row from MethodPicker to the collection. */
   onQuickAddMethod?: (service: string, method: string) => void;
-  /** Auth of the draft's origin collection — inherited when the step's own auth is none. */
+  /** Auth of the draft's origin collection. No longer read here — `effectiveAuth` now
+   *  asks core via `useEffectiveAuth`/`auth_effective` (keyed on `step.collectionId`),
+   *  which looks up the same collection. Kept on the props type for FocusView's call
+   *  site; slated for removal alongside `pickEffectiveAuth` (Slice 5). */
   originAuth?: SavedAuthConfigIpc;
   /** Variables of the draft's origin collection — feeds {{var}} autocomplete. */
   originVars?: Partial<Record<string, string>>;
@@ -55,7 +58,7 @@ interface CallPanelProps {
 }
 
 /** The editable, sendable surface for one step — reused by Focus(draft)/List/Ledger. */
-export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMethod, originAuth, originVars, onMethodSelected }: CallPanelProps) {
+export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMethod, originAuth: _originAuth, originVars, onMethodSelected }: CallPanelProps) {
   const [prefs, setPref] = usePrefs();
   const activeWf = useActiveWorkflow();
   // Re-resolve the address preview when the active env's identity or contents change
@@ -77,8 +80,15 @@ export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMetho
     void resetBodyToTemplate(onPatch, { address: step.address, tls: step.tls, collectionId: step.collectionId }, step.service, step.method);
 
   // Effective auth: the step's own config, falling back to the origin collection's
-  // (request-level auth has no editor UI, so saved requests carry `none`).
-  const effectiveAuth = pickEffectiveAuth(step.auth, originAuth ?? null, activeWf.envName);
+  // (request-level auth has no editor UI, so saved requests carry `none`). Asks core's
+  // `pick_auth_config` via `auth_effective` (the single home of the pick rule) rather
+  // than re-deriving it in TS — see `useEffectiveAuth`. `addressResolveKey` already
+  // folds env name + revision + collection, so an env switch refetches.
+  const effectiveAuth = useEffectiveAuth(
+    step.auth,
+    { collection_id: step.collectionId ?? null, env_name: activeWf.envName },
+    addressResolveKey,
+  );
 
   const onSend = async () => {
     if (step.status === "sending") return; // idempotent: the button stays "Send" during the pre-gate window

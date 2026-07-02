@@ -22,6 +22,7 @@ import type {
   Base64InspectIpc,
   ImportSummaryIpc,
   ImportResultIpc,
+  SendCtxIpc,
 } from "./bindings";
 
 /**
@@ -269,6 +270,15 @@ export async function authInvalidate(config: SavedAuthConfigIpc): Promise<void> 
   if (r.status === "error") throw r.error;
 }
 
+export async function authEffective(
+  stepAuth: SavedAuthConfigIpc,
+  ctx: SendCtxIpc,
+): Promise<SavedAuthConfigIpc> {
+  const r = await commands.authEffective(stepAuth, ctx);
+  if (r.status === "error") throw r.error;
+  return r.data;
+}
+
 export async function collectionSetNodeAuth(
   collectionId: string,
   itemId: string | null,
@@ -357,6 +367,7 @@ export const ipc = {
   authResolve,
   authOauth2FetchToken,
   authInvalidate,
+  authEffective,
   collectionSetNodeAuth,
   collectionSetExpanded,
   appSettingsGet,
