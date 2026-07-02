@@ -14,6 +14,8 @@ export interface CallTargetInit {
   tls: boolean;
   /** Owning collection for {{var}} resolution; null/omitted ⇒ no collection vars. */
   collectionId?: string | null;
+  /** Origin collection's `skip_tls_verify`; omitted/false ⇒ verify certs (mirrors Send). */
+  skipVerify?: boolean;
 }
 
 /** Resolve ctx for a step bound to `collectionId`; null when unbound. */
@@ -78,7 +80,7 @@ export async function buildRequestSkeletonSafe(
   try {
     const address = await resolveAddressSafe(target.address, target.collectionId ?? null);
     return await ipc.grpcBuildRequestSkeleton(
-      { address, tls: target.tls, skip_verify: false },
+      { address, tls: target.tls, skip_verify: target.skipVerify ?? false },
       service,
       method,
     );
@@ -99,7 +101,12 @@ export async function fetchMessageSchemaSafe(
 ): Promise<MessageSchemaIpc | null> {
   try {
     const address = await resolveAddressSafe(target.address, target.collectionId ?? null);
-    return await ipc.grpcMessageSchema({ address, tls: target.tls, skip_verify: false }, service, method, side);
+    return await ipc.grpcMessageSchema(
+      { address, tls: target.tls, skip_verify: target.skipVerify ?? false },
+      service,
+      method,
+      side,
+    );
   } catch {
     return null;
   }

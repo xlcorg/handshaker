@@ -56,6 +56,7 @@ export function FocusView({ onRequestSave, onQuickAddMethod }: FocusViewProps = 
   // auth is none (request-level auth has no editor; collections carry the config).
   const originAuth = origin ? tree.find((c) => c.id === origin.collectionId)?.auth : undefined;
   const originVars = origin ? tree.find((c) => c.id === origin.collectionId)?.variables : undefined;
+  const originSkipVerify = origin ? tree.find((c) => c.id === origin.collectionId)?.skip_tls_verify : undefined;
 
   const segments = draft ? draftBreadcrumb(draft, origin, tree) : [];
   const prefix = segments.slice(0, -1);
@@ -144,6 +145,7 @@ export function FocusView({ onRequestSave, onQuickAddMethod }: FocusViewProps = 
             onMethodSelected={origin ? handleMethodSelected : undefined}
             originAuth={originAuth}
             originVars={originVars}
+            originSkipVerify={originSkipVerify}
           />
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">

@@ -39,6 +39,7 @@ export function useDraftReflection(
   enabled = true,
   collectionId: string | null = null,
   resolveKey = "",
+  skipVerify = false,
 ): DraftReflection {
   const [catalog, setCatalog] = useState<ServiceCatalogIpc | null>(null);
   const [loading, setLoading] = useState(false);
@@ -63,7 +64,7 @@ export function useDraftReflection(
       setError(null);
       try {
         const resolved = await resolveAddressSafe(addr, collectionId);
-        const target = { address: resolved, tls, skip_verify: false };
+        const target = { address: resolved, tls, skip_verify: skipVerify };
         const c = force
           ? await ipc.grpcRefreshContract(target, requestId, timeoutMs)
           : await ipc.grpcDescribe(target, requestId, timeoutMs);
@@ -85,7 +86,7 @@ export function useDraftReflection(
         }
       }
     },
-    [address, tls, enabled, collectionId],
+    [address, tls, enabled, collectionId, skipVerify],
   );
 
   useEffect(() => {

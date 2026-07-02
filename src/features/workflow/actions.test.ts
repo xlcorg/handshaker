@@ -343,6 +343,22 @@ describe("buildRequestSkeletonSafe", () => {
       { address: "api.internal:443", tls: true, skip_verify: false }, "p.S", "M",
     );
   });
+
+  it("threads skipVerify:true into skip_verify", async () => {
+    vi.mocked(ipc.grpcBuildRequestSkeleton).mockResolvedValue("{}");
+    await buildRequestSkeletonSafe({ address: "h:443", tls: true, skipVerify: true }, "p.S", "M");
+    expect(ipc.grpcBuildRequestSkeleton).toHaveBeenCalledWith(
+      { address: "h:443", tls: true, skip_verify: true }, "p.S", "M",
+    );
+  });
+
+  it("defaults skip_verify to false when skipVerify is omitted", async () => {
+    vi.mocked(ipc.grpcBuildRequestSkeleton).mockResolvedValue("{}");
+    await buildRequestSkeletonSafe({ address: "h:443", tls: true }, "p.S", "M");
+    expect(ipc.grpcBuildRequestSkeleton).toHaveBeenCalledWith(
+      { address: "h:443", tls: true, skip_verify: false }, "p.S", "M",
+    );
+  });
 });
 
 describe("applyMethodSelection", () => {
@@ -503,5 +519,25 @@ describe("fetchMessageSchemaSafe", () => {
     vi.mocked(ipc.grpcMessageSchema).mockRejectedValue(new Error("reflection unavailable"));
     const result = await fetchMessageSchemaSafe({ address: "h", tls: false }, "S", "M");
     expect(result).toBeNull();
+  });
+
+  it("threads skipVerify:true into skip_verify", async () => {
+    await fetchMessageSchemaSafe({ address: "h:443", tls: true, skipVerify: true }, "S", "M");
+    expect(ipc.grpcMessageSchema).toHaveBeenCalledWith(
+      { address: "h:443", tls: true, skip_verify: true },
+      "S",
+      "M",
+      "input",
+    );
+  });
+
+  it("defaults skip_verify to false when skipVerify is omitted", async () => {
+    await fetchMessageSchemaSafe({ address: "h:443", tls: true }, "S", "M");
+    expect(ipc.grpcMessageSchema).toHaveBeenCalledWith(
+      { address: "h:443", tls: true, skip_verify: false },
+      "S",
+      "M",
+      "input",
+    );
   });
 });

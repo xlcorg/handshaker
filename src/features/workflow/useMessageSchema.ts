@@ -12,6 +12,8 @@ export interface SchemaTarget {
   service: string;
   method: string;
   collectionId?: string | null;
+  /** Origin collection's `skip_tls_verify`; omitted/false ⇒ verify certs. */
+  skipVerify?: boolean;
 }
 
 /** Returns the flat field-schema for the given call target and side, or null while
@@ -36,8 +38,8 @@ export function useMessageSchema(
   revision = 0,
   resolveKey = "",
 ): MessageSchemaIpc | null {
-  const { address, tls, service, method, collectionId = null } = target;
-  const key = `${address}|${tls}|${service}|${method}|${side}|${collectionId ?? ""}|${revision}|${resolveKey}`;
+  const { address, tls, service, method, collectionId = null, skipVerify = false } = target;
+  const key = `${address}|${tls}|${service}|${method}|${side}|${collectionId ?? ""}|${skipVerify}|${revision}|${resolveKey}`;
   const [schema, setSchema] = useState<MessageSchemaIpc | null>(() => cache.get(key) ?? null);
 
   useEffect(() => {
@@ -50,14 +52,14 @@ export function useMessageSchema(
       return;
     }
     let cancelled = false;
-    void fetchMessageSchemaSafe({ address, tls, collectionId }, service, method, side).then((s) => {
+    void fetchMessageSchemaSafe({ address, tls, collectionId, skipVerify }, service, method, side).then((s) => {
       cache.set(key, s);
       if (!cancelled) setSchema(s);
     });
     return () => {
       cancelled = true;
     };
-  }, [key, address, tls, service, method, side, collectionId]);
+  }, [key, address, tls, service, method, side, collectionId, skipVerify]);
 
   return schema;
 }

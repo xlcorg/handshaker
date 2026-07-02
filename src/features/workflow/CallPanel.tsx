@@ -46,6 +46,9 @@ interface CallPanelProps {
   originAuth?: SavedAuthConfigIpc;
   /** Variables of the draft's origin collection — feeds {{var}} autocomplete. */
   originVars?: Partial<Record<string, string>>;
+  /** `skip_tls_verify` of the draft's origin collection — dials reflection/skeleton/schema
+   *  the same as Send. Unbound draft (no origin) ⇒ false. */
+  originSkipVerify?: boolean;
   /** Origin-bound only: a method was just picked. (prev, next) carry the service/method
    *  before and after the switch — lets the owner auto-rename the saved request when its
    *  name still tracks the old method. */
@@ -56,7 +59,8 @@ interface CallPanelProps {
 }
 
 /** The editable, sendable surface for one step — reused by Focus(draft)/List/Ledger. */
-export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMethod, originAuth: _originAuth, originVars, onMethodSelected }: CallPanelProps) {
+export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMethod, originAuth: _originAuth, originVars, originSkipVerify, onMethodSelected }: CallPanelProps) {
+  const skipVerify = originSkipVerify ?? false;
   const [prefs, setPref] = usePrefs();
   const activeWf = useActiveWorkflow();
   // Re-resolve the address preview when the active env's identity or contents change
@@ -75,7 +79,12 @@ export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMetho
   const onBody = (value: string) => onPatch({ requestJson: value });
   const onMetadata = (rows: MetadataRow[]) => onPatch({ metadata: rows });
   const onResetBody = () =>
-    void resetBodyToTemplate(onPatch, { address: step.address, tls: step.tls, collectionId: step.collectionId }, step.service, step.method);
+    void resetBodyToTemplate(
+      onPatch,
+      { address: step.address, tls: step.tls, collectionId: step.collectionId, skipVerify },
+      step.service,
+      step.method,
+    );
 
   // Effective auth: the step's own config, falling back to the origin collection's
   // (request-level auth has no editor UI, so saved requests carry `none`). Asks core's
@@ -138,7 +147,14 @@ export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMetho
   // a `{{var}}` template resolved against it, so an env switch/edit must re-reflect even though
   // `step.address` is unchanged. Without it the contract froze on the first env until a manual
   // refresh — the "doesn't pick up on env change" bug.
-  const reflection = useDraftReflection(step.address, step.tls, !!editable, step.collectionId, addressResolveKey);
+  const reflection = useDraftReflection(
+    step.address,
+    step.tls,
+    !!editable,
+    step.collectionId,
+    addressResolveKey,
+    skipVerify,
+  );
 
   // Manual "Refresh server reflection": re-reflect the backend pool AND force the schema
   // hooks to refetch. The schema feeds the Contract tab + body hints from a cache that's
@@ -154,7 +170,7 @@ export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMetho
   // output side for the Contract tab.
   // History panels pass an empty target so no fetch fires.
   const schemaTarget = editable
-    ? { address: step.address, tls: step.tls, service: step.service, method: step.method, collectionId: step.collectionId }
+    ? { address: step.address, tls: step.tls, service: step.service, method: step.method, collectionId: step.collectionId, skipVerify }
     : { address: "", tls: false, service: "", method: "", collectionId: null };
   const schema = useMessageSchema(schemaTarget, "input", schemaRevision, addressResolveKey);
   const outputSchema = useMessageSchema(schemaTarget, "output", schemaRevision, addressResolveKey);
@@ -175,7 +191,7 @@ export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMetho
           const prev = { service: step.service, method: step.method };
           void applyMethodSelection(
             onPatch,
-            { address: step.address, tls: step.tls, collectionId: step.collectionId },
+            { address: step.address, tls: step.tls, collectionId: step.collectionId, skipVerify },
             { requestJson: step.requestJson, service: step.service, method: step.method },
             m,
             workflowStore.activeWorkflow().steps,

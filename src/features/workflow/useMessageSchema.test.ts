@@ -30,7 +30,7 @@ describe("useMessageSchema", () => {
       useMessageSchema({ address: "h:1", tls: false, service: "t.S", method: "Call" }),
     );
     await waitFor(() => expect(result.current).toEqual(SCHEMA));
-    expect(fetchMock).toHaveBeenCalledWith({ address: "h:1", tls: false, collectionId: null }, "t.S", "Call", "input");
+    expect(fetchMock).toHaveBeenCalledWith({ address: "h:1", tls: false, collectionId: null, skipVerify: false }, "t.S", "Call", "input");
   });
 
   it("caches input and output sides separately", async () => {
@@ -46,7 +46,7 @@ describe("useMessageSchema", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock).toHaveBeenLastCalledWith(
-      { address: "sides-host", tls: false, collectionId: null }, "S", "M", "output",
+      { address: "sides-host", tls: false, collectionId: null, skipVerify: false }, "S", "M", "output",
     );
   });
 
