@@ -441,4 +441,17 @@ mod tests {
             other => panic!("expected ResolveFailed, got {other:?}"),
         }
     }
+
+    #[tokio::test]
+    async fn bound_draft_honors_collection_skip_tls_verify() {
+        let mut coll = base_collection(&[("host", "h:1"), ("uid", "u")]);
+        coll.default_tls = true;
+        coll.skip_tls_verify = true;
+        let active = env("prod", &[]);
+        let req = base_request();
+        let tokens = static_tokens("Bearer X");
+        let eff = resolve_request(&req, Some(&coll), Some(&active), &tokens).await.unwrap();
+        assert!(eff.target.tls);
+        assert!(eff.target.skip_verify); // was hardcoded false on the old frontend Send path
+    }
 }
