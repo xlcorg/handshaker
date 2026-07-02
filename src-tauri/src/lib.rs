@@ -4,7 +4,7 @@ pub mod commands;
 pub mod ipc;
 mod state;
 
-use commands::auth::{auth_invalidate, auth_oauth2_fetch_token, auth_resolve};
+use commands::auth::{auth_effective, auth_invalidate, auth_oauth2_fetch_token, auth_resolve};
 use commands::base64::{base64_inspect, base64_save, base64_save_encoded};
 use commands::dialog::file_save_text;
 use commands::collection::{
@@ -55,6 +55,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             auth_resolve,
             auth_oauth2_fetch_token,
             auth_invalidate,
+            auth_effective,
             collection_list,
             collection_get,
             collection_upsert,

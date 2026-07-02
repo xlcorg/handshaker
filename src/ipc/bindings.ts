@@ -239,6 +239,14 @@ async authInvalidate(config: SavedAuthConfigIpc) : Promise<Result<null, IpcError
     else return { status: "error", error: e  as any };
 }
 },
+async authEffective(stepAuth: SavedAuthConfigIpc, ctx: SendCtxIpc) : Promise<Result<SavedAuthConfigIpc, IpcError>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("auth_effective", { stepAuth, ctx }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
 async collectionList() : Promise<Result<CollectionMetaIpc[], IpcError>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("collection_list") };
@@ -508,6 +516,12 @@ export type QuotaViolationIpc = { subject: string; description: string }
 export type ResolutionReportIpc = { resolved: string; unresolved_vars: string[]; cycle_chain: string[] | null; dynamic_vars: string[] }
 export type SavedAuthConfigIpc = { kind: "none" } | { kind: "env_var"; env_var: string; header_name: string; prefix: string; environments?: string[] } | { kind: "oauth2_client_credentials"; token_url: string; client_id: string; client_secret: string; scopes: string[]; header_name?: string; prefix?: string; environments?: string[] }
 export type SavedRequestIpc = { id: string; name: string; address_template: string; service: string; method: string; body_template: string; metadata: MetadataRowIpc[]; auth: SavedAuthConfigIpc; tls_override: boolean | null; last_used_at: number | null; use_count: number }
+/**
+ * Send-time context (which collection, which active environment) — the pieces
+ * `pick_auth_config`/resolve need beyond the step itself. Reused across
+ * `auth_effective` (Slice 4) and `grpc_send` (Slice 5).
+ */
+export type SendCtxIpc = { collection_id: string | null; env_name: string | null }
 export type ServiceCatalogIpc = { services: ServiceEntryIpc[] }
 export type ServiceEntryIpc = { full_name: string; methods: MethodEntryIpc[] }
 /**

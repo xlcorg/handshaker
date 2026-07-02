@@ -1,12 +1,13 @@
 //! Auth-resolution IPC commands. `None`/`EnvVar` resolve synchronously in core;
 //! `OAuth2` routes through the session token provider (`AppState::oauth2_provider`).
 
-use handshaker_core::auth::{materialize_env_var, SavedAuthConfig};
+use handshaker_core::auth::{materialize_env_var, pick_auth_config, SavedAuthConfig};
 use tauri::State;
 
 use crate::ipc::auth::{AuthCredentialsIpc, OAuth2TokenInfoIpc};
-use crate::ipc::collection::SavedAuthConfigIpc;
+use crate::ipc::collection::{parse_collection_id, SavedAuthConfigIpc};
 use crate::ipc::error::IpcError;
+use crate::ipc::invoke::SendCtxIpc;
 use crate::state::AppState;
 use handshaker_core::error::CoreError;
 
@@ -48,6 +49,26 @@ impl AppState {
             self.oauth2_provider.invalidate(&c);
         }
     }
+
+    /// "Which auth wins" — the single core pick (`pick_auth_config`), fed the
+    /// request-level auth plus the collection's auth (looked up via `ctx.collection_id`)
+    /// and the active-env name from `ctx`. Mirrors the TS `pickEffectiveAuth` copy
+    /// (until Slice 5 removes it) so the Auth tab and history snapshot agree with core.
+    pub async fn auth_effective_impl(
+        &self,
+        step_auth: SavedAuthConfigIpc,
+        ctx: SendCtxIpc,
+    ) -> Result<SavedAuthConfigIpc, CoreError> {
+        let collection_auth = ctx
+            .collection_id
+            .as_deref()
+            .and_then(|id| parse_collection_id(id).ok())
+            .and_then(|cid| self.collection_store.get(cid))
+            .map(|c| c.auth);
+        let req = step_auth.into_core();
+        let picked = pick_auth_config(&req, collection_auth.as_ref(), ctx.env_name.as_deref());
+        Ok(SavedAuthConfigIpc::from_core(picked.cloned().unwrap_or(SavedAuthConfig::None)))
+    }
 }
 
 #[tauri::command]
@@ -76,6 +97,16 @@ pub async fn auth_invalidate(
 ) -> Result<(), IpcError> {
     state.auth_invalidate_impl(config);
     Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn auth_effective(
+    state: State<'_, AppState>,
+    step_auth: SavedAuthConfigIpc,
+    ctx: SendCtxIpc,
+) -> Result<SavedAuthConfigIpc, IpcError> {
+    state.auth_effective_impl(step_auth, ctx).await.map_err(IpcError::from)
 }
 
 #[cfg(test)]
@@ -117,5 +148,76 @@ mod tests {
     async fn invalidate_is_a_noop_for_non_oauth2() {
         let state = AppState::default();
         state.auth_invalidate_impl(SavedAuthConfigIpc::None); // must not panic
+    }
+
+    use handshaker_core::collections::ids::CollectionId;
+    use handshaker_core::collections::Collection;
+
+    fn env_var_auth(name: &str, environments: Vec<String>) -> SavedAuthConfigIpc {
+        SavedAuthConfigIpc::EnvVar {
+            env_var: name.into(),
+            header_name: "authorization".into(),
+            prefix: "Bearer ".into(),
+            environments,
+        }
+    }
+
+    fn collection_with_auth(id: CollectionId, auth: SavedAuthConfig) -> Collection {
+        Collection {
+            id,
+            name: "Notes".into(),
+            items: vec![],
+            variables: Default::default(),
+            auth,
+            default_tls: false,
+            skip_tls_verify: false,
+            pinned: false,
+            description: None,
+            created_at: 0.0,
+            expanded: false,
+        }
+    }
+
+    #[tokio::test]
+    async fn effective_prefers_request_auth() {
+        let state = AppState::default();
+        let step = env_var_auth("R", vec![]);
+        let out = state
+            .auth_effective_impl(step, SendCtxIpc { collection_id: None, env_name: Some("prod".into()) })
+            .await
+            .unwrap();
+        assert!(matches!(out, SavedAuthConfigIpc::EnvVar { env_var, .. } if env_var == "R"));
+    }
+
+    #[tokio::test]
+    async fn effective_falls_back_to_collection_auth() {
+        let state = AppState::default();
+        let cid = CollectionId::new();
+        let collection_auth = env_var_auth("C", vec![]).into_core();
+        state.collection_store.upsert(collection_with_auth(cid, collection_auth)).unwrap();
+        let out = state
+            .auth_effective_impl(
+                SavedAuthConfigIpc::None,
+                SendCtxIpc { collection_id: Some(cid.0.to_string()), env_name: Some("prod".into()) },
+            )
+            .await
+            .unwrap();
+        assert!(matches!(out, SavedAuthConfigIpc::EnvVar { env_var, .. } if env_var == "C"));
+    }
+
+    #[tokio::test]
+    async fn effective_gates_scoped_collection_auth_out_of_env() {
+        let state = AppState::default();
+        let cid = CollectionId::new();
+        let collection_auth = env_var_auth("C", vec!["prod".into()]).into_core();
+        state.collection_store.upsert(collection_with_auth(cid, collection_auth)).unwrap();
+        let out = state
+            .auth_effective_impl(
+                SavedAuthConfigIpc::None,
+                SendCtxIpc { collection_id: Some(cid.0.to_string()), env_name: Some("dev".into()) },
+            )
+            .await
+            .unwrap();
+        assert!(matches!(out, SavedAuthConfigIpc::None));
     }
 }

@@ -26,6 +26,15 @@ pub struct CallOptionsIpc {
     pub max_message_bytes: u32,
 }
 
+/// Send-time context (which collection, which active environment) — the pieces
+/// `pick_auth_config`/resolve need beyond the step itself. Reused across
+/// `auth_effective` (Slice 4) and `grpc_send` (Slice 5).
+#[derive(Debug, Clone, Deserialize, Type)]
+pub struct SendCtxIpc {
+    pub collection_id: Option<String>,
+    pub env_name: Option<String>,
+}
+
 #[derive(Debug, Serialize, Type)]
 pub struct FieldViolationIpc {
     pub field: String,
