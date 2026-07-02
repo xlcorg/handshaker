@@ -38,7 +38,7 @@ export function faultHint(kind: FaultKind): string {
   return HINT[kind];
 }
 
-function isObj(e: unknown): e is Record<string, unknown> {
+export function isObj(e: unknown): e is Record<string, unknown> {
   return typeof e === "object" && e !== null;
 }
 

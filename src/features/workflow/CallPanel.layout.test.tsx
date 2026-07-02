@@ -12,7 +12,7 @@ vi.mock("@/ipc/client", () => ({
   grpcRefreshContract: vi.fn().mockResolvedValue({ services: [] }),
   grpcBuildRequestSkeleton: vi.fn().mockResolvedValue("{}"),
   varsResolve: vi.fn(),
-  grpcInvokeOneshot: vi.fn(),
+  grpcSend: vi.fn(),
   grpcCancel: vi.fn(),
 }));
 

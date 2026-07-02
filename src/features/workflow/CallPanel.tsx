@@ -1,6 +1,5 @@
 import { ResponsePanel, type ContractInfo } from "@/features/response/ResponsePanel";
 import type { RespState } from "@/features/response/RespMeta";
-import { authResolve, authInvalidate } from "@/ipc/client";
 import { AddressBar } from "./AddressBar";
 import { DraftAddressBar } from "./DraftAddressBar";
 import { useDraftReflection } from "./useDraftReflection";
@@ -8,7 +7,6 @@ import { useMessageSchema } from "./useMessageSchema";
 import { useEffectiveAuth } from "./useEffectiveAuth";
 import { RequestTabs } from "./RequestTabs";
 import {
-  resolveAuthHeader,
   sendStep,
   stepPatchFromSendResult,
   shouldRecordExecuted,
@@ -44,7 +42,7 @@ interface CallPanelProps {
   /** Auth of the draft's origin collection. No longer read here — `effectiveAuth` now
    *  asks core via `useEffectiveAuth`/`auth_effective` (keyed on `step.collectionId`),
    *  which looks up the same collection. Kept on the props type for FocusView's call
-   *  site; slated for removal alongside `pickEffectiveAuth` (Slice 5). */
+   *  site. */
   originAuth?: SavedAuthConfigIpc;
   /** Variables of the draft's origin collection — feeds {{var}} autocomplete. */
   originVars?: Partial<Record<string, string>>;
@@ -94,30 +92,16 @@ export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMetho
     if (step.status === "sending") return; // idempotent: the button stays "Send" during the pre-gate window
     const requestId = newId();
     onPatch({ status: "sending", error: null, requestId });
-    // Merge of both lines: main's `effectiveAuth` (inherit the collection's auth when the
-    // step's own is none — the 16 UNAUTHENTICATED fix) + this branch's collection-scoped
-    // vars resolver, so {{var}} in auth fields resolves against the step's collection too.
-    const auth = await resolveAuthHeader(effectiveAuth, activeWf.envName, {
-      authResolve,
-      varsResolve: varsResolverFor(step.collectionId),
-    });
-    if (auth.kind === "error") {
-      onPatch({ status: "error", outcome: null, error: { kind: "auth", message: auth.message }, requestId: null });
-      return;
-    }
-    const res = await sendStep(step, auth.kind === "header" ? auth.header : null, { requestId });
+    // The raw draft (templates + step's own auth) goes over the wire as-is — `grpc_send`
+    // resolves vars, picks request-vs-collection auth, and materializes/invalidates the
+    // oauth2 token via the core pipeline. No frontend auth resolution left to do here.
+    const res = await sendStep(
+      { ...step, auth: step.auth },
+      { envName: activeWf.envName },
+      { requestId },
+    );
     const patch = { ...stepPatchFromSendResult(res), requestId: null };
     onPatch(patch);
-    // Drop the cached oauth2 token if the server rejected it (gRPC UNAUTHENTICATED = 16):
-    // the next Send fetches a fresh one. No auto-retry (design choice).
-    if (
-      res.kind === "ok" &&
-      res.outcome.status_code === 16 &&
-      auth.kind === "header" &&
-      auth.invalidate
-    ) {
-      void authInvalidate(auth.invalidate).catch(() => {}); // best-effort, like cancelStep
-    }
     // Snapshot the auth actually used, so re-sending the history step works standalone.
     if (onExecuted && shouldRecordExecuted(res)) {
       onExecuted(buildExecutedStep({ ...step, auth: effectiveAuth }, patch));

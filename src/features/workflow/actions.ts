@@ -1,11 +1,13 @@
 import * as ipc from "@/ipc/client";
-import type { InvokeOutcomeIpc, SavedAuthConfigIpc, AuthCredentialsIpc, ResolutionReportIpc, MessageSchemaIpc, MessageSideIpc, VarsResolveCtxIpc } from "@/ipc/bindings";
+import type { InvokeOutcomeIpc, SavedAuthConfigIpc, ResolutionReportIpc, MessageSchemaIpc, MessageSideIpc, VarsResolveCtxIpc, SendDraftIpc, SendCtxIpc, CallOptionsIpc } from "@/ipc/bindings";
 import { newStep, type MetadataRow, type Step } from "./model";
-import { resolveStepTemplates, type Resolver } from "./resolve";
 import { lastExecutedFor, responseSeedPatch } from "./lastExecuted";
 import { newId } from "@/lib/ids";
 import { readPrefs } from "@/lib/use-prefs";
-import { faultFromUnknown, isCancelError, type ClientFault } from "./netDiagnostics";
+import { faultFromUnknown, isCancelError, isObj, type ClientFault } from "./netDiagnostics";
+
+/** A template resolver bound to a particular `{{var}}` source (collection/env ctx). */
+export type Resolver = (template: string) => Promise<ResolutionReportIpc>;
 
 export interface CallTargetInit {
   address: string;
@@ -164,43 +166,6 @@ export type SendResult =
   | { kind: "unresolved"; unresolved: string[]; cycle: string[] | null }
   | { kind: "cancelled" };
 
-export type AuthHeader = { key: string; value: string };
-
-export type AuthHeaderResult =
-  | { kind: "none" }
-  | { kind: "header"; header: AuthHeader; invalidate?: SavedAuthConfigIpc }
-  | { kind: "error"; message: string };
-
-export interface AuthDeps {
-  authResolve: (c: SavedAuthConfigIpc) => Promise<AuthCredentialsIpc | null>;
-  varsResolve: (t: string) => Promise<ResolutionReportIpc>;
-}
-
-/** Environments a config is scoped to ([] = all). */
-function authEnvironments(auth: SavedAuthConfigIpc): string[] {
-  if (auth.kind === "env_var" || auth.kind === "oauth2_client_credentials") {
-    return auth.environments ?? [];
-  }
-  return [];
-}
-
-/** Nearest active non-`none` config wins: the step's own auth first, then the origin
- *  collection's. Mirrors core `resolve_auth_chain` — `none` and env-scoped configs not
- *  listing `activeEnv` are skipped (treated as absent). */
-export function pickEffectiveAuth(
-  stepAuth: SavedAuthConfigIpc,
-  collectionAuth: SavedAuthConfigIpc | null | undefined,
-  activeEnv: string | null,
-): SavedAuthConfigIpc {
-  for (const cfg of [stepAuth, collectionAuth]) {
-    if (!cfg || cfg.kind === "none") continue;
-    const envs = authEnvironments(cfg);
-    if (envs.length > 0 && (activeEnv === null || !envs.includes(activeEnv))) continue;
-    return cfg;
-  }
-  return { kind: "none" };
-}
-
 type Oauth2Config = Extract<SavedAuthConfigIpc, { kind: "oauth2_client_credentials" }>;
 
 /** Resolve `{{var}}` in every oauth2 template field. Returns the resolved config, or
@@ -241,41 +206,9 @@ export async function resolveOauthConfig(
   };
 }
 
-/** Resolve the auth header for a step. Env-gates scoped configs against `activeEnv`,
- *  resolves `{{var}}` for oauth2 fields, and returns the resolved oauth2 config as an
- *  `invalidate` handle (used to drop the cached token on a gRPC UNAUTHENTICATED). */
-export async function resolveAuthHeader(
-  auth: SavedAuthConfigIpc,
-  activeEnv: string | null,
-  deps: AuthDeps,
-): Promise<AuthHeaderResult> {
-  if (auth.kind === "none") return { kind: "none" };
-
-  const envs = authEnvironments(auth);
-  if (envs.length > 0 && (activeEnv === null || !envs.includes(activeEnv))) {
-    return { kind: "none" };
-  }
-
-  try {
-    if (auth.kind === "oauth2_client_credentials") {
-      const resolved = await resolveOauthConfig(auth, deps.varsResolve);
-      if (!resolved.ok) return { kind: "error", message: resolved.message };
-      const creds = await deps.authResolve(resolved.config);
-      if (!creds) return { kind: "none" };
-      return {
-        kind: "header",
-        header: { key: creds.header_name, value: creds.header_value },
-        invalidate: resolved.config,
-      };
-    }
-    const creds = await deps.authResolve(auth);
-    if (!creds) return { kind: "none" };
-    return { kind: "header", header: { key: creds.header_name, value: creds.header_value } };
-  } catch (e) {
-    return { kind: "error", message: errorToMessage(e) };
-  }
-}
-
+/** Live Send: forward the raw draft (templates + the step's own auth) + resolve ctx
+ *  to `grpc_send`, which owns the whole pipeline (vars → auth pick/materialize → TLS →
+ *  invoke → 16-invalidation). No frontend resolution left to do — this is call+map. */
 export async function sendStep(
   step: {
     address: string;
@@ -284,30 +217,42 @@ export async function sendStep(
     method: string;
     requestJson: string;
     metadata: MetadataRow[];
+    auth: SavedAuthConfigIpc;
     collectionId?: string | null;
   },
-  authHeader?: AuthHeader | null,
+  ctx: { envName: string | null },
   opts?: { requestId?: string; timeoutMs?: number; maxMessageBytes?: number },
 ): Promise<SendResult> {
   const requestId = opts?.requestId ?? newId();
-  const timeoutMs = opts?.timeoutMs ?? readPrefs().requestTimeoutMs;
-  const maxMessageBytes = opts?.maxMessageBytes ?? readPrefs().maxMessageBytes;
-  const callOptions = { timeout_ms: timeoutMs, max_message_bytes: maxMessageBytes };
+  const prefs = readPrefs();
+  const draft: SendDraftIpc = {
+    address_template: step.address,
+    tls: step.tls,
+    service: step.service,
+    method: step.method,
+    body_template: step.requestJson,
+    metadata: step.metadata
+      .filter((m) => m.enabled && m.key)
+      .map((m) => ({ key: m.key, value: m.value, enabled: true })),
+    auth: step.auth,
+  };
+  const sendCtx: SendCtxIpc = { collection_id: step.collectionId ?? null, env_name: ctx.envName };
+  const callOpts: CallOptionsIpc = {
+    timeout_ms: opts?.timeoutMs ?? prefs.requestTimeoutMs,
+    max_message_bytes: opts?.maxMessageBytes ?? prefs.maxMessageBytes,
+  };
   try {
-    const r = await resolveStepTemplates(step, varsResolverFor(step.collectionId));
-    if (!r.ok) return { kind: "unresolved", unresolved: r.unresolved, cycle: r.cycle };
-    const metadata: Record<string, string> = {};
-    for (const m of r.request.metadata) metadata[m.key] = m.value;
-    if (authHeader) metadata[authHeader.key] = authHeader.value; // verbatim, not {{var}}-resolved
-    const outcome = await ipc.grpcInvokeOneshot(
-      { address: r.request.address, tls: step.tls, skip_verify: false },
-      { service: step.service, method: step.method, request_json: r.request.requestJson, metadata },
-      requestId,
-      callOptions,
-    );
+    const outcome = await ipc.grpcSend(draft, sendCtx, requestId, callOpts);
     return { kind: "ok", outcome };
   } catch (e) {
     if (isCancelError(e)) return { kind: "cancelled" };
+    if (isObj(e) && e.type === "UnresolvedVars") {
+      return {
+        kind: "unresolved",
+        unresolved: e.unresolved as string[],
+        cycle: (e.cycle as string[] | null) ?? null,
+      };
+    }
     return { kind: "error", fault: faultFromUnknown(e) };
   }
 }
@@ -347,15 +292,4 @@ export function shouldRecordExecuted(res: SendResult): boolean {
 /** A frozen executed-history snapshot of `draft` with the Send patch applied and a fresh id. */
 export function buildExecutedStep(draft: Step, patch: Partial<Step>): Step {
   return { ...draft, ...patch, id: newId(), requestId: null };
-}
-
-function errorToMessage(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  if (e && typeof e === "object") {
-    const obj = e as Record<string, unknown>;
-    if (typeof obj.message === "string") return obj.message;
-    if (typeof obj.data === "string") return obj.data;
-    if (typeof obj.type === "string") return obj.type;
-  }
-  return String(e);
 }

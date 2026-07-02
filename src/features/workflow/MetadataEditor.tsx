@@ -13,8 +13,8 @@ export interface MetadataEditorProps {
   /** Extra resolve inputs (active env, env revision); change ⇒ re-resolve. */
   resolveKey?: string;
   /** Variable candidates for value-field {{-autocomplete. Only values are template-resolved
-   *  (keys are header names sent verbatim — see resolveStepTemplates), so only the value
-   *  field gets the dropdown + highlighting. */
+   *  (keys are header names sent verbatim — resolved core-side in `grpc_send`), so only the
+   *  value field gets the dropdown + highlighting. */
   variables?: VarCandidate[];
 }
 

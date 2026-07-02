@@ -3,7 +3,6 @@ import { newId } from "@/lib/ids";
 import type {
   GrpcTargetIpc,
   ServiceCatalogIpc,
-  InvokeRequest,
   InvokeOutcomeIpc,
   CallOptionsIpc,
   EnvironmentIpc,
@@ -23,6 +22,7 @@ import type {
   ImportSummaryIpc,
   ImportResultIpc,
   SendCtxIpc,
+  SendDraftIpc,
 } from "./bindings";
 
 /**
@@ -94,17 +94,15 @@ export async function grpcMessageSchema(
   return r.data;
 }
 
-export async function grpcInvokeOneshot(
-  target: GrpcTargetIpc,
-  req: InvokeRequest,
-  // The workflow Send path passes an explicit request id (for cancel) and the
-  // user's timeout+size options. Defaults serve callers with no cancel/options surface
-  // (the legacy invoke UI): a fresh id keeps each call's registry entry unique
-  // (so concurrent calls never collide on a shared key); the opts default mirrors the pref defaults.
-  requestId = newId(),
-  opts: CallOptionsIpc = { timeout_ms: 30_000, max_message_bytes: 16 * 1024 * 1024 },
+/** Live Send: forwards the raw draft (templates + step's own auth) + resolve ctx to
+ *  `grpc_send`, which resolves vars/auth/TLS through the core pipeline before invoking. */
+export async function grpcSend(
+  draft: SendDraftIpc,
+  ctx: SendCtxIpc,
+  requestId: string,
+  opts: CallOptionsIpc,
 ): Promise<InvokeOutcomeIpc> {
-  const r = await commands.grpcInvokeOneshot(target, req, requestId, opts);
+  const r = await commands.grpcSend(draft, ctx, requestId, opts);
   if (r.status === "error") throw r.error;
   return r.data;
 }
@@ -337,7 +335,7 @@ export const ipc = {
   startupRecoveryTake,
   grpcDescribe,
   grpcRefreshContract,
-  grpcInvokeOneshot,
+  grpcSend,
   grpcCancel,
   grpcBuildRequestSkeleton,
   grpcMessageSchema,

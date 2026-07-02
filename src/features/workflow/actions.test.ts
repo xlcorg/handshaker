@@ -3,7 +3,7 @@ import { setPref } from "@/lib/use-prefs";
 
 vi.mock("@/ipc/client", () => ({
   grpcBuildRequestSkeleton: vi.fn(),
-  grpcInvokeOneshot: vi.fn(),
+  grpcSend: vi.fn(),
   grpcCancel: vi.fn(),
   varsResolve: vi.fn(),
   authResolve: vi.fn(),
@@ -11,7 +11,7 @@ vi.mock("@/ipc/client", () => ({
 }));
 
 import * as ipc from "@/ipc/client";
-import { createStepFromMethod, sendStep, stepPatchFromSendResult, resolveAuthHeader, shouldRecordExecuted, buildExecutedStep, cancelStep } from "./actions";
+import { createStepFromMethod, sendStep, stepPatchFromSendResult, shouldRecordExecuted, buildExecutedStep, cancelStep } from "./actions";
 import { buildRequestSkeletonSafe, applyMethodSelection, isPristineBody, resetBodyToTemplate, fetchMessageSchemaSafe } from "./actions";
 import { varsCtxFor, varsResolverFor } from "./actions";
 import { newStep, type Step } from "./model";
@@ -70,8 +70,19 @@ describe("varsCtxFor / varsResolverFor", () => {
 });
 
 describe("sendStep", () => {
-  it("returns ok outcome on success", async () => {
-    vi.mocked(ipc.grpcInvokeOneshot).mockResolvedValue({
+  const baseStep = {
+    address: "h:443",
+    tls: true,
+    service: "S",
+    method: "M",
+    requestJson: "{}",
+    metadata: [{ key: "x", value: "1", enabled: true }],
+    auth: { kind: "none" as const },
+    collectionId: "c1",
+  };
+
+  it("forwards the draft templates + ctx unchanged to grpcSend", async () => {
+    vi.mocked(ipc.grpcSend).mockResolvedValue({
       status_code: 0,
       status_message: "OK",
       response_json: '{"state":"OK"}',
@@ -79,138 +90,99 @@ describe("sendStep", () => {
       status_details: [],
       elapsed_ms: 12,
     });
-    const res = await sendStep({
-      address: "h:443",
-      tls: true,
-      service: "S",
-      method: "M",
-      requestJson: "{}",
-      metadata: [{ key: "x", value: "1", enabled: true }],
-    });
+    const res = await sendStep(baseStep, { envName: "prod" }, { requestId: "rid" });
     expect(res.kind).toBe("ok");
     if (res.kind === "ok") expect(res.outcome.status_code).toBe(0);
-    expect(ipc.grpcInvokeOneshot).toHaveBeenCalledWith(
-      { address: "h:443", tls: true, skip_verify: false },
-      { service: "S", method: "M", request_json: "{}", metadata: { x: "1" } },
-      expect.any(String),
+    expect(ipc.grpcSend).toHaveBeenCalledWith(
+      {
+        address_template: "h:443",
+        tls: true,
+        service: "S",
+        method: "M",
+        body_template: "{}",
+        metadata: [{ key: "x", value: "1", enabled: true }],
+        auth: { kind: "none" },
+      },
+      { collection_id: "c1", env_name: "prod" },
+      "rid",
       { timeout_ms: expect.any(Number), max_message_bytes: expect.any(Number) },
     );
   });
 
-  it("returns error kind with the IpcError message on client failure", async () => {
-    vi.mocked(ipc.grpcInvokeOneshot).mockRejectedValue({ type: "Transport", kind: "Refused", message: "connection refused" });
-    const res = await sendStep({
-      address: "h:443",
-      tls: true,
-      service: "S",
-      method: "M",
-      requestJson: "{}",
-      metadata: [],
+  it("omits disabled and empty-key metadata rows from the draft", async () => {
+    vi.mocked(ipc.grpcSend).mockResolvedValue({
+      status_code: 0, status_message: "OK", response_json: "{}",
+      trailing_metadata: {}, status_details: [], elapsed_ms: 1,
     });
+    await sendStep(
+      {
+        ...baseStep,
+        metadata: [
+          { key: "keep", value: "1", enabled: true },
+          { key: "off", value: "2", enabled: false },
+          { key: "", value: "3", enabled: true },
+        ],
+      },
+      { envName: null },
+    );
+    expect(ipc.grpcSend).toHaveBeenCalledWith(
+      expect.objectContaining({ metadata: [{ key: "keep", value: "1", enabled: true }] }),
+      expect.anything(),
+      expect.any(String),
+      expect.anything(),
+    );
+  });
+
+  it("maps an UnresolvedVars throw to kind 'unresolved'", async () => {
+    vi.mocked(ipc.grpcSend).mockRejectedValue({
+      type: "UnresolvedVars",
+      unresolved: ["host", "uid"],
+      cycle: null,
+    });
+    const res = await sendStep(baseStep, { envName: null });
+    expect(res).toEqual({ kind: "unresolved", unresolved: ["host", "uid"], cycle: null });
+  });
+
+  it("maps an UnresolvedVars cycle throw through, cycle intact", async () => {
+    vi.mocked(ipc.grpcSend).mockRejectedValue({
+      type: "UnresolvedVars",
+      unresolved: [],
+      cycle: ["a", "b", "a"],
+    });
+    const res = await sendStep(baseStep, { envName: null });
+    expect(res).toEqual({ kind: "unresolved", unresolved: [], cycle: ["a", "b", "a"] });
+  });
+
+  it("maps a Cancelled throw to kind 'cancelled'", async () => {
+    vi.mocked(ipc.grpcSend).mockRejectedValue({ type: "Cancelled" });
+    const res = await sendStep(baseStep, { envName: null });
+    expect(res).toEqual({ kind: "cancelled" });
+  });
+
+  it("returns error kind with the IpcError message on client failure", async () => {
+    vi.mocked(ipc.grpcSend).mockRejectedValue({ type: "Transport", kind: "Refused", message: "connection refused" });
+    const res = await sendStep(baseStep, { envName: null });
     expect(res).toEqual({ kind: "error", fault: { kind: "refused", message: "connection refused" } });
   });
 
   it("falls back to the IpcError type for messageless variants", async () => {
-    vi.mocked(ipc.grpcInvokeOneshot).mockRejectedValue({ type: "NotConnected" });
-    const res = await sendStep({
-      address: "h:443",
-      tls: true,
-      service: "S",
-      method: "M",
-      requestJson: "{}",
-      metadata: [],
-    });
+    vi.mocked(ipc.grpcSend).mockRejectedValue({ type: "NotConnected" });
+    const res = await sendStep(baseStep, { envName: null });
     expect(res.kind).toBe("error");
     if (res.kind === "error") expect(res.fault).toEqual({ kind: "other", message: "NotConnected" });
   });
 
-  it("omits disabled and empty-key metadata rows", async () => {
-    vi.mocked(ipc.grpcInvokeOneshot).mockResolvedValue({
-      status_code: 0,
-      status_message: "OK",
-      response_json: "{}",
-      trailing_metadata: {},
-      status_details: [],
-      elapsed_ms: 1,
-    });
-    await sendStep({
-      address: "h:443",
-      tls: true,
-      service: "S",
-      method: "M",
-      requestJson: "{}",
-      metadata: [
-        { key: "keep", value: "1", enabled: true },
-        { key: "off", value: "2", enabled: false },
-        { key: "", value: "3", enabled: true },
-      ],
-    });
-    expect(ipc.grpcInvokeOneshot).toHaveBeenCalledWith(
-      { address: "h:443", tls: true, skip_verify: false },
-      { service: "S", method: "M", request_json: "{}", metadata: { keep: "1" } },
-      expect.any(String),
-      { timeout_ms: expect.any(Number), max_message_bytes: expect.any(Number) },
-    );
-  });
-
-  it("sendStep returns an error result (does not throw) when varsResolve rejects", async () => {
-    vi.mocked(ipc.varsResolve).mockRejectedValueOnce(new Error("backend boom"));
-    const res = await sendStep({
-      address: "{{host}}", tls: false, service: "S", method: "M",
-      requestJson: "{}", metadata: [],
-    });
-    expect(res.kind).toBe("error");
-    if (res.kind === "error") expect(res.fault.message).toContain("backend boom");
-    expect(ipc.grpcInvokeOneshot).not.toHaveBeenCalled();
-  });
-
-  it("sendStep blocks on unresolved variables and does not invoke", async () => {
-    vi.mocked(ipc.varsResolve).mockImplementation(async (tpl: string) => {
-      const m = [...tpl.matchAll(/\{\{([^{}]+)\}\}/g)].map((x) => x[1]);
-      return { resolved: tpl, unresolved_vars: m, cycle_chain: null, dynamic_vars: [] };
-    });
-    const res = await sendStep({
-      address: "{{host}}", tls: false, service: "S", method: "M",
-      requestJson: "{}", metadata: [],
-    });
-    expect(res.kind).toBe("unresolved");
-    if (res.kind === "unresolved") expect(res.unresolved).toEqual(["host"]);
-    expect(ipc.grpcInvokeOneshot).not.toHaveBeenCalled();
-  });
-
-  it("sendStep resolves templates in the step's collection ctx", async () => {
-    await sendStep({
-      address: "{{uri-root}}", tls: false, service: "p.S", method: "M",
-      requestJson: "{}", metadata: [], collectionId: "c1",
-    });
-    expect(ipc.varsResolve).toHaveBeenCalledWith("{{uri-root}}", {
-      collection_id: "c1", collection_vars: null, env_vars: null,
-    });
-  });
-
-  it("sendStep without a collection resolves with a null ctx", async () => {
-    await sendStep({
-      address: "h:1", tls: false, service: "p.S", method: "M",
-      requestJson: "{}", metadata: [],
-    });
-    expect(ipc.varsResolve).toHaveBeenCalledWith("h:1", null);
-  });
-
-  it("sendStep invokes with resolved address + metadata when all vars resolve", async () => {
-    vi.mocked(ipc.varsResolve).mockImplementation(async (tpl: string) => ({
-      resolved: tpl.replace("{{host}}", "api.internal"),
-      unresolved_vars: [], cycle_chain: null, dynamic_vars: [],
-    }));
-    vi.mocked(ipc.grpcInvokeOneshot).mockResolvedValue({
+  it("sends a null collection_id when the step is unbound", async () => {
+    vi.mocked(ipc.grpcSend).mockResolvedValue({
       status_code: 0, status_message: "OK", response_json: "{}",
-      trailing_metadata: {}, status_details: [], elapsed_ms: 5,
+      trailing_metadata: {}, status_details: [], elapsed_ms: 1,
     });
-    await sendStep({ address: "{{host}}", tls: true, service: "S", method: "M", requestJson: "{}", metadata: [] });
-    expect(ipc.grpcInvokeOneshot).toHaveBeenCalledWith(
-      { address: "api.internal", tls: true, skip_verify: false },
-      expect.objectContaining({ service: "S", method: "M" }),
+    await sendStep({ ...baseStep, collectionId: undefined }, { envName: null });
+    expect(ipc.grpcSend).toHaveBeenCalledWith(
+      expect.anything(),
+      { collection_id: null, env_name: null },
       expect.any(String),
-      { timeout_ms: expect.any(Number), max_message_bytes: expect.any(Number) },
+      expect.anything(),
     );
   });
 });
@@ -236,75 +208,6 @@ describe("stepPatchFromSendResult", () => {
   });
   it("error → error with message", () => {
     expect(stepPatchFromSendResult({ kind: "error", fault: { kind: "other", message: "boom" } })).toEqual({ status: "error", outcome: null, error: { kind: "other", message: "boom" } });
-  });
-});
-
-describe("sendStep authHeader merge", () => {
-  beforeEach(() => {
-    vi.mocked(ipc.grpcInvokeOneshot).mockResolvedValue({
-      status_code: 0, status_message: "OK", response_json: "{}", trailing_metadata: {}, status_details: [], elapsed_ms: 1,
-    });
-  });
-
-  it("merges the auth header verbatim alongside resolved metadata rows", async () => {
-    await sendStep(
-      { address: "h:443", tls: true, service: "S", method: "M", requestJson: "{}",
-        metadata: [{ key: "x", value: "1", enabled: true }] },
-      { key: "authorization", value: "Bearer {{notresolved}}" }, // verbatim: no var resolution
-    );
-    expect(ipc.grpcInvokeOneshot).toHaveBeenCalledWith(
-      { address: "h:443", tls: true, skip_verify: false },
-      { service: "S", method: "M", request_json: "{}",
-        metadata: { x: "1", authorization: "Bearer {{notresolved}}" } },
-      expect.any(String),
-      { timeout_ms: expect.any(Number), max_message_bytes: expect.any(Number) },
-    );
-  });
-
-  it("injects nothing when no authHeader is given", async () => {
-    await sendStep({ address: "h:443", tls: true, service: "S", method: "M", requestJson: "{}", metadata: [] });
-    expect(ipc.grpcInvokeOneshot).toHaveBeenCalledWith(
-      { address: "h:443", tls: true, skip_verify: false },
-      { service: "S", method: "M", request_json: "{}", metadata: {} },
-      expect.any(String),
-      { timeout_ms: expect.any(Number), max_message_bytes: expect.any(Number) },
-    );
-  });
-});
-
-describe("resolveAuthHeader", () => {
-  const passthroughVars = async (t: string) => ({ resolved: t, unresolved_vars: [], cycle_chain: null, dynamic_vars: [] });
-
-  it("returns kind 'none' when auth.kind is none (no resolve call)", async () => {
-    const r = await resolveAuthHeader({ kind: "none" }, null, {
-      authResolve: ipc.authResolve,
-      varsResolve: passthroughVars,
-    });
-    expect(r.kind).toBe("none");
-    expect(ipc.authResolve).not.toHaveBeenCalled();
-  });
-
-  it("returns a header when EnvVar auth resolves", async () => {
-    vi.mocked(ipc.authResolve).mockResolvedValue({ header_name: "authorization", header_value: "Bearer t" });
-    const auth = { kind: "env_var" as const, env_var: "TOK", header_name: "authorization", prefix: "Bearer " };
-    const r = await resolveAuthHeader(auth, null, { authResolve: ipc.authResolve, varsResolve: passthroughVars });
-    expect(r.kind).toBe("header");
-    if (r.kind === "header") expect(r.header).toEqual({ key: "authorization", value: "Bearer t" });
-  });
-
-  it("returns kind 'none' when authResolve yields null credentials", async () => {
-    vi.mocked(ipc.authResolve).mockResolvedValue(null);
-    const auth = { kind: "env_var" as const, env_var: "TOK", header_name: "authorization", prefix: "Bearer " };
-    const r = await resolveAuthHeader(auth, null, { authResolve: ipc.authResolve, varsResolve: passthroughVars });
-    expect(r.kind).toBe("none");
-  });
-
-  it("returns kind 'error' when authResolve throws", async () => {
-    vi.mocked(ipc.authResolve).mockRejectedValue({ type: "NotImplemented", message: "oauth2 token fetch" });
-    const auth = { kind: "oauth2_client_credentials" as const, token_url: "u", client_id: "c", client_secret: "S", scopes: [] };
-    const r = await resolveAuthHeader(auth, null, { authResolve: ipc.authResolve, varsResolve: passthroughVars });
-    expect(r.kind).toBe("error");
-    if (r.kind === "error") expect(r.message).toContain("oauth2");
   });
 });
 
@@ -336,34 +239,28 @@ describe("buildExecutedStep", () => {
 });
 
 describe("sendStep cancel/timeout wiring", () => {
+  const step = { address: "h:443", tls: true, service: "S", method: "M", requestJson: "{}", metadata: [], auth: { kind: "none" as const } };
+
   beforeEach(() => {
-    vi.mocked(ipc.grpcInvokeOneshot).mockResolvedValue({
+    vi.mocked(ipc.grpcSend).mockResolvedValue({
       status_code: 0, status_message: "OK", response_json: "{}", trailing_metadata: {}, status_details: [], elapsed_ms: 1,
     });
   });
 
-  it("passes a request_id and a timeout_ms to grpcInvokeOneshot", async () => {
-    await sendStep(
-      { address: "h:443", tls: true, service: "S", method: "M", requestJson: "{}", metadata: [] },
-      null,
-      { requestId: "req-1", timeoutMs: 12345 },
-    );
-    expect(ipc.grpcInvokeOneshot).toHaveBeenCalledWith(
-      { address: "h:443", tls: true, skip_verify: false },
-      { service: "S", method: "M", request_json: "{}", metadata: {} },
+  it("passes a request_id and a timeout_ms to grpcSend", async () => {
+    await sendStep(step, { envName: null }, { requestId: "req-1", timeoutMs: 12345 });
+    expect(ipc.grpcSend).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
       "req-1",
       { timeout_ms: 12345, max_message_bytes: expect.any(Number) },
     );
   });
 
-  it("passes the maxMessageBytes pref to grpcInvokeOneshot", async () => {
+  it("passes the maxMessageBytes pref to grpcSend", async () => {
     setPref("maxMessageBytes", 0); // Unlimited
-    await sendStep(
-      { address: "h:443", tls: true, service: "S", method: "M", requestJson: "{}", metadata: [] },
-      null,
-      { requestId: "req-mb", timeoutMs: 1000 },
-    );
-    expect(ipc.grpcInvokeOneshot).toHaveBeenLastCalledWith(
+    await sendStep(step, { envName: null }, { requestId: "req-mb", timeoutMs: 1000 });
+    expect(ipc.grpcSend).toHaveBeenLastCalledWith(
       expect.anything(),
       expect.anything(),
       "req-mb",
@@ -373,12 +270,8 @@ describe("sendStep cancel/timeout wiring", () => {
   });
 
   it("returns kind 'cancelled' when the backend reports a cancellation", async () => {
-    vi.mocked(ipc.grpcInvokeOneshot).mockRejectedValue({ type: "Cancelled" });
-    const res = await sendStep(
-      { address: "h", tls: false, service: "S", method: "M", requestJson: "{}", metadata: [] },
-      null,
-      { requestId: "req-2", timeoutMs: 1000 },
-    );
+    vi.mocked(ipc.grpcSend).mockRejectedValue({ type: "Cancelled" });
+    const res = await sendStep(step, { envName: null }, { requestId: "req-2", timeoutMs: 1000 });
     expect(res.kind).toBe("cancelled");
     expect(ipc.grpcCancel).not.toHaveBeenCalled();
   });
@@ -386,24 +279,20 @@ describe("sendStep cancel/timeout wiring", () => {
   it("does NOT treat a near-miss transport error containing 'cancel' as a cancellation", async () => {
     // Only the exact backend `Cancelled` discriminator resets to draft; an unrelated I/O error
     // that merely contains "cancel" in its message must surface as an error, not silently vanish.
-    vi.mocked(ipc.grpcInvokeOneshot).mockRejectedValue({
+    vi.mocked(ipc.grpcSend).mockRejectedValue({
       type: "Transport",
       kind: "Other",
       message: "I/O operation has been canceled by the host",
     });
-    const res = await sendStep(
-      { address: "h", tls: false, service: "S", method: "M", requestJson: "{}", metadata: [] },
-      null,
-      { requestId: "req-3", timeoutMs: 1000 },
-    );
+    const res = await sendStep(step, { envName: null }, { requestId: "req-3", timeoutMs: 1000 });
     expect(res.kind).toBe("error");
     if (res.kind === "error") expect(res.fault.message).toContain("canceled");
   });
 
   it("generates distinct request ids across calls when none is provided", async () => {
-    await sendStep({ address: "h", tls: false, service: "S", method: "M", requestJson: "{}", metadata: [] });
-    await sendStep({ address: "h", tls: false, service: "S", method: "M", requestJson: "{}", metadata: [] });
-    const ids = vi.mocked(ipc.grpcInvokeOneshot).mock.calls.map((c) => c[2]);
+    await sendStep(step, { envName: null });
+    await sendStep(step, { envName: null });
+    const ids = vi.mocked(ipc.grpcSend).mock.calls.map((c) => c[2]);
     expect(ids[0]).not.toBe(ids[1]);
     expect(typeof ids[0]).toBe("string");
   });
