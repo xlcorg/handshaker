@@ -40,6 +40,7 @@ pub enum IpcError {
     DecodeResponse { message: String },
     UnresolvedVariable { name: String },
     VariableCycle { chain: Vec<String> },
+    UnresolvedVars { unresolved: Vec<String>, cycle: Option<Vec<String>> },
     Transport { kind: TransportKindIpc, message: String },
     Cancelled,
     DeadlineExceeded { timeout_ms: u32 },
@@ -73,15 +74,9 @@ impl From<CoreError> for IpcError {
             CoreError::GrpcStatus { code, message } => IpcError::GrpcStatus { code, message },
             CoreError::NotImplemented(m) => IpcError::NotImplemented { message: m },
             CoreError::Persistence(m) => IpcError::Persistence { message: m },
-            // Temporary: the real `UnresolvedVars` IpcError variant lands in Slice 5
-            // (`src-tauri/src/ipc/error.rs`), once the live Send path routes through
-            // `resolve_request`. For now, map onto the existing shape so the tree builds.
-            CoreError::ResolveFailed { unresolved, cycle } => match cycle {
-                Some(chain) => IpcError::VariableCycle { chain },
-                None => IpcError::UnresolvedVariable {
-                    name: unresolved.into_iter().next().unwrap_or_default(),
-                },
-            },
+            CoreError::ResolveFailed { unresolved, cycle } => {
+                IpcError::UnresolvedVars { unresolved, cycle }
+            }
         }
     }
 }
@@ -143,6 +138,19 @@ mod tests {
         .into();
         match e {
             IpcError::Transport { kind, .. } => assert_eq!(kind, TransportKindIpc::Refused),
+            other => panic!("got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_failed_maps_to_unresolved_vars() {
+        let e: IpcError = CoreError::ResolveFailed {
+            unresolved: vec!["a".into(), "b".into()], cycle: None }.into();
+        match e {
+            IpcError::UnresolvedVars { unresolved, cycle } => {
+                assert_eq!(unresolved, vec!["a", "b"]);
+                assert!(cycle.is_none());
+            }
             other => panic!("got {other:?}"),
         }
     }
