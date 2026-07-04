@@ -519,7 +519,12 @@ export type SendCtxIpc = { collection_id: string | null; env_name: string | null
  * `grpc_send`. Templates (address/body/metadata values) are resolved via
  * `resolve_request` against the collection + active environment carried in `SendCtxIpc`.
  */
-export type SendDraftIpc = { address_template: string; tls: boolean; service: string; method: string; body_template: string; metadata: MetadataRowIpc[]; auth: SavedAuthConfigIpc }
+export type SendDraftIpc = { address_template: string; 
+/**
+ * Per-request TLS override. `None` = inherit the collection's `default_tls`
+ * (resolved in core against the ctx collection); `Some(b)` = force on/off.
+ */
+tls_override: boolean | null; service: string; method: string; body_template: string; metadata: MetadataRowIpc[]; auth: SavedAuthConfigIpc }
 export type ServiceCatalogIpc = { services: ServiceEntryIpc[] }
 export type ServiceEntryIpc = { full_name: string; methods: MethodEntryIpc[] }
 /**

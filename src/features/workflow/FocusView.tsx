@@ -57,6 +57,7 @@ export function FocusView({ onRequestSave, onQuickAddMethod }: FocusViewProps = 
   const originAuth = origin ? tree.find((c) => c.id === origin.collectionId)?.auth : undefined;
   const originVars = origin ? tree.find((c) => c.id === origin.collectionId)?.variables : undefined;
   const originSkipVerify = origin ? tree.find((c) => c.id === origin.collectionId)?.skip_tls_verify : undefined;
+  const originDefaultTls = origin ? tree.find((c) => c.id === origin.collectionId)?.default_tls : undefined;
 
   const segments = draft ? draftBreadcrumb(draft, origin, tree) : [];
   const prefix = segments.slice(0, -1);
@@ -146,6 +147,7 @@ export function FocusView({ onRequestSave, onQuickAddMethod }: FocusViewProps = 
             originAuth={originAuth}
             originVars={originVars}
             originSkipVerify={originSkipVerify}
+            originDefaultTls={originDefaultTls}
           />
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">

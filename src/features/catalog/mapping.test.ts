@@ -44,9 +44,11 @@ describe("stepToSavedRequest", () => {
     expect(saved.metadata).toEqual([{ key: "a", value: "b", enabled: false }]);
   });
 
-  it("writes a concrete tls_override for a plaintext step (never null on Save)", () => {
-    const saved = stepToSavedRequest(step({ tls: false }), { id: "r", name: "n" });
-    expect(saved.tls_override).toBe(false);
+  it("passes the step's tri-state tls through to tls_override (bool and inherit)", () => {
+    expect(stepToSavedRequest(step({ tls: false }), { id: "r", name: "n" }).tls_override).toBe(false);
+    expect(stepToSavedRequest(step({ tls: true }), { id: "r", name: "n" }).tls_override).toBe(true);
+    // null (inherit) must survive Save — else a request saved into a TLS collection freezes plaintext.
+    expect(stepToSavedRequest(step({ tls: null }), { id: "r", name: "n" }).tls_override).toBeNull();
   });
 });
 
@@ -88,8 +90,12 @@ describe("savedRequestToDraft", () => {
     expect(draft.metadata).toEqual([{ key: "x", value: "y", enabled: true }]);
   });
 
-  it("treats a null tls_override as plaintext (false)", () => {
-    expect(savedRequestToDraft(saved({ tls_override: null })).tls).toBe(false);
+  it("preserves a null tls_override as inherit (not collapsed to false)", () => {
+    expect(savedRequestToDraft(saved({ tls_override: null })).tls).toBeNull();
+  });
+
+  it("keeps an explicit false tls_override distinct from inherit", () => {
+    expect(savedRequestToDraft(saved({ tls_override: false })).tls).toBe(false);
   });
 
   it("copies metadata into a fresh array, not aliasing the saved request", () => {

@@ -19,7 +19,7 @@ function r(ui: ReactElement) {
 
 function props(over = {}) {
   return {
-    step: base, catalog: null, reflecting: false, reflectError: null,
+    step: base, catalog: null, reflecting: false, reflectError: null, defaultTls: false,
     onAddress: vi.fn(), onTls: vi.fn(), onRefresh: vi.fn(), onReflectCancel: vi.fn(), onSelectMethod: vi.fn(),
     onSend: vi.fn(), onCancel: vi.fn(), ...over,
   };
@@ -33,17 +33,24 @@ describe("DraftAddressBar", () => {
     expect(p.onAddress).toHaveBeenCalledWith("newhost:8080");
   });
 
-  it("toggles TLS via the lock (enabled → off)", () => {
-    const p = props(); // base.tls === true
+  it("cycles the lock on → off (explicit on)", () => {
+    const p = props(); // base.tls === true (explicit on)
     r(<DraftAddressBar {...p} />);
-    fireEvent.click(screen.getByLabelText("TLS enabled"));
+    fireEvent.click(screen.getByLabelText("TLS on"));
     expect(p.onTls).toHaveBeenCalledWith(false);
   });
 
-  it("toggles TLS via the lock (plaintext → on)", () => {
+  it("cycles the lock off → inherit", () => {
     const p = props({ step: { ...base, tls: false } });
     r(<DraftAddressBar {...p} />);
-    fireEvent.click(screen.getByLabelText("Plaintext"));
+    fireEvent.click(screen.getByLabelText("TLS off"));
+    expect(p.onTls).toHaveBeenCalledWith(null);
+  });
+
+  it("cycles the lock inherit → on", () => {
+    const p = props({ step: { ...base, tls: null } });
+    r(<DraftAddressBar {...p} />);
+    fireEvent.click(screen.getByLabelText("TLS inherit"));
     expect(p.onTls).toHaveBeenCalledWith(true);
   });
 

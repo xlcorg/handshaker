@@ -22,8 +22,10 @@ export function openSavedRequest(collectionId: string, saved: SavedRequestIpc): 
   );
 }
 
-/** Start a fresh, empty pending-draft in Focus (header `+` / menu "Add request"). */
+/** Start a fresh, empty pending-draft in Focus (header `+` / menu "Add request").
+ *  TLS is left inherit (null) so saving into a TLS collection picks up its default_tls
+ *  instead of freezing plaintext — the frozen-TLS bug. */
 export function newRequestDraft(): void {
   workflowStore.update((w) => setView(w, "focus"));
-  workflowStore.setDraft(newStep({ address: "", tls: false, service: "", method: "" }));
+  workflowStore.setDraft(newStep({ address: "", service: "", method: "" }));
 }

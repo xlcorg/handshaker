@@ -14,7 +14,10 @@ export interface MetadataRow {
 export interface Step {
   id: string;
   address: string; // resolved or {{var}} template
-  tls: boolean;
+  /** Per-request TLS override. `null` = inherit the origin collection's `default_tls`
+   *  (resolved at Send/probe time); `true`/`false` = explicit on/off. Freezing a bool
+   *  here is what caused the "saved request connects with the wrong TLS mode" bug. */
+  tls: boolean | null;
   service: string; // proto service full name, e.g. "payments.v1.PaymentService"
   method: string; // method name, e.g. "GetPayment"
   auth: SavedAuthConfigIpc; // inline auth for this call (resolved at Send)
@@ -40,7 +43,9 @@ export interface Workflow {
 
 export function newStep(init: {
   address: string;
-  tls: boolean;
+  /** Omit / `null` ⇒ inherit the collection default_tls (the sane default for a new or
+   *  saved request); pass a bool only for an explicit per-request override. */
+  tls?: boolean | null;
   service: string;
   method: string;
   requestJson?: string;
@@ -51,7 +56,7 @@ export function newStep(init: {
   return {
     id: newId(),
     address: init.address,
-    tls: init.tls,
+    tls: init.tls ?? null,
     service: init.service,
     method: init.method,
     auth: init.auth ?? { kind: "none" },

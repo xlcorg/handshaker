@@ -9,6 +9,8 @@ import { VarHighlightInput } from "@/features/vars/VarHighlightInput";
 import { useBusyDelay } from "@/lib/use-busy-delay";
 import type { VarCandidate } from "@/features/vars/candidates";
 import type { Step } from "./model";
+import { effectiveTls, nextTlsState } from "./tls";
+import { messages } from "@/lib/messages";
 
 export interface DraftAddressBarProps {
   step: Step;
@@ -16,7 +18,10 @@ export interface DraftAddressBarProps {
   reflecting: boolean;
   reflectError: string | null;
   onAddress: (address: string) => void;
-  onTls: (tls: boolean) => void;
+  /** Tri-state: the lock cycles inherit(null) → on(true) → off(false) → inherit. */
+  onTls: (tls: boolean | null) => void;
+  /** Collection `default_tls` — what an inherited (null) override effectively is. */
+  defaultTls: boolean;
   onRefresh: () => void;
   /** Abort the in-flight reflection (distinct from `onCancel`, which cancels a Send). */
   onReflectCancel: () => void;
@@ -39,26 +44,28 @@ export interface DraftAddressBarProps {
  *  resolved, red = unresolved/cycle); the full resolved value is in the field tooltip. */
 export function DraftAddressBar({
   step, catalog, reflecting, reflectError,
-  onAddress, onTls, onRefresh, onReflectCancel, onSelectMethod, onSend, onCancel, onQuickAdd,
+  onAddress, onTls, defaultTls, onRefresh, onReflectCancel, onSelectMethod, onSend, onCancel, onQuickAdd,
   resolveAddress, resolveKey, variables,
 }: DraftAddressBarProps) {
   const sending = step.status === "sending";
+  const inherit = step.tls === null;
+  const tlsOn = effectiveTls(step.tls, defaultTls);
   // Delay the Send→Cancel swap so a sub-250ms call never twitches the button.
   // Same 250ms as the response comet (ResponsePanel) ⇒ they appear in lockstep.
   const showCancel = useBusyDelay(sending, 250);
   return (
     <div className="flex h-14 items-center gap-2 border-b border-border px-4">
       <div className="flex h-8 flex-1 min-w-[16rem] items-center gap-1.5 rounded-md border border-input bg-background pl-2 pr-1 focus-within:ring-1 focus-within:ring-ring">
-        <Tooltip
-          content={step.tls ? "TLS enabled — click to switch to plaintext" : "Plaintext — click to enable TLS"}
-        >
+        <Tooltip content={messages.workflow.tls.tooltip(step.tls, defaultTls)}>
           <button
             type="button"
-            onClick={() => onTls(!step.tls)}
-            aria-label={step.tls ? "TLS enabled" : "Plaintext"}
-            className="flex flex-none items-center text-muted-foreground hover:text-foreground focus-visible:outline-none"
+            onClick={() => onTls(nextTlsState(step.tls))}
+            aria-label={messages.workflow.tls.aria(step.tls)}
+            className={`flex flex-none items-center hover:text-foreground focus-visible:outline-none ${
+              inherit ? "text-muted-foreground/60" : "text-foreground"
+            }`}
           >
-            {step.tls ? <Lock className="size-3.5" /> : <Unlock className="size-3.5" />}
+            {tlsOn ? <Lock className="size-3.5" /> : <Unlock className="size-3.5" />}
           </button>
         </Tooltip>
         <VarHighlightInput

@@ -41,7 +41,9 @@ pub struct SendCtxIpc {
 #[derive(Debug, Deserialize, Type)]
 pub struct SendDraftIpc {
     pub address_template: String,
-    pub tls: bool,
+    /// Per-request TLS override. `None` = inherit the collection's `default_tls`
+    /// (resolved in core against the ctx collection); `Some(b)` = force on/off.
+    pub tls_override: Option<bool>,
     pub service: String,
     pub method: String,
     pub body_template: String,

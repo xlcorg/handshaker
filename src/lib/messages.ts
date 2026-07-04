@@ -29,6 +29,18 @@ export const messages = {
     requestTabs: {
       authInherited: "Auth is inherited from the service (configured in the service panel).",
     },
+    tls: {
+      // Tri-state address-bar lock. `override` is the per-request choice; `defaultTls`
+      // is the collection default an inherited (null) override resolves to.
+      tooltip: (override: boolean | null, defaultTls: boolean): string =>
+        override === null
+          ? `TLS: inherit (collection: ${defaultTls ? "on" : "off"}) — click to force on`
+          : override
+            ? "TLS: on (override) — click to force off"
+            : "TLS: off (override) — click to inherit",
+      aria: (override: boolean | null): string =>
+        override === null ? "TLS inherit" : override ? "TLS on" : "TLS off",
+    },
     toast: {
       alreadyInCollection: (name: string) => `Already in "${name}"`,
       savedTo: (collection: string, folder: string) => `Saved to ${collection} / ${folder}`,

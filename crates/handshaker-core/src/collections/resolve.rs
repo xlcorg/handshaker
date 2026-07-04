@@ -454,4 +454,18 @@ mod tests {
         assert!(eff.target.tls);
         assert!(eff.target.skip_verify); // was hardcoded false on the old frontend Send path
     }
+
+    #[tokio::test]
+    async fn none_tls_override_inherits_collection_default_tls() {
+        // The frozen-TLS bug: a saved request with tls_override=None must inherit the
+        // collection's default_tls, not fall back to plaintext.
+        let mut coll = base_collection(&[("host", "h:1"), ("uid", "u")]);
+        coll.default_tls = true;
+        let active = env("prod", &[]);
+        let mut req = base_request();
+        req.tls_override = None;
+        let tokens = static_tokens("Bearer X");
+        let eff = resolve_request(&req, Some(&coll), Some(&active), &tokens).await.unwrap();
+        assert!(eff.target.tls); // inherited from collection.default_tls
+    }
 }

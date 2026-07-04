@@ -219,7 +219,7 @@ export async function resolveOauthConfig(
 export async function sendStep(
   step: {
     address: string;
-    tls: boolean;
+    tls: boolean | null;
     service: string;
     method: string;
     requestJson: string;
@@ -234,7 +234,8 @@ export async function sendStep(
   const prefs = readPrefs();
   const draft: SendDraftIpc = {
     address_template: step.address,
-    tls: step.tls,
+    // Raw tri-state override: null ⇒ core inherits the ctx collection's default_tls.
+    tls_override: step.tls,
     service: step.service,
     method: step.method,
     body_template: step.requestJson,

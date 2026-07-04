@@ -96,7 +96,7 @@ describe("sendStep", () => {
     expect(ipc.grpcSend).toHaveBeenCalledWith(
       {
         address_template: "h:443",
-        tls: true,
+        tls_override: true,
         service: "S",
         method: "M",
         body_template: "{}",
@@ -106,6 +106,20 @@ describe("sendStep", () => {
       { collection_id: "c1", env_name: "prod" },
       "rid",
       { timeout_ms: expect.any(Number), max_message_bytes: expect.any(Number) },
+    );
+  });
+
+  it("forwards a null tls (inherit) as tls_override: null for core to resolve", async () => {
+    vi.mocked(ipc.grpcSend).mockResolvedValue({
+      status_code: 0, status_message: "OK", response_json: "{}",
+      trailing_metadata: {}, status_details: [], elapsed_ms: 1,
+    });
+    await sendStep({ ...baseStep, tls: null }, { envName: "prod" });
+    expect(ipc.grpcSend).toHaveBeenCalledWith(
+      expect.objectContaining({ tls_override: null }),
+      expect.anything(),
+      expect.any(String),
+      expect.anything(),
     );
   });
 

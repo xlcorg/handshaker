@@ -65,8 +65,8 @@ describe("CallPanel editable", () => {
         <CallPanel step={draft} onPatch={onPatch} editable />
       </TooltipProvider>
     );
-    // draft.tls === true → lock shows "TLS enabled"; clicking switches to plaintext
-    fireEvent.click(screen.getByLabelText("TLS enabled"));
+    // draft.tls === true (explicit on) → lock shows "TLS on"; clicking cycles to off
+    fireEvent.click(screen.getByLabelText("TLS on"));
     expect(onPatch).toHaveBeenCalledWith({ tls: false });
   });
 

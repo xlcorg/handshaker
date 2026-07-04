@@ -248,7 +248,7 @@ export function WorkflowApp() {
       body_template: EMPTY_BODY_TEMPLATE,
       metadata: [],
       auth: { kind: "none" },
-      tls_override: current?.tls ?? false,
+      tls_override: current?.tls ?? null,
       last_used_at: null,
       use_count: 0,
     };

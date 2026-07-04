@@ -16,6 +16,7 @@ import {
   resetBodyToTemplate,
   varsResolverFor,
 } from "./actions";
+import { effectiveTls } from "./tls";
 import { workflowStore } from "./store";
 import { isSendHotkey } from "./sendHotkey";
 import { useEnvRevision } from "@/features/envs/envRevision";
@@ -49,6 +50,9 @@ interface CallPanelProps {
   /** `skip_tls_verify` of the draft's origin collection — dials reflection/skeleton/schema
    *  the same as Send. Unbound draft (no origin) ⇒ false. */
   originSkipVerify?: boolean;
+  /** `default_tls` of the draft's origin collection — what a null (inherit) TLS override
+   *  resolves to at Send/probe time. Unbound draft (no origin) ⇒ false. */
+  originDefaultTls?: boolean;
   /** Origin-bound only: a method was just picked. (prev, next) carry the service/method
    *  before and after the switch — lets the owner auto-rename the saved request when its
    *  name still tracks the old method. */
@@ -59,8 +63,11 @@ interface CallPanelProps {
 }
 
 /** The editable, sendable surface for one step — reused by Focus(draft)/List/Ledger. */
-export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMethod, originAuth: _originAuth, originVars, originSkipVerify, onMethodSelected }: CallPanelProps) {
+export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMethod, originAuth: _originAuth, originVars, originSkipVerify, originDefaultTls, onMethodSelected }: CallPanelProps) {
   const skipVerify = originSkipVerify ?? false;
+  // Concrete TLS for probes/Send display: the step's override, or the collection default
+  // when inheriting (null). Send itself forwards the raw override; core inherits identically.
+  const effTls = effectiveTls(step.tls, originDefaultTls ?? false);
   const [prefs, setPref] = usePrefs();
   const activeWf = useActiveWorkflow();
   // Re-resolve the address preview when the active env's identity or contents change
@@ -81,7 +88,7 @@ export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMetho
   const onResetBody = () =>
     void resetBodyToTemplate(
       onPatch,
-      { address: step.address, tls: step.tls, collectionId: step.collectionId, skipVerify },
+      { address: step.address, tls: effTls, collectionId: step.collectionId, skipVerify },
       step.service,
       step.method,
     );
@@ -113,7 +120,8 @@ export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMetho
     onPatch(patch);
     // Snapshot the auth actually used, so re-sending the history step works standalone.
     if (onExecuted && shouldRecordExecuted(res)) {
-      onExecuted(buildExecutedStep({ ...step, auth: effectiveAuth }, patch));
+      // Freeze the concrete TLS actually used, so the history row is self-describing.
+      onExecuted(buildExecutedStep({ ...step, auth: effectiveAuth, tls: effTls }, patch));
     }
   };
 
@@ -149,7 +157,7 @@ export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMetho
   // refresh — the "doesn't pick up on env change" bug.
   const reflection = useDraftReflection(
     step.address,
-    step.tls,
+    effTls,
     !!editable,
     step.collectionId,
     addressResolveKey,
@@ -170,7 +178,7 @@ export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMetho
   // output side for the Contract tab.
   // History panels pass an empty target so no fetch fires.
   const schemaTarget = editable
-    ? { address: step.address, tls: step.tls, service: step.service, method: step.method, collectionId: step.collectionId, skipVerify }
+    ? { address: step.address, tls: effTls, service: step.service, method: step.method, collectionId: step.collectionId, skipVerify }
     : { address: "", tls: false, service: "", method: "", collectionId: null };
   const schema = useMessageSchema(schemaTarget, "input", schemaRevision, addressResolveKey);
   const outputSchema = useMessageSchema(schemaTarget, "output", schemaRevision, addressResolveKey);
@@ -183,6 +191,7 @@ export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMetho
       reflectError={reflection.error}
       onAddress={(address) => onPatch({ address })}
       onTls={(tls) => onPatch({ tls })}
+      defaultTls={originDefaultTls ?? false}
       onRefresh={refreshContract}
       onReflectCancel={reflection.cancel}
       onSelectMethod={(m) => {
@@ -191,7 +200,7 @@ export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMetho
           const prev = { service: step.service, method: step.method };
           void applyMethodSelection(
             onPatch,
-            { address: step.address, tls: step.tls, collectionId: step.collectionId, skipVerify },
+            { address: step.address, tls: effTls, collectionId: step.collectionId, skipVerify },
             { requestJson: step.requestJson, service: step.service, method: step.method },
             m,
             workflowStore.activeWorkflow().steps,

@@ -26,7 +26,9 @@ export function stepToSavedRequest(step: Step, opts: { id: string; name: string 
 export function savedRequestToDraft(saved: SavedRequestIpc): Step {
   return newStep({
     address: saved.address_template,
-    tls: saved.tls_override ?? false,
+    // Preserve tri-state: null override ⇒ inherit the collection default_tls at Send.
+    // Collapsing null→false here is what silently connected saved requests in plaintext.
+    tls: saved.tls_override,
     service: saved.service,
     method: saved.method,
     requestJson: saved.body_template,

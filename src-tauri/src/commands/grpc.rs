@@ -285,7 +285,7 @@ pub(crate) async fn grpc_send_impl(
         body_template: draft.body_template,
         metadata: draft.metadata.into_iter().map(|r| r.into_core()).collect(),
         auth: draft.auth.into_core(),
-        tls_override: Some(draft.tls),
+        tls_override: draft.tls_override,
         last_used_at: None,
         use_count: 0,
     };
@@ -396,7 +396,7 @@ mod tests {
     async fn grpc_send_unresolved_var_returns_unresolved_vars_error() {
         let state = AppState::default(); // empty stores ⇒ {{host}} unresolvable
         let draft = SendDraftIpc {
-            address_template: "{{host}}".into(), tls: false,
+            address_template: "{{host}}".into(), tls_override: None,
             service: "pkg.Svc".into(), method: "Do".into(),
             body_template: "{}".into(), metadata: vec![],
             auth: SavedAuthConfigIpc::None,
