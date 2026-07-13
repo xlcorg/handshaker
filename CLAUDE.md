@@ -8,10 +8,12 @@ Workspace: `crates/handshaker-core` (OS-independent core) · `src-tauri` (IPC) �
 
 No active feature (between features).
 
-Latest merged: **single resolve pipeline** — battle Send routes through the core
-`resolve_request` (vars → TLS → metadata → auth resolved once, in core, per ADR-0001).
-Banner: `docs/superpowers/plans/archive/2026-07-02-single-resolve-pipeline.md` ·
-memory `project_single_resolve_pipeline_done`.
+Latest merged: **remove default context menu** — a bubble-phase `document` `contextmenu`
+guard suppresses the native WebView2 menu in prod everywhere except editable text fields;
+Monaco/Radix menus stay untouched via `event.defaultPrevented`. Frontend-only
+(`src/features/shell/nativeContextMenu.ts`).
+Banner: `docs/superpowers/plans/archive/2026-07-13-remove-default-context-menu.md` ·
+memory `project_remove_default_context_menu_done`.
 
 Integration branch is `main`; features run in isolated worktree branches (`claude/*`)
 and land fast-forward. Before merging, squash the branch into clean, cohesive history —
