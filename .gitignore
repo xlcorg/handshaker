@@ -46,3 +46,4 @@ Thumbs.db
 !.claude/rules/
 # codegraph local index/daemon artifacts
 .codegraph/
+.mcp.json
