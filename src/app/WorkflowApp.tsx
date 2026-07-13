@@ -39,6 +39,7 @@ import { UpdaterProvider } from "@/features/updater/updaterContext";
 import { useUiZoom } from "@/features/shell/zoom";
 import { useWordWrapHotkey } from "@/features/shell/wordWrap";
 import { useSplitDirectionHotkey } from "@/features/shell/splitDirection";
+import { useSuppressNativeContextMenu } from "@/features/shell/nativeContextMenu";
 import { dismissSplash } from "@/features/shell/splash";
 import { useStartupRecovery } from "@/features/shell/startupRecovery";
 
@@ -85,6 +86,8 @@ export function WorkflowApp() {
   useWordWrapHotkey();
   // Глобальный Alt+V / ⌥⌘V → переключает prefs.split (ориентация request/response).
   useSplitDirectionHotkey();
+  // Подавляет дефолтное меню WebView (кроме текстовых полей) в prod-сборке.
+  useSuppressNativeContextMenu();
   // Уведомить один раз о файлах, помещённых в карантин при старте (битый JSON → .corrupt).
   useStartupRecovery();
 
