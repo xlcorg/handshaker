@@ -8,12 +8,12 @@ Workspace: `crates/handshaker-core` (OS-independent core) · `src-tauri` (IPC) �
 
 No active feature (between features).
 
-Latest merged: **remove default context menu** — a bubble-phase `document` `contextmenu`
-guard suppresses the native WebView2 menu in prod everywhere except editable text fields;
-Monaco/Radix menus stay untouched via `event.defaultPrevented`. Frontend-only
-(`src/features/shell/nativeContextMenu.ts`).
-Banner: `docs/superpowers/plans/archive/2026-07-13-remove-default-context-menu.md` ·
-memory `project_remove_default_context_menu_done`.
+Latest merged: **icons off by default · methods in proto order** — the sidebar gRPC
+icon defaults to `off` (`grpcIcon` pref, `src/lib/use-prefs.ts`); the core catalog keeps
+methods in `.proto` definition order (dropped the method `sort_by` in
+`crates/handshaker-core/src/grpc/catalog/build.rs`, services stay alphabetical).
+Banner: `docs/superpowers/plans/archive/2026-07-14-icons-off-method-proto-order.md` ·
+memory `project_icons_off_method_proto_order_done`.
 
 Integration branch is `main`; features run in isolated worktree branches (`claude/*`)
 and land fast-forward. Before merging, squash the branch into clean, cohesive history —
