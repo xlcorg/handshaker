@@ -5,6 +5,7 @@ import type { ItemIpc } from "@/ipc/bindings";
 import type { TreeCallbacks } from "./treeTypes";
 import { RequestRow } from "./RequestRow";
 import { SidebarProvider } from "@/components/ui/sidebar";
+import { setPref } from "@/lib/use-prefs";
 
 function req(name: string): Extract<ItemIpc, { type: "request" }> {
   return {
@@ -58,12 +59,25 @@ function renderWithSidebar(ui: React.ReactElement) {
 }
 
 describe("RequestRow", () => {
-  it("renders the gRPC icon (default solid)", () => {
+  it("renders no gRPC icon by default (grpcIcon 'off')", () => {
     renderWithSidebar(
       <RequestRow collectionId="c1" req={req("My Req")} cb={makeCb()} />,
     );
-    const icon = screen.getByLabelText("grpc");
-    expect(icon.getAttribute("data-variant")).toBe("solid");
+    expect(screen.queryByLabelText("grpc")).toBeNull();
+    expect(screen.getByText("My Req")).toBeTruthy();
+  });
+
+  it("renders the gRPC icon when a style pref is set", () => {
+    setPref("grpcIcon", "solid");
+    try {
+      renderWithSidebar(
+        <RequestRow collectionId="c1" req={req("My Req")} cb={makeCb()} />,
+      );
+      const icon = screen.getByLabelText("grpc");
+      expect(icon.getAttribute("data-variant")).toBe("solid");
+    } finally {
+      setPref("grpcIcon", "off"); // reset the module-level singleton for sibling tests
+    }
   });
 
   it("shows the name and opens the request on click", () => {

@@ -43,7 +43,7 @@ export const PREFS_DEFAULTS: Prefs = {
   split: "vertical",
   zoom: 1,
   requestTimeoutMs: 30000,
-  grpcIcon: "solid",
+  grpcIcon: "off",
   methodGroupStyle: "zebra",
   varHighlight: "indigo",
   bodyHints: true,
