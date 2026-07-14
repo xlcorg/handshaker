@@ -4,12 +4,12 @@ use crate::grpc::catalog::{MethodEntry, ServiceCatalog, ServiceEntry};
 use prost_reflect::DescriptorPool;
 
 /// Snapshot all services in `pool` into a `ServiceCatalog`. Services are sorted by
-/// full_name for stable UI rendering.
+/// full_name for a stable list; methods keep their `.proto` definition order.
 pub fn build_catalog(pool: &DescriptorPool) -> ServiceCatalog {
     let mut services: Vec<ServiceEntry> = pool
         .services()
         .map(|s| {
-            let mut methods: Vec<MethodEntry> = s
+            let methods: Vec<MethodEntry> = s
                 .methods()
                 .map(|m| MethodEntry {
                     name: m.name().to_string(),
@@ -20,7 +20,6 @@ pub fn build_catalog(pool: &DescriptorPool) -> ServiceCatalog {
                     server_streaming: m.is_server_streaming(),
                 })
                 .collect();
-            methods.sort_by(|a, b| a.name.cmp(&b.name));
             ServiceEntry {
                 full_name: s.full_name().to_string(),
                 methods,
@@ -70,17 +69,17 @@ mod tests {
                     name: Some("Alpha".into()),
                     method: vec![
                         MethodDescriptorProto {
+                            name: Some("Foo".into()),
+                            input_type: Some(".test.Empty".into()),
+                            output_type: Some(".test.Empty".into()),
+                            ..Default::default()
+                        },
+                        MethodDescriptorProto {
                             name: Some("Bar".into()),
                             input_type: Some(".test.Empty".into()),
                             output_type: Some(".test.Empty".into()),
                             client_streaming: Some(true),
                             server_streaming: Some(false),
-                            ..Default::default()
-                        },
-                        MethodDescriptorProto {
-                            name: Some("Foo".into()),
-                            input_type: Some(".test.Empty".into()),
-                            output_type: Some(".test.Empty".into()),
                             ..Default::default()
                         },
                     ],
@@ -92,22 +91,25 @@ mod tests {
     }
 
     #[test]
-    fn catalog_is_sorted_and_method_paths_correct() {
+    fn services_sorted_methods_in_definition_order() {
         let pool = build_pool(vec![simple_file_with_two_services()]).unwrap();
         let cat = build_catalog(&pool);
+        // Services stay alphabetically sorted (fixture defines Beta before Alpha).
         assert_eq!(cat.services.len(), 2);
         assert_eq!(cat.services[0].full_name, "test.Alpha");
         assert_eq!(cat.services[1].full_name, "test.Beta");
 
+        // Methods keep `.proto` definition order (fixture defines Foo before Bar —
+        // non-alphabetical, so this fails if the catalog re-sorts them).
         let alpha = &cat.services[0];
         assert_eq!(alpha.methods.len(), 2);
-        assert_eq!(alpha.methods[0].name, "Bar");
-        assert_eq!(alpha.methods[0].path, "/test.Alpha/Bar");
-        assert!(alpha.methods[0].client_streaming);
-        assert!(!alpha.methods[0].server_streaming);
-        assert_eq!(alpha.methods[1].name, "Foo");
-        assert_eq!(alpha.methods[1].path, "/test.Alpha/Foo");
-        assert_eq!(alpha.methods[1].input_message, "test.Empty");
-        assert_eq!(alpha.methods[1].output_message, "test.Empty");
+        assert_eq!(alpha.methods[0].name, "Foo");
+        assert_eq!(alpha.methods[0].path, "/test.Alpha/Foo");
+        assert_eq!(alpha.methods[0].input_message, "test.Empty");
+        assert_eq!(alpha.methods[0].output_message, "test.Empty");
+        assert_eq!(alpha.methods[1].name, "Bar");
+        assert_eq!(alpha.methods[1].path, "/test.Alpha/Bar");
+        assert!(alpha.methods[1].client_streaming);
+        assert!(!alpha.methods[1].server_streaming);
     }
 }
