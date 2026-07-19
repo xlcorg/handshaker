@@ -8,12 +8,12 @@ Workspace: `crates/handshaker-core` (OS-independent core) · `src-tauri` (IPC) �
 
 No active feature (between features).
 
-Latest merged: **one home for the Send lifecycle** — `grpc_send` returns
-`SendReportIpc { outcome, auth_used, tls_used }` (picked auth in template form,
-`EffectiveRequest.picked_auth`); the `useSend` hook owns the frontend lifecycle
-(patch → executed snapshot from the report → usage bump).
-Banner: `docs/superpowers/plans/archive/2026-07-20-send-lifecycle.md` ·
-memory `project-send-lifecycle-done`.
+Latest merged: **body completion — one pure home** — `computeCompletion(fullText,
+caretOffset, {schema, vars})` in `src/features/bodyview/completion.ts` is the single
+home and test surface of the suggest pipeline; Monaco shell and BodyView auto-trigger
+are pass-through consumers (term: `src/CONTEXT.md`).
+Banner: `docs/superpowers/plans/archive/2026-07-20-body-completion.md` ·
+memory `project-body-completion-done`.
 
 Integration branch is `main`; features run in isolated worktree branches (`claude/*`)
 and land fast-forward. Before merging, squash the branch into clean, cohesive history —
