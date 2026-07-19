@@ -9,7 +9,7 @@ import { bodyFieldKey, matchesField, fieldPresent } from "./fieldName";
 // Cursor context — a schema-blind scanner over the text before the cursor.
 // ---------------------------------------------------------------------------
 
-export interface CompletionContext {
+interface CompletionContext {
   /** Literal object keys from root to the enclosing object (array frames add nothing). */
   path: string[];
   where: "key" | "value";
@@ -28,7 +28,7 @@ interface Frame {
  * typically incomplete/invalid mid-typing, so this is a lenient char scanner, not a
  * parser. It never throws.
  */
-export function resolveCompletionContext(text: string): CompletionContext {
+function resolveCompletionContext(text: string): CompletionContext {
   const stack: Frame[] = [];
   let pendingKey: string | null = null;
   let afterColon = false;
@@ -129,7 +129,7 @@ export function resolveCompletionContext(text: string): CompletionContext {
  * unterminated string swallows the rest of the text, dropping any keys after it
  * (acceptable mid-typing degradation).
  */
-export function collectPresentKeys(text: string, caret: number): ReadonlySet<string> {
+function collectPresentKeys(text: string, caret: number): ReadonlySet<string> {
   interface KeyFrame { type: "object" | "array"; keys: Set<string> }
   const stack: KeyFrame[] = [];
   let caretFrame: KeyFrame | null = null;
@@ -246,7 +246,7 @@ export function descendSchema(schema: MessageSchemaIpc, path: string[]): Descent
 // Suggestion builders (Monaco-agnostic).
 // ---------------------------------------------------------------------------
 
-export interface Suggestion {
+interface Suggestion {
   label: string;
   detail?: string;
   insertText: string;
@@ -300,7 +300,7 @@ function keyKind(field: FieldNodeIpc): Suggestion["kind"] {
   }
 }
 
-export function buildKeySuggestions(
+function buildKeySuggestions(
   schema: MessageSchemaIpc,
   ctx: CompletionContext,
   presentKeys: ReadonlySet<string> = new Set(),
@@ -333,7 +333,7 @@ export function buildKeySuggestions(
     }));
 }
 
-export function buildValueSuggestions(schema: MessageSchemaIpc, ctx: CompletionContext): Suggestion[] {
+function buildValueSuggestions(schema: MessageSchemaIpc, ctx: CompletionContext): Suggestion[] {
   const d = descendSchema(schema, ctx.path);
   if (!d) return [];
 
@@ -372,20 +372,6 @@ export function buildValueSuggestions(schema: MessageSchemaIpc, ctx: CompletionC
   return [];
 }
 
-/** Full pipeline: text-before-cursor → suggestions. The Monaco provider wraps this.
- *  `presentKeys` (from `collectPresentKeys` over the full text) hides fields the
- *  enclosing object already has; value suggestions ignore it. */
-export function computeSuggestions(
-  schema: MessageSchemaIpc,
-  textBefore: string,
-  presentKeys?: ReadonlySet<string>,
-): Suggestion[] {
-  const ctx = resolveCompletionContext(textBefore);
-  return ctx.where === "key"
-    ? buildKeySuggestions(schema, ctx, presentKeys)
-    : buildValueSuggestions(schema, ctx);
-}
-
 /** Human detail line for a var suggestion: "<value> · <origin>[ (overrides)]". */
 function varDetail(c: VarCandidate): string {
   const origin = c.overrides ? "env (overrides)" : c.origin;
@@ -394,7 +380,7 @@ function varDetail(c: VarCandidate): string {
 
 /** Variable-name suggestions for an open `{{` token. `closingAhead` = `}}` already
  *  immediately follows the caret (skip appending it). */
-export function buildVarSuggestions(
+function buildVarSuggestions(
   candidates: VarCandidate[],
   partial: string,
   closingAhead: boolean,
@@ -406,6 +392,167 @@ export function buildVarSuggestions(
     kind: "variable" as const,
     sortText: sortKey(i),
   }));
+}
+
+// ---------------------------------------------------------------------------
+// The deep interface: pure body completion over (fullText, caretOffset).
+// Monaco registration and the BodyView auto-trigger are pass-through consumers.
+// ---------------------------------------------------------------------------
+
+export interface BodyCompletionItem {
+  label: string;
+  detail?: string;
+  kind: Suggestion["kind"];
+  insertText: string;
+  sortText?: string;
+  /** insideString: quoted so Monaco's filter matches past the opening `"`. */
+  filterText?: string;
+  isSnippet?: boolean;
+  /** Re-trigger suggest after accepting (next nesting level). */
+  triggerNext?: boolean;
+  /** 1-based, Monaco convention. */
+  range: { startLineNumber: number; startColumn: number; endLineNumber: number; endColumn: number };
+}
+
+export interface BodyCompletion {
+  /** Which branch produced the items; null = nothing to show. */
+  source: "vars" | "schema" | null;
+  suggestions: BodyCompletionItem[];
+}
+
+/**
+ * Monaco's usual word separators (default wordPattern equivalent). The default
+ * pattern's number-literal alternative `(-?\d*\.\d\w*)` is deliberately not
+ * reproduced — it only changes the replace-range around decimal literals, where
+ * the widget's prefix filter rejects every suggestion anyway.
+ */
+const WORD_SEPARATORS = new Set("`~!@#$%^&*()-=+[{]}\\|;:'\",.<>/?".split(""));
+
+interface TextPos {
+  lineNumber: number;
+  column: number;
+  lineStartOffset: number;
+  lineContent: string;
+}
+
+/** Offset → 1-based line/column plus the line's text. LF line endings (Monaco
+ *  bodies are LF; a stray `\r` stays in lineContent, harmless for JSON). */
+function positionAt(fullText: string, offset: number): TextPos {
+  let lineStart = 0;
+  let lineNumber = 1;
+  for (let i = 0; i < offset; i++) {
+    if (fullText[i] === "\n") {
+      lineStart = i + 1;
+      lineNumber += 1;
+    }
+  }
+  const nextNl = fullText.indexOf("\n", lineStart);
+  const lineContent = fullText.slice(lineStart, nextNl === -1 ? fullText.length : nextNl);
+  return { lineNumber, column: offset - lineStart + 1, lineStartOffset: lineStart, lineContent };
+}
+
+/** `getWordUntilPosition` equivalent: the run of non-separator, non-whitespace
+ *  chars ending at `column` (endColumn = the caret column, Monaco convention). */
+function wordUntil(lineContent: string, column: number): { startColumn: number; endColumn: number } {
+  let start = column;
+  while (start > 1) {
+    const ch = lineContent[start - 2];
+    if (ch === undefined || WORD_SEPARATORS.has(ch) || /\s/.test(ch)) break;
+    start -= 1;
+  }
+  return { startColumn: start, endColumn: column };
+}
+
+/** The pure answer to "what does the suggest widget show at this caret". */
+export function computeCompletion(
+  fullText: string,
+  caretOffset: number,
+  ctx: { schema: MessageSchemaIpc | null; vars: VarCandidate[] | null },
+): BodyCompletion {
+  const textBefore = fullText.slice(0, caretOffset);
+  const pos = positionAt(fullText, caretOffset);
+
+  // --- variable completion (works without a schema) -----------------------
+  const tok = openVarToken(textBefore);
+  if (tok && ctx.vars && ctx.vars.length > 0) {
+    // Range covers the whole partial (offset after `{{` → caret), so dotted
+    // names replace correctly instead of duplicating the prefix.
+    const start = positionAt(fullText, tok.tokenStart + 2);
+    const afterOnLine = pos.lineContent.slice(pos.column - 1);
+    const closingAhead = /^\}\}/.test(afterOnLine);
+    const items = buildVarSuggestions(ctx.vars, tok.partial, closingAhead);
+    if (items.length > 0) {
+      const range = {
+        startLineNumber: start.lineNumber,
+        startColumn: start.column,
+        endLineNumber: pos.lineNumber,
+        endColumn: pos.column,
+      };
+      return {
+        source: "vars",
+        suggestions: items.map((s) => ({
+          label: s.label,
+          detail: s.detail,
+          kind: s.kind,
+          insertText: s.insertText,
+          sortText: s.sortText,
+          filterText: s.label,
+          range,
+        })),
+      };
+    }
+    // Zero matches → not a real var context (e.g. a stray unclosed `{{`); fall
+    // through to schema completion below.
+  }
+
+  if (!ctx.schema) return { source: null, suggestions: [] };
+  const schema = ctx.schema;
+
+  const cctx = resolveCompletionContext(textBefore);
+  const items =
+    cctx.where === "key"
+      ? buildKeySuggestions(schema, cctx, collectPresentKeys(fullText, caretOffset))
+      : buildValueSuggestions(schema, cctx);
+  if (items.length === 0) return { source: null, suggestions: [] };
+
+  const word = wordUntil(pos.lineContent, pos.column);
+  const cols = insertionColumns(pos.lineContent, word.startColumn, word.endColumn);
+  const range = {
+    startLineNumber: pos.lineNumber,
+    endLineNumber: pos.lineNumber,
+    startColumn: cols.startColumn,
+    endColumn: cols.endColumn,
+  };
+  const afterCaretOnLine = pos.lineContent.slice(pos.column - 1);
+  // When a key is completed but a value already follows, insert only the quoted key.
+  const keyOnly = cctx.where === "key" && /^\s*:/.test(afterCaretOnLine);
+  // Separator comma when the next token after the replaced range is another
+  // property/value (VS Code parity). Not for key-only inserts — a `:` follows.
+  const sep = separatorAfter(fullText.slice(pos.lineStartOffset + cols.endColumn - 1));
+  // When the caret is inside a string, `insertionColumns` extended the range left
+  // over the opening `"`. Monaco then filters suggestions against the leading text
+  // INCLUDING that quote (e.g. `"ti`), so a bare label like `title` matches nothing
+  // and the widget shows "No suggestions". Give those items a quoted `filterText`
+  // so the leading quote matches. (Outside a string we keep the default label.)
+  const insideString = cols.startColumn < word.startColumn;
+
+  return {
+    source: "schema",
+    suggestions: items.map((s) => {
+      const asKeyOnly = keyOnly && s.kind !== "value";
+      return {
+        label: s.label,
+        detail: s.detail,
+        kind: s.kind,
+        insertText: asKeyOnly ? `"${s.label}"` : s.insertText + sep,
+        sortText: s.sortText,
+        filterText: insideString ? `"${s.label}"` : undefined,
+        isSnippet: s.isSnippet && !asKeyOnly,
+        triggerNext: s.triggerNext && !asKeyOnly,
+        range,
+      };
+    }),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -440,21 +587,9 @@ export function setModelVarCandidates(
  *  replacement range. Mirrors VS Code's `evaluateSeparatorAfter`: another token ahead
  *  (the next property/value) needs a `,`; a closing brace/bracket, an existing comma,
  *  or end-of-text needs nothing. */
-export function separatorAfter(textAfter: string): "" | "," {
+function separatorAfter(textAfter: string): "" | "," {
   const next = /\S/.exec(textAfter)?.[0];
   return next === undefined || next === "," || next === "}" || next === "]" ? "" : ",";
-}
-
-/** When a key is completed but a value already follows, insert only the quoted key. */
-function colonAlreadyAhead(model: Monaco.editor.ITextModel, position: Monaco.Position): boolean {
-  const lineEnd = model.getLineMaxColumn(position.lineNumber);
-  const after = model.getValueInRange({
-    startLineNumber: position.lineNumber,
-    startColumn: position.column,
-    endLineNumber: position.lineNumber,
-    endColumn: lineEnd,
-  });
-  return /^\s*:/.test(after);
 }
 
 function monacoKind(monaco: typeof Monaco, kind: Suggestion["kind"]): Monaco.languages.CompletionItemKind {
@@ -483,7 +618,7 @@ function monacoKind(monaco: typeof Monaco, kind: Suggestion["kind"]): Monaco.lan
  * `lineContent` is the full line text; `wordStartColumn`/`wordEndColumn` come from
  * `model.getWordUntilPosition`.
  */
-export function insertionColumns(
+function insertionColumns(
   lineContent: string,
   wordStartColumn: number,
   wordEndColumn: number,
@@ -497,112 +632,29 @@ export function insertionColumns(
   };
 }
 
-/** Register the request-body completion provider exactly once (called from monaco.ts). */
+/** Register the request-body completion provider exactly once (called from monaco.ts).
+ *  A pass-through shell: all decisions live in `computeCompletion`. */
 export function registerBodyCompletion(monaco: typeof Monaco): void {
   monaco.languages.registerCompletionItemProvider("json-with-vars", {
     triggerCharacters: ['"', ":", " ", "{"],
     provideCompletionItems(model, position) {
-      const textBefore = model.getValueInRange({
-        startLineNumber: 1,
-        startColumn: 1,
-        endLineNumber: position.lineNumber,
-        endColumn: position.column,
+      const r = computeCompletion(model.getValue(), model.getOffsetAt(position), {
+        schema: schemaByModel.get(model) ?? null,
+        vars: varsByModel.get(model) ?? null,
       });
-
-      // --- variable completion (works without a schema) -------------------
-      const varCands = varsByModel.get(model);
-      const tok = openVarToken(textBefore);
-      if (tok && varCands) {
-        // Range covers the whole partial (offset after `{{` → caret), so dotted
-        // names replace correctly instead of duplicating the prefix.
-        const start = model.getPositionAt(tok.tokenStart + 2);
-        const lineEnd = model.getLineMaxColumn(position.lineNumber);
-        const after = model.getValueInRange({
-          startLineNumber: position.lineNumber, startColumn: position.column,
-          endLineNumber: position.lineNumber, endColumn: lineEnd,
-        });
-        const closingAhead = /^\}\}/.test(after);
-        const items = buildVarSuggestions(varCands, tok.partial, closingAhead);
-        if (items.length > 0) {
-          const range: Monaco.IRange = {
-            startLineNumber: start.lineNumber, startColumn: start.column,
-            endLineNumber: position.lineNumber, endColumn: position.column,
-          };
-          return {
-            suggestions: items.map((s) => ({
-              label: s.label,
-              detail: s.detail,
-              kind: monacoKind(monaco, s.kind),
-              insertText: s.insertText,
-              sortText: s.sortText,
-              filterText: s.label,
-              range,
-            })),
-          };
-        }
-        // Zero matches → not a real var context (e.g. a stray unclosed `{{`); fall
-        // through to schema completion below.
-      }
-
-      const schema = schemaByModel.get(model);
-      if (!schema) return { suggestions: [] };
-
-      const ctx = resolveCompletionContext(textBefore);
-      const items =
-        ctx.where === "key"
-          ? buildKeySuggestions(
-              schema,
-              ctx,
-              collectPresentKeys(model.getValue(), model.getOffsetAt(position)),
-            )
-          : buildValueSuggestions(schema, ctx);
-      if (items.length === 0) return { suggestions: [] };
-
-      const word = model.getWordUntilPosition(position);
-      const lineContent = model.getLineContent(position.lineNumber);
-      const cols = insertionColumns(lineContent, word.startColumn, word.endColumn);
-      const range: Monaco.IRange = {
-        startLineNumber: position.lineNumber,
-        endLineNumber: position.lineNumber,
-        startColumn: cols.startColumn,
-        endColumn: cols.endColumn,
-      };
-      const keyOnly = ctx.where === "key" && colonAlreadyAhead(model, position);
-      // Separator comma when the next token after the replaced range is another
-      // property/value (VS Code parity). Not for key-only inserts — a `:` follows.
-      const sep = separatorAfter(
-        model.getValue().slice(
-          model.getOffsetAt({ lineNumber: position.lineNumber, column: cols.endColumn }),
-        ),
-      );
-      // When the caret is inside a string, `insertionColumns` extended the range left
-      // over the opening `"`. Monaco then filters suggestions against the leading text
-      // INCLUDING that quote (e.g. `"ti`), so a bare label like `title` matches nothing
-      // and the widget shows "No suggestions". Give those items a quoted `filterText`
-      // so the leading quote matches. (Outside a string we keep the default label.)
-      const insideString = cols.startColumn < word.startColumn;
-
-      const suggestions: Monaco.languages.CompletionItem[] = items.map((s) => {
-        const asKeyOnly = keyOnly && s.kind !== "value";
-        const insertText = asKeyOnly ? `"${s.label}"` : s.insertText + sep;
-        return {
-          label: s.label,
-          detail: s.detail,
-          kind: monacoKind(monaco, s.kind),
-          insertText,
-          sortText: s.sortText,
-          filterText: insideString ? `"${s.label}"` : undefined,
-          insertTextRules:
-            s.isSnippet && !asKeyOnly
-              ? monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet
-              : undefined,
-          range,
-          command:
-            s.triggerNext && !asKeyOnly
-              ? { id: "editor.action.triggerSuggest", title: "" }
-              : undefined,
-        };
-      });
+      const suggestions: Monaco.languages.CompletionItem[] = r.suggestions.map((s) => ({
+        label: s.label,
+        detail: s.detail,
+        kind: monacoKind(monaco, s.kind),
+        insertText: s.insertText,
+        sortText: s.sortText,
+        filterText: s.filterText,
+        insertTextRules: s.isSnippet
+          ? monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet
+          : undefined,
+        range: s.range,
+        command: s.triggerNext ? { id: "editor.action.triggerSuggest", title: "" } : undefined,
+      }));
       return { suggestions };
     },
   });

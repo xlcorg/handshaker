@@ -1,5 +1,7 @@
 # Body Completion — Test the Interface That Ships — Implementation Plan
 
+> Status: 🎉 DONE (2026-07-20) — all tasks implemented, reviewed, live-verified, merged to `main`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** One pure `computeCompletion(fullText, caretOffset, ctx)` is the single home (and test surface) of the body-completion pipeline; Monaco registration and BodyView auto-trigger become pass-through consumers.
@@ -56,7 +58,7 @@ export interface BodyCompletionItem {
 
 Task 2 rewires the shell and BodyView to exactly these names.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `src/features/bodyview/completion.test.ts` (reuses the file's existing `SCHEMA`, `VC`, and `f()` fixtures — do not duplicate them):
 
@@ -151,12 +153,12 @@ describe("computeCompletion — orchestration", () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `pnpm vitest run src/features/bodyview/completion.test.ts`
 Expected: FAIL — `computeCompletion` is not exported.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `src/features/bodyview/completion.ts`, after the `buildVarSuggestions` section (before the "Monaco glue" banner), add:
 
@@ -320,12 +322,12 @@ export function computeCompletion(
 
 Do NOT modify `registerBodyCompletion`, BodyView, or any export in this task.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `pnpm vitest run src/features/bodyview/completion.test.ts`
 Expected: PASS — all new `computeCompletion — orchestration` cases AND every pre-existing describe (old code untouched). Then `pnpm lint` — clean.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/features/bodyview/completion.ts src/features/bodyview/completion.test.ts
@@ -345,7 +347,7 @@ git commit -m "feat(bodyview): computeCompletion — pure body-completion pipeli
 - Consumes: `computeCompletion`, `BodyCompletion` (Task 1 signatures).
 - Produces: final export surface of `completion.ts` = `computeCompletion`, `BodyCompletion`, `BodyCompletionItem`, `registerBodyCompletion`, `setModelSchema`, `setModelVarCandidates`, `descendSchema`, `Descent`.
 
-- [ ] **Step 1: Rewrite the Monaco shell**
+- [x] **Step 1: Rewrite the Monaco shell**
 
 Replace the whole `registerBodyCompletion` body with the pass-through (dictionary substitutions only — `kind`, `isSnippet`, `triggerNext`; range verbatim):
 
@@ -381,7 +383,7 @@ export function registerBodyCompletion(monaco: typeof Monaco): void {
 
 Delete `colonAlreadyAhead` (absorbed into `computeCompletion` in Task 1) and delete `computeSuggestions` entirely.
 
-- [ ] **Step 2: Rewire the BodyView auto-trigger**
+- [x] **Step 2: Rewire the BodyView auto-trigger**
 
 In `src/features/bodyview/BodyView.tsx`, replace the handler body (currently `openVarToken`/`filterCandidates` var check + `key !== '"'` gate + `collectPresentKeys`/`computeSuggestions`) with:
 
@@ -403,11 +405,11 @@ In `src/features/bodyview/BodyView.tsx`, replace the handler body (currently `op
 
 Update the line-14 import to `import { setModelSchema, computeCompletion, setModelVarCandidates } from "./completion";` and drop `openVarToken`/`filterCandidates` from the `varContext` import if this block was their last use in the file (`pnpm lint` confirms).
 
-- [ ] **Step 3: De-export the helpers**
+- [x] **Step 3: De-export the helpers**
 
 In `completion.ts`, remove the `export` keyword from: `CompletionContext`, `resolveCompletionContext`, `collectPresentKeys`, `Suggestion`, `buildKeySuggestions`, `buildValueSuggestions`, `buildVarSuggestions`, `insertionColumns`, `separatorAfter`. Keep exported: `descendSchema` + `Descent` (consumed by `validate.ts`), `setModelSchema`, `setModelVarCandidates`, `registerBodyCompletion`, `computeCompletion`, `BodyCompletion`, `BodyCompletionItem`.
 
-- [ ] **Step 4: Migrate the tests**
+- [x] **Step 4: Migrate the tests**
 
 In `completion.test.ts`, port every meaningful case of these describes to interface level (rule: 1 old case → ≥1 `computeCompletion` case via the `at`/`complete` helpers from Task 1), then delete the old describe: `buildVarSuggestions`, `resolveCompletionContext`, `computeSuggestions`, `collectPresentKeys`, `proto field order (sortText)`, `separatorAfter`, `present-key filtering`, `map value suggestions`, `insertionColumns (quote-aware range)`, `scalar well-known types`, `proto snake_case field names`. Keep `describe("descendSchema")` as-is. Porting examples (the pattern for the rest):
 
@@ -433,12 +435,12 @@ it("present keys are hidden from key suggestions", () => {
 
 Update the `labels` helper (it references `ReturnType<typeof computeSuggestions>`) to take `BodyCompletion` or inline it away. Fix the import list to the new export surface.
 
-- [ ] **Step 5: Run the gate**
+- [x] **Step 5: Run the gate**
 
 Run: `pnpm lint && pnpm test`
 Expected: PASS. Lint proves no stale consumer of a de-exported helper anywhere in `src/`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/features/bodyview/completion.ts src/features/bodyview/completion.test.ts src/features/bodyview/BodyView.tsx
@@ -453,7 +455,7 @@ git commit -m "feat(bodyview): Monaco shell and auto-trigger ride computeComplet
 - Create: `src/CONTEXT.md`
 - Modify: `CONTEXT-MAP.md` (line ~11: the "своего `CONTEXT.md` пока нет" entry)
 
-- [ ] **Step 1: Create `src/CONTEXT.md`** (Russian, matching `src-tauri/CONTEXT.md` style):
+- [x] **Step 1: Create `src/CONTEXT.md`** (Russian, matching `src-tauri/CONTEXT.md` style):
 
 ```markdown
 # Frontend (`src/`) — контекст
@@ -472,23 +474,23 @@ range-математики и правил вставки; Monaco-регистр
 _Avoid_: повторная реализация ветвления в провайдере или обработчиках клавиш.
 ```
 
-- [ ] **Step 2: Link it from `CONTEXT-MAP.md`** — replace the "Frontend … своего `CONTEXT.md` пока нет" line with:
+- [x] **Step 2: Link it from `CONTEXT-MAP.md`** — replace the "Frontend … своего `CONTEXT.md` пока нет" line with:
 
 ```markdown
 - [Frontend](./src/CONTEXT.md) — React 18 UI; фасад `src/ipc/client.ts`
 ```
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/CONTEXT.md CONTEXT-MAP.md
 git commit -m "docs(context): frontend CONTEXT.md with the Body completion term"
 ```
 
-- [ ] **Step 4: Live verification**
+- [x] **Step 4: Live verification**
 
 Run: `pnpm tauri:dev` (never a bare vite/browser). Manually, in a request body with a schema: key suggestions inside `{ }` (proto order, snippets, re-trigger on message fields), typing inside a quoted partial key still matches (insideString), completing before an existing `:` inserts the bare key, completing above another property appends a comma, enum/bool value suggestions after `:`, and `{{` pops variable candidates on any key. Behavior identical to pre-refactor.
 
-- [ ] **Step 5: Mark done + hand off to merge flow**
+- [x] **Step 5: Mark done + hand off to merge flow**
 
 Update the spec banner (`docs/superpowers/specs/2026-07-20-body-completion-design.md`) to `🎉 DONE`; run the full gate (`pnpm lint` + `pnpm test` + `cargo test --workspace`); then follow `superpowers:finishing-a-development-branch` — squash to **one** feature commit, ff-merge to `main`, archive plan+spec per `.claude/rules/archiving-completed-work.md` (rotate the CLAUDE.md "Active work" entry, update memory).

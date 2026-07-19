@@ -1,6 +1,6 @@
 # Body completion — test the interface that ships — design
 
-Status: 📐 spec approved (2026-07-20), plan next.
+Status: 🎉 DONE (2026-07-20) — implemented, live-verified, merged to `main`.
 
 Candidate 1 from the architecture review: `src/features/bodyview/completion.ts`
 has 8 pure helpers, each unit-tested — but the 110-line Monaco

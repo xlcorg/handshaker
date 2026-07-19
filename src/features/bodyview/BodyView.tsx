@@ -11,8 +11,7 @@ import { exceedsByteCeiling } from "./elide";
 import { attachBodyController } from "./controller";
 import { badgeDecorationOptions } from "./badgeDecoration";
 import type { MessageSchemaIpc } from "@/ipc/bindings";
-import { setModelSchema, computeSuggestions, collectPresentKeys, setModelVarCandidates } from "./completion";
-import { openVarToken, filterCandidates } from "@/features/vars/varContext";
+import { setModelSchema, computeCompletion, setModelVarCandidates } from "./completion";
 import type { VarCandidate } from "@/features/vars/candidates";
 import { GhostZone, computeGhostLines } from "./ghost";
 import { computeUnknownFieldMarkers } from "./validate";
@@ -285,23 +284,14 @@ export function BodyView({ mode, value, onChange, onSubmit, schema, varCandidate
           const model = editor.getModel();
           const pos = editor.getPosition();
           if (!model || !pos) return;
-          const textBefore = model.getValueInRange({
-            startLineNumber: 1, startColumn: 1,
-            endLineNumber: pos.lineNumber, endColumn: pos.column,
+          const r = computeCompletion(model.getValue(), model.getOffsetAt(pos), {
+            schema: schemaRef.current ?? null,
+            vars: varCandidatesRef.current ?? null,
           });
-          // Variable token: open the widget if `{{…` and candidates match.
-          const tok = openVarToken(textBefore);
-          const vc = varCandidatesRef.current;
-          if (tok && vc && filterCandidates(vc, tok.partial).length > 0) {
-            editor.trigger("autocomplete", "editor.action.triggerSuggest", {});
-            return;
-          }
-          // Schema path (quote open) — unchanged behaviour.
-          if (key !== '"') return;
-          const sc = schemaRef.current;
-          if (!sc) return;
-          const present = collectPresentKeys(model.getValue(), model.getOffsetAt(pos));
-          if (computeSuggestions(sc, textBefore, present).length > 0) {
+          // Vars pop on any key inside an open `{{…` ; schema keys only on a quote —
+          // the `"` gate is BodyView's UI policy, the "is there anything" answer is
+          // computeCompletion's.
+          if (r.source === "vars" || (key === '"' && r.source === "schema")) {
             editor.trigger("autocomplete", "editor.action.triggerSuggest", {});
           }
         });

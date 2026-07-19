@@ -8,8 +8,7 @@ Handshaker — один Cargo+pnpm воркспейс, три контекста
 - [gRPC Core](./crates/handshaker-core/CONTEXT.md) — OS-независимое ядро:
   reflection, invoke, коллекции, окружения, auth, резолв переменных
 - [IPC](./src-tauri/CONTEXT.md) — Tauri-слой: команды, specta-биндинги, стейт
-- **Frontend** (`src/`) — React 18 UI; своего `CONTEXT.md` пока нет (создать
-  лениво при первом разрешённом термине)
+- [Frontend](./src/CONTEXT.md) — React 18 UI; фасад `src/ipc/client.ts`
 
 ## Relationships
 
