@@ -100,6 +100,10 @@ pub struct EffectiveRequest {
     /// command uses it to invalidate the token cache on a 16 UNAUTHENTICATED. `None`
     /// for None/EnvVar auth.
     pub invalidate_oauth: Option<crate::auth::OAuth2ClientCredentialsConfig>,
+    /// The auth config that won the pick, in **template** form (as stored in the
+    /// collection/request) — `None` = unauthenticated. This is what the Send report
+    /// carries back to the UI; resolved secrets stay out of it by construction.
+    pub picked_auth: Option<crate::auth::SavedAuthConfig>,
 }
 
 impl Item {

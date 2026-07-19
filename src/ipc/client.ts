@@ -3,7 +3,6 @@ import { newId } from "@/lib/ids";
 import type {
   GrpcTargetIpc,
   ServiceCatalogIpc,
-  InvokeOutcomeIpc,
   CallOptionsIpc,
   EnvironmentIpc,
   ResolutionReportIpc,
@@ -23,6 +22,7 @@ import type {
   ImportResultIpc,
   SendCtxIpc,
   SendDraftIpc,
+  SendReportIpc,
 } from "./bindings";
 
 /**
@@ -101,7 +101,7 @@ export async function grpcSend(
   ctx: SendCtxIpc,
   requestId: string,
   opts: CallOptionsIpc,
-): Promise<InvokeOutcomeIpc> {
+): Promise<SendReportIpc> {
   const r = await commands.grpcSend(draft, ctx, requestId, opts);
   if (r.status === "error") throw r.error;
   return r.data;

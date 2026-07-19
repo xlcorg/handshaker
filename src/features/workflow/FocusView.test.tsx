@@ -7,15 +7,13 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 vi.mock("./CallPanel", () => ({
   CallPanel: ({
     step,
-    originAuth,
+    origin,
     onQuickAddMethod,
-    onExecuted,
     onMethodSelected,
   }: {
     step: { service: string; method: string };
-    originAuth?: { kind: string };
+    origin?: { collectionId: string; requestId: string } | null;
     onQuickAddMethod?: (service: string, method: string) => void;
-    onExecuted?: (executed: unknown) => void;
     onMethodSelected?: (
       prev: { service: string; method: string },
       next: { service: string; method: string },
@@ -23,12 +21,8 @@ vi.mock("./CallPanel", () => ({
   }) => (
     <div>
       <div>CALL:{step.method}</div>
-      <div data-testid="origin-auth">{originAuth?.kind ?? ""}</div>
+      <div data-testid="origin-request-id">{origin?.requestId ?? ""}</div>
       <div data-testid="quickadd-wired">{onQuickAddMethod ? "yes" : "no"}</div>
-      {/* Simulate CallPanel firing onExecuted (gated on shouldRecordExecuted = server responded). */}
-      <button type="button" onClick={() => onExecuted?.(step)}>
-        fire-executed
-      </button>
       {/* Simulate a method switch: prev = current step method, next = a different method. */}
       <button
         type="button"
@@ -170,32 +164,19 @@ describe("FocusView Save affordance", () => {
     expect(screen.getByTestId("draft-breadcrumb")).toHaveTextContent("Notes › Staging › Create");
   });
 
-  it("passes the origin collection's auth to CallPanel for a bound draft", () => {
-    cat.tree = [
-      {
-        id: "c1", name: "Notes", default_tls: false, skip_tls_verify: false,
-        pinned: false, description: null, created_at: 0, variables: {},
-        auth: {
-          kind: "oauth2_client_credentials", token_url: "https://idp/token", client_id: "c",
-          client_secret: "{{s}}", scopes: [], header_name: "authorization", prefix: "Bearer ",
-          environments: [],
-        },
-        expanded: false,
-        items: [],
-      },
-    ];
+  it("passes the origin to CallPanel for a bound draft (useSend credits the saved request)", () => {
     workflowStore.setDraft(
       newStep({ address: "h:443", tls: false, service: "p.S", method: "GetX" }),
       { collectionId: "c1", requestId: "r1" },
     );
     renderFV();
-    expect(screen.getByTestId("origin-auth")).toHaveTextContent("oauth2_client_credentials");
+    expect(screen.getByTestId("origin-request-id")).toHaveTextContent("r1");
   });
 
-  it("passes no originAuth for an unbound draft", () => {
+  it("passes no origin for an unbound draft", () => {
     workflowStore.setDraft(newStep({ address: "h:443", tls: false, service: "p.S", method: "GetX" }));
     renderFV();
-    expect(screen.getByTestId("origin-auth")).toHaveTextContent(/^$/);
+    expect(screen.getByTestId("origin-request-id")).toHaveTextContent(/^$/);
   });
 
   it("duplicates the bound request and opens the copy", async () => {
@@ -244,25 +225,8 @@ describe("FocusView Save affordance", () => {
     renderFV(<FocusView onQuickAddMethod={vi.fn()} />);
     expect(screen.getByTestId("quickadd-wired")).toHaveTextContent("no");
   });
-
-  it("bumps usage on the origin request when a send reaches the server (bound draft)", async () => {
-    const user = userEvent.setup();
-    workflowStore.setDraft(
-      newStep({ address: "h:443", tls: false, service: "p.S", method: "GetX" }),
-      { collectionId: "c1", requestId: "r1" },
-    );
-    renderFV();
-    await user.click(screen.getByRole("button", { name: "fire-executed" }));
-    expect(cat.bumpUsage).toHaveBeenCalledWith("c1", "r1", expect.any(Number));
-  });
-
-  it("does not bump usage for an unbound draft (no origin request to credit)", async () => {
-    const user = userEvent.setup();
-    workflowStore.setDraft(newStep({ address: "h:443", tls: false, service: "p.S", method: "GetX" }));
-    renderFV();
-    await user.click(screen.getByRole("button", { name: "fire-executed" }));
-    expect(cat.bumpUsage).not.toHaveBeenCalled();
-  });
+  // The usage-bump-on-execute behavior now lives inside useSend (invoked by the real
+  // CallPanel, which this suite mocks away) — covered by useSend.test.ts.
 });
 
 describe("FocusView auto-rename on method change", () => {

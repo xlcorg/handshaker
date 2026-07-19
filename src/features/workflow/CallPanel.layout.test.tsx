@@ -23,6 +23,9 @@ vi.mock("@/lib/use-prefs", () => ({
   usePrefs: () => [{ split: h.split, bodyPanel: 50 }, vi.fn()],
   readPrefs: () => ({ split: h.split, bodyPanel: 50 }),
 }));
+vi.mock("@/features/catalog/CatalogProvider", () => ({
+  useCatalog: () => ({ bumpUsage: vi.fn(() => Promise.resolve()) }),
+}));
 
 import { CallPanel } from "./CallPanel";
 import { newStep } from "./model";

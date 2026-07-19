@@ -79,6 +79,7 @@ pub async fn resolve_request(
     let target = GrpcTarget::new(address, tls, skip_verify)?;
 
     // --- 4. Auth materialize (nearest active config already picked above) ---
+    let picked_auth = picked.clone();
     let (auth, invalidate_oauth) = match picked {
         None => (None, None),
         Some(SavedAuthConfig::None) => (None, None), // unreachable via pick
@@ -98,6 +99,7 @@ pub async fn resolve_request(
         metadata,
         auth,
         invalidate_oauth,
+        picked_auth,
     })
 }
 
@@ -134,9 +136,12 @@ impl ResolveAcc {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::auth::{AuthCredentials, EnvVarAuthConfig, SavedAuthConfig, StaticTokenSource};
+    use crate::auth::{AuthCredentials, EnvVarAuthConfig, OAuth2ClientCredentialsConfig, SavedAuthConfig, StaticTokenSource, TokenSource};
     use crate::collections::ids::{CollectionId, ItemId};
     use crate::collections::MetadataRow;
+    use crate::error::CoreError;
+    use async_trait::async_trait;
+    use indexmap::IndexMap;
     use uuid::Uuid;
 
     fn static_tokens(value: &str) -> StaticTokenSource {
@@ -192,6 +197,68 @@ mod tests {
             prefix: "Bearer ".into(),
             environments: vec![],
         })
+    }
+
+    struct FakeTokens;
+    #[async_trait]
+    impl TokenSource for FakeTokens {
+        async fn header_for(
+            &self,
+            _cfg: &OAuth2ClientCredentialsConfig,
+        ) -> Result<AuthCredentials, CoreError> {
+            Ok(AuthCredentials { header_name: "authorization".into(), header_value: "Bearer t".into() })
+        }
+        fn invalidate(&self, _cfg: &OAuth2ClientCredentialsConfig) {}
+    }
+
+    fn req_with_auth(auth: SavedAuthConfig) -> SavedRequest {
+        SavedRequest {
+            id: ItemId(Uuid::from_u128(1)),
+            name: "r".into(),
+            address_template: "h:50051".into(),
+            service: "pkg.Svc".into(),
+            method: "Do".into(),
+            body_template: "{}".into(),
+            metadata: vec![],
+            auth,
+            tls_override: None,
+            last_used_at: None,
+            use_count: 0,
+        }
+    }
+
+    fn oauth_template() -> SavedAuthConfig {
+        SavedAuthConfig::OAuth2ClientCredentials(OAuth2ClientCredentialsConfig {
+            token_url: "https://idp/token".into(),
+            client_id: "cid".into(),
+            client_secret: "{{sec}}".into(),
+            scopes: vec![],
+            header_name: "authorization".into(),
+            prefix: "Bearer ".into(),
+            environments: vec![],
+        })
+    }
+
+    fn env_with_sec() -> Environment {
+        let mut variables = IndexMap::new();
+        variables.insert("sec".to_string(), "s3cr3t".to_string());
+        Environment { name: "dev".into(), variables, color: None }
+    }
+
+    fn coll_with_auth(auth: SavedAuthConfig) -> Collection {
+        Collection {
+            id: CollectionId(Uuid::from_u128(9)),
+            name: "C".into(),
+            items: vec![],
+            variables: IndexMap::new(),
+            auth,
+            default_tls: false,
+            skip_tls_verify: false,
+            pinned: false,
+            description: None,
+            created_at: 0.0,
+            expanded: false,
+        }
     }
 
     #[tokio::test]
@@ -467,5 +534,43 @@ mod tests {
         let tokens = static_tokens("Bearer X");
         let eff = resolve_request(&req, Some(&coll), Some(&active), &tokens).await.unwrap();
         assert!(eff.target.tls); // inherited from collection.default_tls
+    }
+
+    #[tokio::test]
+    async fn picked_auth_is_request_config_in_template_form() {
+        let req = req_with_auth(oauth_template());
+        let env = env_with_sec();
+        let eff = resolve_request(&req, None, Some(&env), &FakeTokens).await.unwrap();
+        // Template form: client_secret stays "{{sec}}", never the resolved value.
+        assert_eq!(eff.picked_auth, Some(oauth_template()));
+    }
+
+    #[tokio::test]
+    async fn picked_auth_falls_back_to_collection_config() {
+        let req = req_with_auth(SavedAuthConfig::None);
+        let coll = coll_with_auth(oauth_template());
+        let env = env_with_sec();
+        let eff = resolve_request(&req, Some(&coll), Some(&env), &FakeTokens).await.unwrap();
+        assert_eq!(eff.picked_auth, Some(oauth_template()));
+    }
+
+    #[tokio::test]
+    async fn picked_auth_none_when_env_gate_skips_all_configs() {
+        let mut auth = oauth_template();
+        if let SavedAuthConfig::OAuth2ClientCredentials(c) = &mut auth {
+            c.environments = vec!["prod".into()];
+        }
+        let req = req_with_auth(auth);
+        let env = Environment { name: "dev".into(), variables: IndexMap::new(), color: None };
+        let eff = resolve_request(&req, None, Some(&env), &FakeTokens).await.unwrap();
+        assert_eq!(eff.picked_auth, None);
+        assert!(eff.auth.is_none());
+    }
+
+    #[tokio::test]
+    async fn picked_auth_none_when_unauthenticated() {
+        let req = req_with_auth(SavedAuthConfig::None);
+        let eff = resolve_request(&req, None, None, &FakeTokens).await.unwrap();
+        assert_eq!(eff.picked_auth, None);
     }
 }

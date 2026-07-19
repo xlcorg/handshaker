@@ -7,24 +7,19 @@ import { useMessageSchema } from "./useMessageSchema";
 import { useEffectiveAuth } from "./useEffectiveAuth";
 import { RequestTabs } from "./RequestTabs";
 import {
-  sendStep,
-  stepPatchFromSendResult,
-  shouldRecordExecuted,
-  buildExecutedStep,
-  cancelStep,
   applyMethodSelection,
   resetBodyToTemplate,
   varsResolverFor,
 } from "./actions";
+import { useSend } from "./useSend";
 import { effectiveTls } from "./tls";
 import { workflowStore } from "./store";
+import type { DraftOrigin } from "./store";
 import { isSendHotkey } from "./sendHotkey";
 import { useEnvRevision } from "@/features/envs/envRevision";
 import { useActiveEnvVars } from "@/features/envs/useActiveEnvVars";
 import { buildVarCandidates } from "@/features/vars/candidates";
-import { newId } from "@/lib/ids";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { SavedAuthConfigIpc } from "@/ipc/bindings";
 import type { MetadataRow, Step } from "./model";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { usePrefs } from "@/lib/use-prefs";
@@ -34,17 +29,10 @@ interface CallPanelProps {
   step: Step;
   /** Apply a patch to the edited step (history step in place, or the global draft). */
   onPatch: (patch: Partial<Step>) => void;
-  /** Draft only: record a completed call as an executed history snapshot. */
-  onExecuted?: (executed: Step) => void;
   /** Focus(draft) only: editable host + reflection + MethodPicker header. */
   editable?: boolean;
   /** One-click save of a method row from MethodPicker to the collection. */
   onQuickAddMethod?: (service: string, method: string) => void;
-  /** Auth of the draft's origin collection. No longer read here — `effectiveAuth` now
-   *  asks core via `useEffectiveAuth`/`auth_effective` (keyed on `step.collectionId`),
-   *  which looks up the same collection. Kept on the props type for FocusView's call
-   *  site. */
-  originAuth?: SavedAuthConfigIpc;
   /** Variables of the draft's origin collection — feeds {{var}} autocomplete. */
   originVars?: Partial<Record<string, string>>;
   /** `skip_tls_verify` of the draft's origin collection — dials reflection/skeleton/schema
@@ -60,10 +48,13 @@ interface CallPanelProps {
     prev: { service: string; method: string },
     next: { service: string; method: string },
   ) => void;
+  /** Focus(draft) only: origin of the bound draft — lets useSend credit the saved
+   *  request with one execution. Absent/null for unbound drafts and history panels. */
+  origin?: DraftOrigin | null;
 }
 
 /** The editable, sendable surface for one step — reused by Focus(draft)/List/Ledger. */
-export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMethod, originAuth: _originAuth, originVars, originSkipVerify, originDefaultTls, onMethodSelected }: CallPanelProps) {
+export function CallPanel({ step, onPatch, editable, onQuickAddMethod, originVars, originSkipVerify, originDefaultTls, onMethodSelected, origin }: CallPanelProps) {
   const skipVerify = originSkipVerify ?? false;
   // Concrete TLS for probes/Send display: the step's override, or the collection default
   // when inheriting (null). Send itself forwards the raw override; core inherits identically.
@@ -104,30 +95,15 @@ export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMetho
     addressResolveKey,
   );
 
-  const onSend = async () => {
-    if (step.status === "sending") return; // idempotent: the button stays "Send" during the pre-gate window
-    const requestId = newId();
-    onPatch({ status: "sending", error: null, requestId });
-    // The raw draft (templates + step's own auth) goes over the wire as-is — `grpc_send`
-    // resolves vars, picks request-vs-collection auth, and materializes/invalidates the
-    // oauth2 token via the core pipeline. No frontend auth resolution left to do here.
-    const res = await sendStep(
-      step,
-      { envName: activeWf.envName },
-      { requestId },
-    );
-    const patch = { ...stepPatchFromSendResult(res), requestId: null };
-    onPatch(patch);
-    // Snapshot the auth actually used, so re-sending the history step works standalone.
-    if (onExecuted && shouldRecordExecuted(res)) {
-      // Freeze the concrete TLS actually used, so the history row is self-describing.
-      onExecuted(buildExecutedStep({ ...step, auth: effectiveAuth, tls: effTls }, patch));
-    }
-  };
-
-  const onCancel = () => {
-    if (step.requestId) void cancelStep(step.requestId);
-  };
+  // The Send lifecycle lives in useSend: gate → send → patch → executed snapshot
+  // (auth/TLS from the Send report — fact, not a second fetch) → usage bump.
+  const { send, cancel } = useSend({
+    step,
+    envName: activeWf.envName,
+    onPatch,
+    record: !!editable,
+    origin,
+  });
 
   // Ctrl/Cmd+Enter and Ctrl/Cmd+R send the active draft (mirrors the Send button).
   // Bound only for the editable Focus draft so history re-send panels don't all
@@ -137,7 +113,7 @@ export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMetho
   const sendShortcutRef = useRef<() => void>(() => {});
   sendShortcutRef.current = () => {
     if (step.status === "sending" || step.method.trim().length === 0) return;
-    void onSend();
+    void send();
   };
   useEffect(() => {
     if (!editable) return;
@@ -207,15 +183,15 @@ export function CallPanel({ step, onPatch, onExecuted, editable, onQuickAddMetho
           );
           onMethodSelected?.(prev, { service: m.service, method: m.method });
         }}
-      onSend={onSend}
-      onCancel={onCancel}
+      onSend={send}
+      onCancel={cancel}
       onQuickAdd={onQuickAddMethod}
       resolveAddress={varsResolverFor(step.collectionId)}
       resolveKey={addressResolveKey}
       variables={varCandidates}
     />
   ) : (
-    <AddressBar step={step} onSend={onSend} onCancel={onCancel} />
+    <AddressBar step={step} onSend={send} onCancel={cancel} />
   );
 
   return (

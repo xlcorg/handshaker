@@ -1,5 +1,5 @@
 import * as ipc from "@/ipc/client";
-import type { InvokeOutcomeIpc, SavedAuthConfigIpc, ResolutionReportIpc, MessageSchemaIpc, MessageSideIpc, VarsResolveCtxIpc, SendDraftIpc, SendCtxIpc, CallOptionsIpc } from "@/ipc/bindings";
+import type { SavedAuthConfigIpc, ResolutionReportIpc, MessageSchemaIpc, MessageSideIpc, VarsResolveCtxIpc, SendDraftIpc, SendCtxIpc, CallOptionsIpc, SendReportIpc } from "@/ipc/bindings";
 import { newStep, type MetadataRow, type Step } from "./model";
 import { lastExecutedFor, responseSeedPatch } from "./lastExecuted";
 import { newId } from "@/lib/ids";
@@ -168,7 +168,7 @@ export async function createStepFromMethod(
 }
 
 export type SendResult =
-  | { kind: "ok"; outcome: InvokeOutcomeIpc }
+  | { kind: "ok"; report: SendReportIpc }
   | { kind: "error"; fault: ClientFault }
   | { kind: "unresolved"; unresolved: string[]; cycle: string[] | null }
   | { kind: "cancelled" };
@@ -250,8 +250,8 @@ export async function sendStep(
     max_message_bytes: opts?.maxMessageBytes ?? prefs.maxMessageBytes,
   };
   try {
-    const outcome = await ipc.grpcSend(draft, sendCtx, requestId, callOpts);
-    return { kind: "ok", outcome };
+    const report = await ipc.grpcSend(draft, sendCtx, requestId, callOpts);
+    return { kind: "ok", report };
   } catch (e) {
     if (isCancelError(e)) return { kind: "cancelled" };
     if (isObj(e) && e.type === "UnresolvedVars") {
@@ -275,29 +275,3 @@ export async function cancelStep(requestId: string): Promise<void> {
   }
 }
 
-export function stepPatchFromSendResult(res: SendResult): Partial<Step> {
-  if (res.kind === "ok") {
-    return { status: res.outcome.status_code === 0 ? "ok" : "error", outcome: res.outcome, error: null };
-  }
-  if (res.kind === "unresolved") {
-    const message = res.cycle
-      ? `Variable cycle: ${res.cycle.join(" → ")}`
-      : `Unresolved variables: ${res.unresolved.map((v) => `{{${v}}}`).join(", ")}`;
-    return { status: "error", outcome: null, error: { kind: "other", message } };
-  }
-  if (res.kind === "cancelled") {
-    return { status: "draft", outcome: null, error: null };
-  }
-  return { status: "error", outcome: null, error: res.fault };
-}
-
-/** Whether a Send result represents a call that reached the server and should be
- *  recorded as an executed history step (gRPC responded — success or non-zero status). */
-export function shouldRecordExecuted(res: SendResult): boolean {
-  return res.kind === "ok";
-}
-
-/** A frozen executed-history snapshot of `draft` with the Send patch applied and a fresh id. */
-export function buildExecutedStep(draft: Step, patch: Partial<Step>): Step {
-  return { ...draft, ...patch, id: newId(), requestId: null };
-}

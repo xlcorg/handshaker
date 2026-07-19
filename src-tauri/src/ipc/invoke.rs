@@ -207,10 +207,75 @@ impl From<UnaryOutcome> for InvokeOutcomeIpc {
     }
 }
 
+/// Send report: the invoke outcome plus the facts the resolve pipeline actually
+/// used — so the UI's executed-history snapshot records fact instead of asking
+/// `auth_effective` a second (possibly stale) time. `auth_used` is the picked
+/// config in template form; resolved secrets never cross IPC (ADR-0001).
+#[derive(Debug, Serialize, Type)]
+pub struct SendReportIpc {
+    pub outcome: InvokeOutcomeIpc,
+    pub auth_used: crate::ipc::collection::SavedAuthConfigIpc,
+    pub tls_used: bool,
+}
+
+impl SendReportIpc {
+    pub fn from_parts(
+        outcome: InvokeOutcomeIpc,
+        picked_auth: Option<handshaker_core::auth::SavedAuthConfig>,
+        tls_used: bool,
+    ) -> Self {
+        let picked = picked_auth.unwrap_or(handshaker_core::auth::SavedAuthConfig::None);
+        let auth_used = crate::ipc::collection::SavedAuthConfigIpc::from_core(picked);
+        Self { outcome, auth_used, tls_used }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ipc::collection::SavedAuthConfigIpc;
+    use handshaker_core::auth::{OAuth2ClientCredentialsConfig, SavedAuthConfig};
     use handshaker_core::grpc::{FieldViolation, StatusDetail};
+    use std::collections::HashMap;
+
+    fn outcome_fixture() -> InvokeOutcomeIpc {
+        InvokeOutcomeIpc {
+            status_code: 0,
+            status_message: String::new(),
+            response_json: Some("{}".into()),
+            trailing_metadata: HashMap::new(),
+            status_details: vec![],
+            elapsed_ms: 5,
+        }
+    }
+
+    #[test]
+    fn send_report_none_pick_maps_to_auth_none() {
+        let report = SendReportIpc::from_parts(outcome_fixture(), None, false);
+        assert_eq!(report.auth_used, SavedAuthConfigIpc::None);
+        assert!(!report.tls_used);
+    }
+
+    #[test]
+    fn send_report_keeps_picked_config_in_template_form() {
+        let picked = SavedAuthConfig::OAuth2ClientCredentials(OAuth2ClientCredentialsConfig {
+            token_url: "https://idp/token".into(),
+            client_id: "cid".into(),
+            client_secret: "{{sec}}".into(),
+            scopes: vec![],
+            header_name: "authorization".into(),
+            prefix: "Bearer ".into(),
+            environments: vec![],
+        });
+        let report = SendReportIpc::from_parts(outcome_fixture(), Some(picked), true);
+        match report.auth_used {
+            SavedAuthConfigIpc::Oauth2ClientCredentials { client_secret, .. } => {
+                assert_eq!(client_secret, "{{sec}}"); // template survived, secret did not resolve
+            }
+            other => panic!("got {other:?}"),
+        }
+        assert!(report.tls_used);
+    }
 
     #[test]
     fn maps_error_info_detail_to_tagged_ipc() {

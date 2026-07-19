@@ -1,5 +1,11 @@
 # One Home for the Send Lifecycle — Implementation Plan
 
+> **Status: 🎉 DONE (2026-07-20).** All 5 tasks implemented via subagent-driven
+> execution, per-task + whole-branch reviews clean, full gate green, live-verified
+> in `tauri:dev`, squashed and ff-merged to `main`. Bonus fix shipped alongside:
+> vitest Storage shim (node ≥ 22 shadows jsdom `localStorage`). Follow-up
+> candidate: move the two Send error strings into `src/lib/messages.ts`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** `grpc_send` returns a Send report (outcome + auth/TLS actually used), and a new `useSend` hook owns the whole frontend Send lifecycle (patch → executed snapshot → usage bump), eliminating the stale `auth_effective` snapshot and the CallPanel+FocusView co-authoring.

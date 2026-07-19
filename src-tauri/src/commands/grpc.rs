@@ -22,7 +22,7 @@ use uuid::Uuid;
 use crate::commands::events::ContractUpdated;
 use crate::ipc::{
     CallOptionsIpc, GrpcTargetIpc, InvokeOutcomeIpc, InvokeRequest, IpcError, MessageSchemaIpc,
-    MessageSideIpc, SendCtxIpc, SendDraftIpc, ServiceCatalogIpc,
+    MessageSideIpc, SendCtxIpc, SendDraftIpc, SendReportIpc, ServiceCatalogIpc,
 };
 use crate::state::{AppState, InFlight};
 
@@ -266,7 +266,7 @@ pub(crate) async fn grpc_send_impl(
     ctx: SendCtxIpc,
     request_id: String,
     opts: CallOptionsIpc,
-) -> Result<InvokeOutcomeIpc, IpcError> {
+) -> Result<SendReportIpc, IpcError> {
     // Read collection + active env from the stores (ctx carries references, not data).
     let collection = ctx
         .collection_id
@@ -292,6 +292,10 @@ pub(crate) async fn grpc_send_impl(
 
     let tokens: &dyn TokenSource = &state.oauth2_provider;
     let eff = resolve_request(&saved, collection.as_ref(), active_env.as_ref(), tokens).await?;
+
+    // Send-report facts, captured before `eff` fields move into the work closure.
+    let picked_auth = eff.picked_auth.clone();
+    let tls_used = eff.target.tls;
 
     // Assemble InvokeRequest: effective body + metadata + auth header.
     let mut metadata = eff.metadata;
@@ -331,7 +335,7 @@ pub(crate) async fn grpc_send_impl(
 
     // On 16 UNAUTHENTICATED drop the cached oauth token; next Send fetches fresh. No retry.
     invalidate_on_unauthenticated(&state.oauth2_provider, outcome.status_code, invalidate.as_ref());
-    Ok(outcome)
+    Ok(SendReportIpc::from_parts(outcome, picked_auth, tls_used))
 }
 
 #[tauri::command]
@@ -342,7 +346,7 @@ pub async fn grpc_send(
     ctx: SendCtxIpc,
     request_id: String,
     opts: CallOptionsIpc,
-) -> Result<InvokeOutcomeIpc, IpcError> {
+) -> Result<SendReportIpc, IpcError> {
     grpc_send_impl(&state, draft, ctx, request_id, opts).await
 }
 

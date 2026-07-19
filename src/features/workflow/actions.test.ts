@@ -11,10 +11,10 @@ vi.mock("@/ipc/client", () => ({
 }));
 
 import * as ipc from "@/ipc/client";
-import { createStepFromMethod, sendStep, stepPatchFromSendResult, shouldRecordExecuted, buildExecutedStep, cancelStep } from "./actions";
+import { createStepFromMethod, sendStep, cancelStep } from "./actions";
 import { buildRequestSkeletonSafe, applyMethodSelection, isPristineBody, resetBodyToTemplate, fetchMessageSchemaSafe } from "./actions";
 import { varsCtxFor, varsResolverFor } from "./actions";
-import { newStep, type Step } from "./model";
+import type { Step } from "./model";
 import type { InvokeOutcomeIpc } from "@/ipc/bindings";
 
 beforeEach(() => {
@@ -83,16 +83,20 @@ describe("sendStep", () => {
 
   it("forwards the draft templates + ctx unchanged to grpcSend", async () => {
     vi.mocked(ipc.grpcSend).mockResolvedValue({
-      status_code: 0,
-      status_message: "OK",
-      response_json: '{"state":"OK"}',
-      trailing_metadata: {},
-      status_details: [],
-      elapsed_ms: 12,
+      outcome: {
+        status_code: 0,
+        status_message: "OK",
+        response_json: '{"state":"OK"}',
+        trailing_metadata: {},
+        status_details: [],
+        elapsed_ms: 12,
+      },
+      auth_used: { kind: "none" },
+      tls_used: false,
     });
     const res = await sendStep(baseStep, { envName: "prod" }, { requestId: "rid" });
     expect(res.kind).toBe("ok");
-    if (res.kind === "ok") expect(res.outcome.status_code).toBe(0);
+    if (res.kind === "ok") expect(res.report.outcome.status_code).toBe(0);
     expect(ipc.grpcSend).toHaveBeenCalledWith(
       {
         address_template: "h:443",
@@ -111,8 +115,12 @@ describe("sendStep", () => {
 
   it("forwards a null tls (inherit) as tls_override: null for core to resolve", async () => {
     vi.mocked(ipc.grpcSend).mockResolvedValue({
-      status_code: 0, status_message: "OK", response_json: "{}",
-      trailing_metadata: {}, status_details: [], elapsed_ms: 1,
+      outcome: {
+        status_code: 0, status_message: "OK", response_json: "{}",
+        trailing_metadata: {}, status_details: [], elapsed_ms: 1,
+      },
+      auth_used: { kind: "none" },
+      tls_used: false,
     });
     await sendStep({ ...baseStep, tls: null }, { envName: "prod" });
     expect(ipc.grpcSend).toHaveBeenCalledWith(
@@ -125,8 +133,12 @@ describe("sendStep", () => {
 
   it("omits disabled and empty-key metadata rows from the draft", async () => {
     vi.mocked(ipc.grpcSend).mockResolvedValue({
-      status_code: 0, status_message: "OK", response_json: "{}",
-      trailing_metadata: {}, status_details: [], elapsed_ms: 1,
+      outcome: {
+        status_code: 0, status_message: "OK", response_json: "{}",
+        trailing_metadata: {}, status_details: [], elapsed_ms: 1,
+      },
+      auth_used: { kind: "none" },
+      tls_used: false,
     });
     await sendStep(
       {
@@ -188,8 +200,12 @@ describe("sendStep", () => {
 
   it("sends a null collection_id when the step is unbound", async () => {
     vi.mocked(ipc.grpcSend).mockResolvedValue({
-      status_code: 0, status_message: "OK", response_json: "{}",
-      trailing_metadata: {}, status_details: [], elapsed_ms: 1,
+      outcome: {
+        status_code: 0, status_message: "OK", response_json: "{}",
+        trailing_metadata: {}, status_details: [], elapsed_ms: 1,
+      },
+      auth_used: { kind: "none" },
+      tls_used: false,
     });
     await sendStep({ ...baseStep, collectionId: undefined }, { envName: null });
     expect(ipc.grpcSend).toHaveBeenCalledWith(
@@ -201,63 +217,16 @@ describe("sendStep", () => {
   });
 });
 
-describe("stepPatchFromSendResult", () => {
-  it("ok with status 0 → ok", () => {
-    const outcome = { status_code: 0, status_message: "OK", response_json: "{}", trailing_metadata: {}, status_details: [], elapsed_ms: 1 };
-    expect(stepPatchFromSendResult({ kind: "ok", outcome })).toEqual({ status: "ok", outcome, error: null });
-  });
-  it("ok with non-zero status → error (grpc status), keeps outcome", () => {
-    const outcome = { status_code: 5, status_message: "NOT_FOUND", response_json: null, trailing_metadata: {}, status_details: [], elapsed_ms: 1 };
-    expect(stepPatchFromSendResult({ kind: "ok", outcome })).toEqual({ status: "error", outcome, error: null });
-  });
-  it("unresolved → error with variable list", () => {
-    const p = stepPatchFromSendResult({ kind: "unresolved", unresolved: ["host", "id"], cycle: null });
-    expect(p.status).toBe("error");
-    expect(p.outcome).toBeNull();
-    expect(p.error).toEqual({ kind: "other", message: "Unresolved variables: {{host}}, {{id}}" });
-  });
-  it("unresolved with cycle → cycle message", () => {
-    const p = stepPatchFromSendResult({ kind: "unresolved", unresolved: [], cycle: ["a", "b", "a"] });
-    expect(p.error).toEqual({ kind: "other", message: "Variable cycle: a → b → a" });
-  });
-  it("error → error with message", () => {
-    expect(stepPatchFromSendResult({ kind: "error", fault: { kind: "other", message: "boom" } })).toEqual({ status: "error", outcome: null, error: { kind: "other", message: "boom" } });
-  });
-});
-
-describe("shouldRecordExecuted", () => {
-  it("records only calls that reached the server (kind 'ok')", () => {
-    const outcome = { status_code: 0, status_message: "OK", response_json: "{}", trailing_metadata: {}, status_details: [], elapsed_ms: 1 };
-    expect(shouldRecordExecuted({ kind: "ok", outcome })).toBe(true);
-    // non-zero gRPC status still reached the server → recorded
-    const errOutcome = { status_code: 5, status_message: "NOT_FOUND", response_json: null, trailing_metadata: {}, status_details: [], elapsed_ms: 1 };
-    expect(shouldRecordExecuted({ kind: "ok", outcome: errOutcome })).toBe(true);
-    expect(shouldRecordExecuted({ kind: "error", fault: { kind: "other", message: "refused" } })).toBe(false);
-    expect(shouldRecordExecuted({ kind: "unresolved", unresolved: ["x"], cycle: null })).toBe(false);
-    expect(shouldRecordExecuted({ kind: "cancelled" })).toBe(false);
-  });
-});
-
-describe("buildExecutedStep", () => {
-  it("freezes a fresh-id snapshot of the draft with the send patch applied", () => {
-    const draft = newStep({ address: "h:443", tls: true, service: "S", method: "M" });
-    const outcome = { status_code: 0, status_message: "OK", response_json: "{}", trailing_metadata: {}, status_details: [], elapsed_ms: 7 };
-    const snap = buildExecutedStep(draft, { status: "ok", outcome, error: null, requestId: null });
-    expect(snap.id).not.toBe(draft.id);     // distinct history entry
-    expect(snap.requestId).toBeNull();
-    expect(snap.status).toBe("ok");
-    expect(snap.outcome).toEqual(outcome);
-    expect(snap.service).toBe("S");
-    expect(snap.method).toBe("M");
-  });
-});
-
 describe("sendStep cancel/timeout wiring", () => {
   const step = { address: "h:443", tls: true, service: "S", method: "M", requestJson: "{}", metadata: [], auth: { kind: "none" as const } };
 
   beforeEach(() => {
     vi.mocked(ipc.grpcSend).mockResolvedValue({
-      status_code: 0, status_message: "OK", response_json: "{}", trailing_metadata: {}, status_details: [], elapsed_ms: 1,
+      outcome: {
+        status_code: 0, status_message: "OK", response_json: "{}", trailing_metadata: {}, status_details: [], elapsed_ms: 1,
+      },
+      auth_used: { kind: "none" },
+      tls_used: false,
     });
   });
 
@@ -320,14 +289,6 @@ describe("cancelStep", () => {
   it("swallows grpcCancel errors (best-effort)", async () => {
     vi.mocked(ipc.grpcCancel).mockRejectedValueOnce(new Error("gone"));
     await expect(cancelStep("req-x")).resolves.toBeUndefined();
-  });
-});
-
-describe("stepPatchFromSendResult cancelled", () => {
-  it("cancelled → draft, cleared", () => {
-    expect(stepPatchFromSendResult({ kind: "cancelled" })).toEqual({
-      status: "draft", outcome: null, error: null,
-    });
   });
 });
 

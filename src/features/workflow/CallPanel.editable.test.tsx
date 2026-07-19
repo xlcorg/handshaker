@@ -13,11 +13,15 @@ vi.mock("@/ipc/client", () => ({
   grpcBuildRequestSkeleton: vi.fn().mockResolvedValue("{}"),
   varsResolve: vi.fn(),
   // Safe default so tests that merely trigger Send (without asserting on the outcome)
-  // don't crash downstream in `stepPatchFromSendResult` reading `res.outcome.status_code`
+  // don't crash downstream in useSend's `stepPatch` reading `res.report.outcome.status_code`
   // — mirrors the other IPC mocks' safe defaults above.
   grpcSend: vi.fn().mockResolvedValue({
-    status_code: 0, status_message: "OK", response_json: "{}",
-    trailing_metadata: {}, status_details: [], elapsed_ms: 0,
+    outcome: {
+      status_code: 0, status_message: "", response_json: "{}",
+      trailing_metadata: {}, status_details: [], elapsed_ms: 1,
+    },
+    auth_used: { kind: "none" },
+    tls_used: false,
   }),
   grpcCancel: vi.fn(),
   // No reflection in tests: both schema sides resolve null. NB: useMessageSchema
@@ -27,16 +31,25 @@ vi.mock("@/ipc/client", () => ({
   grpcMessageSchema: vi.fn().mockResolvedValue(null),
 }));
 
+const bumpUsage = vi.fn(() => Promise.resolve());
+vi.mock("@/features/catalog/CatalogProvider", () => ({
+  useCatalog: () => ({ bumpUsage }),
+}));
+
 import { CallPanel } from "./CallPanel";
 import { newStep } from "./model";
+import { workflowStore } from "./store";
 import { messages } from "@/lib/messages";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { grpcMessageSchema, grpcRefreshContract, authEffective, varsResolve, grpcSend } from "@/ipc/client";
-import type { MessageSchemaIpc, InvokeOutcomeIpc, ResolutionReportIpc } from "@/ipc/bindings";
+import type { MessageSchemaIpc, SendReportIpc, ResolutionReportIpc } from "@/ipc/bindings";
 
 const draft = newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "GetX" });
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  workflowStore.reset();
+});
 
 describe("CallPanel editable", () => {
   it("renders the editable draft header when editable", () => {
@@ -219,44 +232,47 @@ describe("CallPanel collection-auth inheritance (auth_effective)", () => {
     prefix: "Bearer ",
     environments: [] as string[],
   };
-  const okOutcome: InvokeOutcomeIpc = {
-    status_code: 0,
-    status_message: "OK",
-    response_json: "{}",
-    trailing_metadata: {},
-    status_details: [],
-    elapsed_ms: 1,
+  const okReport: SendReportIpc = {
+    outcome: {
+      status_code: 0,
+      status_message: "OK",
+      response_json: "{}",
+      trailing_metadata: {},
+      status_details: [],
+      elapsed_ms: 1,
+    },
+    auth_used: { kind: "none" },
+    tls_used: false,
   };
   const passthrough = (t: string): Promise<ResolutionReportIpc> =>
     Promise.resolve({ resolved: t, unresolved_vars: [], cycle_chain: null, dynamic_vars: [] });
 
-  it("sends the raw (unresolved) step auth — grpc_send picks/materializes collection inheritance", async () => {
+  it("sends the raw (unresolved) step auth — grpc_send picks/materializes collection inheritance; the executed history snapshot records the report's actual auth_used", async () => {
     vi.mocked(varsResolve).mockImplementation(passthrough);
-    // Backend's `auth_effective` pick: step auth is none, so the collection's oauth2
-    // config wins (mirrors core `pick_auth_config` inheritance) — drives the Auth tab
-    // and the history snapshot, but NOT what's sent: `grpc_send` re-derives the same
-    // pick core-side from the raw draft + collection/env ctx.
+    // `auth_effective` drives the Auth tab display only (see below) — the history
+    // snapshot now records the Send report's `auth_used` fact, not a second fetch.
     vi.mocked(authEffective).mockResolvedValue(collectionOauth);
-    vi.mocked(grpcSend).mockResolvedValueOnce(okOutcome);
-    const onExecuted = vi.fn();
+    const reportWithOauth: SendReportIpc = { ...okReport, auth_used: collectionOauth };
+    vi.mocked(grpcSend).mockResolvedValueOnce(reportWithOauth);
 
     // step auth defaults to none — inheritance is core-side now, not frontend-side.
     const inheritDraft = newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "GetInherit" });
     render(
       <TooltipProvider>
-        <CallPanel step={inheritDraft} onPatch={() => {}} onExecuted={onExecuted} editable />
+        <CallPanel step={inheritDraft} onPatch={() => {}} editable />
       </TooltipProvider>,
     );
-    // Wait for the async effective-auth fetch to resolve (drives the history snapshot).
+    // Wait for the async effective-auth fetch to resolve (Auth tab display).
     await waitFor(() => expect(authEffective).toHaveBeenCalled());
     fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
 
     await waitFor(() => expect(grpcSend).toHaveBeenCalledTimes(1));
     const draftArg = vi.mocked(grpcSend).mock.calls[0][0];
     expect(draftArg.auth).toEqual({ kind: "none" }); // raw step auth, core does the pick
-    // The executed history snapshot records the effective auth, so re-send works standalone.
-    expect(onExecuted).toHaveBeenCalledWith(
-      expect.objectContaining({ auth: expect.objectContaining({ kind: "oauth2_client_credentials" }) }),
+    // The executed history snapshot records the report's auth_used, so re-send works standalone.
+    await waitFor(() => expect(workflowStore.activeWorkflow().steps).toHaveLength(1));
+    expect(workflowStore.activeWorkflow().steps[0].auth).toEqual(
+      expect.objectContaining({ kind: "oauth2_client_credentials" }),
     );
   });
 

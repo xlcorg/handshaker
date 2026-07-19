@@ -24,7 +24,7 @@ export function FocusView({ onRequestSave, onQuickAddMethod }: FocusViewProps = 
   const draft = useDraft();
   const origin = useDraftOrigin();
   const dirty = useDraftDirty();
-  const { tree, duplicateItem, bumpUsage, renameItem } = useCatalog();
+  const { tree, duplicateItem, renameItem } = useCatalog();
 
   // Origin-bound drafts autosave, so duplicating never loses edits — no discard guard.
   async function duplicate() {
@@ -52,9 +52,6 @@ export function FocusView({ onRequestSave, onQuickAddMethod }: FocusViewProps = 
     void renameItem(origin.collectionId, origin.requestId, newName).catch(() => {});
   };
 
-  // Auth of the origin collection — CallPanel falls back to it when the step's own
-  // auth is none (request-level auth has no editor; collections carry the config).
-  const originAuth = origin ? tree.find((c) => c.id === origin.collectionId)?.auth : undefined;
   const originVars = origin ? tree.find((c) => c.id === origin.collectionId)?.variables : undefined;
   const originSkipVerify = origin ? tree.find((c) => c.id === origin.collectionId)?.skip_tls_verify : undefined;
   const originDefaultTls = origin ? tree.find((c) => c.id === origin.collectionId)?.default_tls : undefined;
@@ -127,27 +124,16 @@ export function FocusView({ onRequestSave, onQuickAddMethod }: FocusViewProps = 
           <CallPanel
             step={draft}
             onPatch={(patch: Partial<Step>) => workflowStore.updateDraft(patch)}
-            onExecuted={(executed: Step) => {
-              workflowStore.commitExecutedStep(executed);
-              // Credit the origin saved request with one execution. CallPanel fires
-              // onExecuted only when the call reached the server (shouldRecordExecuted),
-              // so this counts "any server response". Routed through the catalog so the
-              // in-memory tree stays in sync — otherwise a later whole-collection autosave
-              // would upsert the stale (pre-bump) count back over it. Best-effort.
-              if (origin) {
-                void bumpUsage(origin.collectionId, origin.requestId, Date.now()).catch(() => {});
-              }
-            }}
             editable
             // Quick-add «+» saves into the open request's collection (origin). An unbound
             // draft has no target collection, so the «+» is hidden rather than silently
             // landing the method in some arbitrary collection.
             onQuickAddMethod={origin ? onQuickAddMethod : undefined}
             onMethodSelected={origin ? handleMethodSelected : undefined}
-            originAuth={originAuth}
             originVars={originVars}
             originSkipVerify={originSkipVerify}
             originDefaultTls={originDefaultTls}
+            origin={origin}
           />
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">

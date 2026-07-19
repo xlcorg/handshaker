@@ -1,6 +1,6 @@
 # One home for the Send lifecycle — design
 
-Status: 📐 spec approved (2026-07-20), plan next.
+Status: 🎉 DONE (2026-07-20) — implemented, reviewed, live-verified, merged.
 
 Candidate from the architecture review: the Send lifecycle is spread across ~8
 frontend modules, CallPanel and FocusView co-author it, and the executed-history
