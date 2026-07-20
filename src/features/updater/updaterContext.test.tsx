@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { renderHook } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { UpdaterProvider, useUpdater } from "./updaterContext";
@@ -25,6 +25,13 @@ describe("useUpdater", () => {
   });
 
   it("throws when used outside a provider", () => {
-    expect(() => renderHook(() => useUpdater())).toThrow(/UpdaterProvider/);
+    // React logs the render failure through console.error; the throw is the
+    // assertion here, so keep the expected stack trace out of the test output.
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(() => renderHook(() => useUpdater())).toThrow(/UpdaterProvider/);
+    } finally {
+      logged.mockRestore();
+    }
   });
 });

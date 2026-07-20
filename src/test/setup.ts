@@ -2,7 +2,9 @@ import "@testing-library/jest-dom/vitest";
 
 // Node >= 22 defines global `localStorage`/`sessionStorage` getters that
 // return undefined unless node runs with --localstorage-file; under vitest
-// they shadow jsdom's Storage. Install an in-memory Storage when shadowed.
+// they shadow jsdom's Storage. Install an in-memory Storage unconditionally —
+// merely *reading* node's getter emits an ExperimentalWarning per worker, so
+// the shim must never probe the existing value.
 class MemoryStorage implements Storage {
   private store = new Map<string, string>();
   get length() {
@@ -25,20 +27,11 @@ class MemoryStorage implements Storage {
   }
 }
 for (const name of ["localStorage", "sessionStorage"] as const) {
-  if (!globalThis[name]) {
-    const storage = new MemoryStorage();
-    Object.defineProperty(globalThis, name, {
-      value: storage,
-      configurable: true,
-      writable: true,
-    });
-    if (typeof window !== "undefined" && !window[name]) {
-      Object.defineProperty(window, name, {
-        value: storage,
-        configurable: true,
-        writable: true,
-      });
-    }
+  const storage = new MemoryStorage();
+  const descriptor = { value: storage, configurable: true, writable: true };
+  Object.defineProperty(globalThis, name, descriptor);
+  if (typeof window !== "undefined" && window !== globalThis) {
+    Object.defineProperty(window, name, descriptor);
   }
 }
 
