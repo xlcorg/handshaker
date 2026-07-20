@@ -96,7 +96,7 @@ fn civil_from_days(z: i64) -> (i64, u32, u32) {
 
 /// Replace EACH `{{$name}}` occurrence with a freshly generated value (per-occurrence).
 /// Non-builtin `{{…}}` (and any text) is copied verbatim. Pure given `gen`.
-pub fn expand_builtins(s: &str, gen: &impl BuiltinGenerator) -> String {
+pub fn expand_builtins(s: &str, gen: &dyn BuiltinGenerator) -> String {
     // Fast path: no `{{` ⇒ no var tokens ⇒ nothing to expand. Skips a regex scan + alloc
     // on the common invoke-path case (most bodies/metadata carry no `{{$builtin}}`).
     if !s.contains("{{") {

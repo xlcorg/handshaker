@@ -8,6 +8,7 @@
 //! `grpc/transport`" invariant is about production code paths.
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -71,13 +72,17 @@ pub fn fixture_pool() -> DescriptorPool {
 }
 
 /// Test seam — captures the last `unary_dynamic` call and returns a canned outcome.
-/// `channel()` is unused by invoke-level tests (all logic happens before transport).
+/// `channel()` hands out an inert lazy channel (never connected) so `activate`-level
+/// code composes with the fake; `channel_calls` counts those handouts so tests can
+/// assert the transport was never touched.
 #[derive(Default)]
 pub struct FakeTransport {
     pub outcome: Mutex<Option<Result<UnaryOutcome, CoreError>>>,
     pub last_path: Mutex<Option<String>>,
+    pub last_request: Mutex<Option<DynamicMessage>>,
     pub last_metadata: Mutex<Option<HashMap<String, String>>>,
     pub last_max_bytes: Mutex<Option<usize>>,
+    pub channel_calls: AtomicU32,
 }
 
 impl FakeTransport {
@@ -91,7 +96,9 @@ impl FakeTransport {
 #[async_trait]
 impl GrpcTransport for FakeTransport {
     async fn channel(&self, _target: &GrpcTarget) -> Result<TonicChannel, CoreError> {
-        Err(CoreError::NotImplemented("FakeTransport.channel".into()))
+        self.channel_calls.fetch_add(1, Ordering::Relaxed);
+        // Inert lazy channel to a bogus address — `unary_dynamic` below never dials it.
+        Ok(tonic::transport::Channel::from_static("http://127.0.0.1:1").connect_lazy())
     }
 
     async fn unary_dynamic(
@@ -99,14 +106,27 @@ impl GrpcTransport for FakeTransport {
         _channel: TonicChannel,
         method_path: String,
         _codec: DynamicCodec,
-        _request: DynamicMessage,
+        request: DynamicMessage,
         metadata: HashMap<String, String>,
         opts: CallOptions,
     ) -> Result<UnaryOutcome, CoreError> {
         *self.last_path.lock().await = Some(method_path);
+        *self.last_request.lock().await = Some(request);
         *self.last_metadata.lock().await = Some(metadata);
         *self.last_max_bytes.lock().await = Some(opts.max_message_bytes);
         self.outcome.lock().await.take().expect("outcome set")
+    }
+}
+
+/// A `CachedContract` over the fixture pool — seed a `ContractCache` with it so
+/// `activate` composes with `FakeTransport` without running reflection.
+pub fn fixture_cached_contract() -> crate::grpc::contract_cache::CachedContract {
+    let pool = fixture_pool();
+    let catalog = crate::grpc::catalog::build::build_catalog(&pool);
+    crate::grpc::contract_cache::CachedContract {
+        pool,
+        catalog,
+        fetched_at: std::time::SystemTime::UNIX_EPOCH,
     }
 }
 
