@@ -336,7 +336,6 @@ mod tests {
     use super::*;
     use crate::ipc::collection::{FolderIpc, SavedRequestIpc};
     use handshaker_core::collections::CollectionStore;
-    use std::collections::HashMap;
     use uuid::Uuid;
 
     fn empty_collection_ipc(id: u128, name: &str) -> CollectionIpc {
@@ -610,24 +609,7 @@ mod tests {
     fn state_with_collection_store(
         store: std::sync::Arc<dyn handshaker_core::collections::CollectionStore>,
     ) -> AppState {
-        let ui_dir = tempfile::tempdir().unwrap().keep();
-        AppState {
-            env_store: std::sync::Arc::new(
-                handshaker_core::env::in_memory::InMemoryEnvironmentStore::new(),
-            ),
-            active_env: tokio::sync::RwLock::new(None),
-            active_env_path: None,
-            collection_store: store,
-            contract_cache: std::sync::Arc::new(handshaker_core::grpc::InMemoryContractCache::new()),
-            ui_state_store: std::sync::Arc::new(
-                handshaker_core::ui_state::FileUiStateStore::load(&ui_dir).unwrap(),
-            ),
-            in_flight: std::sync::Mutex::new(HashMap::new()),
-            oauth2_provider: std::sync::Arc::new(
-                handshaker_core::auth::oauth2::Oauth2TokenProvider::new(),
-            ),
-            recovered: std::sync::Mutex::new(Vec::new()),
-        }
+        AppState { collection_store: store, ..AppState::default() }
     }
 
     #[test]

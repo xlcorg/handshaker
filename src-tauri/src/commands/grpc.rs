@@ -9,11 +9,10 @@ use std::time::Duration;
 
 use tokio::sync::Notify;
 
-use handshaker_core::auth::{OAuth2ClientCredentialsConfig, TokenSource};
-use handshaker_core::collections::{resolve_request, ItemId, SavedRequest};
+use handshaker_core::collections::{ItemId, SavedRequest};
 use handshaker_core::grpc::{
-    activate, build_message_schema_from_pool, build_request_skeleton_from_pool, invoke_unary,
-    CallOptions, ContractKey, GrpcTarget, TonicTransport,
+    activate, build_message_schema_from_pool, build_request_skeleton_from_pool, CallOptions,
+    ContractKey, GrpcTarget, TonicTransport,
 };
 use tauri::{AppHandle, State};
 use tauri_specta::Event;
@@ -21,8 +20,8 @@ use uuid::Uuid;
 
 use crate::commands::events::ContractUpdated;
 use crate::ipc::{
-    CallOptionsIpc, GrpcTargetIpc, InvokeOutcomeIpc, InvokeRequest, IpcError, MessageSchemaIpc,
-    MessageSideIpc, SendCtxIpc, SendDraftIpc, SendReportIpc, ServiceCatalogIpc,
+    CallOptionsIpc, GrpcTargetIpc, InvokeOutcomeIpc, IpcError, MessageSchemaIpc, MessageSideIpc,
+    SendCtxIpc, SendDraftIpc, SendReportIpc, ServiceCatalogIpc,
 };
 use crate::state::{AppState, InFlight};
 
@@ -216,50 +215,14 @@ where
     }
 }
 
-/// Expand built-in dynamic variables (`{{$guid}}`, …) in the request body and each
-/// metadata VALUE, in place. Per-occurrence: each `{{$name}}` gets a fresh value.
-/// Metadata keys are left untouched. Generic over the generator for testability.
+/// Live Send — an ADAPTER over the core `Sender` (the whole spine lives in core):
+/// parse ctx references → read collection/env from the stores → run the shared
+/// `Sender` under the cancel/timeout race → map the core report and errors to
+/// wire form.
 ///
-/// Note: the auth header is injected into `metadata` upstream (frontend `sendStep`)
-/// before this runs, so an auth value literally containing `{{$guid}}` would also be
-/// expanded. That's benign (real IdP tokens carry no `{{}}`); auth-FIELD resolution
-/// (oauth2 config) remains a separate, out-of-scope concern.
-fn expand_request_builtins(
-    request: &mut InvokeRequest,
-    gen: &impl handshaker_core::vars::builtins::BuiltinGenerator,
-) {
-    use handshaker_core::vars::builtins::expand_builtins;
-    request.request_json = expand_builtins(&request.request_json, gen);
-    for v in request.metadata.values_mut() {
-        *v = expand_builtins(v, gen);
-    }
-}
-
-/// On UNAUTHENTICATED (gRPC 16), drop the cached OAuth2 token so the next Send
-/// fetches a fresh one (no auto-retry — design choice). No-op for other statuses
-/// or when the effective auth wasn't OAuth2.
-fn invalidate_on_unauthenticated(
-    tokens: &dyn TokenSource,
-    status_code: i32,
-    oauth_config: Option<&OAuth2ClientCredentialsConfig>,
-) {
-    if status_code == 16 {
-        if let Some(cfg) = oauth_config {
-            tokens.invalidate(cfg);
-        }
-    }
-}
-
-/// Live Send: resolve the draft through the core `resolve_request` pipeline (vars,
-/// auth pick + materialize, TLS), then activate + invoke. Replaces the old
-/// `grpc_invoke_oneshot`, which took an already-resolved `InvokeRequest` (the
-/// now-deleted TS mirror did the resolving; that job now belongs to core).
-///
-/// Non-OK gRPC status arrives in `InvokeOutcomeIpc.status_code`, NOT as `Err`.
-/// `Err` covers resolve failure (`UnresolvedVars`) and client-side failures
-/// (transport / encode / decode). On a 16 UNAUTHENTICATED outcome with an OAuth2
-/// auth pick, the cached token is invalidated so the next Send fetches fresh — no
-/// automatic retry.
+/// Non-OK gRPC status arrives in `SendReportIpc.outcome.status_code`, NOT as
+/// `Err`. `Err` covers resolve failure (`UnresolvedVars`) and client-side
+/// failures (transport / encode / decode).
 pub(crate) async fn grpc_send_impl(
     state: &AppState,
     draft: SendDraftIpc,
@@ -290,52 +253,17 @@ pub(crate) async fn grpc_send_impl(
         use_count: 0,
     };
 
-    let tokens = state.token_source();
-    let eff = resolve_request(&saved, collection.as_ref(), active_env.as_ref(), tokens.as_ref()).await?;
-
-    // Send-report facts, captured before `eff` fields move into the work closure.
-    let picked_auth = eff.picked_auth.clone();
-    let tls_used = eff.target.tls;
-
-    // Assemble InvokeRequest: effective body + metadata + auth header.
-    let mut metadata = eff.metadata;
-    if let Some(creds) = &eff.auth {
-        metadata.insert(creds.header_name.clone(), creds.header_value.clone());
-    }
-    let mut request = InvokeRequest {
-        service: eff.service,
-        method: eff.method,
-        request_json: eff.body_json,
-        metadata,
-    };
-    let invalidate = eff.invalidate_oauth;
     let timeout_ms = opts.timeout_ms;
     let call_opts = CallOptions { max_message_bytes: resolve_max_message_size(opts.max_message_bytes) };
-    let target = eff.target;
-    let cache = state.contract_cache.clone();
-
-    let outcome = {
-        let work = async move {
-            expand_request_builtins(&mut request, &handshaker_core::vars::builtins::SystemBuiltins);
-            let transport = Arc::new(TonicTransport::new());
-            let conn = activate(target, transport, cache.as_ref()).await?;
-            let outcome = invoke_unary(
-                &conn,
-                &request.service,
-                &request.method,
-                &request.request_json,
-                request.metadata,
-                call_opts,
-            )
+    let sender = state.sender.clone();
+    let work = async move {
+        let report = sender
+            .send(&saved, collection.as_ref(), active_env.as_ref(), call_opts)
             .await?;
-            Ok::<InvokeOutcomeIpc, IpcError>(outcome.into())
-        };
-        race_cancel_timeout(&state.in_flight, request_id, timeout_ms, work).await?
+        let outcome: InvokeOutcomeIpc = report.outcome.into();
+        Ok(SendReportIpc::from_parts(outcome, report.auth_used, report.tls_used))
     };
-
-    // On 16 UNAUTHENTICATED drop the cached oauth token; next Send fetches fresh. No retry.
-    invalidate_on_unauthenticated(tokens.as_ref(), outcome.status_code, invalidate.as_ref());
-    Ok(SendReportIpc::from_parts(outcome, picked_auth, tls_used))
+    race_cancel_timeout(&state.in_flight, request_id, timeout_ms, work).await
 }
 
 #[tauri::command]
@@ -389,29 +317,103 @@ mod tests {
     }
 
     use crate::ipc::collection::SavedAuthConfigIpc;
-    use crate::ipc::invoke::{InvokeRequest, SendDraftIpc};
+    use crate::ipc::invoke::SendDraftIpc;
     use crate::ipc::{IpcError, SendCtxIpc};
     use crate::state::InFlight;
-    use handshaker_core::vars::builtins::BuiltinGenerator;
     use std::collections::HashMap;
     use std::time::Duration;
 
-    #[tokio::test]
-    async fn grpc_send_unresolved_var_returns_unresolved_vars_error() {
-        let state = AppState::default(); // empty stores ⇒ {{host}} unresolvable
-        let draft = SendDraftIpc {
+    /// Draft whose address is the `{{host}}` template — resolvable only when the
+    /// ctx-referenced store provides `host`.
+    fn host_template_draft() -> SendDraftIpc {
+        SendDraftIpc {
             address_template: "{{host}}".into(), tls_override: None,
             service: "pkg.Svc".into(), method: "Do".into(),
             body_template: "{}".into(), metadata: vec![],
             auth: SavedAuthConfigIpc::None,
-        };
-        let opts = CallOptionsIpc { timeout_ms: 1000, max_message_bytes: 0 };
-        let err = grpc_send_impl(&state, draft, SendCtxIpc { collection_id: None, env_name: None },
-            "rid".into(), opts).await.unwrap_err();
+        }
+    }
+
+    fn quick_opts() -> CallOptionsIpc {
+        CallOptionsIpc { timeout_ms: 1000, max_message_bytes: 0 }
+    }
+
+    #[tokio::test]
+    async fn grpc_send_unresolved_var_returns_unresolved_vars_error() {
+        let state = AppState::default(); // empty stores ⇒ {{host}} unresolvable
+        let ctx = SendCtxIpc { collection_id: None, env_name: None };
+        let opts = quick_opts();
+        let draft = host_template_draft();
+        let err = grpc_send_impl(&state, draft, ctx, "rid".into(), opts).await.unwrap_err();
         match err {
             IpcError::UnresolvedVars { unresolved, .. } => assert_eq!(unresolved, vec!["host"]),
             other => panic!("got {other:?}"),
         }
+    }
+
+    /// `host` → a portless address: it resolves fine, then fails target validation
+    /// with `InvalidTarget` — the no-network signal that the store was consulted
+    /// (an unread store would leave `{{host}}` unresolved instead).
+    fn portless_host_vars() -> indexmap::IndexMap<String, String> {
+        let mut variables = indexmap::IndexMap::new();
+        variables.insert("host".to_string(), "portless-address".to_string());
+        variables
+    }
+
+    fn assert_store_var_resolved(err: IpcError) {
+        match err {
+            IpcError::InvalidTarget { message } => {
+                assert!(message.contains("portless-address"), "{message}")
+            }
+            other => panic!("expected InvalidTarget (var resolved from store), got {other:?}"),
+        }
+    }
+
+    /// The ctx carries a collection REFERENCE; the command must read the collection
+    /// from the store.
+    #[tokio::test]
+    async fn grpc_send_reads_collection_from_store_by_ctx_reference() {
+        let state = AppState::default();
+        let id = handshaker_core::collections::ids::CollectionId(uuid::Uuid::from_u128(7));
+        let collection = handshaker_core::collections::Collection {
+            id,
+            name: "c".into(),
+            items: vec![],
+            variables: portless_host_vars(),
+            auth: handshaker_core::auth::SavedAuthConfig::None,
+            default_tls: false,
+            skip_tls_verify: false,
+            pinned: false,
+            description: None,
+            created_at: 0.0,
+            expanded: false,
+        };
+        state.collection_store.upsert(collection).unwrap();
+
+        let ctx = SendCtxIpc { collection_id: Some(id.0.to_string()), env_name: None };
+        let opts = quick_opts();
+        let draft = host_template_draft();
+        let err = grpc_send_impl(&state, draft, ctx, "rid".into(), opts).await.unwrap_err();
+        assert_store_var_resolved(err);
+    }
+
+    /// Same for the environment REFERENCE: `env_name` in the ctx must be read from
+    /// the env store and its variables fed into resolve.
+    #[tokio::test]
+    async fn grpc_send_reads_environment_from_store_by_ctx_reference() {
+        let state = AppState::default();
+        let env = handshaker_core::env::Environment {
+            name: "dev".into(),
+            variables: portless_host_vars(),
+            color: None,
+        };
+        state.env_store.upsert(env).unwrap();
+
+        let ctx = SendCtxIpc { collection_id: None, env_name: Some("dev".into()) };
+        let opts = quick_opts();
+        let draft = host_template_draft();
+        let err = grpc_send_impl(&state, draft, ctx, "rid".into(), opts).await.unwrap_err();
+        assert_store_var_resolved(err);
     }
 
     fn empty_in_flight() -> InFlight {
@@ -549,82 +551,4 @@ mod tests {
         assert!(m.lock().unwrap().is_empty(), "registry entry removed on cancel");
     }
 
-    struct FakeGen;
-    impl BuiltinGenerator for FakeGen {
-        fn generate(&self, name: &str) -> Option<String> {
-            match name {
-                "$guid" => Some("GUID".into()),
-                _ => None,
-            }
-        }
-    }
-
-    #[test]
-    fn expands_builtins_in_body_and_metadata() {
-        let mut req = InvokeRequest {
-            service: "s".into(),
-            method: "m".into(),
-            request_json: r#"{"id":"{{$guid}}","k":"{{kept}}"}"#.into(),
-            metadata: HashMap::from([("x-id".into(), "{{$guid}}".into())]),
-        };
-        expand_request_builtins(&mut req, &FakeGen);
-        assert_eq!(req.request_json, r#"{"id":"GUID","k":"{{kept}}"}"#);
-        assert_eq!(req.metadata.get("x-id").unwrap(), "GUID");
-    }
-
-    struct RecordingTokens {
-        invalidated: std::sync::Mutex<Vec<String>>,
-    }
-    impl RecordingTokens {
-        fn new() -> Self {
-            Self { invalidated: std::sync::Mutex::new(Vec::new()) }
-        }
-    }
-    #[async_trait::async_trait]
-    impl handshaker_core::auth::TokenSource for RecordingTokens {
-        async fn header_for(
-            &self,
-            _cfg: &OAuth2ClientCredentialsConfig,
-        ) -> Result<handshaker_core::auth::AuthCredentials, handshaker_core::error::CoreError> {
-            unreachable!("header_for not exercised by these tests")
-        }
-        fn invalidate(&self, cfg: &OAuth2ClientCredentialsConfig) {
-            self.invalidated.lock().unwrap().push(cfg.client_id.clone());
-        }
-    }
-
-    fn oauth_cfg(client_id: &str) -> OAuth2ClientCredentialsConfig {
-        OAuth2ClientCredentialsConfig {
-            token_url: "https://idp/token".into(),
-            client_id: client_id.into(),
-            client_secret: "shh".into(),
-            scopes: vec![],
-            header_name: "authorization".into(),
-            prefix: "Bearer ".into(),
-            environments: vec![],
-        }
-    }
-
-    #[test]
-    fn invalidate_on_unauthenticated_invalidates_when_status_16_and_oauth_config_present() {
-        let tokens = RecordingTokens::new();
-        let cfg = oauth_cfg("client-a");
-        invalidate_on_unauthenticated(&tokens, 16, Some(&cfg));
-        assert_eq!(tokens.invalidated.lock().unwrap().as_slice(), ["client-a"]);
-    }
-
-    #[test]
-    fn invalidate_on_unauthenticated_is_noop_without_oauth_config() {
-        let tokens = RecordingTokens::new();
-        invalidate_on_unauthenticated(&tokens, 16, None);
-        assert!(tokens.invalidated.lock().unwrap().is_empty());
-    }
-
-    #[test]
-    fn invalidate_on_unauthenticated_is_noop_for_non_16_status() {
-        let tokens = RecordingTokens::new();
-        let cfg = oauth_cfg("client-b");
-        invalidate_on_unauthenticated(&tokens, 0, Some(&cfg));
-        assert!(tokens.invalidated.lock().unwrap().is_empty());
-    }
 }

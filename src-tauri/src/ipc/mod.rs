@@ -15,7 +15,7 @@ pub use auth::AuthCredentialsIpc;
 pub use catalog::ServiceCatalogIpc;
 pub use error::IpcError;
 pub use invoke::{
-    CallOptionsIpc, InvokeOutcomeIpc, InvokeRequest, SendCtxIpc, SendDraftIpc, SendReportIpc,
+    CallOptionsIpc, InvokeOutcomeIpc, SendCtxIpc, SendDraftIpc, SendReportIpc,
 };
 pub use schema::{MessageSchemaIpc, MessageSideIpc};
 pub use target::GrpcTargetIpc;

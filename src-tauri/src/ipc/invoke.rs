@@ -10,14 +10,6 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::collections::HashMap;
 
-#[derive(Debug, Deserialize, Type)]
-pub struct InvokeRequest {
-    pub service: String,
-    pub method: String,
-    pub request_json: String,
-    pub metadata: HashMap<String, String>,
-}
-
 /// Per-call invoke options, as they cross the wire. `request_id` is NOT here — it's a
 /// separate `grpc_send` param (cancel key, distinct lifecycle from call options).
 #[derive(Debug, Deserialize, Type)]
