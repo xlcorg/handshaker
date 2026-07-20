@@ -40,12 +40,15 @@ describe("AboutPane", () => {
     expect(recheck).toHaveBeenCalledTimes(1);
   });
 
-  it("disables the button while a check is in flight", () => {
+  it("disables the button while a check is in flight", async () => {
     render(
       <UpdaterProvider value={makeUpdater({ phase: "checking" })}>
         <AboutPane />
       </UpdaterProvider>,
     );
+    // AboutPane's mount effect resolves ipc.appVersion() → setVersion; let it land inside
+    // the test, otherwise the state update fires after teardown, outside act().
+    await screen.findByText("1.2.3");
     expect(screen.getByRole("button", { name: /checking/i })).toBeDisabled();
   });
 });

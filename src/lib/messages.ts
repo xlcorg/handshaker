@@ -48,6 +48,15 @@ export const messages = {
   },
   catalog: {
     saveDialog: {
+      /** Dialog heading — the two modes rename vs. save-as-new. */
+      title: (originBound: boolean): string => (originBound ? "Update request" : "Save request"),
+      /** Screen-reader description of the dialog; the two modes offer different controls. */
+      description: (originBound: boolean): string =>
+        originBound
+          ? "Rename this request and update the copy already saved in its collection."
+          : "Name the request and choose the collection or folder to save it in.",
+      /** Label + aria-label for the request-name field. */
+      requestNameLabel: "Request name",
       recommendationTitle: "Recommended location",
       addToRecommended: "Add",
       add: "Add",

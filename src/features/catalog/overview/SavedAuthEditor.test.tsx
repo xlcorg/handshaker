@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { SavedAuthEditor } from "./SavedAuthEditor";
 import type { SavedAuthConfigIpc } from "@/ipc/bindings";
 
@@ -27,17 +27,28 @@ const oauth2: SavedAuthConfigIpc = {
   environments: [],
 };
 
+/**
+ * SavedAuthEditor fetches env names in a mount effect (`ipc.envList().then(setEnvNames)`),
+ * so a bare `render` leaves a state update to land after the test's sync assertions —
+ * outside act(). Flush that microtask inside act() before asserting.
+ */
+async function renderEditor(ui: Parameters<typeof render>[0]) {
+  const result = render(ui);
+  await act(async () => {});
+  return result;
+}
+
 describe("SavedAuthEditor", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("shows the 'no auth' copy for a none config", () => {
-    render(<SavedAuthEditor value={{ kind: "none" }} onChange={() => {}} />);
+  it("shows the 'no auth' copy for a none config", async () => {
+    await renderEditor(<SavedAuthEditor value={{ kind: "none" }} onChange={() => {}} />);
     expect(screen.getByText(/No authentication/i)).toBeInTheDocument();
   });
 
-  it("selecting Bearer emits an env_var config with authorization/'Bearer '", () => {
+  it("selecting Bearer emits an env_var config with authorization/'Bearer '", async () => {
     const onChange = vi.fn();
-    render(<SavedAuthEditor value={{ kind: "none" }} onChange={onChange} />);
+    await renderEditor(<SavedAuthEditor value={{ kind: "none" }} onChange={onChange} />);
     fireEvent.click(screen.getByText("Bearer"));
     expect(onChange).toHaveBeenCalledWith({
       kind: "env_var", env_var: "", header_name: "authorization", prefix: "Bearer ",
@@ -45,9 +56,9 @@ describe("SavedAuthEditor", () => {
     });
   });
 
-  it("editing the Bearer token emits the env var name", () => {
+  it("editing the Bearer token emits the env var name", async () => {
     const onChange = vi.fn();
-    render(
+    await renderEditor(
       <SavedAuthEditor
         value={{ kind: "env_var", env_var: "", header_name: "authorization", prefix: "Bearer ", environments: [] }}
         onChange={onChange}
@@ -60,8 +71,8 @@ describe("SavedAuthEditor", () => {
     });
   });
 
-  it("renders header + value for an api-key config", () => {
-    render(
+  it("renders header + value for an api-key config", async () => {
+    await renderEditor(
       <SavedAuthEditor
         value={{ kind: "env_var", env_var: "KEY", header_name: "x-api-key", prefix: "", environments: [] }}
         onChange={() => {}}
@@ -75,21 +86,21 @@ describe("SavedAuthEditor", () => {
 describe("SavedAuthEditor (oauth2)", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("renders the oauth2 fields when the config is oauth2", () => {
-    render(<SavedAuthEditor value={oauth2} onChange={() => {}} />);
+  it("renders the oauth2 fields when the config is oauth2", async () => {
+    await renderEditor(<SavedAuthEditor value={oauth2} onChange={() => {}} />);
     expect(screen.getByDisplayValue("https://idp/token")).toBeTruthy();
     expect(screen.getByDisplayValue("cid")).toBeTruthy();
   });
 
   it("Get token resolves vars, calls the backend, and shows the lifetime", async () => {
-    render(<SavedAuthEditor value={oauth2} onChange={() => {}} />);
+    await renderEditor(<SavedAuthEditor value={oauth2} onChange={() => {}} />);
     fireEvent.click(screen.getByRole("button", { name: /get token/i }));
     await waitFor(() => expect(ipc.authOauth2FetchToken).toHaveBeenCalledTimes(1));
     expect(await screen.findByText(/expires in 14 min/i)).toBeTruthy(); // 840s ≈ 14 min
   });
 
   it("Get token shows a truncated token and copies the full one to the clipboard", async () => {
-    render(<SavedAuthEditor value={oauth2} onChange={() => {}} />);
+    await renderEditor(<SavedAuthEditor value={oauth2} onChange={() => {}} />);
     fireEvent.click(screen.getByRole("button", { name: /get token/i }));
     // Truncated preview — never the full token in the DOM.
     expect(await screen.findByText(/eyJhbGciOiJSUzI1NiJ9…/)).toBeTruthy();
@@ -100,9 +111,9 @@ describe("SavedAuthEditor (oauth2)", () => {
     );
   });
 
-  it("editing a field emits an updated config via onChange", () => {
+  it("editing a field emits an updated config via onChange", async () => {
     const onChange = vi.fn();
-    render(<SavedAuthEditor value={oauth2} onChange={onChange} />);
+    await renderEditor(<SavedAuthEditor value={oauth2} onChange={onChange} />);
     fireEvent.change(screen.getByDisplayValue("cid"), { target: { value: "cid2" } });
     expect(onChange).toHaveBeenCalled();
     const last = onChange.mock.calls.at(-1)![0] as SavedAuthConfigIpc;

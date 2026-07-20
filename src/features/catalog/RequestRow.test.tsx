@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ItemIpc } from "@/ipc/bindings";
 import type { TreeCallbacks } from "./treeTypes";
@@ -76,7 +76,8 @@ describe("RequestRow", () => {
       const icon = screen.getByLabelText("grpc");
       expect(icon.getAttribute("data-variant")).toBe("solid");
     } finally {
-      setPref("grpcIcon", "off"); // reset the module-level singleton for sibling tests
+      // Broadcasts to the mounted row's usePrefs subscriber ⇒ a React state update.
+      act(() => setPref("grpcIcon", "off")); // reset the module-level singleton for sibling tests
     }
   });
 

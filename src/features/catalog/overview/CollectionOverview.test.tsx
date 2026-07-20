@@ -97,9 +97,12 @@ describe("CollectionOverview", () => {
     );
   });
 
-  it("the Authorization tab persists a chosen auth via collectionSetNodeAuth", () => {
+  it("the Authorization tab persists a chosen auth via collectionSetNodeAuth", async () => {
     r(<CollectionOverview {...props()} />);
     fireEvent.click(screen.getByText("Authorization"));
+    // SavedAuthEditor mounts here and fetches env names in an effect; let that
+    // microtask settle inside act() before asserting.
+    await act(async () => {});
     fireEvent.click(screen.getByText("Bearer"));
     expect(ipc.collectionSetNodeAuth).toHaveBeenCalledWith("c1", null, {
       kind: "env_var", env_var: "", header_name: "authorization", prefix: "Bearer ",

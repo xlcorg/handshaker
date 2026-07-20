@@ -1,4 +1,5 @@
 import "@testing-library/jest-dom/vitest";
+import { afterEach, beforeEach, expect } from "vitest";
 
 // Node >= 22 defines global `localStorage`/`sessionStorage` getters that
 // return undefined unless node runs with --localstorage-file; under vitest
@@ -74,3 +75,56 @@ if (!Element.prototype.hasPointerCapture) {
 if (!Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = () => {};
 }
+
+// Any console.error / console.warn a test produces fails that test. React's act(...)
+// warnings and Radix's a11y warnings both arrive on these channels, so this turns "the
+// suite is noisy" into "the suite is red" — a new warning can no longer hide among old
+// ones.
+//
+// The assertion runs in afterEach rather than throwing from inside console.error: React
+// logs during render, and an exception thrown from there is swallowed by an error
+// boundary, burying the real failure under unrelated noise.
+//
+// Installed by plain assignment, not vi.spyOn: a vi mock is subject to vi's
+// mock-management functions, and a `vi.resetAllMocks()` in some other test's beforeEach
+// (an ordinary idiom) would strip the implementation, silently disarming the guard —
+// console output would vanish instead of being captured, and the test would pass green
+// with no stderr. Plain assignment is invisible to vi.resetAllMocks/restoreAllMocks.
+//
+// A test that legitimately expects console output opts out the way
+// src/features/updater/updaterContext.test.tsx does — a local
+// vi.spyOn(console, "error").mockImplementation(() => {}) restored in a finally. vi.spyOn
+// captures whatever is currently installed (this guard's handler), so its mockRestore
+// puts the handler back rather than the raw console, and the opt-out composes.
+//
+// Reach: this only covers console.error/warn calls made from within a test body. Output
+// from beforeAll/afterAll hooks or module top-level runs outside beforeEach/afterEach and
+// escapes the guard, as does console.log/info/debug on any other channel.
+const GUARDED_CHANNELS = ["error", "warn"] as const;
+
+const ORIGINAL_CONSOLE = Object.fromEntries(
+  GUARDED_CHANNELS.map((channel) => [channel, console[channel]]),
+) as Record<(typeof GUARDED_CHANNELS)[number], typeof console.error>;
+
+let capturedConsoleOutput: string[] = [];
+
+beforeEach(() => {
+  capturedConsoleOutput = [];
+  for (const channel of GUARDED_CHANNELS) {
+    console[channel] = (...args: unknown[]) => {
+      capturedConsoleOutput.push(`console.${channel}: ${args.map(String).join(" ")}`);
+    };
+  }
+});
+
+afterEach(() => {
+  const output = capturedConsoleOutput;
+  capturedConsoleOutput = [];
+  // Restore the original console functions directly — a test that opted out via
+  // vi.spyOn(...).mockRestore() already put its own value back, so this only fires for
+  // tests that never touched the spy.
+  for (const channel of GUARDED_CHANNELS) {
+    console[channel] = ORIGINAL_CONSOLE[channel];
+  }
+  expect(output.join("\n\n")).toBe("");
+});

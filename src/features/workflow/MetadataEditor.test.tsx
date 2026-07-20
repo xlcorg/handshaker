@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { VarCandidate } from "@/features/vars/candidates";
 import { MetadataEditor } from "./MetadataEditor";
@@ -14,7 +14,7 @@ const VARS: VarCandidate[] = [
 // jsdom doesn't track the caret from a change event, so place it explicitly and fire the
 // keyUp that VarHighlightInput listens on (mirrors the VarHighlightInput suite helper).
 function typeInto(input: HTMLInputElement, value: string) {
-  input.focus();
+  act(() => input.focus()); // Radix Tooltip opens on focus — a React state update
   fireEvent.change(input, { target: { value } });
   input.setSelectionRange(value.length, value.length);
   fireEvent.keyUp(input, { key: value.slice(-1) });

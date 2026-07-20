@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { messages } from "@/lib/messages";
 import { useState, type ReactElement } from "react";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent, act } from "@testing-library/react";
 import type { VarCandidate } from "./candidates";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -108,7 +108,7 @@ describe("VarHighlightInput", () => {
     r(<Host />);
     await waitFor(() => expect(screen.getByText("api.staging")).toBeInTheDocument()); // report resolved
     const input = screen.getByLabelText("addr") as HTMLInputElement; // node after the resolve settled
-    input.focus();
+    act(() => input.focus()); // Radix Tooltip opens on focus — a React state update
     expect(document.activeElement).toBe(input);
 
     fireEvent.click(screen.getByText("clear")); // select-all + delete ⇒ value goes empty
@@ -125,7 +125,7 @@ const VARS: VarCandidate[] = [
 ];
 
 function typeInto(input: HTMLInputElement, value: string) {
-  input.focus();
+  act(() => input.focus()); // Radix Tooltip opens on focus — a React state update
   fireEvent.change(input, { target: { value } });
   // place caret at end (jsdom doesn't track it from change)
   input.setSelectionRange(value.length, value.length);

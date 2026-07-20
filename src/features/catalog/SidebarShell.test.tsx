@@ -58,6 +58,9 @@ function col(id: string, name = id, items: ItemIpc[] = []): CollectionIpc {
 beforeEach(() => {
   localStorage.clear();
   vi.clearAllMocks();
+  // clearAllMocks keeps implementations, so a per-test mockResolvedValue would leak
+  // into later tests and make the mount effect setState after a sync test ended.
+  vi.mocked(loadUiState).mockResolvedValue({ sort_key: null, active_request: null });
   tree.current = makeTreeHook();
 });
 

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -210,14 +211,17 @@ export function SaveRequestDialog(props: SaveRequestDialogProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex h-[80vh] max-w-[640px] flex-col">
         <DialogHeader>
-          <DialogTitle>{originBound ? "Update request" : "Save request"}</DialogTitle>
+          <DialogTitle>{messages.catalog.saveDialog.title(originBound === true)}</DialogTitle>
+          <DialogDescription className="sr-only">
+            {messages.catalog.saveDialog.description(originBound === true)}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-1.5">
-          <Label htmlFor="save-name" className="text-xs">Request name</Label>
+          <Label htmlFor="save-name" className="text-xs">{messages.catalog.saveDialog.requestNameLabel}</Label>
           <Input
             id="save-name"
-            aria-label="Request name"
+            aria-label={messages.catalog.saveDialog.requestNameLabel}
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder={messages.catalog.saveDialog.defaultRequestName}

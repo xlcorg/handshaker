@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render } from "@testing-library/react";
+import { act, render } from "@testing-library/react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 vi.mock("@/features/invoke/BodyEditor", () => ({
@@ -32,8 +32,13 @@ import { newStep } from "./model";
 
 const draft = newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "GetX" });
 
-function renderCallPanel(ui: React.ReactElement) {
-  return render(<TooltipProvider>{ui}</TooltipProvider>);
+/** Renders and flushes the mount-time async effects (useEffectiveAuth's
+ *  `auth_effective` fetch) inside act, so their setState doesn't land — and
+ *  re-render the tree — after the test's synchronous assertions. */
+async function renderCallPanel(ui: React.ReactElement) {
+  const result = render(<TooltipProvider>{ui}</TooltipProvider>);
+  await act(async () => {});
+  return result;
 }
 
 beforeEach(() => {
@@ -42,8 +47,8 @@ beforeEach(() => {
 });
 
 describe("CallPanel body layout", () => {
-  it("renders a resizable group with request + response panels and a handle", () => {
-    const { container } = renderCallPanel(<CallPanel step={draft} onPatch={() => {}} />);
+  it("renders a resizable group with request + response panels and a handle", async () => {
+    const { container } = await renderCallPanel(<CallPanel step={draft} onPatch={() => {}} />);
     expect(container.querySelector('[data-slot="resizable-panel-group"]')).not.toBeNull();
     expect(container.querySelectorAll('[data-slot="resizable-panel"]').length).toBe(2);
     expect(container.querySelector('[data-slot="resizable-handle"]')).not.toBeNull();
@@ -54,8 +59,8 @@ describe("CallPanel body layout", () => {
   // the Monaco wrapper) overflowed it and the library's div showed a NATIVE horizontal
   // scrollbar in both panels. The wrapper must clip its horizontal axis (content scrolls
   // internally via min-h-0 + scroll-thin regions).
-  it("clips each panel's content horizontally so a narrowed panel can't show a native scrollbar", () => {
-    const { container } = renderCallPanel(<CallPanel step={draft} onPatch={() => {}} />);
+  it("clips each panel's content horizontally so a narrowed panel can't show a native scrollbar", async () => {
+    const { container } = await renderCallPanel(<CallPanel step={draft} onPatch={() => {}} />);
     const panels = container.querySelectorAll('[data-slot="resizable-panel"]');
     expect(panels.length).toBe(2);
     panels.forEach((p) => {
@@ -67,15 +72,15 @@ describe("CallPanel body layout", () => {
   // The react-resizable-panels v4 fork reflects orientation via the group's
   // inline `flex-direction` style ("row" = horizontal, "column" = vertical) —
   // NOT via aria-orientation/data-orientation (verified against the installed fork).
-  it("maps split='vertical' (Left/Right) to a row-direction (horizontal) group", () => {
-    const { container } = renderCallPanel(<CallPanel step={draft} onPatch={() => {}} />);
+  it("maps split='vertical' (Left/Right) to a row-direction (horizontal) group", async () => {
+    const { container } = await renderCallPanel(<CallPanel step={draft} onPatch={() => {}} />);
     const group = container.querySelector('[data-slot="resizable-panel-group"]') as HTMLElement;
     expect(group.style.flexDirection).toBe("row");
   });
 
-  it("maps split='horizontal' (Top/Bottom) to a column-direction (vertical) group", () => {
+  it("maps split='horizontal' (Top/Bottom) to a column-direction (vertical) group", async () => {
     h.split = "horizontal";
-    const { container } = renderCallPanel(<CallPanel step={draft} onPatch={() => {}} />);
+    const { container } = await renderCallPanel(<CallPanel step={draft} onPatch={() => {}} />);
     const group = container.querySelector('[data-slot="resizable-panel-group"]') as HTMLElement;
     expect(group.style.flexDirection).toBe("column");
   });

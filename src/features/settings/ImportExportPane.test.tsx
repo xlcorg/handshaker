@@ -21,13 +21,15 @@ import { CatalogProvider } from "@/features/catalog/CatalogProvider";
 import { ImportExportPane } from "./ImportExportPane";
 
 describe("ImportExportPane", () => {
-  it("renders Export and Import actions + the non-destructive note", () => {
+  it("renders Export and Import actions + the non-destructive note", async () => {
     render(
       <CatalogProvider>
         <ImportExportPane />
       </CatalogProvider>,
     );
-    expect(screen.getByRole("button", { name: /^export$/i })).toBeInTheDocument();
+    // CatalogProvider's mount effect awaits ipc.collectionList() and then sets tree +
+    // loading; let those land inside the test rather than after teardown, outside act().
+    expect(await screen.findByRole("button", { name: /^export$/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^import$/i })).toBeInTheDocument();
     expect(screen.getByText(/nothing is deleted/i)).toBeInTheDocument();
   });

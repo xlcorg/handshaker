@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { act, render, screen, fireEvent, waitFor } from "@testing-library/react";
 
 vi.mock("@/features/invoke/BodyEditor", () => ({
   BodyEditor: ({ value }: { value: string }) => <div data-testid="body-editor">{value}</div>,
@@ -46,109 +46,87 @@ import type { MessageSchemaIpc, SendReportIpc, ResolutionReportIpc } from "@/ipc
 
 const draft = newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "GetX" });
 
+/** Renders inside the tooltip provider and flushes the mount-time async effects
+ *  (useEffectiveAuth's `auth_effective`, useMessageSchema's fetches) inside act,
+ *  so their setState — and the whole-tree re-render it triggers — can't land
+ *  after the test's synchronous assertions. */
+async function renderPanel(ui: React.ReactElement) {
+  const result = render(<TooltipProvider>{ui}</TooltipProvider>);
+  await act(async () => {});
+  return result;
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   workflowStore.reset();
 });
 
 describe("CallPanel editable", () => {
-  it("renders the editable draft header when editable", () => {
-    render(
-      <TooltipProvider>
-        <CallPanel step={draft} onPatch={() => {}} editable />
-      </TooltipProvider>
-    );
+  it("renders the editable draft header when editable", async () => {
+    await renderPanel(<CallPanel step={draft} onPatch={() => {}} editable />);
     expect(screen.getByLabelText("draft-address")).toBeTruthy();
   });
 
-  it("renders the read-only AddressBar when not editable", () => {
-    render(
-      <TooltipProvider>
-        <CallPanel step={draft} onPatch={() => {}} />
-      </TooltipProvider>
-    );
+  it("renders the read-only AddressBar when not editable", async () => {
+    await renderPanel(<CallPanel step={draft} onPatch={() => {}} />);
     expect(screen.queryByLabelText("draft-address")).toBeNull();
     expect(screen.getByText("GetX")).toBeTruthy(); // AddressBar shows the method name
   });
 
-  it("toggles TLS through onPatch from the draft header", () => {
+  it("toggles TLS through onPatch from the draft header", async () => {
     const onPatch = vi.fn();
-    render(
-      <TooltipProvider>
-        <CallPanel step={draft} onPatch={onPatch} editable />
-      </TooltipProvider>
-    );
+    await renderPanel(<CallPanel step={draft} onPatch={onPatch} editable />);
     // draft.tls === true (explicit on) → lock shows "TLS on"; clicking cycles to off
     fireEvent.click(screen.getByLabelText("TLS on"));
     expect(onPatch).toHaveBeenCalledWith({ tls: false });
   });
 
-  it("Ctrl+Enter sends the editable draft (sets status: sending)", () => {
+  it("Ctrl+Enter sends the editable draft (sets status: sending)", async () => {
     const onPatch = vi.fn();
-    render(
-      <TooltipProvider>
-        <CallPanel step={draft} onPatch={onPatch} editable />
-      </TooltipProvider>
-    );
+    await renderPanel(<CallPanel step={draft} onPatch={onPatch} editable />);
     fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
     // onSend's first effect is to mark the step as sending.
     expect(onPatch).toHaveBeenCalledWith(expect.objectContaining({ status: "sending" }));
+    // The send itself is async — let it settle inside act.
+    await act(async () => {});
   });
 
-  it("Ctrl+R also sends the editable draft (physical-key, layout-independent)", () => {
+  it("Ctrl+R also sends the editable draft (physical-key, layout-independent)", async () => {
     const onPatch = vi.fn();
-    render(
-      <TooltipProvider>
-        <CallPanel step={draft} onPatch={onPatch} editable />
-      </TooltipProvider>
-    );
+    await renderPanel(<CallPanel step={draft} onPatch={onPatch} editable />);
     fireEvent.keyDown(window, { code: "KeyR", key: "r", ctrlKey: true });
     expect(onPatch).toHaveBeenCalledWith(expect.objectContaining({ status: "sending" }));
+    // The send itself is async — let it settle inside act.
+    await act(async () => {});
   });
 
-  it("does not start a second send when already sending (button stays Send pre-gate)", () => {
+  it("does not start a second send when already sending (button stays Send pre-gate)", async () => {
     const onPatch = vi.fn();
     const sendingStep = { ...draft, status: "sending" as const };
-    render(
-      <TooltipProvider>
-        <CallPanel step={sendingStep} onPatch={onPatch} editable />
-      </TooltipProvider>
-    );
+    await renderPanel(<CallPanel step={sendingStep} onPatch={onPatch} editable />);
     // Pre-gate the action button still reads "Send"; clicking it must be a no-op.
     fireEvent.click(screen.getByRole("button", { name: /send/i }));
     expect(onPatch).not.toHaveBeenCalled();
   });
 
-  it("does not bind the send shortcut when not editable", () => {
+  it("does not bind the send shortcut when not editable", async () => {
     const onPatch = vi.fn();
-    render(
-      <TooltipProvider>
-        <CallPanel step={draft} onPatch={onPatch} />
-      </TooltipProvider>
-    );
+    await renderPanel(<CallPanel step={draft} onPatch={onPatch} />);
     fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
     expect(onPatch).not.toHaveBeenCalled();
   });
 });
 
 describe("CallPanel contract tab", () => {
-  it("shows the Contract tab on the editable draft", () => {
-    render(
-      <TooltipProvider>
-        <CallPanel step={draft} onPatch={() => {}} editable />
-      </TooltipProvider>,
-    );
+  it("shows the Contract tab on the editable draft", async () => {
+    await renderPanel(<CallPanel step={draft} onPatch={() => {}} editable />);
     fireEvent.click(screen.getByRole("tab", { name: "Contract" }));
     // schema fetch is mocked away → both sides null → placeholder text
     expect(screen.getByText(messages.contract.unavailable)).toBeInTheDocument();
   });
 
-  it("offers no Contract tab on non-editable (history) panels", () => {
-    render(
-      <TooltipProvider>
-        <CallPanel step={draft} onPatch={() => {}} />
-      </TooltipProvider>,
-    );
+  it("offers no Contract tab on non-editable (history) panels", async () => {
+    await renderPanel(<CallPanel step={draft} onPatch={() => {}} />);
     expect(screen.queryByRole("tab", { name: "Contract" })).toBeNull();
   });
 
@@ -171,11 +149,7 @@ describe("CallPanel contract tab", () => {
     // Distinct method → fresh useMessageSchema cache keys (the tests above already
     // cached null for `draft`'s keys, which would shadow this side-aware mock).
     const sideDraft = newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "GetSides" });
-    render(
-      <TooltipProvider>
-        <CallPanel step={sideDraft} onPatch={() => {}} editable />
-      </TooltipProvider>,
-    );
+    await renderPanel(<CallPanel step={sideDraft} onPatch={() => {}} editable />);
     // The panel defaults to Body; open the Contract tab explicitly. Schemas
     // resolve async — the tab then lists both sides at once.
     fireEvent.click(screen.getByRole("tab", { name: "Contract" }));
@@ -198,11 +172,7 @@ describe("CallPanel reflection refresh", () => {
     const wireSchema: MessageSchemaIpc = { root: "t.Wire", messages: [], enums: [] };
     vi.mocked(grpcMessageSchema).mockResolvedValue(wireSchema);
     const wireDraft = newStep({ address: "wire-host:443", tls: true, service: "p.v1.S", method: "WireRefresh" });
-    render(
-      <TooltipProvider>
-        <CallPanel step={wireDraft} onPatch={() => {}} editable />
-      </TooltipProvider>,
-    );
+    await renderPanel(<CallPanel step={wireDraft} onPatch={() => {}} editable />);
     // Initial input+output schema fetch for this fresh target lands.
     await waitFor(() => expect(grpcMessageSchema).toHaveBeenCalled());
     const before = vi.mocked(grpcMessageSchema).mock.calls.length;
@@ -257,11 +227,7 @@ describe("CallPanel collection-auth inheritance (auth_effective)", () => {
 
     // step auth defaults to none — inheritance is core-side now, not frontend-side.
     const inheritDraft = newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "GetInherit" });
-    render(
-      <TooltipProvider>
-        <CallPanel step={inheritDraft} onPatch={() => {}} editable />
-      </TooltipProvider>,
-    );
+    await renderPanel(<CallPanel step={inheritDraft} onPatch={() => {}} editable />);
     // Wait for the async effective-auth fetch to resolve (Auth tab display).
     await waitFor(() => expect(authEffective).toHaveBeenCalled());
     fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
@@ -279,11 +245,7 @@ describe("CallPanel collection-auth inheritance (auth_effective)", () => {
   it("shows the inherited collection config in the Auth tab", async () => {
     vi.mocked(authEffective).mockResolvedValue(collectionOauth);
     const inheritDraft = newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "GetAuthTab" });
-    render(
-      <TooltipProvider>
-        <CallPanel step={inheritDraft} onPatch={() => {}} editable />
-      </TooltipProvider>,
-    );
+    await renderPanel(<CallPanel step={inheritDraft} onPatch={() => {}} editable />);
     fireEvent.click(screen.getByRole("tab", { name: "Auth" }));
     await waitFor(() => expect(screen.getByText(/oauth2_client_credentials/)).toBeInTheDocument());
     expect(screen.getByText(/https:\/\/idp\/token/)).toBeInTheDocument();
