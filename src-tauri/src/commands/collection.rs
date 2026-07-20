@@ -623,7 +623,9 @@ mod tests {
                 handshaker_core::ui_state::FileUiStateStore::load(&ui_dir).unwrap(),
             ),
             in_flight: std::sync::Mutex::new(HashMap::new()),
-            oauth2_provider: handshaker_core::auth::oauth2::Oauth2TokenProvider::new(),
+            oauth2_provider: std::sync::Arc::new(
+                handshaker_core::auth::oauth2::Oauth2TokenProvider::new(),
+            ),
             recovered: std::sync::Mutex::new(Vec::new()),
         }
     }

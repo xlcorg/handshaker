@@ -290,8 +290,8 @@ pub(crate) async fn grpc_send_impl(
         use_count: 0,
     };
 
-    let tokens: &dyn TokenSource = &state.oauth2_provider;
-    let eff = resolve_request(&saved, collection.as_ref(), active_env.as_ref(), tokens).await?;
+    let tokens = state.token_source();
+    let eff = resolve_request(&saved, collection.as_ref(), active_env.as_ref(), tokens.as_ref()).await?;
 
     // Send-report facts, captured before `eff` fields move into the work closure.
     let picked_auth = eff.picked_auth.clone();
@@ -334,7 +334,7 @@ pub(crate) async fn grpc_send_impl(
     };
 
     // On 16 UNAUTHENTICATED drop the cached oauth token; next Send fetches fresh. No retry.
-    invalidate_on_unauthenticated(&state.oauth2_provider, outcome.status_code, invalidate.as_ref());
+    invalidate_on_unauthenticated(tokens.as_ref(), outcome.status_code, invalidate.as_ref());
     Ok(SendReportIpc::from_parts(outcome, picked_auth, tls_used))
 }
 

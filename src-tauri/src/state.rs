@@ -5,6 +5,7 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use handshaker_core::auth::oauth2::Oauth2TokenProvider;
+use handshaker_core::auth::TokenSource;
 use handshaker_core::collections::{CollectionStore, FileCollectionStore, InMemoryCollectionStore};
 use handshaker_core::env::file_store::FileEnvironmentStore;
 use handshaker_core::env::in_memory::InMemoryEnvironmentStore;
@@ -47,7 +48,10 @@ pub struct AppState {
     /// In-flight gRPC requests: `request_id` → cancellation `Notify`.
     pub in_flight: InFlight,
     /// OAuth2 client-credentials token cache + HTTP client (session-lived).
-    pub oauth2_provider: Oauth2TokenProvider,
+    /// `Arc`-shared: `token_source()` hands the same cache to every consumer
+    /// (commands today, the core `Sender` next); this field stays concrete so
+    /// provider-only calls (`force_fetch`) keep working.
+    pub oauth2_provider: Arc<Oauth2TokenProvider>,
     /// Files quarantined as corrupt during startup `load` (each moved to `<name>.corrupt`).
     /// Drained once by the frontend (`startup_recovery_take`) to show a recovery notice.
     pub recovered: Mutex<Vec<String>>,
@@ -69,13 +73,20 @@ impl Default for AppState {
                 FileUiStateStore::load(&ui_dir).expect("temp ui-state store load"),
             ),
             in_flight: Mutex::new(HashMap::new()),
-            oauth2_provider: Oauth2TokenProvider::new(),
+            oauth2_provider: Arc::new(Oauth2TokenProvider::new()),
             recovered: Mutex::new(Vec::new()),
         }
     }
 }
 
 impl AppState {
+    /// The session token source as a shared trait-object handle — every consumer
+    /// (auth commands, `grpc_send`, the upcoming core `Sender`) shares the one
+    /// session token cache instead of owning the concrete provider.
+    pub fn token_source(&self) -> Arc<dyn TokenSource> {
+        self.oauth2_provider.clone()
+    }
+
     /// Drain the list of files quarantined during startup `load`. Returns each only
     /// once so the recovery notice shows a single time per launch.
     pub fn take_recovered(&self) -> Vec<String> {
@@ -118,7 +129,7 @@ impl AppState {
             contract_cache: Arc::new(FileContractCache::load(data_dir.join("contracts"))?),
             ui_state_store: Arc::new(ui_state_store),
             in_flight: Mutex::new(HashMap::new()),
-            oauth2_provider: Oauth2TokenProvider::new(),
+            oauth2_provider: Arc::new(Oauth2TokenProvider::new()),
             recovered: Mutex::new(recovered),
         })
     }
@@ -174,6 +185,17 @@ mod tests {
         drop(state);
         let state2 = AppState::load(dir.path()).unwrap();
         assert_eq!(state2.env_active_get_impl().await, None);
+    }
+
+    #[test]
+    fn token_source_is_a_shared_handle_to_the_session_provider() {
+        use handshaker_core::auth::TokenSource;
+        let s = AppState::default();
+        let handle = s.token_source();
+        let again = s.token_source();
+        assert!(Arc::ptr_eq(&handle, &again), "one shared token cache per session");
+        let concrete: Arc<dyn TokenSource> = s.oauth2_provider.clone();
+        assert!(Arc::ptr_eq(&handle, &concrete), "handle aliases the session provider");
     }
 
     #[test]

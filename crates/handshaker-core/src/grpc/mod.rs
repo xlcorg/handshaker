@@ -15,6 +15,8 @@ pub mod error_class;
 pub mod file_contract_cache;
 pub mod invoke;
 pub mod reflection;
+#[cfg(test)]
+pub mod testing;
 pub mod transport;
 
 pub use catalog::{build_catalog, MethodEntry, ServiceCatalog, ServiceEntry};
