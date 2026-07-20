@@ -1,6 +1,6 @@
 # Zero test warnings — design
 
-**Status:** 📝 spec — awaiting plan
+**Status:** 🎉 DONE — shipped on `main`; plan banner: `docs/superpowers/plans/archive/2026-07-20-zero-test-warnings.md`
 
 ## Problem
 

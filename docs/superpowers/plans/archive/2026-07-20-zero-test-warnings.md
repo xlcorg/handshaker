@@ -1,5 +1,15 @@
 # Zero Test Warnings Implementation Plan
 
+> **🎉 DONE** — all 9 tasks implemented and reviewed. `pnpm test` is 167 files /
+> 1213 tests green with zero console output, and the guard is proven still armed.
+> Shipped beyond the original plan: the guard is installed by plain assignment rather
+> than `vi.spyOn`, because a `vi.resetAllMocks()` in any test's `beforeEach` would
+> otherwise strip the mock implementation and silently disarm it — output destroyed,
+> test green. Found by the final whole-branch review and verified by experiment.
+> Known limitation: the guard's reach equals test coverage. `SettingsDialog.tsx` has
+> the same missing-`DialogTitle`/`DialogDescription` defect as `SaveRequestDialog` but
+> no test file, so nothing turned red for it — follow-up work.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make `pnpm test` emit zero console output, and make any future warning fail the suite.
@@ -56,11 +66,25 @@ Spec: `docs/superpowers/specs/2026-07-20-zero-test-warnings-design.md`.
 | `src/features/catalog/overview/CollectionOverview.test.tsx` | 1 | 6 |
 | `src/features/workflow/MetadataEditor.test.tsx` | 1 | 7 |
 
-Count warnings in any file with:
+### How to measure — read this before running any check
+
+The counts above are the **pre-guard** baseline, measured with:
 
 ```bash
 pnpm vitest run <path> 2>&1 | grep -cE "^Warning:"
 ```
+
+**That command stops working the moment Task 1 lands.** The guard intercepts
+`console.error`/`console.warn`, so the text never reaches stderr with a bare `Warning:`
+prefix — it is re-emitted as `console.error: …` inside a test failure message. After Task
+1 the grep returns `0` whether or not warnings are being produced, which would read as
+false success.
+
+From Task 2 onward the criterion is simply: **the test file passes.** The guard's
+`afterEach` asserts `expect(output.join("\n\n")).toBe("")` — exact equality against all
+captured console output for that test — so a green file is a stronger guarantee than any
+line count. Where a step below still shows a `grep -cE "^Warning:"` command, treat a
+passing suite as the real verdict and the grep as informational only.
 
 ---
 
@@ -844,16 +868,43 @@ RequestRow each landed a setState after their sync test ended."
 Run: `pnpm test`
 Expected: `Test Files 167 passed (167)`, `Tests 1213 passed (1213)`.
 
-- [ ] **Step 2: Prove zero warnings**
+- [ ] **Step 2: Prove zero warnings — and prove the guard is still armed**
 
-Run: `pnpm test 2>&1 | grep -cE "^Warning:"`
-Expected: `0`
+A green suite only means "zero warnings" if the guard is actually running. A grep for
+`^Warning:` proves nothing here (see "How to measure" above), and a guard accidentally
+disabled would also produce a green suite. So verify both halves.
 
-Run: `pnpm test 2>&1 | grep -c "^stderr |"`
-Expected: `0`
+First, the suite itself:
 
-The second check matters: it catches console output that does not start with
-`Warning:`, which the first would miss.
+```bash
+pnpm test 2>&1 | grep -c "^stderr |"
+```
+
+Expected: `0`. Combined with Step 1's all-green result, this establishes that no test
+produced console output and none leaked to stderr by another route.
+
+Second, prove the guard still fails a dirty test. Recreate the throwaway self-check from
+Task 1:
+
+```ts
+// src/test/guard-selfcheck.test.ts
+import { describe, it, expect } from "vitest";
+
+describe("console guard self-check", () => {
+  it("still fails the test when something writes to console.warn", () => {
+    console.warn("boom");
+    expect(true).toBe(true);
+  });
+});
+```
+
+Run: `pnpm vitest run src/test/guard-selfcheck.test.ts`
+Expected: FAIL, with `console.warn: boom` in the message.
+
+Then delete it: `rm src/test/guard-selfcheck.test.ts`
+
+If it PASSES, the guard has been disabled or broken somewhere in Tasks 2-8 and the whole
+green suite is meaningless — stop and find out why.
 
 - [ ] **Step 3: Run the rest of the gate**
 

@@ -8,12 +8,11 @@ Workspace: `crates/handshaker-core` (OS-independent core) · `src-tauri` (IPC) �
 
 No active feature (between features).
 
-Latest merged: **body completion — one pure home** — `computeCompletion(fullText,
-caretOffset, {schema, vars})` in `src/features/bodyview/completion.ts` is the single
-home and test surface of the suggest pipeline; Monaco shell and BodyView auto-trigger
-are pass-through consumers (term: `src/CONTEXT.md`).
-Banner: `docs/superpowers/plans/archive/2026-07-20-body-completion.md` ·
-memory `project-body-completion-done`.
+Latest merged: **zero test warnings** — `src/test/setup.ts` fails any test that writes
+to `console.error`/`console.warn`, so the suite's 184 warnings became 12 red files and
+then zero; opt out with a local `vi.spyOn(console, …)` restored in a `finally`.
+Banner: `docs/superpowers/plans/archive/2026-07-20-zero-test-warnings.md` ·
+memory `project-zero-test-warnings-done`.
 
 Integration branch is `main`; features run in isolated worktree branches (`claude/*`)
 and land fast-forward. Before merging, squash the branch into clean, cohesive history —
