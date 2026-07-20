@@ -57,8 +57,9 @@ The core is specta-free and tonic-free outside `grpc/transport`.
 Invariants that span layers (ubiquitous language + details: `CONTEXT-MAP.md` →
 per-context `CONTEXT.md`):
 
-- The **resolve pipeline** (draft/request + collection + env → effective request) lives
-  in core exactly once; `grpc_send` owns resolve → builtin expansion → invoke. The
+- The **Send spine** (resolve pipeline → builtin expansion → invoke → token
+  invalidation on 16) lives in core exactly once, behind the shared `Sender`;
+  `grpc_send` is an adapter (store reads, cancel/timeout race, wire mapping). The
   frontend sends `{{var}}` templates, never resolved values.
 - **Auth pick** (which config wins) is sync core logic the UI asks over IPC;
   **auth materialization** (env var read / OAuth2 token fetch) is async, behind the
@@ -86,7 +87,7 @@ Details: `docs/agents/session-cadence.md`.
 
 ## Agent skills
 
-Config for Matt Pocock's engineering skills (`triage`, `to-issues`, `to-prd`,
+Config for Matt Pocock's engineering skills (`triage`, `to-tickets`, `to-spec`,
 `diagnosing-bugs`, `tdd`, `improve-codebase-architecture`, etc.). One-line summaries here;
 details in `docs/agents/*.md`.
 
