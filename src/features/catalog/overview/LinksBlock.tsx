@@ -5,7 +5,10 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/cn";
 import { newId } from "@/lib/ids";
 import { messages } from "@/lib/messages";
+import { VarHighlightInput } from "@/features/vars/VarHighlightInput";
+import type { VarCandidate } from "@/features/vars/candidates";
 import { type LinkResolve, type LinkRow, openLink, useLinkTarget } from "./linkTarget";
+import { VAR_FIELD_FRAME, VAR_FIELD_METRICS } from "./varField";
 
 const m = messages.catalog.overview.links;
 
@@ -15,17 +18,20 @@ const GRID_COLS = "grid grid-cols-[1fr_1.4fr_28px_28px]";
 interface LinksBlockProps extends LinkResolve {
   rows: LinkRow[];
   onChange: (nextRows: LinkRow[]) => void;
+  /** Variable candidates for `{{`-autocomplete inside the URL field. */
+  variables?: VarCandidate[];
 }
 
 interface LinkRowItemProps extends LinkResolve {
   row: LinkRow;
   onEdit: (key: "name" | "url", val: string) => void;
   onDelete: () => void;
+  variables?: VarCandidate[];
 }
 
 /** One link row: name + URL template editors, plus an open-in-browser action whose
  *  target is the URL resolved against the collection vars + active environment. */
-function LinkRowItem({ row, onEdit, onDelete, resolveUrl, resolveKey }: LinkRowItemProps) {
+function LinkRowItem({ row, onEdit, onDelete, resolveUrl, resolveKey, variables }: LinkRowItemProps) {
   const target = useLinkTarget(row.url, resolveUrl, resolveKey);
 
   return (
@@ -37,12 +43,19 @@ function LinkRowItem({ row, onEdit, onDelete, resolveUrl, resolveKey }: LinkRowI
         aria-label={m.nameAria}
         className="h-8 text-[12.5px]"
       />
-      <Input
+      {/* URL gets the shared variable treatment (token highlight + resolve preview +
+          `{{`-autocomplete), matching the collection Variables value field. Per-token
+          coloring inside the field marks broken vars, so no manual error class here. */}
+      <VarHighlightInput
         value={row.url}
-        onChange={(e) => onEdit("url", e.target.value)}
+        onChange={(v) => onEdit("url", v)}
+        resolver={resolveUrl}
+        resolveKey={resolveKey}
         placeholder={m.urlPlaceholder}
-        aria-label={m.urlAria}
-        className={cn("h-8 font-mono text-[12.5px]", target.kind === "broken" && "vh-error-text")}
+        ariaLabel={m.urlAria}
+        metrics={VAR_FIELD_METRICS}
+        variables={variables}
+        className={VAR_FIELD_FRAME}
       />
       {/* Native `title` rather than the `Tooltip` wrapper: the hover text is the resolved
           URL (or the missing vars) and must stay readable on a non-interactive, blocked
@@ -81,7 +94,7 @@ function LinkRowItem({ row, onEdit, onDelete, resolveUrl, resolveKey }: LinkRowI
  * resolves its URL through the var-resolve IPC and opens the resolved target in the
  * system browser. A row whose vars don't resolve is marked and can't be opened.
  */
-export function LinksBlock({ rows, onChange, resolveUrl, resolveKey }: LinksBlockProps) {
+export function LinksBlock({ rows, onChange, resolveUrl, resolveKey, variables }: LinksBlockProps) {
   const add = () => onChange([...rows, { id: newId(), name: "", url: "" }]);
 
   const upd = (id: string, key: "name" | "url", val: string) =>
@@ -123,6 +136,7 @@ export function LinksBlock({ rows, onChange, resolveUrl, resolveKey }: LinksBloc
           onDelete={() => del(row.id)}
           resolveUrl={resolveUrl}
           resolveKey={resolveKey}
+          variables={variables}
         />
       ))}
       <div className="pt-1">

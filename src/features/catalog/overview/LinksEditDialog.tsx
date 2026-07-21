@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { messages } from "@/lib/messages";
 import { LinksBlock } from "./LinksBlock";
 import type { LinkResolve, LinkRow } from "./linkTarget";
+import type { VarCandidate } from "@/features/vars/candidates";
 
 const m = messages.catalog.overview.links;
 
@@ -18,6 +19,8 @@ export interface LinksEditDialogProps extends LinkResolve {
   onOpenChange: (open: boolean) => void;
   rows: LinkRow[];
   onChange: (nextRows: LinkRow[]) => void;
+  /** Variable candidates for `{{`-autocomplete inside the URL field. */
+  variables?: VarCandidate[];
 }
 
 /** Edit surface for collection links (Edit Environment pattern): the name+URL rows grid,
@@ -30,6 +33,7 @@ export function LinksEditDialog({
   onChange,
   resolveUrl,
   resolveKey,
+  variables,
 }: LinksEditDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -45,6 +49,7 @@ export function LinksEditDialog({
             onChange={onChange}
             resolveUrl={resolveUrl}
             resolveKey={resolveKey}
+            variables={variables}
           />
         </div>
 

@@ -6,6 +6,7 @@ import { newId } from "@/lib/ids";
 import { VarHighlightInput } from "@/features/vars/VarHighlightInput";
 import type { ResolutionReportIpc } from "@/ipc/bindings";
 import type { VarCandidate } from "@/features/vars/candidates";
+import { VAR_FIELD_FRAME, VAR_FIELD_METRICS } from "./varField";
 
 export interface VarRow {
   id: string;
@@ -74,9 +75,9 @@ export function VariablesBlock({ rows, onChange, resolveRow, resolveKey, variabl
             resolveKey={resolveKey}
             placeholder="value"
             ariaLabel="variable value"
-            metrics="h-8 px-3 font-mono text-[12.5px] leading-8"
+            metrics={VAR_FIELD_METRICS}
             variables={variables}
-            className="w-full rounded-md border border-input bg-transparent shadow-xs transition-[color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30"
+            className={VAR_FIELD_FRAME}
           />
           <Tooltip content="Remove">
             <button

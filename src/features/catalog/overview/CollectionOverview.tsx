@@ -174,6 +174,7 @@ export function CollectionOverview({ collection, onChanged, onSelectRequest, onC
             onChange={onLinksChange}
             resolveUrl={resolveRow}
             resolveKey={resolveKey}
+            variables={varCandidates}
           />
         )}
         <div className="ml-auto">
@@ -193,6 +194,7 @@ export function CollectionOverview({ collection, onChanged, onSelectRequest, onC
           onChange={onLinksChange}
           resolveUrl={resolveRow}
           resolveKey={resolveKey}
+          variables={varCandidates}
         />
       )}
 

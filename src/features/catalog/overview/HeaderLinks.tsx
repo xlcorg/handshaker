@@ -9,6 +9,7 @@ import { messages } from "@/lib/messages";
 import { LinkChip, EditPencil, GhostChip } from "./LinkChip";
 import { LinksEditDialog } from "./LinksEditDialog";
 import type { LinkResolve, LinkRow } from "./linkTarget";
+import type { VarCandidate } from "@/features/vars/candidates";
 
 const m = messages.catalog.overview.links;
 
@@ -20,12 +21,14 @@ const HEADER_MAX_CHIPS = 3;
 export interface HeaderLinksProps extends LinkResolve {
   rows: LinkRow[];
   onChange: (nextRows: LinkRow[]) => void;
+  /** Variable candidates for `{{`-autocomplete inside the edit dialog's URL field. */
+  variables?: VarCandidate[];
 }
 
 /** Header variant of the collection quick-links: chips inline in the panel header after the
  *  title/counters. Excess chips past {@link HEADER_MAX_CHIPS} collapse into a "+N" overflow
  *  menu with the same chip states/behaviour. Empty state and the pencil match the strip. */
-export function HeaderLinks({ rows, onChange, resolveUrl, resolveKey }: HeaderLinksProps) {
+export function HeaderLinks({ rows, onChange, resolveUrl, resolveKey, variables }: HeaderLinksProps) {
   const [editing, setEditing] = useState(false);
 
   const visible = rows.slice(0, HEADER_MAX_CHIPS);
@@ -70,6 +73,7 @@ export function HeaderLinks({ rows, onChange, resolveUrl, resolveKey }: HeaderLi
         onChange={onChange}
         resolveUrl={resolveUrl}
         resolveKey={resolveKey}
+        variables={variables}
       />
     </div>
   );

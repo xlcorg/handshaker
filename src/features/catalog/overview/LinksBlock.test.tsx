@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { ReactElement } from "react";
+import { useState, type ReactElement } from "react";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import type { VarCandidate } from "@/features/vars/candidates";
 
 vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 
@@ -78,14 +79,17 @@ describe("LinksBlock — resolve + open", () => {
     const { rerender } = r(
       <LinksBlock rows={rows} onChange={vi.fn()} resolveUrl={resolve} resolveKey="dev" />,
     );
-    await waitFor(() => expect(resolve).toHaveBeenCalledTimes(1));
+    // The URL field (VarHighlightInput) also resolves, so the row resolves more than once
+    // per key — assert the key change triggers a fresh resolve, not an exact call count.
+    await waitFor(() => expect(resolve).toHaveBeenCalled());
+    const before = resolve.mock.calls.length;
 
     rerender(
       <TooltipProvider>
         <LinksBlock rows={rows} onChange={vi.fn()} resolveUrl={resolve} resolveKey="prod" />
       </TooltipProvider>,
     );
-    await waitFor(() => expect(resolve).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(resolve.mock.calls.length).toBeGreaterThan(before));
   });
 
   it("surfaces a rejected open (scheme outside the capability allowlist)", async () => {
@@ -107,5 +111,43 @@ describe("LinksBlock — resolve + open", () => {
     r(<LinksBlock rows={rows} onChange={vi.fn()} resolveUrl={resolve} resolveKey="k" />);
     fireEvent.click(screen.getByLabelText("Open link"));
     expect(ipc.openExternal).not.toHaveBeenCalled();
+  });
+});
+
+describe("LinksBlock — URL field variable treatment", () => {
+  it("highlights the {{var}} token in the URL and previews the resolved value", async () => {
+    const resolve = resolver("https://grafana.example/d/abc");
+    r(<LinksBlock rows={rows} onChange={vi.fn()} resolveUrl={resolve} resolveKey="k" />);
+
+    // Token segment painted as resolved (green), literal segments left plain.
+    await waitFor(() => expect(screen.getByText("{{host}}").className).toContain("vh-resolved"));
+    // Inline resolve preview shows the substituted value while editing.
+    expect(screen.getByText("https://grafana.example/d/abc")).toBeInTheDocument();
+  });
+
+  it("marks the token as an error when the URL does not resolve", async () => {
+    const resolve = resolver("https://{{host}}/d/abc", ["host"]);
+    r(<LinksBlock rows={rows} onChange={vi.fn()} resolveUrl={resolve} resolveKey="k" />);
+
+    await waitFor(() => expect(screen.getByText("{{host}}").className).toContain("vh-error"));
+  });
+
+  it("offers {{-autocomplete over the supplied variable candidates", async () => {
+    const resolve = resolver("");
+    const variables: VarCandidate[] = [{ name: "host", value: "grafana.example", origin: "collection" }];
+
+    function Host() {
+      const [rs, setRs] = useState<LinkRow[]>([{ id: "l1", name: "", url: "" }]);
+      return (
+        <LinksBlock rows={rs} onChange={setRs} resolveUrl={resolve} resolveKey="k" variables={variables} />
+      );
+    }
+    r(<Host />);
+
+    const url = screen.getByLabelText("link URL");
+    fireEvent.change(url, { target: { value: "{{ho" } });
+    fireEvent.keyUp(url, { key: "o" });
+
+    await waitFor(() => expect(screen.getByText("host")).toBeInTheDocument());
   });
 });
