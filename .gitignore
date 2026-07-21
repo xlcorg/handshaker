@@ -8,6 +8,10 @@ node_modules
 dist
 dist-ssr
 
+# pnpm content-addressable store (a sandbox run without a global store puts it
+# in-workspace; never commit it — this is what filled a branch with 13k junk files)
+.pnpm-store
+
 # TypeScript build cache
 *.tsbuildinfo
 
