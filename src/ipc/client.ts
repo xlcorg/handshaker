@@ -1,3 +1,5 @@
+import { openUrl } from "@tauri-apps/plugin-opener";
+
 import { commands } from "./bindings";
 import { newId } from "@/lib/ids";
 import type {
@@ -330,6 +332,12 @@ export async function fileSaveText(text: string, defaultName: string): Promise<s
   return r.data;
 }
 
+/** Hand `url` to the OS default browser. The single seam for leaving the app —
+ *  callers pass a FULLY RESOLVED url; `{{var}}` templates never cross it. */
+export async function openExternal(url: string): Promise<void> {
+  await openUrl(url);
+}
+
 export const ipc = {
   appVersion,
   startupRecoveryTake,
@@ -374,4 +382,5 @@ export const ipc = {
   base64Save,
   base64SaveEncoded,
   fileSaveText,
+  openExternal,
 };

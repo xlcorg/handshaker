@@ -12,6 +12,7 @@ vi.mock("@/ipc/client", () => ({
     collectionSetNodeAuth: vi.fn().mockResolvedValue(undefined),
     envList: vi.fn().mockResolvedValue([]),
     varsResolve: vi.fn(async (t: string) => ({ resolved: t, unresolved_vars: [], cycle_chain: null })),
+    openExternal: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -220,10 +221,28 @@ describe("CollectionOverview", () => {
       expect(ipc.collectionUpsert).toHaveBeenCalledWith(expect.objectContaining({ links: [] }));
     });
 
-    it("renders a URL template verbatim — resolution is not this ticket's job", () => {
+    it("keeps the stored URL a verbatim template while opening the resolved one", async () => {
+      vi.mocked(ipc.varsResolve).mockResolvedValue({
+        resolved: "https://grafana.example/d/abc",
+        unresolved_vars: [],
+        cycle_chain: null,
+        dynamic_vars: [],
+      });
       r(<CollectionOverview {...props({ collection: collection({ links }) })} />);
       const urls = screen.getAllByLabelText("link URL") as HTMLInputElement[];
       expect(urls[0].value).toBe("https://{{host}}/d/abc");
+
+      await waitFor(() =>
+        expect(ipc.varsResolve).toHaveBeenCalledWith("https://{{host}}/d/abc", {
+          collection_id: null,
+          collection_vars: { base: "x" },
+          env_vars: null,
+        }),
+      );
+      const open = screen.getAllByLabelText("Open link")[0];
+      await waitFor(() => expect(open).toHaveAttribute("aria-disabled", "false"));
+      fireEvent.click(open);
+      expect(ipc.openExternal).toHaveBeenCalledWith("https://grafana.example/d/abc");
     });
   });
 

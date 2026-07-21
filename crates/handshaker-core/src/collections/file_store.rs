@@ -12,7 +12,7 @@ use crate::persist::{atomic_write_json, quarantine_corrupt, read_json, Envelope}
 
 use super::ids::CollectionId;
 use super::store::CollectionStore;
-use super::{Collection, CollectionLink};
+use super::Collection;
 
 #[derive(Debug)]
 pub struct FileCollectionStore {
@@ -97,6 +97,7 @@ impl CollectionStore for FileCollectionStore {
 mod tests {
     use super::*;
     use crate::auth::SavedAuthConfig;
+    use crate::collections::CollectionLink;
     use indexmap::IndexMap;
     use uuid::Uuid;
 

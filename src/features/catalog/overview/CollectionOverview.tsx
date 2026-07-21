@@ -208,6 +208,8 @@ export function CollectionOverview({ collection, onChanged, onSelectRequest, onC
                     setLinkRows(next);
                     persistLinks(next);
                   }}
+                  resolveUrl={resolveRow}
+                  resolveKey={resolveKey}
                 />
               </COBlock>
 

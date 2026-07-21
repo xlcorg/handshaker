@@ -6,14 +6,13 @@ Workspace: `crates/handshaker-core` (OS-independent core) · `src-tauri` (IPC) �
 
 ## Active work
 
-Active: **collection links** (spec #15) — #16 merged, **#17 next** (`{{var}}` resolution
-of link URLs, unresolved-state marking, opening in the system browser).
+Active: **collection links** (spec #15) — #16 and #17 merged; spec #15 complete.
 
-Latest merged: **collection links CRUD** (#16) — `Collection.links` (`CollectionLink
-{ name, url }`, `serde(default)`) persists through the collection upsert path and rides
-bundle export/import; a "Links" block on the collection overview does add/edit/delete.
-URLs stay `{{var}}` templates, rendered verbatim. Ticket: `gh issue view 16` ·
-memory `project-collection-links-crud-done`.
+Latest merged: **collection link resolution + open** (#17) — a link's `{{var}}` URL
+resolves through the existing `vars_resolve` IPC (collection vars + active env,
+re-resolving on change); a resolved link opens via the `ipc.openExternal` seam
+(`@tauri-apps/plugin-opener`, capability scoped to http/https), an unresolved or
+cycling one is marked, blocked and names the offending vars. Ticket: `gh issue view 17`.
 
 Integration branch is `main`; features run in isolated worktree branches (`claude/*`)
 and land fast-forward. Before merging, squash the branch into clean, cohesive history —
