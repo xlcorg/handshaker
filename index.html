@@ -38,7 +38,14 @@
       }
     </style>
   </head>
-  <body class="bg-background text-foreground antialiased">
+  <!-- spellcheck/autocorrect inherit to every editable descendant (incl. Monaco's
+       hidden textarea): kills macOS auto-capitalization, substitutions and squiggles
+       app-wide (WebKit ties them all to the element's text-checking state). -->
+  <body
+    class="bg-background text-foreground antialiased"
+    spellcheck="false"
+    autocorrect="off"
+  >
     <div id="root"></div>
     <div id="splash" aria-hidden="true">
       <svg width="92" height="92" viewBox="40 40 120 120" xmlns="http://www.w3.org/2000/svg">
