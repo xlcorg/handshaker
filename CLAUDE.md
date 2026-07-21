@@ -6,13 +6,14 @@ Workspace: `crates/handshaker-core` (OS-independent core) · `src-tauri` (IPC) �
 
 ## Active work
 
-No active feature (between features).
+Active: **collection links** (spec #15) — #16 merged, **#17 next** (`{{var}}` resolution
+of link URLs, unresolved-state marking, opening in the system browser).
 
-Latest merged: **zero test warnings** — `src/test/setup.ts` fails any test that writes
-to `console.error`/`console.warn`, so the suite's 184 warnings became 12 red files and
-then zero; opt out with a local `vi.spyOn(console, …)` restored in a `finally`.
-Banner: `docs/superpowers/plans/archive/2026-07-20-zero-test-warnings.md` ·
-memory `project-zero-test-warnings-done`.
+Latest merged: **collection links CRUD** (#16) — `Collection.links` (`CollectionLink
+{ name, url }`, `serde(default)`) persists through the collection upsert path and rides
+bundle export/import; a "Links" block on the collection overview does add/edit/delete.
+URLs stay `{{var}}` templates, rendered verbatim. Ticket: `gh issue view 16` ·
+memory `project-collection-links-crud-done`.
 
 Integration branch is `main`; features run in isolated worktree branches (`claude/*`)
 and land fast-forward. Before merging, squash the branch into clean, cohesive history —
