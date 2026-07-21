@@ -6,13 +6,12 @@ Workspace: `crates/handshaker-core` (OS-independent core) · `src-tauri` (IPC) �
 
 ## Active work
 
-Active: **collection links** (spec #15) — #16 and #17 merged; spec #15 complete.
+Active: none — next candidates: #18/#19 (auth editor edit buffer).
 
-Latest merged: **collection link resolution + open** (#17) — a link's `{{var}}` URL
-resolves through the existing `vars_resolve` IPC (collection vars + active env,
-re-resolving on change); a resolved link opens via the `ipc.openExternal` seam
-(`@tauri-apps/plugin-opener`, capability scoped to http/https), an unresolved or
-cycling one is marked, blocked and names the offending vars. Ticket: `gh issue view 17`.
+Latest merged: **collection links** (spec #15, issues #16+#17, closed) — named
+`{{var}}`-templated URLs on the collection overview: CRUD + persistence + bundle
+transfer, resolution via `vars_resolve`, open via the `ipc.openExternal` seam.
+Details: `gh issue view 15` · memory `project-collection-links-crud-done.md`.
 
 Integration branch is `main`; features run in isolated worktree branches (`claude/*`)
 and land fast-forward. Before merging, squash the branch into clean, cohesive history —
