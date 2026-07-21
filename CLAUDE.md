@@ -6,12 +6,14 @@ Workspace: `crates/handshaker-core` (OS-independent core) · `src-tauri` (IPC) �
 
 ## Active work
 
-Active: none — next candidates: #18/#19 (auth editor edit buffer).
+Active: none — backlog empty (all issues through #23 closed).
 
-Latest merged: **collection links** (spec #15, issues #16+#17, closed) — named
-`{{var}}`-templated URLs on the collection overview: CRUD + persistence + bundle
-transfer, resolution via `vars_resolve`, open via the `ipc.openExternal` seam.
-Details: `gh issue view 15` · memory `project-collection-links-crud-done.md`.
+Latest merged: **collection links v2 + auth-editor edit buffer** (specs #18/#20,
+issues #19/#21/#22/#23, closed) — view-first quick-links strip with edit dialog,
+strip/header placement setting (persisted via `ui_state`), `VarHighlightInput` URL
+field, and a local edit buffer keeping cleared Header name / Prefix edits from being
+clobbered by persist→reload. Produced by the sandcastle sequential-reviewer loop,
+squashed + gated on merge. Details: `git log main`.
 
 Integration branch is `main`; features run in isolated worktree branches (`claude/*`)
 and land fast-forward. Before merging, squash the branch into clean, cohesive history —
