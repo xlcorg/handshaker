@@ -17,6 +17,12 @@ import { useEnvRevision } from "@/features/envs/envRevision";
 export interface SavedAuthEditorProps {
   value: SavedAuthConfigIpc;
   onChange: (next: SavedAuthConfigIpc) => void;
+  /**
+   * Re-seed the local edit buffer only when this changes (the collection identity). A
+   * persist→reload echo of the *same* collection keeps the same key, so an in-progress
+   * edit — a cleared Header name, a shortened Prefix — is never clobbered by the reload.
+   */
+  seedKey?: string;
 }
 
 const KIND_OPTIONS = [
@@ -43,9 +49,20 @@ function msg(e: unknown): string {
   return String(e);
 }
 
-export function SavedAuthEditor({ value, onChange }: SavedAuthEditorProps) {
-  const form = configToForm(value);
-  const patch = (next: Partial<AuthForm>) => onChange(formToConfig({ ...form, ...next }));
+export function SavedAuthEditor({ value, onChange, seedKey }: SavedAuthEditorProps) {
+  // Local edit buffer, mirroring the sibling Variables/Links blocks: normalization (trim,
+  // empty→default in formToConfig) happens only at persist time and never echoes back into
+  // the live input. Re-seed only when the collection identity changes.
+  const [form, setForm] = useState<AuthForm>(() => configToForm(value));
+  useEffect(() => {
+    setForm(configToForm(value));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seedKey]);
+  const patch = (next: Partial<AuthForm>) => {
+    const nextForm = { ...form, ...next };
+    setForm(nextForm);
+    onChange(formToConfig(nextForm));
+  };
 
   const [envNames, setEnvNames] = useState<string[]>([]);
   // Re-fetch when env contents change (e.g. an import adds environments) so the

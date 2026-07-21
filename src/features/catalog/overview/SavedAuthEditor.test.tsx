@@ -81,6 +81,57 @@ describe("SavedAuthEditor", () => {
     expect(screen.getByDisplayValue("x-api-key")).toBeInTheDocument();
     expect(screen.getByDisplayValue("KEY")).toBeInTheDocument();
   });
+
+  it("clearing Header name leaves the field empty on screen while the emitted config keeps the default", async () => {
+    const onChange = vi.fn();
+    await renderEditor(
+      <SavedAuthEditor
+        value={{ kind: "env_var", env_var: "KEY", header_name: "custom-key", prefix: "", environments: [] }}
+        onChange={onChange}
+      />,
+    );
+    const field = screen.getByDisplayValue("custom-key");
+    fireEvent.change(field, { target: { value: "" } });
+    // The input keeps what the user left, even though the persisted config falls back to the default.
+    expect(field).toHaveValue("");
+    const last = onChange.mock.calls.at(-1)![0] as SavedAuthConfigIpc;
+    expect(last.kind === "env_var" && last.header_name).toBe("x-api-key");
+  });
+
+  it("a persist→reload echo of the same collection does not clobber an in-progress edit", async () => {
+    const onChange = vi.fn();
+    const value: SavedAuthConfigIpc = {
+      kind: "env_var", env_var: "KEY", header_name: "x-api-key", prefix: "", environments: [],
+    };
+    const { rerender } = await renderEditor(
+      <SavedAuthEditor value={value} onChange={onChange} seedKey="col-1" />,
+    );
+    fireEvent.change(screen.getByDisplayValue("x-api-key"), { target: { value: "my-header" } });
+    // Same collection re-renders with the stale (pre-edit) value — the buffer must win.
+    rerender(<SavedAuthEditor value={value} onChange={onChange} seedKey="col-1" />);
+    await act(async () => {});
+    expect(screen.getByDisplayValue("my-header")).toBeInTheDocument();
+  });
+
+  it("switching to a different collection re-seeds the form", async () => {
+    const { rerender } = await renderEditor(
+      <SavedAuthEditor
+        value={{ kind: "env_var", env_var: "KEY", header_name: "header-a", prefix: "", environments: [] }}
+        onChange={() => {}}
+        seedKey="col-a"
+      />,
+    );
+    expect(screen.getByDisplayValue("header-a")).toBeInTheDocument();
+    rerender(
+      <SavedAuthEditor
+        value={{ kind: "env_var", env_var: "KEY", header_name: "header-b", prefix: "", environments: [] }}
+        onChange={() => {}}
+        seedKey="col-b"
+      />,
+    );
+    await act(async () => {});
+    expect(screen.getByDisplayValue("header-b")).toBeInTheDocument();
+  });
 });
 
 describe("SavedAuthEditor (oauth2)", () => {
