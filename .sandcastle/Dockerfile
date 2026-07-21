@@ -1,20 +1,26 @@
 FROM node:22-bookworm
 
-# Install system dependencies
+# Install system dependencies, incl. Tauri 2 Linux build prerequisites
+# (needed so `cargo test --workspace` can compile src-tauri in the sandbox)
 RUN apt-get update && apt-get install -y \
   git \
   curl \
   jq \
   build-essential \
   pkg-config \
+  file \
   libssl-dev \
-  protobuf-compiler \
-  libglib2.0-dev \
   libgtk-3-dev \
-  libsoup-3.0-dev \
-  libjavascriptcoregtk-4.1-dev \
   libwebkit2gtk-4.1-dev \
+  libayatana-appindicator3-dev \
+  librsvg2-dev \
+  libxdo-dev \
   && rm -rf /var/lib/apt/lists/*
+
+# Enable corepack so the repo-pinned pnpm (package.json "packageManager") is used;
+# never prompt before downloading the pinned version (hooks run non-interactively)
+RUN corepack enable
+ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 
 # Install GitHub CLI
 RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
@@ -23,9 +29,6 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
   | tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
   && apt-get update && apt-get install -y gh \
   && rm -rf /var/lib/apt/lists/*
-
-# Enable pnpm via corepack
-RUN corepack enable && corepack prepare pnpm@9 --activate
 
 # Build-args for UID/GID alignment: sandcastle docker build-image
 # defaults these to the host user's UID/GID so image-built files
@@ -40,8 +43,8 @@ USER ${AGENT_UID}:${AGENT_GID}
 # Install Claude Code CLI
 RUN curl -fsSL https://claude.ai/install.sh | bash
 
-# Install the Rust toolchain — the project gate includes `cargo test --workspace`.
-RUN curl -fsSL https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal
+# Install Rust (minimal profile) for the cargo workspace
+RUN curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
 
 # Add Claude and cargo to PATH
 ENV PATH="/home/agent/.local/bin:/home/agent/.cargo/bin:$PATH"

@@ -47,3 +47,6 @@ Thumbs.db
 # codegraph local index/daemon artifacts
 .codegraph/
 .mcp.json
+
+# Sandcastle backup (contains .env with tokens)
+.sandcastle.bak/
