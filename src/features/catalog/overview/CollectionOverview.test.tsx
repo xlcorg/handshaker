@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { ReactElement } from "react";
-import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, act, waitFor, within } from "@testing-library/react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 import { bumpEnvRevision } from "@/features/envs/envRevision";
@@ -169,23 +169,30 @@ describe("CollectionOverview", () => {
     );
   });
 
-  describe("Links block", () => {
+  describe("Links strip + edit dialog", () => {
     const links = [
       { name: "Grafana", url: "https://{{host}}/d/abc" },
       { name: "Logs", url: "https://logs.example" },
     ];
 
-    it("renders the collection's links in creation order", () => {
+    it("renders the collection's links as chips in creation order", () => {
       r(<CollectionOverview {...props({ collection: collection({ links }) })} />);
-      const names = screen.getAllByLabelText("link name") as HTMLInputElement[];
-      expect(names.map((i) => i.value)).toEqual(["Grafana", "Logs"]);
+      expect(screen.getByText("Grafana")).toBeInTheDocument();
+      expect(screen.getByText("Logs")).toBeInTheDocument();
     });
 
-    it("adding a link persists it via collectionUpsert", () => {
+    it("keeps the links grid out of the Overview tab body until the dialog opens", () => {
+      r(<CollectionOverview {...props({ collection: collection({ links }) })} />);
+      expect(screen.queryByLabelText("link name")).toBeNull();
+    });
+
+    it("adding a link via the dialog persists it via collectionUpsert", () => {
       r(<CollectionOverview {...props()} />);
-      fireEvent.click(screen.getByText("Add link"));
-      fireEvent.change(screen.getByLabelText("link name"), { target: { value: "Grafana" } });
-      fireEvent.change(screen.getByLabelText("link URL"), {
+      fireEvent.click(screen.getByText("Add link")); // empty-state ghost chip → dialog
+      const dialog = screen.getByRole("dialog");
+      fireEvent.click(within(dialog).getByText("Add link")); // seed a row inside the dialog
+      fireEvent.change(within(dialog).getByLabelText("link name"), { target: { value: "Grafana" } });
+      fireEvent.change(within(dialog).getByLabelText("link URL"), {
         target: { value: "https://grafana.example" },
       });
       expect(ipc.collectionUpsert).toHaveBeenLastCalledWith(
@@ -196,10 +203,13 @@ describe("CollectionOverview", () => {
       );
     });
 
-    it("editing a link's name persists the whole list, order kept", () => {
+    it("editing a link's name in the dialog persists the whole list, order kept", () => {
       r(<CollectionOverview {...props({ collection: collection({ links }) })} />);
-      const names = screen.getAllByLabelText("link name");
-      fireEvent.change(names[0], { target: { value: "Dashboards" } });
+      fireEvent.click(screen.getByLabelText("Edit links")); // pencil
+      const dialog = screen.getByRole("dialog");
+      fireEvent.change(within(dialog).getAllByLabelText("link name")[0], {
+        target: { value: "Dashboards" },
+      });
       expect(ipc.collectionUpsert).toHaveBeenCalledWith(
         expect.objectContaining({
           links: [{ name: "Dashboards", url: "https://{{host}}/d/abc" }, links[1]],
@@ -207,9 +217,11 @@ describe("CollectionOverview", () => {
       );
     });
 
-    it("deleting a link persists the shortened list", () => {
+    it("deleting a link in the dialog persists the shortened list", () => {
       r(<CollectionOverview {...props({ collection: collection({ links }) })} />);
-      fireEvent.click(screen.getAllByLabelText("Remove link")[0]);
+      fireEvent.click(screen.getByLabelText("Edit links"));
+      const dialog = screen.getByRole("dialog");
+      fireEvent.click(within(dialog).getAllByLabelText("Remove link")[0]);
       expect(ipc.collectionUpsert).toHaveBeenCalledWith(
         expect.objectContaining({ links: [links[1]] }),
       );
@@ -218,10 +230,12 @@ describe("CollectionOverview", () => {
     it("a link with a blank name and URL is not persisted", () => {
       r(<CollectionOverview {...props()} />);
       fireEvent.click(screen.getByText("Add link"));
+      const dialog = screen.getByRole("dialog");
+      fireEvent.click(within(dialog).getByText("Add link"));
       expect(ipc.collectionUpsert).toHaveBeenCalledWith(expect.objectContaining({ links: [] }));
     });
 
-    it("keeps the stored URL a verbatim template while opening the resolved one", async () => {
+    it("a ready chip opens the RESOLVED url via the opener seam", async () => {
       vi.mocked(ipc.varsResolve).mockResolvedValue({
         resolved: "https://grafana.example/d/abc",
         unresolved_vars: [],
@@ -229,9 +243,6 @@ describe("CollectionOverview", () => {
         dynamic_vars: [],
       });
       r(<CollectionOverview {...props({ collection: collection({ links }) })} />);
-      const urls = screen.getAllByLabelText("link URL") as HTMLInputElement[];
-      expect(urls[0].value).toBe("https://{{host}}/d/abc");
-
       await waitFor(() =>
         expect(ipc.varsResolve).toHaveBeenCalledWith("https://{{host}}/d/abc", {
           collection_id: null,
@@ -239,9 +250,9 @@ describe("CollectionOverview", () => {
           env_vars: null,
         }),
       );
-      const open = screen.getAllByLabelText("Open link")[0];
-      await waitFor(() => expect(open).toHaveAttribute("aria-disabled", "false"));
-      fireEvent.click(open);
+      const chip = screen.getByText("Grafana").closest("button") as HTMLButtonElement;
+      await waitFor(() => expect(chip).toHaveAttribute("aria-disabled", "false"));
+      fireEvent.click(chip);
       expect(ipc.openExternal).toHaveBeenCalledWith("https://grafana.example/d/abc");
     });
   });

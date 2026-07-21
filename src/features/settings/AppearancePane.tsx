@@ -20,6 +20,11 @@ import {
 } from "@/lib/use-prefs";
 import { nextZoom } from "@/features/shell/zoom";
 import { isMacOS } from "@/lib/platform";
+import { useLinksPlacement, patchUiState } from "@/features/catalog/uiState";
+import type { LinksPlacementIpc } from "@/ipc/bindings";
+import { messages } from "@/lib/messages";
+
+const mLinks = messages.catalog.overview.links.placement;
 
 // Word-wrap toggle chord — platform-aware (plain ⌥Z is reserved for character input
 // on macOS, so the Mac chord is ⌥⌘Z; see features/shell/wordWrap.ts).
@@ -46,6 +51,7 @@ const VAR_HIGHLIGHT_SCHEMES: { key: VarHighlightScheme; label: string; hint: str
 
 export function AppearancePane() {
   const [prefs, setPref] = usePrefs();
+  const linksPlacement = useLinksPlacement();
   return (
     <>
       <SettingsGroup title="Display">
@@ -114,6 +120,20 @@ export function AppearancePane() {
               options={[
                 { value: "horizontal", label: "Top / Bottom" },
                 { value: "vertical", label: "Left / Right" },
+              ]}
+            />
+          }
+        />
+        <SettingsRow
+          title={mLinks.title}
+          hint={mLinks.hint}
+          control={
+            <ToggleGroup
+              value={linksPlacement}
+              onValueChange={(v) => void patchUiState({ links_placement: v as LinksPlacementIpc })}
+              options={[
+                { value: "strip", label: mLinks.strip },
+                { value: "header", label: mLinks.header },
               ]}
             />
           }

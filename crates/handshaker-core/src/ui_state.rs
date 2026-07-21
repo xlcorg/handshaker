@@ -21,6 +21,18 @@ pub struct ActiveRequestRef {
     pub item_id: String,
 }
 
+/// Where the collection quick-links render: a dedicated strip below the panel
+/// header (default), or inline chips in the header itself. Global preference.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LinksPlacement {
+    /// Slim strip of chips between the collection panel header and the tabs.
+    #[default]
+    Strip,
+    /// Chips inline in the collection panel header, overflow collapsing to "+N".
+    Header,
+}
+
 /// Persisted UI state. Every field is optional so an empty file (cold boot)
 /// deserializes to `UiState::default()`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -29,6 +41,10 @@ pub struct UiState {
     pub sort_key: Option<String>,
     #[serde(default)]
     pub active_request: Option<ActiveRequestRef>,
+    /// Serde-defaults to [`LinksPlacement::Strip`] so a settings file written
+    /// before this field existed deserializes unchanged.
+    #[serde(default)]
+    pub links_placement: LinksPlacement,
 }
 
 /// Disk-backed store for [`UiState`], one `ui-state.json` per `dir`.
@@ -86,12 +102,34 @@ mod tests {
                     collection_id: "c1".into(),
                     item_id: "r1".into(),
                 }),
+                ..UiState::default()
             })
             .unwrap();
         // reload from a fresh store → persisted
         let store2 = FileUiStateStore::load(dir.path()).unwrap();
         assert_eq!(store2.get().sort_key.as_deref(), Some("recent"));
         assert_eq!(store2.get().active_request.unwrap().item_id, "r1");
+    }
+
+    #[test]
+    fn envelope_without_links_placement_defaults_to_strip() {
+        // A ui-state file written before the placement field existed: no
+        // `links_placement` key. It must deserialize to the Strip default so
+        // the update is invisible until the user opts into the header variant.
+        let json = r#"{ "sort_key": "recent", "active_request": null }"#;
+        let state: UiState = serde_json::from_str(json).unwrap();
+        assert_eq!(state.links_placement, LinksPlacement::Strip);
+    }
+
+    #[test]
+    fn links_placement_round_trips_through_disk() {
+        let dir = tempdir().unwrap();
+        let store = FileUiStateStore::load(dir.path()).unwrap();
+        store
+            .set(UiState { links_placement: LinksPlacement::Header, ..UiState::default() })
+            .unwrap();
+        let store2 = FileUiStateStore::load(dir.path()).unwrap();
+        assert_eq!(store2.get().links_placement, LinksPlacement::Header);
     }
 
     #[test]

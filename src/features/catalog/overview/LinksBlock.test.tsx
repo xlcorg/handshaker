@@ -12,7 +12,8 @@ vi.mock("@/ipc/client", () => ({
 import { toast } from "sonner";
 
 import { ipc } from "@/ipc/client";
-import { LinksBlock, type LinkRow } from "./LinksBlock";
+import { LinksBlock } from "./LinksBlock";
+import type { LinkRow } from "./linkTarget";
 
 function r(ui: ReactElement) {
   return render(<TooltipProvider>{ui}</TooltipProvider>);

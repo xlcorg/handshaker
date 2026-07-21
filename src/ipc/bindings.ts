@@ -5,1061 +5,622 @@
 
 /** user-defined commands **/
 
+
 export const commands = {
-  /**
-   * Smoke-command: returns version from Cargo.toml. Proves tauri-specta wiring works.
-   */
-  async appVersion(): Promise<AppVersion> {
+/**
+ * Smoke-command: returns version from Cargo.toml. Proves tauri-specta wiring works.
+ */
+async appVersion() : Promise<AppVersion> {
     return await TAURI_INVOKE("app_version");
-  },
-  /**
-   * Drain the files quarantined as corrupt during startup load. The frontend calls this
-   * once on mount to show a "recovered from a corrupt file" notice; it returns each path
-   * only once (subsequent calls are empty), so the notice shows a single time per launch.
-   */
-  async startupRecoveryTake(): Promise<Result<string[], IpcError>> {
+},
+/**
+ * Drain the files quarantined as corrupt during startup load. The frontend calls this
+ * once on mount to show a "recovered from a corrupt file" notice; it returns each path
+ * only once (subsequent calls are empty), so the notice shows a single time per launch.
+ */
+async startupRecoveryTake() : Promise<Result<string[], IpcError>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("startup_recovery_take"),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  /**
-   * Cache-first contract describe. On a cache hit, returns the cached catalog
-   * WITHOUT opening a channel (auto-reflect-on-blur fires often). On a miss,
-   * `activate()` reflects + populates the cache, then the connection is dropped.
-   *
-   * The reflecting path (miss only — a hit returns instantly with nothing to abort)
-   * runs under `race_cancel_timeout`, so it honors the caller's deadline and can be
-   * cancelled by `grpc_cancel(request_id)`, exactly like `grpc_send`.
-   */
-  async grpcDescribe(
-    target: GrpcTargetIpc,
-    requestId: string,
-    timeoutMs: number,
-  ): Promise<Result<ServiceCatalogIpc, IpcError>> {
+    return { status: "ok", data: await TAURI_INVOKE("startup_recovery_take") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Cache-first contract describe. On a cache hit, returns the cached catalog
+ * WITHOUT opening a channel (auto-reflect-on-blur fires often). On a miss,
+ * `activate()` reflects + populates the cache, then the connection is dropped.
+ * 
+ * The reflecting path (miss only — a hit returns instantly with nothing to abort)
+ * runs under `race_cancel_timeout`, so it honors the caller's deadline and can be
+ * cancelled by `grpc_cancel(request_id)`, exactly like `grpc_send`.
+ */
+async grpcDescribe(target: GrpcTargetIpc, requestId: string, timeoutMs: number) : Promise<Result<ServiceCatalogIpc, IpcError>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("grpc_describe", {
-          target,
-          requestId,
-          timeoutMs,
-        }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  /**
-   * Manual refresh: invalidate the cache entry then re-reflect. Like `grpc_describe`,
-   * the re-reflection runs under `race_cancel_timeout` (deadline + `grpc_cancel`).
-   */
-  async grpcRefreshContract(
-    target: GrpcTargetIpc,
-    requestId: string,
-    timeoutMs: number,
-  ): Promise<Result<ServiceCatalogIpc, IpcError>> {
+    return { status: "ok", data: await TAURI_INVOKE("grpc_describe", { target, requestId, timeoutMs }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Manual refresh: invalidate the cache entry then re-reflect. Like `grpc_describe`,
+ * the re-reflection runs under `race_cancel_timeout` (deadline + `grpc_cancel`).
+ */
+async grpcRefreshContract(target: GrpcTargetIpc, requestId: string, timeoutMs: number) : Promise<Result<ServiceCatalogIpc, IpcError>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("grpc_refresh_contract", {
-          target,
-          requestId,
-          timeoutMs,
-        }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  /**
-   * Build a JSON skeleton from the cached pool. On a cache miss, activate first.
-   *
-   * The reflecting path (miss only) runs under `race_cancel_timeout`, so it honors the
-   * caller's deadline and can be cancelled by `grpc_cancel(request_id)` — otherwise a
-   * slow/unreachable endpoint would hang this command with no bound and no cancel path.
-   */
-  async grpcBuildRequestSkeleton(
-    target: GrpcTargetIpc,
-    service: string,
-    method: string,
-    requestId: string,
-    timeoutMs: number,
-  ): Promise<Result<string, IpcError>> {
+    return { status: "ok", data: await TAURI_INVOKE("grpc_refresh_contract", { target, requestId, timeoutMs }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Build a JSON skeleton from the cached pool. On a cache miss, activate first.
+ * 
+ * The reflecting path (miss only) runs under `race_cancel_timeout`, so it honors the
+ * caller's deadline and can be cancelled by `grpc_cancel(request_id)` — otherwise a
+ * slow/unreachable endpoint would hang this command with no bound and no cancel path.
+ */
+async grpcBuildRequestSkeleton(target: GrpcTargetIpc, service: string, method: string, requestId: string, timeoutMs: number) : Promise<Result<string, IpcError>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("grpc_build_request_skeleton", {
-          target,
-          service,
-          method,
-          requestId,
-          timeoutMs,
-        }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  /**
-   * Build the flat field-schema for a method's input or output message — drives autocomplete
-   * and the contract view. Same cache discipline as `grpc_build_request_skeleton`: cache
-   * hit → build from the pool; miss → `activate` first.
-   */
-  async grpcMessageSchema(
-    target: GrpcTargetIpc,
-    service: string,
-    method: string,
-    side: MessageSideIpc,
-    requestId: string,
-    timeoutMs: number,
-  ): Promise<Result<MessageSchemaIpc, IpcError>> {
+    return { status: "ok", data: await TAURI_INVOKE("grpc_build_request_skeleton", { target, service, method, requestId, timeoutMs }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Build the flat field-schema for a method's input or output message — drives autocomplete
+ * and the contract view. Same cache discipline as `grpc_build_request_skeleton`: cache
+ * hit → build from the pool; miss → `activate` first.
+ */
+async grpcMessageSchema(target: GrpcTargetIpc, service: string, method: string, side: MessageSideIpc, requestId: string, timeoutMs: number) : Promise<Result<MessageSchemaIpc, IpcError>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("grpc_message_schema", {
-          target,
-          service,
-          method,
-          side,
-          requestId,
-          timeoutMs,
-        }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async grpcSend(
-    draft: SendDraftIpc,
-    ctx: SendCtxIpc,
-    requestId: string,
-    opts: CallOptionsIpc,
-  ): Promise<Result<SendReportIpc, IpcError>> {
+    return { status: "ok", data: await TAURI_INVOKE("grpc_message_schema", { target, service, method, side, requestId, timeoutMs }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async grpcSend(draft: SendDraftIpc, ctx: SendCtxIpc, requestId: string, opts: CallOptionsIpc) : Promise<Result<SendReportIpc, IpcError>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("grpc_send", { draft, ctx, requestId, opts }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  /**
-   * Fire the cancel `Notify` for an in-flight `request_id`. No-op if unknown (already
-   * finished or never started). Uses `notify_one()` so a cancel racing the `select!` first
-   * poll still stores a permit.
-   */
-  async grpcCancel(requestId: string): Promise<Result<null, IpcError>> {
+    return { status: "ok", data: await TAURI_INVOKE("grpc_send", { draft, ctx, requestId, opts }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Fire the cancel `Notify` for an in-flight `request_id`. No-op if unknown (already
+ * finished or never started). Uses `notify_one()` so a cancel racing the `select!` first
+ * poll still stores a permit.
+ */
+async grpcCancel(requestId: string) : Promise<Result<null, IpcError>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("grpc_cancel", { requestId }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async envList(): Promise<Result<EnvironmentIpc[], IpcError>> {
+    return { status: "ok", data: await TAURI_INVOKE("grpc_cancel", { requestId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async envList() : Promise<Result<EnvironmentIpc[], IpcError>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("env_list") };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async envActiveGet(): Promise<Result<string | null, IpcError>> {
+    return { status: "ok", data: await TAURI_INVOKE("env_list") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async envActiveGet() : Promise<Result<string | null, IpcError>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("env_active_get") };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async envActiveSet(name: string | null): Promise<Result<null, IpcError>> {
+    return { status: "ok", data: await TAURI_INVOKE("env_active_get") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async envActiveSet(name: string | null) : Promise<Result<null, IpcError>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("env_active_set", { name }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async envUpsert(env: EnvironmentIpc): Promise<Result<null, IpcError>> {
+    return { status: "ok", data: await TAURI_INVOKE("env_active_set", { name }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async envUpsert(env: EnvironmentIpc) : Promise<Result<null, IpcError>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("env_upsert", { env }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async envDelete(name: string): Promise<Result<null, IpcError>> {
+    return { status: "ok", data: await TAURI_INVOKE("env_upsert", { env }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async envDelete(name: string) : Promise<Result<null, IpcError>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("env_delete", { name }) };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async envReorder(names: string[]): Promise<Result<null, IpcError>> {
+    return { status: "ok", data: await TAURI_INVOKE("env_delete", { name }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async envReorder(names: string[]) : Promise<Result<null, IpcError>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("env_reorder", { names }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async varsResolve(
-    template: string,
-    ctx: VarsResolveCtxIpc | null,
-  ): Promise<Result<ResolutionReportIpc, IpcError>> {
+    return { status: "ok", data: await TAURI_INVOKE("env_reorder", { names }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async varsResolve(template: string, ctx: VarsResolveCtxIpc | null) : Promise<Result<ResolutionReportIpc, IpcError>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("vars_resolve", { template, ctx }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  /**
-   * Decode a base64 string and report its kind/size/text (view-only).
-   */
-  async base64Inspect(
-    input: string,
-  ): Promise<Result<Base64InspectIpc, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("vars_resolve", { template, ctx }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Decode a base64 string and report its kind/size/text (view-only).
+ */
+async base64Inspect(input: string) : Promise<Result<Base64InspectIpc, string>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("base64_inspect", { input }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  /**
-   * Decode a base64 string and write the DECODED bytes to a user-picked file.
-   * Ok(Some(path)) = saved; Ok(None) = cancelled; Err = decode/write failure.
-   */
-  async base64Save(input: string): Promise<Result<string | null, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("base64_inspect", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Decode a base64 string and write the DECODED bytes to a user-picked file.
+ * Ok(Some(path)) = saved; Ok(None) = cancelled; Err = decode/write failure.
+ */
+async base64Save(input: string) : Promise<Result<string | null, string>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("base64_save", { input }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  /**
-   * Write the RAW base64 text (verbatim, no decode) to a user-picked file.
-   * Ok(Some(path)) = saved; Ok(None) = cancelled; Err = dialog/write failure.
-   */
-  async base64SaveEncoded(
-    input: string,
-  ): Promise<Result<string | null, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("base64_save", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Write the RAW base64 text (verbatim, no decode) to a user-picked file.
+ * Ok(Some(path)) = saved; Ok(None) = cancelled; Err = dialog/write failure.
+ */
+async base64SaveEncoded(input: string) : Promise<Result<string | null, string>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("base64_save_encoded", { input }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  /**
-   * Write arbitrary UTF-8 `text` (verbatim — no newline transformation) to a
-   * user-picked file via the native Save-As dialog. Ok(Some(path)) = saved;
-   * Ok(None) = cancelled; Err = dialog/write failure.
-   */
-  async fileSaveText(
-    text: string,
-    defaultName: string,
-  ): Promise<Result<string | null, string>> {
+    return { status: "ok", data: await TAURI_INVOKE("base64_save_encoded", { input }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Write arbitrary UTF-8 `text` (verbatim — no newline transformation) to a
+ * user-picked file via the native Save-As dialog. Ok(Some(path)) = saved;
+ * Ok(None) = cancelled; Err = dialog/write failure.
+ */
+async fileSaveText(text: string, defaultName: string) : Promise<Result<string | null, string>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("file_save_text", { text, defaultName }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async authResolve(
-    config: SavedAuthConfigIpc,
-  ): Promise<Result<AuthCredentialsIpc | null, IpcError>> {
+    return { status: "ok", data: await TAURI_INVOKE("file_save_text", { text, defaultName }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async authResolve(config: SavedAuthConfigIpc) : Promise<Result<AuthCredentialsIpc | null, IpcError>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("auth_resolve", { config }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async authOauth2FetchToken(
-    config: SavedAuthConfigIpc,
-  ): Promise<Result<OAuth2TokenInfoIpc, IpcError>> {
+    return { status: "ok", data: await TAURI_INVOKE("auth_resolve", { config }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async authOauth2FetchToken(config: SavedAuthConfigIpc) : Promise<Result<OAuth2TokenInfoIpc, IpcError>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("auth_oauth2_fetch_token", { config }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async authInvalidate(
-    config: SavedAuthConfigIpc,
-  ): Promise<Result<null, IpcError>> {
+    return { status: "ok", data: await TAURI_INVOKE("auth_oauth2_fetch_token", { config }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async authInvalidate(config: SavedAuthConfigIpc) : Promise<Result<null, IpcError>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("auth_invalidate", { config }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async authEffective(
-    stepAuth: SavedAuthConfigIpc,
-    ctx: SendCtxIpc,
-  ): Promise<Result<SavedAuthConfigIpc, IpcError>> {
+    return { status: "ok", data: await TAURI_INVOKE("auth_invalidate", { config }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async authEffective(stepAuth: SavedAuthConfigIpc, ctx: SendCtxIpc) : Promise<Result<SavedAuthConfigIpc, IpcError>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("auth_effective", { stepAuth, ctx }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async collectionList(): Promise<Result<CollectionMetaIpc[], IpcError>> {
+    return { status: "ok", data: await TAURI_INVOKE("auth_effective", { stepAuth, ctx }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async collectionList() : Promise<Result<CollectionMetaIpc[], IpcError>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("collection_list") };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async collectionGet(id: string): Promise<Result<CollectionIpc, IpcError>> {
+    return { status: "ok", data: await TAURI_INVOKE("collection_list") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async collectionGet(id: string) : Promise<Result<CollectionIpc, IpcError>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("collection_get", { id }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async collectionUpsert(
-    collection: CollectionIpc,
-  ): Promise<Result<null, IpcError>> {
+    return { status: "ok", data: await TAURI_INVOKE("collection_get", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async collectionUpsert(collection: CollectionIpc) : Promise<Result<null, IpcError>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("collection_upsert", { collection }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async collectionDelete(id: string): Promise<Result<null, IpcError>> {
+    return { status: "ok", data: await TAURI_INVOKE("collection_upsert", { collection }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async collectionDelete(id: string) : Promise<Result<null, IpcError>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("collection_delete", { id }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async collectionSetVariables(
-    id: string,
-    vars: Partial<{ [key in string]: string }>,
-  ): Promise<Result<null, IpcError>> {
+    return { status: "ok", data: await TAURI_INVOKE("collection_delete", { id }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async collectionSetVariables(id: string, vars: Partial<{ [key in string]: string }>) : Promise<Result<null, IpcError>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("collection_set_variables", { id, vars }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async collectionAddItem(
-    collectionId: string,
-    parentId: string | null,
-    item: ItemIpc,
-  ): Promise<Result<null, IpcError>> {
+    return { status: "ok", data: await TAURI_INVOKE("collection_set_variables", { id, vars }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async collectionAddItem(collectionId: string, parentId: string | null, item: ItemIpc) : Promise<Result<null, IpcError>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("collection_add_item", {
-          collectionId,
-          parentId,
-          item,
-        }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async collectionRenameItem(
-    collectionId: string,
-    itemId: string,
-    name: string,
-  ): Promise<Result<null, IpcError>> {
+    return { status: "ok", data: await TAURI_INVOKE("collection_add_item", { collectionId, parentId, item }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async collectionRenameItem(collectionId: string, itemId: string, name: string) : Promise<Result<null, IpcError>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("collection_rename_item", {
-          collectionId,
-          itemId,
-          name,
-        }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async collectionMoveItem(
-    collectionId: string,
-    itemId: string,
-    newParentId: string | null,
-    position: number,
-  ): Promise<Result<null, IpcError>> {
+    return { status: "ok", data: await TAURI_INVOKE("collection_rename_item", { collectionId, itemId, name }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async collectionMoveItem(collectionId: string, itemId: string, newParentId: string | null, position: number) : Promise<Result<null, IpcError>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("collection_move_item", {
-          collectionId,
-          itemId,
-          newParentId,
-          position,
-        }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async collectionMoveItemAcross(
-    sourceCollectionId: string,
-    itemId: string,
-    targetCollectionId: string,
-    newParentId: string | null,
-    position: number,
-  ): Promise<Result<null, IpcError>> {
+    return { status: "ok", data: await TAURI_INVOKE("collection_move_item", { collectionId, itemId, newParentId, position }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async collectionMoveItemAcross(sourceCollectionId: string, itemId: string, targetCollectionId: string, newParentId: string | null, position: number) : Promise<Result<null, IpcError>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("collection_move_item_across", {
-          sourceCollectionId,
-          itemId,
-          targetCollectionId,
-          newParentId,
-          position,
-        }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async collectionDuplicateItem(
-    collectionId: string,
-    itemId: string,
-  ): Promise<Result<string, IpcError>> {
+    return { status: "ok", data: await TAURI_INVOKE("collection_move_item_across", { sourceCollectionId, itemId, targetCollectionId, newParentId, position }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async collectionDuplicateItem(collectionId: string, itemId: string) : Promise<Result<string, IpcError>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("collection_duplicate_item", {
-          collectionId,
-          itemId,
-        }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async collectionDeleteItem(
-    collectionId: string,
-    itemId: string,
-  ): Promise<Result<ItemSnapshotIpc | null, IpcError>> {
+    return { status: "ok", data: await TAURI_INVOKE("collection_duplicate_item", { collectionId, itemId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async collectionDeleteItem(collectionId: string, itemId: string) : Promise<Result<ItemSnapshotIpc | null, IpcError>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("collection_delete_item", {
-          collectionId,
-          itemId,
-        }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async collectionRestoreItem(
-    collectionId: string,
-    snapshot: ItemSnapshotIpc,
-    parentId: string | null,
-    position: number,
-  ): Promise<Result<null, IpcError>> {
+    return { status: "ok", data: await TAURI_INVOKE("collection_delete_item", { collectionId, itemId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async collectionRestoreItem(collectionId: string, snapshot: ItemSnapshotIpc, parentId: string | null, position: number) : Promise<Result<null, IpcError>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("collection_restore_item", {
-          collectionId,
-          snapshot,
-          parentId,
-          position,
-        }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async collectionSetNodeAuth(
-    collectionId: string,
-    itemId: string | null,
-    config: SavedAuthConfigIpc,
-  ): Promise<Result<null, IpcError>> {
+    return { status: "ok", data: await TAURI_INVOKE("collection_restore_item", { collectionId, snapshot, parentId, position }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async collectionSetNodeAuth(collectionId: string, itemId: string | null, config: SavedAuthConfigIpc) : Promise<Result<null, IpcError>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("collection_set_node_auth", {
-          collectionId,
-          itemId,
-          config,
-        }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async collectionSetExpanded(
-    collectionId: string,
-    itemId: string | null,
-    expanded: boolean,
-  ): Promise<Result<null, IpcError>> {
+    return { status: "ok", data: await TAURI_INVOKE("collection_set_node_auth", { collectionId, itemId, config }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async collectionSetExpanded(collectionId: string, itemId: string | null, expanded: boolean) : Promise<Result<null, IpcError>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("collection_set_expanded", {
-          collectionId,
-          itemId,
-          expanded,
-        }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async collectionBumpUsage(
-    collectionId: string,
-    itemId: string,
-    usedAt: number,
-  ): Promise<Result<null, IpcError>> {
+    return { status: "ok", data: await TAURI_INVOKE("collection_set_expanded", { collectionId, itemId, expanded }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async collectionBumpUsage(collectionId: string, itemId: string, usedAt: number) : Promise<Result<null, IpcError>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("collection_bump_usage", {
-          collectionId,
-          itemId,
-          usedAt,
-        }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async appSettingsGet(): Promise<Result<UiStateIpc, IpcError>> {
+    return { status: "ok", data: await TAURI_INVOKE("collection_bump_usage", { collectionId, itemId, usedAt }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async appSettingsGet() : Promise<Result<UiStateIpc, IpcError>> {
     try {
-      return { status: "ok", data: await TAURI_INVOKE("app_settings_get") };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  /**
-   * Replaces the entire persisted UI state — callers send the complete object, not a partial patch.
-   */
-  async appSettingsSet(patch: UiStateIpc): Promise<Result<null, IpcError>> {
+    return { status: "ok", data: await TAURI_INVOKE("app_settings_get") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Replaces the entire persisted UI state — callers send the complete object, not a partial patch.
+ */
+async appSettingsSet(patch: UiStateIpc) : Promise<Result<null, IpcError>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("app_settings_set", { patch }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async bundleExport(
-    path: string,
-    collectionId: string | null,
-  ): Promise<Result<null, IpcError>> {
+    return { status: "ok", data: await TAURI_INVOKE("app_settings_set", { patch }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async bundleExport(path: string, collectionId: string | null) : Promise<Result<null, IpcError>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("bundle_export", { path, collectionId }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async bundleImportInspect(
-    path: string,
-  ): Promise<Result<ImportSummaryIpc, IpcError>> {
+    return { status: "ok", data: await TAURI_INVOKE("bundle_export", { path, collectionId }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async bundleImportInspect(path: string) : Promise<Result<ImportSummaryIpc, IpcError>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("bundle_import_inspect", { path }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  async bundleImportApply(
-    path: string,
-  ): Promise<Result<ImportResultIpc, IpcError>> {
+    return { status: "ok", data: await TAURI_INVOKE("bundle_import_inspect", { path }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async bundleImportApply(path: string) : Promise<Result<ImportResultIpc, IpcError>> {
     try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("bundle_import_apply", { path }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-};
+    return { status: "ok", data: await TAURI_INVOKE("bundle_import_apply", { path }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+}
+}
 
 /** user-defined events **/
 
+
 export const events = __makeEvents__<{
-  contractUpdated: ContractUpdated;
+contractUpdated: ContractUpdated
 }>({
-  contractUpdated: "contract-updated",
-});
+contractUpdated: "contract-updated"
+})
 
 /** user-defined constants **/
 
+
+
 /** user-defined types **/
 
-export type ActiveRequestRefIpc = { collection_id: string; item_id: string };
-export type AppVersion = { version: string };
-export type AuthCredentialsIpc = { header_name: string; header_value: string };
-export type Base64InspectIpc = {
-  kind: Base64KindIpc;
-  /**
-   * Decoded byte length. specta rejects u64 in DTOs → u32 (responses ≪ 4 GB; saturating).
-   */
-  size_bytes: number;
-  /**
-   * Decoded UTF-8 text for Json/Text; None for Binary.
-   */
-  text: string | null;
-  /**
-   * MIME for Binary (magic bytes); None otherwise.
-   */
-  mime: string | null;
-  /**
-   * Suggested extension for Binary; None otherwise.
-   */
-  extension: string | null;
-};
-export type Base64KindIpc = "json" | "text" | "binary";
+export type ActiveRequestRefIpc = { collection_id: string; item_id: string }
+export type AppVersion = { version: string }
+export type AuthCredentialsIpc = { header_name: string; header_value: string }
+export type Base64InspectIpc = { kind: Base64KindIpc; 
+/**
+ * Decoded byte length. specta rejects u64 in DTOs → u32 (responses ≪ 4 GB; saturating).
+ */
+size_bytes: number; 
+/**
+ * Decoded UTF-8 text for Json/Text; None for Binary.
+ */
+text: string | null; 
+/**
+ * MIME for Binary (magic bytes); None otherwise.
+ */
+mime: string | null; 
+/**
+ * Suggested extension for Binary; None otherwise.
+ */
+extension: string | null }
+export type Base64KindIpc = "json" | "text" | "binary"
 /**
  * Per-call invoke options, as they cross the wire. `request_id` is NOT here — it's a
  * separate `grpc_send` param (cancel key, distinct lifecycle from call options).
  */
-export type CallOptionsIpc = { timeout_ms: number; max_message_bytes: number };
-export type CollectionIpc = {
-  id: string;
-  name: string;
-  items: ItemIpc[];
-  variables: Partial<{ [key in string]: string }>;
-  auth: SavedAuthConfigIpc;
-  default_tls: boolean;
-  skip_tls_verify: boolean;
-  pinned: boolean;
-  description: string | null;
-  created_at: number;
-  expanded: boolean;
-  /**
-   * Collection links in creation order; empty for pre-feature stores.
-   */
-  links?: CollectionLinkIpc[];
-};
-export type CollectionLinkIpc = {
-  name: string;
-  /**
-   * `{{var}}` template — crosses the seam unresolved.
-   */
-  url: string;
-};
+export type CallOptionsIpc = { timeout_ms: number; max_message_bytes: number }
+export type CollectionIpc = { id: string; name: string; items: ItemIpc[]; variables: Partial<{ [key in string]: string }>; auth: SavedAuthConfigIpc; default_tls: boolean; skip_tls_verify: boolean; pinned: boolean; description: string | null; created_at: number; expanded: boolean; 
+/**
+ * Collection links in creation order; empty for pre-feature stores.
+ */
+links?: CollectionLinkIpc[] }
+export type CollectionLinkIpc = { name: string; 
+/**
+ * `{{var}}` template — crosses the seam unresolved.
+ */
+url: string }
 /**
  * Lightweight list entry (id + name only) for `collection_list`.
  */
-export type CollectionMetaIpc = { id: string; name: string };
+export type CollectionMetaIpc = { id: string; name: string }
 /**
  * Emitted whenever a target's contract has been (re)built (describe / refresh).
  */
-export type ContractUpdated = {
-  /**
-   * Stable key identifying the target whose contract just refreshed.
-   */
-  target_key: string;
-};
-export type EnumNodeIpc = { full_name: string; values: EnumValueIpc[] };
-export type EnumValueIpc = { name: string; number: number };
-export type EnvironmentIpc = {
-  name: string;
-  variables: Partial<{ [key in string]: string }>;
-  color: string | null;
-};
-export type FieldNodeIpc = {
-  json_name: string;
-  proto_name: string;
-  type_label: string;
-  value_kind: FieldValueKindIpc;
-  repeated: boolean;
-  message_type: string | null;
-  enum_type: string | null;
-  oneof_group: string | null;
-  number: number;
-  optional: boolean;
-};
-export type FieldValueKindIpc = "scalar" | "message" | "enum" | "map";
-export type FieldViolationIpc = { field: string; description: string };
-export type FolderIpc = {
-  id: string;
-  name: string;
-  items: ItemIpc[];
-  expanded: boolean;
-};
-export type GrpcTargetIpc = {
-  address: string;
-  tls: boolean;
-  skip_verify: boolean;
-};
-export type HelpLinkIpc = { description: string; url: string };
+export type ContractUpdated = { 
+/**
+ * Stable key identifying the target whose contract just refreshed.
+ */
+target_key: string }
+export type EnumNodeIpc = { full_name: string; values: EnumValueIpc[] }
+export type EnumValueIpc = { name: string; number: number }
+export type EnvironmentIpc = { name: string; variables: Partial<{ [key in string]: string }>; color: string | null }
+export type FieldNodeIpc = { json_name: string; proto_name: string; type_label: string; value_kind: FieldValueKindIpc; repeated: boolean; message_type: string | null; enum_type: string | null; oneof_group: string | null; number: number; optional: boolean }
+export type FieldValueKindIpc = "scalar" | "message" | "enum" | "map"
+export type FieldViolationIpc = { field: string; description: string }
+export type FolderIpc = { id: string; name: string; items: ItemIpc[]; expanded: boolean }
+export type GrpcTargetIpc = { address: string; tls: boolean; skip_verify: boolean }
+export type HelpLinkIpc = { description: string; url: string }
 /**
  * Result of applying an import (merge).
  */
-export type ImportResultIpc = {
-  collections_added: number;
-  collections_updated: number;
-  environments_added: number;
-  environments_updated: number;
-};
+export type ImportResultIpc = { collections_added: number; collections_updated: number; environments_added: number; environments_updated: number }
 /**
  * Result of inspecting an export file before applying it (no mutation).
  */
-export type ImportSummaryIpc = {
-  collections_total: number;
-  collections_existing: number;
-  environments_total: number;
-  environments_existing: number;
-};
-export type InvokeOutcomeIpc = {
-  status_code: number;
-  status_message: string;
-  response_json: string | null;
-  trailing_metadata: Partial<{ [key in string]: string }>;
-  status_details: StatusDetailIpc[];
-  /**
-   * Elapsed time in milliseconds. Capped at u32::MAX (~49 days) for
-   * TypeScript compatibility (specta forbids u64 / BigInt at the IPC boundary).
-   */
-  elapsed_ms: number;
-};
-export type IpcError =
-  | { type: "InvalidTarget"; message: string }
-  | { type: "NotConnected" }
-  | { type: "ReflectionDisabled"; hint: string }
-  | { type: "Reflection"; message: string }
-  | { type: "DescriptorBuild"; message: string }
-  | { type: "ServiceNotFound"; service: string }
-  | { type: "MethodNotFound"; service: string; method: string }
-  | { type: "EncodeRequest"; message: string }
-  | { type: "DecodeResponse"; message: string }
-  | { type: "UnresolvedVariable"; name: string }
-  | { type: "VariableCycle"; chain: string[] }
-  | { type: "UnresolvedVars"; unresolved: string[]; cycle: string[] | null }
-  | { type: "Transport"; kind: TransportKindIpc; message: string }
-  | { type: "Cancelled" }
-  | { type: "DeadlineExceeded"; timeout_ms: number }
-  | { type: "Auth"; message: string }
-  | { type: "GrpcStatus"; code: number; message: string }
-  | { type: "NotImplemented"; message: string }
-  | { type: "Persistence"; message: string };
-export type ItemIpc =
-  | ({ type: "folder" } & FolderIpc)
-  | ({ type: "request" } & SavedRequestIpc);
+export type ImportSummaryIpc = { collections_total: number; collections_existing: number; environments_total: number; environments_existing: number }
+export type InvokeOutcomeIpc = { status_code: number; status_message: string; response_json: string | null; trailing_metadata: Partial<{ [key in string]: string }>; status_details: StatusDetailIpc[]; 
+/**
+ * Elapsed time in milliseconds. Capped at u32::MAX (~49 days) for
+ * TypeScript compatibility (specta forbids u64 / BigInt at the IPC boundary).
+ */
+elapsed_ms: number }
+export type IpcError = { type: "InvalidTarget"; message: string } | { type: "NotConnected" } | { type: "ReflectionDisabled"; hint: string } | { type: "Reflection"; message: string } | { type: "DescriptorBuild"; message: string } | { type: "ServiceNotFound"; service: string } | { type: "MethodNotFound"; service: string; method: string } | { type: "EncodeRequest"; message: string } | { type: "DecodeResponse"; message: string } | { type: "UnresolvedVariable"; name: string } | { type: "VariableCycle"; chain: string[] } | { type: "UnresolvedVars"; unresolved: string[]; cycle: string[] | null } | { type: "Transport"; kind: TransportKindIpc; message: string } | { type: "Cancelled" } | { type: "DeadlineExceeded"; timeout_ms: number } | { type: "Auth"; message: string } | { type: "GrpcStatus"; code: number; message: string } | { type: "NotImplemented"; message: string } | { type: "Persistence"; message: string }
+export type ItemIpc = ({ type: "folder" } & FolderIpc) | ({ type: "request" } & SavedRequestIpc)
 /**
  * Undo payload returned by `collection_delete_item`.
  */
-export type ItemSnapshotIpc = {
-  item: ItemIpc;
-  parent_id: string | null;
-  position: number;
-};
-export type MessageNodeIpc = { full_name: string; fields: FieldNodeIpc[] };
-export type MessageSchemaIpc = {
-  root: string;
-  messages: MessageNodeIpc[];
-  enums: EnumNodeIpc[];
-};
+export type ItemSnapshotIpc = { item: ItemIpc; parent_id: string | null; position: number }
+/**
+ * Where the collection quick-links render — mirrors [`LinksPlacement`].
+ */
+export type LinksPlacementIpc = "strip" | "header"
+export type MessageNodeIpc = { full_name: string; fields: FieldNodeIpc[] }
+export type MessageSchemaIpc = { root: string; messages: MessageNodeIpc[]; enums: EnumNodeIpc[] }
 /**
  * Which side of the method the schema is built from.
  */
-export type MessageSideIpc = "input" | "output";
-export type MetadataRowIpc = { key: string; value: string; enabled: boolean };
-export type MethodEntryIpc = {
-  name: string;
-  path: string;
-  input_message: string;
-  output_message: string;
-  client_streaming: boolean;
-  server_streaming: boolean;
-};
+export type MessageSideIpc = "input" | "output"
+export type MetadataRowIpc = { key: string; value: string; enabled: boolean }
+export type MethodEntryIpc = { name: string; path: string; input_message: string; output_message: string; client_streaming: boolean; server_streaming: boolean }
 /**
  * Result of a forced token fetch (the "Get token" button). The token is cached in
  * the backend either way; it is returned so the UI can show/copy it on demand —
  * session memory only, never persisted.
  * `u32` (not u64) because specta forbids BigInt in generated TypeScript.
  */
-export type OAuth2TokenInfoIpc = {
-  access_token: string;
-  expires_in_secs: number;
-};
-export type PreconditionViolationIpc = {
-  kind: string;
-  subject: string;
-  description: string;
-};
-export type QuotaViolationIpc = { subject: string; description: string };
-export type ResolutionReportIpc = {
-  resolved: string;
-  unresolved_vars: string[];
-  cycle_chain: string[] | null;
-  dynamic_vars: string[];
-};
-export type SavedAuthConfigIpc =
-  | { kind: "none" }
-  | {
-      kind: "env_var";
-      env_var: string;
-      header_name: string;
-      prefix: string;
-      environments?: string[];
-    }
-  | {
-      kind: "oauth2_client_credentials";
-      token_url: string;
-      client_id: string;
-      client_secret: string;
-      scopes: string[];
-      header_name?: string;
-      prefix?: string;
-      environments?: string[];
-    };
-export type SavedRequestIpc = {
-  id: string;
-  name: string;
-  address_template: string;
-  service: string;
-  method: string;
-  body_template: string;
-  metadata: MetadataRowIpc[];
-  auth: SavedAuthConfigIpc;
-  tls_override: boolean | null;
-  last_used_at: number | null;
-  use_count: number;
-};
+export type OAuth2TokenInfoIpc = { access_token: string; expires_in_secs: number }
+export type PreconditionViolationIpc = { kind: string; subject: string; description: string }
+export type QuotaViolationIpc = { subject: string; description: string }
+export type ResolutionReportIpc = { resolved: string; unresolved_vars: string[]; cycle_chain: string[] | null; dynamic_vars: string[] }
+export type SavedAuthConfigIpc = { kind: "none" } | { kind: "env_var"; env_var: string; header_name: string; prefix: string; environments?: string[] } | { kind: "oauth2_client_credentials"; token_url: string; client_id: string; client_secret: string; scopes: string[]; header_name?: string; prefix?: string; environments?: string[] }
+export type SavedRequestIpc = { id: string; name: string; address_template: string; service: string; method: string; body_template: string; metadata: MetadataRowIpc[]; auth: SavedAuthConfigIpc; tls_override: boolean | null; last_used_at: number | null; use_count: number }
 /**
  * Send-time context (which collection, which active environment) — the pieces
  * `pick_auth_config`/resolve need beyond the step itself. Reused across
  * `auth_effective` (Slice 4) and `grpc_send` (Slice 5).
  */
-export type SendCtxIpc = {
-  collection_id: string | null;
-  env_name: string | null;
-};
+export type SendCtxIpc = { collection_id: string | null; env_name: string | null }
 /**
  * Raw, unresolved request draft as it lives in the frontend step — the input to
  * `grpc_send`. Templates (address/body/metadata values) are resolved via
  * `resolve_request` against the collection + active environment carried in `SendCtxIpc`.
  */
-export type SendDraftIpc = {
-  address_template: string;
-  /**
-   * Per-request TLS override. `None` = inherit the collection's `default_tls`
-   * (resolved in core against the ctx collection); `Some(b)` = force on/off.
-   */
-  tls_override: boolean | null;
-  service: string;
-  method: string;
-  body_template: string;
-  metadata: MetadataRowIpc[];
-  auth: SavedAuthConfigIpc;
-};
+export type SendDraftIpc = { address_template: string; 
+/**
+ * Per-request TLS override. `None` = inherit the collection's `default_tls`
+ * (resolved in core against the ctx collection); `Some(b)` = force on/off.
+ */
+tls_override: boolean | null; service: string; method: string; body_template: string; metadata: MetadataRowIpc[]; auth: SavedAuthConfigIpc }
 /**
  * Send report: the invoke outcome plus the facts the resolve pipeline actually
  * used — so the UI's executed-history snapshot records fact instead of asking
  * `auth_effective` a second (possibly stale) time. `auth_used` is the picked
  * config in template form; resolved secrets never cross IPC (ADR-0001).
  */
-export type SendReportIpc = {
-  outcome: InvokeOutcomeIpc;
-  auth_used: SavedAuthConfigIpc;
-  tls_used: boolean;
-};
-export type ServiceCatalogIpc = { services: ServiceEntryIpc[] };
-export type ServiceEntryIpc = { full_name: string; methods: MethodEntryIpc[] };
+export type SendReportIpc = { outcome: InvokeOutcomeIpc; auth_used: SavedAuthConfigIpc; tls_used: boolean }
+export type ServiceCatalogIpc = { services: ServiceEntryIpc[] }
+export type ServiceEntryIpc = { full_name: string; methods: MethodEntryIpc[] }
 /**
  * Tagged-union mirror of `StatusDetail` (discriminator "type"), as the frontend narrows.
  */
-export type StatusDetailIpc =
-  | {
-      type: "ErrorInfo";
-      reason: string;
-      domain: string;
-      metadata: Partial<{ [key in string]: string }>;
-    }
-  | { type: "BadRequest"; violations: FieldViolationIpc[] }
-  | { type: "RetryInfo"; retry_delay_ms: number | null }
-  | { type: "QuotaFailure"; violations: QuotaViolationIpc[] }
-  | { type: "PreconditionFailure"; violations: PreconditionViolationIpc[] }
-  | { type: "DebugInfo"; stack_entries: string[]; detail: string }
-  | { type: "RequestInfo"; request_id: string; serving_data: string }
-  | {
-      type: "ResourceInfo";
-      resource_type: string;
-      resource_name: string;
-      owner: string;
-      description: string;
-    }
-  | { type: "Help"; links: HelpLinkIpc[] }
-  | { type: "LocalizedMessage"; locale: string; message: string };
+export type StatusDetailIpc = { type: "ErrorInfo"; reason: string; domain: string; metadata: Partial<{ [key in string]: string }> } | { type: "BadRequest"; violations: FieldViolationIpc[] } | { type: "RetryInfo"; retry_delay_ms: number | null } | { type: "QuotaFailure"; violations: QuotaViolationIpc[] } | { type: "PreconditionFailure"; violations: PreconditionViolationIpc[] } | { type: "DebugInfo"; stack_entries: string[]; detail: string } | { type: "RequestInfo"; request_id: string; serving_data: string } | { type: "ResourceInfo"; resource_type: string; resource_name: string; owner: string; description: string } | { type: "Help"; links: HelpLinkIpc[] } | { type: "LocalizedMessage"; locale: string; message: string }
 /**
  * Structured classification of a transport-connect failure. Lets the frontend
  * narrow on a kind instead of regex-parsing the message string.
  */
-export type TransportKindIpc = "Refused" | "Tls" | "Dns" | "Other";
-export type UiStateIpc = {
-  sort_key: string | null;
-  active_request: ActiveRequestRefIpc | null;
-};
+export type TransportKindIpc = "Refused" | "Tls" | "Dns" | "Other"
+export type UiStateIpc = { sort_key: string | null; active_request: ActiveRequestRefIpc | null; links_placement?: LinksPlacementIpc }
 /**
  * Optional resolve context for `vars_resolve`. All fields optional:
  * - `collection_id` — live paths; the backend reads the collection's vars from the store;
  * - `collection_vars` — editor overlay (unsaved rows); wins over `collection_id`;
  * - `env_vars` — env-editor overlay; wins over the active environment.
  */
-export type VarsResolveCtxIpc = {
-  collection_id: string | null;
-  collection_vars: Partial<{ [key in string]: string }> | null;
-  env_vars: Partial<{ [key in string]: string }> | null;
-};
+export type VarsResolveCtxIpc = { collection_id: string | null; collection_vars: Partial<{ [key in string]: string }> | null; env_vars: Partial<{ [key in string]: string }> | null }
 
 /** tauri-specta globals **/
 
 import {
-  invoke as TAURI_INVOKE,
-  Channel as TAURI_CHANNEL,
+	invoke as TAURI_INVOKE,
+	Channel as TAURI_CHANNEL,
 } from "@tauri-apps/api/core";
 import * as TAURI_API_EVENT from "@tauri-apps/api/event";
 import { type WebviewWindow as __WebviewWindow__ } from "@tauri-apps/api/webviewWindow";
 
 type __EventObj__<T> = {
-  listen: (
-    cb: TAURI_API_EVENT.EventCallback<T>,
-  ) => ReturnType<typeof TAURI_API_EVENT.listen<T>>;
-  once: (
-    cb: TAURI_API_EVENT.EventCallback<T>,
-  ) => ReturnType<typeof TAURI_API_EVENT.once<T>>;
-  emit: null extends T
-    ? (payload?: T) => ReturnType<typeof TAURI_API_EVENT.emit>
-    : (payload: T) => ReturnType<typeof TAURI_API_EVENT.emit>;
+	listen: (
+		cb: TAURI_API_EVENT.EventCallback<T>,
+	) => ReturnType<typeof TAURI_API_EVENT.listen<T>>;
+	once: (
+		cb: TAURI_API_EVENT.EventCallback<T>,
+	) => ReturnType<typeof TAURI_API_EVENT.once<T>>;
+	emit: null extends T
+		? (payload?: T) => ReturnType<typeof TAURI_API_EVENT.emit>
+		: (payload: T) => ReturnType<typeof TAURI_API_EVENT.emit>;
 };
 
 export type Result<T, E> =
-  | { status: "ok"; data: T }
-  | { status: "error"; error: E };
+	| { status: "ok"; data: T }
+	| { status: "error"; error: E };
 
 function __makeEvents__<T extends Record<string, any>>(
-  mappings: Record<keyof T, string>,
+	mappings: Record<keyof T, string>,
 ) {
-  return new Proxy(
-    {} as unknown as {
-      [K in keyof T]: __EventObj__<T[K]> & {
-        (handle: __WebviewWindow__): __EventObj__<T[K]>;
-      };
-    },
-    {
-      get: (_, event) => {
-        const name = mappings[event as keyof T];
+	return new Proxy(
+		{} as unknown as {
+			[K in keyof T]: __EventObj__<T[K]> & {
+				(handle: __WebviewWindow__): __EventObj__<T[K]>;
+			};
+		},
+		{
+			get: (_, event) => {
+				const name = mappings[event as keyof T];
 
-        return new Proxy((() => {}) as any, {
-          apply: (_, __, [window]: [__WebviewWindow__]) => ({
-            listen: (arg: any) => window.listen(name, arg),
-            once: (arg: any) => window.once(name, arg),
-            emit: (arg: any) => window.emit(name, arg),
-          }),
-          get: (_, command: keyof __EventObj__<any>) => {
-            switch (command) {
-              case "listen":
-                return (arg: any) => TAURI_API_EVENT.listen(name, arg);
-              case "once":
-                return (arg: any) => TAURI_API_EVENT.once(name, arg);
-              case "emit":
-                return (arg: any) => TAURI_API_EVENT.emit(name, arg);
-            }
-          },
-        });
-      },
-    },
-  );
+				return new Proxy((() => {}) as any, {
+					apply: (_, __, [window]: [__WebviewWindow__]) => ({
+						listen: (arg: any) => window.listen(name, arg),
+						once: (arg: any) => window.once(name, arg),
+						emit: (arg: any) => window.emit(name, arg),
+					}),
+					get: (_, command: keyof __EventObj__<any>) => {
+						switch (command) {
+							case "listen":
+								return (arg: any) => TAURI_API_EVENT.listen(name, arg);
+							case "once":
+								return (arg: any) => TAURI_API_EVENT.once(name, arg);
+							case "emit":
+								return (arg: any) => TAURI_API_EVENT.emit(name, arg);
+						}
+					},
+				});
+			},
+		},
+	);
 }

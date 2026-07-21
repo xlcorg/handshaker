@@ -1,61 +1,23 @@
 import { ExternalLink, Plus, Trash2 } from "lucide-react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/cn";
 import { newId } from "@/lib/ids";
 import { messages } from "@/lib/messages";
-import { ipc } from "@/ipc/client";
-import type { ResolutionReportIpc } from "@/ipc/bindings";
-import { hasVars, useVarResolve } from "@/features/vars/useVarResolve";
+import { type LinkResolve, type LinkRow, openLink, useLinkTarget } from "./linkTarget";
 
 const m = messages.catalog.overview.links;
-
-/** Resolve state of one link's URL — the three states the open action can be in.
- *  `title` is the hover text in every state; only `ready` carries an openable URL. */
-type LinkTarget =
-  | { kind: "ready"; url: string; title: string }
-  | { kind: "pending"; title: string }
-  | { kind: "broken"; title: string };
-
-function linkTarget(url: string, report: ResolutionReportIpc | null): LinkTarget {
-  // Template-free URLs need no backend round-trip — `useVarResolve` doesn't fire for them.
-  if (!hasVars(url)) return { kind: "ready", url, title: m.openHint(url) };
-  if (report === null) return { kind: "pending", title: m.resolving };
-  if (report.cycle_chain) return { kind: "broken", title: m.cycle(report.cycle_chain) };
-  if (report.unresolved_vars.length > 0) {
-    return { kind: "broken", title: m.unresolved(report.unresolved_vars) };
-  }
-  return { kind: "ready", url: report.resolved, title: m.openHint(report.resolved) };
-}
 
 /** Shared by the header and every row so the columns line up in one edit. */
 const GRID_COLS = "grid grid-cols-[1fr_1.4fr_28px_28px]";
 
-/** Hand a resolved URL to the OS browser. The capability allows http/https only, so a
- *  link with any other scheme is rejected at the seam — surface that, don't swallow it. */
-function openLink(url: string) {
-  void ipc.openExternal(url).catch(() => toast.error(m.openFailed(url)));
-}
-
-/** One editable link row. `id` is a render key only — links are stored as name+url. */
-export interface LinkRow {
-  id: string;
-  name: string;
-  url: string;
-}
-
-interface LinksBlockProps {
+interface LinksBlockProps extends LinkResolve {
   rows: LinkRow[];
   onChange: (nextRows: LinkRow[]) => void;
-  /** Resolves a URL template — the caller bakes the ctx (collection vars + active env) in. */
-  resolveUrl: (t: string) => Promise<ResolutionReportIpc>;
-  /** Stringified extra resolve inputs (collection vars, active env); change ⇒ re-resolve. */
-  resolveKey: string;
 }
 
-interface LinkRowItemProps extends Pick<LinksBlockProps, "resolveUrl" | "resolveKey"> {
+interface LinkRowItemProps extends LinkResolve {
   row: LinkRow;
   onEdit: (key: "name" | "url", val: string) => void;
   onDelete: () => void;
@@ -64,8 +26,7 @@ interface LinkRowItemProps extends Pick<LinksBlockProps, "resolveUrl" | "resolve
 /** One link row: name + URL template editors, plus an open-in-browser action whose
  *  target is the URL resolved against the collection vars + active environment. */
 function LinkRowItem({ row, onEdit, onDelete, resolveUrl, resolveKey }: LinkRowItemProps) {
-  const report = useVarResolve(row.url, resolveUrl, resolveKey);
-  const target = linkTarget(row.url, report);
+  const target = useLinkTarget(row.url, resolveUrl, resolveKey);
 
   return (
     <div className={cn("group/link gap-x-2 gap-y-0.5 items-center", GRID_COLS)}>

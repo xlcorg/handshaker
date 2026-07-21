@@ -27,8 +27,16 @@ describe("uiState cache", () => {
   it("patchUiState sends the FULL merged object and updates the cache", async () => {
     vi.mocked(ipc.appSettingsSet).mockResolvedValue(undefined as never);
     await patchUiState({ sort_key: "recent" });
-    expect(ipc.appSettingsSet).toHaveBeenCalledWith({ sort_key: "recent", active_request: null });
-    expect(readUiState()).toEqual({ sort_key: "recent", active_request: null });
+    expect(ipc.appSettingsSet).toHaveBeenCalledWith({
+      sort_key: "recent",
+      active_request: null,
+      links_placement: "strip",
+    });
+    expect(readUiState()).toEqual({
+      sort_key: "recent",
+      active_request: null,
+      links_placement: "strip",
+    });
   });
 
   it("subsequent patches do not clobber earlier fields", async () => {
@@ -38,10 +46,12 @@ describe("uiState cache", () => {
     expect(ipc.appSettingsSet).toHaveBeenLastCalledWith({
       sort_key: "recent",
       active_request: { collection_id: "c1", item_id: "r1" },
+      links_placement: "strip",
     });
     expect(readUiState()).toEqual({
       sort_key: "recent",
       active_request: { collection_id: "c1", item_id: "r1" },
+      links_placement: "strip",
     });
   });
 });

@@ -1,0 +1,40 @@
+import { useState } from "react";
+import { LinkChip, EditPencil, GhostChip } from "./LinkChip";
+import { type LinkResolve, type LinkRow } from "./linkTarget";
+import { LinksEditDialog } from "./LinksEditDialog";
+
+export interface QuickLinksStripProps extends LinkResolve {
+  rows: LinkRow[];
+  onChange: (nextRows: LinkRow[]) => void;
+}
+
+/** Strip variant of the collection quick-links: a slim row of clickable chips shown on every
+ *  collection tab, between the panel header and the tab bar. Editing lives behind the pencil
+ *  (and the empty-state ghost chip), which opens the shared edit dialog. */
+export function QuickLinksStrip({ rows, onChange, resolveUrl, resolveKey }: QuickLinksStripProps) {
+  const [editing, setEditing] = useState(false);
+
+  return (
+    <div className="flex-none flex items-center gap-1.5 border-b border-border/70 bg-card/20 px-4 py-1.5">
+      {rows.length === 0 ? (
+        <GhostChip onClick={() => setEditing(true)} />
+      ) : (
+        <>
+          {rows.map((row) => (
+            <LinkChip key={row.id} row={row} resolveUrl={resolveUrl} resolveKey={resolveKey} />
+          ))}
+          <EditPencil onClick={() => setEditing(true)} />
+        </>
+      )}
+
+      <LinksEditDialog
+        open={editing}
+        onOpenChange={setEditing}
+        rows={rows}
+        onChange={onChange}
+        resolveUrl={resolveUrl}
+        resolveKey={resolveKey}
+      />
+    </div>
+  );
+}

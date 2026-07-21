@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Layers, X, AlignLeft, Lock, KeyRound, Braces, Bookmark, Send, Link2 } from "lucide-react";
+import { Layers, X, AlignLeft, Lock, KeyRound, Braces, Bookmark, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/cn";
@@ -18,7 +18,10 @@ import { COBlock } from "./COBlock";
 import { CollectionTitle } from "./CollectionTitle";
 import { DescriptionBlock } from "./DescriptionBlock";
 import { VariablesBlock, type VarRow } from "./VariablesBlock";
-import { LinksBlock, type LinkRow } from "./LinksBlock";
+import { QuickLinksStrip } from "./QuickLinksStrip";
+import { HeaderLinks } from "./HeaderLinks";
+import type { LinkRow } from "./linkTarget";
+import { useLinksPlacement } from "../uiState";
 import { TlsBlock } from "./TlsBlock";
 import { SavedAuthEditor } from "./SavedAuthEditor";
 import { usageLabel } from "./usage";
@@ -148,6 +151,13 @@ export function CollectionOverview({ collection, onChanged, onSelectRequest, onC
   // count/time refresh live without a reload.
   const now = Date.now();
 
+  // Global preference: quick-links as a strip below the header, or inline in the header.
+  const linksPlacement = useLinksPlacement();
+  const onLinksChange = (next: LinkRow[]) => {
+    setLinkRows(next);
+    persistLinks(next);
+  };
+
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
       {/* header */}
@@ -157,6 +167,15 @@ export function CollectionOverview({ collection, onChanged, onSelectRequest, onC
         <span className="truncate text-[11px] text-muted-foreground/55">
           {mo.counts(folders, total)}
         </span>
+        {/* Header variant: chips inline after the counters, overflow collapsing to "+N". */}
+        {linksPlacement === "header" && (
+          <HeaderLinks
+            rows={linkRows}
+            onChange={onLinksChange}
+            resolveUrl={resolveRow}
+            resolveKey={resolveKey}
+          />
+        )}
         <div className="ml-auto">
           <Tooltip content={mo.close}>
             <Button variant="ghost" size="icon-sm" aria-label="close-overview" onClick={onClose}>
@@ -165,6 +184,17 @@ export function CollectionOverview({ collection, onChanged, onSelectRequest, onC
           </Tooltip>
         </div>
       </div>
+
+      {/* Strip variant (default): a slim row of chips on every tab, above the tab bar. Editing
+          is behind the pencil / empty-state ghost chip (a dialog), not inline in the body. */}
+      {linksPlacement === "strip" && (
+        <QuickLinksStrip
+          rows={linkRows}
+          onChange={onLinksChange}
+          resolveUrl={resolveRow}
+          resolveKey={resolveKey}
+        />
+      )}
 
       <COTabs value={tab} onChange={setTab} items={tabs} />
 
@@ -198,18 +228,6 @@ export function CollectionOverview({ collection, onChanged, onSelectRequest, onC
                   enabled={collection.default_tls}
                   skipVerify={collection.skip_tls_verify}
                   onChange={persistTls}
-                />
-              </COBlock>
-
-              <COBlock icon={<Link2 size={15} />} title={mo.links.title} desc={mo.links.desc}>
-                <LinksBlock
-                  rows={linkRows}
-                  onChange={(next) => {
-                    setLinkRows(next);
-                    persistLinks(next);
-                  }}
-                  resolveUrl={resolveRow}
-                  resolveKey={resolveKey}
                 />
               </COBlock>
 
