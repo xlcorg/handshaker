@@ -66,6 +66,56 @@ export const messages = {
       searchCollectionOrFolder: "Search collection or folder",
       nameLabel: "Name",
     },
+    overview: {
+      close: "Close",
+      /** Header summary — "2 folders · 5 requests". */
+      counts: (folders: number, requests: number): string =>
+        `${folders} ${folders === 1 ? "folder" : "folders"} · ${requests} ${
+          requests === 1 ? "request" : "requests"
+        }`,
+      tabs: {
+        overview: "Overview",
+        auth: "Authorization",
+        variables: "Variables",
+      },
+      description: {
+        title: "Description",
+        desc: "What this collection is for — shown to anyone you share it with.",
+      },
+      tls: {
+        title: "TLS defaults",
+        desc: "The transport security new requests in this collection start with.",
+      },
+      requests: {
+        title: "Requests",
+        desc: "Saved requests in this collection. Click any row to open it.",
+        /** Row tooltip on the usage column. */
+        lastUsed: (when: string) => `Last used ${when}`,
+      },
+      auth: {
+        title: "Authorization",
+        desc: "A single auth config applied to this collection's requests (a request can override it).",
+      },
+      variables: {
+        title: "Variables",
+        desc: "Collection-wide key/value pairs, reusable as {{name}} inside requests.",
+      },
+      links: {
+        title: "Links",
+        desc: "External tooling for this service — dashboards, logs, docs.",
+        columnName: "Name",
+        columnUrl: "URL",
+        namePlaceholder: "Grafana",
+        urlPlaceholder: "https://grafana.example/d/abc",
+        nameAria: "link name",
+        urlAria: "link URL",
+        add: "Add link",
+        remove: "Remove",
+        removeAria: "Remove link",
+        emptyTitle: "No links yet.",
+        emptyHint: "Grafana, logs or docs for the service this collection talks to.",
+      },
+    },
   },
   palette: {
     title: "Command palette",

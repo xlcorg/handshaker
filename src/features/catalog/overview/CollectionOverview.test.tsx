@@ -168,6 +168,65 @@ describe("CollectionOverview", () => {
     );
   });
 
+  describe("Links block", () => {
+    const links = [
+      { name: "Grafana", url: "https://{{host}}/d/abc" },
+      { name: "Logs", url: "https://logs.example" },
+    ];
+
+    it("renders the collection's links in creation order", () => {
+      r(<CollectionOverview {...props({ collection: collection({ links }) })} />);
+      const names = screen.getAllByLabelText("link name") as HTMLInputElement[];
+      expect(names.map((i) => i.value)).toEqual(["Grafana", "Logs"]);
+    });
+
+    it("adding a link persists it via collectionUpsert", () => {
+      r(<CollectionOverview {...props()} />);
+      fireEvent.click(screen.getByText("Add link"));
+      fireEvent.change(screen.getByLabelText("link name"), { target: { value: "Grafana" } });
+      fireEvent.change(screen.getByLabelText("link URL"), {
+        target: { value: "https://grafana.example" },
+      });
+      expect(ipc.collectionUpsert).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          id: "c1",
+          links: [{ name: "Grafana", url: "https://grafana.example" }],
+        }),
+      );
+    });
+
+    it("editing a link's name persists the whole list, order kept", () => {
+      r(<CollectionOverview {...props({ collection: collection({ links }) })} />);
+      const names = screen.getAllByLabelText("link name");
+      fireEvent.change(names[0], { target: { value: "Dashboards" } });
+      expect(ipc.collectionUpsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          links: [{ name: "Dashboards", url: "https://{{host}}/d/abc" }, links[1]],
+        }),
+      );
+    });
+
+    it("deleting a link persists the shortened list", () => {
+      r(<CollectionOverview {...props({ collection: collection({ links }) })} />);
+      fireEvent.click(screen.getAllByLabelText("Remove link")[0]);
+      expect(ipc.collectionUpsert).toHaveBeenCalledWith(
+        expect.objectContaining({ links: [links[1]] }),
+      );
+    });
+
+    it("a link with a blank name and URL is not persisted", () => {
+      r(<CollectionOverview {...props()} />);
+      fireEvent.click(screen.getByText("Add link"));
+      expect(ipc.collectionUpsert).toHaveBeenCalledWith(expect.objectContaining({ links: [] }));
+    });
+
+    it("renders a URL template verbatim — resolution is not this ticket's job", () => {
+      r(<CollectionOverview {...props({ collection: collection({ links }) })} />);
+      const urls = screen.getAllByLabelText("link URL") as HTMLInputElement[];
+      expect(urls[0].value).toBe("https://{{host}}/d/abc");
+    });
+  });
+
   it("the close button calls onClose", () => {
     const p = props();
     r(<CollectionOverview {...p} />);

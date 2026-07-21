@@ -726,6 +726,17 @@ export type CollectionIpc = {
   description: string | null;
   created_at: number;
   expanded: boolean;
+  /**
+   * Collection links in creation order; empty for pre-feature stores.
+   */
+  links?: CollectionLinkIpc[];
+};
+export type CollectionLinkIpc = {
+  name: string;
+  /**
+   * `{{var}}` template — crosses the seam unresolved.
+   */
+  url: string;
 };
 /**
  * Lightweight list entry (id + name only) for `collection_list`.

@@ -35,6 +35,16 @@ pub struct MetadataRow {
     pub enabled: bool,
 }
 
+/// A **collection link**: a named external URL belonging to the collection — a quick
+/// hop to the tooling of the service the collection represents (Grafana, logs, docs).
+/// The URL is a `{{var}}` template; resolution happens at click time, not here.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CollectionLink {
+    pub name: String,
+    /// `{{var}}` template — stored verbatim, never resolved on the way in.
+    pub url: String,
+}
+
 /// Root entity. Carries collection-scope variables, root auth, and TLS defaults.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Collection {
@@ -50,6 +60,10 @@ pub struct Collection {
     pub created_at: f64, // epoch ms, set by frontend
     #[serde(default)]
     pub expanded: bool,
+    /// Collection links, in creation order. Defaulted so pre-feature files and
+    /// bundles (written before links existed) load with an empty list.
+    #[serde(default)]
+    pub links: Vec<CollectionLink>,
 }
 
 /// A node in the tree.
@@ -187,6 +201,7 @@ mod model_tests {
 
         let collection: Collection = serde_json::from_str(legacy).unwrap();
         assert!(!collection.expanded, "omitted Collection.expanded must default to false");
+        assert!(collection.links.is_empty(), "omitted Collection.links must default to empty");
 
         // The nested folder also omitted `expanded`.
         let Item::Folder(folder) = &collection.items[0] else {
@@ -218,8 +233,37 @@ mod model_tests {
             description: Some("d".into()),
             created_at: 1_700_000_000_000.0,
             expanded: false,
+            links: vec![],
         };
         assert!(c.pinned);
         assert_eq!(c.description.as_deref(), Some("d"));
+    }
+
+    /// Links keep creation order across a serde round-trip — the list is the order
+    /// the UI renders, so nothing may reorder it on the way to disk and back.
+    #[test]
+    fn links_round_trip_through_serde_in_creation_order() {
+        let c = Collection {
+            id: CollectionId(Uuid::from_u128(5)),
+            name: "c".into(),
+            items: vec![],
+            variables: IndexMap::new(),
+            auth: SavedAuthConfig::None,
+            default_tls: false,
+            skip_tls_verify: false,
+            pinned: false,
+            description: None,
+            created_at: 0.0,
+            expanded: false,
+            links: vec![
+                CollectionLink { name: "Grafana".into(), url: "https://{{host}}/d/abc".into() },
+                CollectionLink { name: "Logs".into(), url: "https://logs.example".into() },
+            ],
+        };
+        let json = serde_json::to_string(&c).unwrap();
+        let back: Collection = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, c);
+        assert_eq!(back.links[0].name, "Grafana");
+        assert_eq!(back.links[1].name, "Logs");
     }
 }

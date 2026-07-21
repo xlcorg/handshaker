@@ -11,7 +11,9 @@ use handshaker_core::auth::{
 };
 use handshaker_core::collections::ids::{CollectionId, ItemId};
 use handshaker_core::collections::tree::ItemSnapshot;
-use handshaker_core::collections::{Collection, Folder, Item, MetadataRow, SavedRequest};
+use handshaker_core::collections::{
+    Collection, CollectionLink, Folder, Item, MetadataRow, SavedRequest,
+};
 use handshaker_core::error::CoreError;
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -214,6 +216,24 @@ impl ItemIpc {
     }
 }
 
+// --- collection link DTOs ---------------------------------------------------
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub struct CollectionLinkIpc {
+    pub name: String,
+    /// `{{var}}` template — crosses the seam unresolved.
+    pub url: String,
+}
+
+impl CollectionLinkIpc {
+    pub fn from_core(l: CollectionLink) -> Self {
+        Self { name: l.name, url: l.url }
+    }
+    pub fn into_core(self) -> CollectionLink {
+        CollectionLink { name: self.name, url: self.url }
+    }
+}
+
 // --- collection DTOs --------------------------------------------------------
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -229,6 +249,9 @@ pub struct CollectionIpc {
     pub description: Option<String>,
     pub created_at: f64,
     pub expanded: bool,
+    /// Collection links in creation order; empty for pre-feature stores.
+    #[serde(default)]
+    pub links: Vec<CollectionLinkIpc>,
 }
 
 impl CollectionIpc {
@@ -245,6 +268,7 @@ impl CollectionIpc {
             description: c.description,
             created_at: c.created_at,
             expanded: c.expanded,
+            links: c.links.into_iter().map(CollectionLinkIpc::from_core).collect(),
         }
     }
 
@@ -262,6 +286,7 @@ impl CollectionIpc {
             description: self.description,
             created_at: self.created_at,
             expanded: self.expanded,
+            links: self.links.into_iter().map(CollectionLinkIpc::into_core).collect(),
         })
     }
 }
@@ -330,6 +355,10 @@ mod tests {
             description: Some("d".into()),
             created_at: 1_700_000_000_000.0,
             expanded: true,
+            links: vec![
+                CollectionLink { name: "Grafana".into(), url: "https://{{host}}/d/abc".into() },
+                CollectionLink { name: "Logs".into(), url: "https://logs.example".into() },
+            ],
         }
     }
 
@@ -346,6 +375,34 @@ mod tests {
         assert_eq!(req.metadata[0].key, "a");
         assert!(req.metadata[0].enabled);
         assert!(!req.metadata[1].enabled);
+
+        // links survive the round-trip in creation order, URL template unresolved
+        assert_eq!(back.links.len(), 2);
+        assert_eq!(back.links[0].name, "Grafana");
+        assert_eq!(back.links[0].url, "https://{{host}}/d/abc");
+        assert_eq!(back.links[1].name, "Logs");
+    }
+
+    /// A payload sent by a frontend that predates links (or a stored DTO without the
+    /// field) must deserialize with an empty list, not fail.
+    #[test]
+    fn collection_ipc_without_links_deserializes_to_empty() {
+        let json = r#"{
+            "id": "00000000-0000-0000-0000-000000000001",
+            "name": "c",
+            "items": [],
+            "variables": {},
+            "auth": { "kind": "none" },
+            "default_tls": false,
+            "skip_tls_verify": false,
+            "pinned": false,
+            "description": null,
+            "created_at": 0.0,
+            "expanded": false
+        }"#;
+        let ipc: CollectionIpc = serde_json::from_str(json).unwrap();
+        assert!(ipc.links.is_empty());
+        assert!(ipc.into_core().unwrap().links.is_empty());
     }
 
     #[test]
@@ -399,6 +456,7 @@ mod tests {
             description: None,
             created_at: 0.0,
             expanded: false,
+            links: vec![],
         };
         assert!(matches!(ipc.into_core().unwrap_err(), CoreError::InvalidTarget(_)));
     }

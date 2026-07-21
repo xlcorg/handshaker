@@ -12,7 +12,7 @@ use crate::persist::{atomic_write_json, quarantine_corrupt, read_json, Envelope}
 
 use super::ids::CollectionId;
 use super::store::CollectionStore;
-use super::Collection;
+use super::{Collection, CollectionLink};
 
 #[derive(Debug)]
 pub struct FileCollectionStore {
@@ -113,6 +113,7 @@ mod tests {
             description: None,
             created_at: 0.0,
             expanded: false,
+            links: vec![],
         }
     }
 
@@ -170,6 +171,47 @@ mod tests {
             .cloned()
             .collect();
         assert_eq!(keys, ordered.iter().map(|(k, _)| k.to_string()).collect::<Vec<_>>());
+    }
+
+    /// Links are part of the persisted collection: a store reload (the app-restart
+    /// path) must return them, in creation order.
+    #[test]
+    fn links_survive_reload_in_creation_order() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = FileCollectionStore::load(dir.path().to_path_buf()).unwrap();
+        let mut c = coll(1, "c");
+        c.links = vec![
+            CollectionLink { name: "Grafana".into(), url: "https://{{host}}/d/abc".into() },
+            CollectionLink { name: "Logs".into(), url: "https://logs.example".into() },
+        ];
+        store.upsert(c.clone()).unwrap();
+        drop(store);
+
+        let store2 = FileCollectionStore::load(dir.path().to_path_buf()).unwrap();
+        let back = store2.get(CollectionId(Uuid::from_u128(1))).unwrap();
+        assert_eq!(back.links, c.links);
+    }
+
+    /// A collection file written before links existed loads with an empty list.
+    #[test]
+    fn store_file_without_links_loads_with_empty_list() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = FileCollectionStore::load(dir.path().to_path_buf()).unwrap();
+        store.upsert(coll(1, "a")).unwrap();
+        drop(store);
+
+        // Strip the field from the persisted file, mimicking a pre-feature write.
+        let path = dir.path().join(format!("{}.json", Uuid::from_u128(1)));
+        let raw = std::fs::read_to_string(&path).unwrap();
+        let mut doc: serde_json::Value = serde_json::from_str(&raw).unwrap();
+        let payload = doc.get_mut("data").expect("envelope data");
+        assert!(payload.get("links").is_some(), "links must be persisted in the first place");
+        payload.as_object_mut().unwrap().remove("links");
+        std::fs::write(&path, serde_json::to_string(&doc).unwrap()).unwrap();
+
+        let store2 = FileCollectionStore::load(dir.path().to_path_buf()).unwrap();
+        let back = store2.get(CollectionId(Uuid::from_u128(1))).unwrap();
+        assert!(back.links.is_empty());
     }
 
     #[test]

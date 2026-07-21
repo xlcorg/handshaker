@@ -50,6 +50,7 @@ fn collection_tree_survives_restart() {
         description: None,
         created_at: 0.0,
         expanded: false,
+        links: vec![],
     };
 
     // Add a request under the folder, then persist.

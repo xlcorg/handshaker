@@ -59,6 +59,7 @@ mod tests {
     use super::*;
     use crate::auth::SavedAuthConfig;
     use crate::collections::ids::CollectionId;
+    use crate::collections::CollectionLink;
 
     fn sample_collection(id: u128, name: &str) -> Collection {
         Collection {
@@ -73,6 +74,7 @@ mod tests {
             description: None,
             created_at: 0.0,
             expanded: false,
+            links: vec![],
         }
     }
 
@@ -88,6 +90,45 @@ mod tests {
         write_bundle(&path, &bundle).unwrap();
         let back = read_bundle(&path).unwrap();
         assert_eq!(back, bundle);
+    }
+
+    /// A shared bundle carries the collection's links, so an importing teammate
+    /// gets the service's tooling too.
+    #[test]
+    fn links_survive_an_export_import_round_trip() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("export.json");
+        let mut c = sample_collection(1, "c");
+        c.links = vec![
+            CollectionLink { name: "Grafana".into(), url: "https://{{host}}/d/abc".into() },
+            CollectionLink { name: "Logs".into(), url: "https://logs.example".into() },
+        ];
+        write_bundle(&path, &Bundle::new(vec![c.clone()], vec![])).unwrap();
+        let back = read_bundle(&path).unwrap();
+        assert_eq!(back.collections[0].links, c.links);
+    }
+
+    /// A bundle exported before this feature has no `links` key — it must import
+    /// cleanly, with an empty list.
+    #[test]
+    fn pre_feature_bundle_imports_with_empty_links() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("legacy.json");
+        let bundle = Bundle::new(vec![sample_collection(1, "c")], vec![]);
+        write_bundle(&path, &bundle).unwrap();
+
+        // Strip `links` from the persisted collection, mimicking a pre-feature export.
+        let raw = std::fs::read_to_string(&path).unwrap();
+        let mut doc: serde_json::Value = serde_json::from_str(&raw).unwrap();
+        doc["data"]["collections"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("links")
+            .expect("links must be exported in the first place");
+        std::fs::write(&path, serde_json::to_string(&doc).unwrap()).unwrap();
+
+        let back = read_bundle(&path).unwrap();
+        assert!(back.collections[0].links.is_empty());
     }
 
     #[test]

@@ -1,17 +1,24 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Layers, X, AlignLeft, Lock, KeyRound, Braces, Bookmark, Send } from "lucide-react";
+import { Layers, X, AlignLeft, Lock, KeyRound, Braces, Bookmark, Send, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/cn";
 import { newId } from "@/lib/ids";
 import { ipc } from "@/ipc/client";
-import type { CollectionIpc, ItemIpc, SavedAuthConfigIpc, SavedRequestIpc } from "@/ipc/bindings";
+import type {
+  CollectionIpc,
+  CollectionLinkIpc,
+  ItemIpc,
+  SavedAuthConfigIpc,
+  SavedRequestIpc,
+} from "@/ipc/bindings";
 import { flattenRequests } from "../palette";
 import { COTabs, type COTabItem } from "./COTabs";
 import { COBlock } from "./COBlock";
 import { CollectionTitle } from "./CollectionTitle";
 import { DescriptionBlock } from "./DescriptionBlock";
 import { VariablesBlock, type VarRow } from "./VariablesBlock";
+import { LinksBlock, type LinkRow } from "./LinksBlock";
 import { TlsBlock } from "./TlsBlock";
 import { SavedAuthEditor } from "./SavedAuthEditor";
 import { usageLabel } from "./usage";
@@ -19,6 +26,9 @@ import { useActiveWorkflow } from "@/features/workflow/store";
 import { useEnvRevision } from "@/features/envs/envRevision";
 import { useActiveEnvVars } from "@/features/envs/useActiveEnvVars";
 import { buildVarCandidates } from "@/features/vars/candidates";
+import { messages } from "@/lib/messages";
+
+const mo = messages.catalog.overview;
 
 function countFolders(items: ItemIpc[]): number {
   return items.reduce((n, it) => (it.type === "folder" ? n + 1 + countFolders(it.items) : n), 0);
@@ -39,6 +49,17 @@ function rowsToRecord(rows: VarRow[]): Record<string, string> {
   return rec;
 }
 
+function linksToRows(links: CollectionLinkIpc[] | undefined): LinkRow[] {
+  return (links ?? []).map((l) => ({ id: newId(), name: l.name, url: l.url }));
+}
+
+/** Drop the blank row an "Add link" click seeds — it isn't a link until it has content. */
+function rowsToLinks(rows: LinkRow[]): CollectionLinkIpc[] {
+  return rows
+    .filter((r) => r.name.trim() || r.url.trim())
+    .map((r) => ({ name: r.name, url: r.url }));
+}
+
 export interface CollectionOverviewProps {
   collection: CollectionIpc;
   /** Reload the tree after a persisted change. */
@@ -54,8 +75,10 @@ export function CollectionOverview({ collection, onChanged, onSelectRequest, onC
   const [varRows, setVarRows] = useState<VarRow[]>(() => entriesToRows(collection.variables));
   // Re-seed the variable buffer only when the collection identity changes, so a persist→reload
   // of the SAME collection doesn't clobber an in-progress edit.
+  const [linkRows, setLinkRows] = useState<LinkRow[]>(() => linksToRows(collection.links));
   useEffect(() => {
     setVarRows(entriesToRows(collection.variables));
+    setLinkRows(linksToRows(collection.links));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collection.id]);
 
@@ -65,9 +88,9 @@ export function CollectionOverview({ collection, onChanged, onSelectRequest, onC
   const varCount = varRows.filter((r) => r.k.trim()).length;
 
   const tabs: COTabItem[] = [
-    { value: "overview", label: "Overview" },
-    { value: "auth", label: "Authorization" },
-    { value: "variables", label: "Variables", hint: varCount || null },
+    { value: "overview", label: mo.tabs.overview },
+    { value: "auth", label: mo.tabs.auth },
+    { value: "variables", label: mo.tabs.variables, hint: varCount || null },
   ];
 
   const persistName = (name: string) => {
@@ -86,6 +109,16 @@ export function CollectionOverview({ collection, onChanged, onSelectRequest, onC
   };
   const persistAuth = (config: SavedAuthConfigIpc) => {
     void ipc.collectionSetNodeAuth(collection.id, null, config).then(onChanged).catch(() => {});
+  };
+  // Links ride the whole-collection upsert path, like description/TLS above — there is
+  // no `collection_set_links` command. The write carries this render's snapshot, so a
+  // concurrent backend-side change (e.g. a usage bump) is overwritten; same trade-off
+  // the sibling blocks already make.
+  const persistLinks = (rows: LinkRow[]) => {
+    void ipc
+      .collectionUpsert({ ...collection, links: rowsToLinks(rows) })
+      .then(onChanged)
+      .catch(() => {});
   };
   const persistVars = (rows: VarRow[]) => {
     void ipc.collectionSetVariables(collection.id, rowsToRecord(rows)).then(onChanged).catch(() => {});
@@ -122,11 +155,10 @@ export function CollectionOverview({ collection, onChanged, onSelectRequest, onC
         <Layers size={15} className="flex-none text-muted-foreground" />
         <CollectionTitle name={collection.name} onRename={persistName} />
         <span className="truncate text-[11px] text-muted-foreground/55">
-          {folders} {folders === 1 ? "folder" : "folders"} · {total}{" "}
-          {total === 1 ? "request" : "requests"}
+          {mo.counts(folders, total)}
         </span>
         <div className="ml-auto">
-          <Tooltip content="Close">
+          <Tooltip content={mo.close}>
             <Button variant="ghost" size="icon-sm" aria-label="close-overview" onClick={onClose}>
               <X size={14} />
             </Button>
@@ -151,16 +183,16 @@ export function CollectionOverview({ collection, onChanged, onSelectRequest, onC
             <div className="flex flex-col gap-7">
               <COBlock
                 icon={<AlignLeft size={15} />}
-                title="Description"
-                desc="What this collection is for — shown to anyone you share it with."
+                title={mo.description.title}
+                desc={mo.description.desc}
               >
                 <DescriptionBlock text={collection.description ?? ""} onChange={persistDesc} />
               </COBlock>
 
               <COBlock
                 icon={<Lock size={15} />}
-                title="TLS defaults"
-                desc="The transport security new requests in this collection start with."
+                title={mo.tls.title}
+                desc={mo.tls.desc}
               >
                 <TlsBlock
                   enabled={collection.default_tls}
@@ -169,11 +201,21 @@ export function CollectionOverview({ collection, onChanged, onSelectRequest, onC
                 />
               </COBlock>
 
+              <COBlock icon={<Link2 size={15} />} title={mo.links.title} desc={mo.links.desc}>
+                <LinksBlock
+                  rows={linkRows}
+                  onChange={(next) => {
+                    setLinkRows(next);
+                    persistLinks(next);
+                  }}
+                />
+              </COBlock>
+
               {total > 0 && (
                 <COBlock
                   icon={<Bookmark size={15} />}
-                  title="Requests"
-                  desc="Saved requests in this collection. Click any row to open it."
+                  title={mo.requests.title}
+                  desc={mo.requests.desc}
                 >
                   <div className="overflow-hidden rounded-md border border-border">
                     {hits.map((h) => (
@@ -199,7 +241,7 @@ export function CollectionOverview({ collection, onChanged, onSelectRequest, onC
                           )}
                           title={
                             h.request.last_used_at != null
-                              ? `Last used ${new Date(h.request.last_used_at).toLocaleString()}`
+                              ? mo.requests.lastUsed(new Date(h.request.last_used_at).toLocaleString())
                               : undefined
                           }
                         >
@@ -220,8 +262,8 @@ export function CollectionOverview({ collection, onChanged, onSelectRequest, onC
           {tab === "auth" && (
             <COBlock
               icon={<KeyRound size={15} />}
-              title="Authorization"
-              desc="A single auth config applied to this collection's requests (a request can override it)."
+              title={mo.auth.title}
+              desc={mo.auth.desc}
             >
               <SavedAuthEditor value={collection.auth} onChange={persistAuth} />
             </COBlock>
@@ -230,8 +272,8 @@ export function CollectionOverview({ collection, onChanged, onSelectRequest, onC
           {tab === "variables" && (
             <COBlock
               icon={<Braces size={15} />}
-              title="Variables"
-              desc="Collection-wide key/value pairs, reusable as {{name}} inside requests."
+              title={mo.variables.title}
+              desc={mo.variables.desc}
             >
               <VariablesBlock
                 rows={varRows}
