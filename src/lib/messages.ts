@@ -112,6 +112,7 @@ export const messages = {
         add: "Add link",
         remove: "Remove",
         removeAria: "Remove link",
+        reorderAria: "Reorder link",
         emptyTitle: "No links yet.",
         emptyHint: "Grafana, logs or docs for the service this collection talks to.",
         openAria: "Open link",
