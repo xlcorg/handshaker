@@ -28,6 +28,41 @@ function resolver(resolved: string, unresolved: string[] = [], cycle: string[] |
 
 beforeEach(() => vi.clearAllMocks());
 
+describe("LinksBlock — drag reorder", () => {
+  const three: LinkRow[] = [
+    { id: "a", name: "A", url: "https://a.example" },
+    { id: "b", name: "B", url: "https://b.example" },
+    { id: "c", name: "C", url: "https://c.example" },
+  ];
+
+  function rowOf(index: number): HTMLElement {
+    return screen.getAllByLabelText("link name")[index].parentElement as HTMLElement;
+  }
+
+  it("dragging a grip onto another row fires onChange with the full new order", () => {
+    const onChange = vi.fn();
+    r(<LinksBlock rows={three} onChange={onChange} resolveUrl={resolver("x")} resolveKey="k" />);
+
+    // jsdom getBoundingClientRect has zero height, so every dragOver resolves to zone "before".
+    fireEvent.dragStart(screen.getAllByLabelText("Reorder link")[2]); // drag c
+    fireEvent.dragOver(rowOf(0), { clientY: 5 }); // before a
+    fireEvent.drop(rowOf(0), { clientY: 5 });
+
+    expect(onChange).toHaveBeenCalledWith([three[2], three[0], three[1]]);
+  });
+
+  it("a no-op drop (same resulting order) does not fire onChange", () => {
+    const onChange = vi.fn();
+    r(<LinksBlock rows={three} onChange={onChange} resolveUrl={resolver("x")} resolveKey="k" />);
+
+    fireEvent.dragStart(screen.getAllByLabelText("Reorder link")[0]); // drag a
+    fireEvent.dragOver(rowOf(1), { clientY: 5 }); // before b ⇒ a stays where it is
+    fireEvent.drop(rowOf(1), { clientY: 5 });
+
+    expect(onChange).not.toHaveBeenCalled();
+  });
+});
+
 describe("LinksBlock — resolve + open", () => {
   it("opens the RESOLVED url via the opener seam", async () => {
     const resolve = resolver("https://grafana.example/d/abc");
