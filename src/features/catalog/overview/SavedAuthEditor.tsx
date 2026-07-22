@@ -13,6 +13,9 @@ import { EnvVarField } from "./EnvVarField";
 import { configToForm, formToConfig, type AuthForm } from "./authConfigMap";
 import { resolveOauthConfig } from "@/features/workflow/actions";
 import { useEnvRevision } from "@/features/envs/envRevision";
+import { messages } from "@/lib/messages";
+
+const m = messages.catalog.overview.auth;
 
 export interface SavedAuthEditorProps {
   value: SavedAuthConfigIpc;
@@ -26,10 +29,10 @@ export interface SavedAuthEditorProps {
 }
 
 const KIND_OPTIONS = [
-  { value: "none", label: "None" },
-  { value: "bearer", label: "Bearer" },
-  { value: "apikey", label: "API key" },
-  { value: "oauth2", label: "OAuth2" },
+  { value: "none", label: m.kinds.none },
+  { value: "bearer", label: m.kinds.bearer },
+  { value: "apikey", label: m.kinds.apikey },
+  { value: "oauth2", label: m.kinds.oauth2 },
 ];
 
 type TokenStatus =
@@ -86,7 +89,7 @@ export function SavedAuthEditor({ value, onChange, seedKey }: SavedAuthEditorPro
       const info = await ipc.authOauth2FetchToken(resolved.config);
       setToken({
         kind: "ok",
-        message: `expires in ${Math.round(info.expires_in_secs / 60)} min`,
+        message: m.tokenExpiry(Math.round(info.expires_in_secs / 60)),
         token: info.access_token,
       });
     } catch (e) {
@@ -97,9 +100,9 @@ export function SavedAuthEditor({ value, onChange, seedKey }: SavedAuthEditorPro
   const onCopyToken = async (token: string) => {
     try {
       await writeText(token);
-      toast.success("Token copied");
+      toast.success(m.tokenCopied);
     } catch (e) {
-      toast.error(`Couldn't copy token: ${msg(e)}`);
+      toast.error(m.copyTokenFailed(msg(e)));
     }
   };
 
@@ -110,15 +113,15 @@ export function SavedAuthEditor({ value, onChange, seedKey }: SavedAuthEditorPro
 
   const envScopeRow = form.kind !== "none" && (
     <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-      <span>Apply in environments:</span>
+      <span>{m.applyInEnvironments}</span>
       <Popover>
         <PopoverTrigger asChild>
           <Button variant="outline" size="sm" className="h-7 text-xs">
-            {form.environments.length === 0 ? "All environments" : form.environments.join(", ")}
+            {form.environments.length === 0 ? m.allEnvironments : form.environments.join(", ")}
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-56 p-1">
-          {envNames.length === 0 && <div className="px-2 py-1.5 text-xs text-muted-foreground">No environments</div>}
+          {envNames.length === 0 && <div className="px-2 py-1.5 text-xs text-muted-foreground">{m.noEnvironments}</div>}
           {envNames.map((name) => (
             <button
               key={name}
@@ -144,61 +147,59 @@ export function SavedAuthEditor({ value, onChange, seedKey }: SavedAuthEditorPro
       />
 
       {form.kind === "none" && (
-        <div className="py-1 text-xs text-muted-foreground">
-          No authentication is attached to this collection's requests.
-        </div>
+        <div className="py-1 text-xs text-muted-foreground">{m.none}</div>
       )}
 
       {form.kind === "bearer" && (
-        <EnvVarField label="Token" value={form.envVar} onChange={(v) => patch({ envVar: v })} placeholder="BEARER_TOKEN_VAR" />
+        <EnvVarField label={m.tokenLabel} value={form.envVar} onChange={(v) => patch({ envVar: v })} placeholder={m.tokenPlaceholder} />
       )}
 
       {form.kind === "apikey" && (
         <>
           <div className="grid gap-1.5">
-            <Label className="text-xs">Header name</Label>
+            <Label className="text-xs">{m.headerName}</Label>
             <Input value={form.headerName} onChange={(e) => patch({ headerName: e.target.value })} className="h-9 font-mono text-[12.5px]" />
           </div>
-          <EnvVarField label="Value" value={form.envVar} onChange={(v) => patch({ envVar: v })} placeholder="API_KEY_VAR" />
+          <EnvVarField label={m.valueLabel} value={form.envVar} onChange={(v) => patch({ envVar: v })} placeholder={m.valuePlaceholder} />
         </>
       )}
 
       {form.kind === "oauth2" && (
         <div className="grid gap-3">
           <div className="grid gap-1.5">
-            <Label className="text-xs">Token URL</Label>
-            <Input value={form.tokenUrl} onChange={(e) => patch({ tokenUrl: e.target.value })} placeholder="https://idp/realms/x/protocol/openid-connect/token" className="h-9 font-mono text-[12.5px]" />
+            <Label className="text-xs">{m.tokenUrl}</Label>
+            <Input value={form.tokenUrl} onChange={(e) => patch({ tokenUrl: e.target.value })} placeholder={m.tokenUrlPlaceholder} className="h-9 font-mono text-[12.5px]" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-1.5">
-              <Label className="text-xs">Client ID</Label>
+              <Label className="text-xs">{m.clientId}</Label>
               <Input value={form.clientId} onChange={(e) => patch({ clientId: e.target.value })} className="h-9 font-mono text-[12.5px]" />
             </div>
             <div className="grid gap-1.5">
-              <Label className="text-xs">Client secret</Label>
-              <Input value={form.clientSecret} onChange={(e) => patch({ clientSecret: e.target.value })} placeholder="{{secret}}" className="h-9 font-mono text-[12.5px]" />
+              <Label className="text-xs">{m.clientSecret}</Label>
+              <Input value={form.clientSecret} onChange={(e) => patch({ clientSecret: e.target.value })} placeholder={m.clientSecretPlaceholder} className="h-9 font-mono text-[12.5px]" />
             </div>
           </div>
           <div className="grid gap-1.5">
-            <Label className="text-xs">Scope</Label>
-            <Input value={form.scope} onChange={(e) => patch({ scope: e.target.value })} placeholder="scope-a scope-b" className="h-9 font-mono text-[12.5px]" />
+            <Label className="text-xs">{m.scope}</Label>
+            <Input value={form.scope} onChange={(e) => patch({ scope: e.target.value })} placeholder={m.scopePlaceholder} className="h-9 font-mono text-[12.5px]" />
           </div>
           <details className="text-xs text-muted-foreground">
-            <summary className="cursor-pointer select-none">Header &amp; prefix</summary>
+            <summary className="cursor-pointer select-none">{m.headerAndPrefix}</summary>
             <div className="mt-2 grid grid-cols-2 gap-3">
               <div className="grid gap-1.5">
-                <Label className="text-xs">Header name</Label>
+                <Label className="text-xs">{m.headerName}</Label>
                 <Input value={form.oauthHeaderName} onChange={(e) => patch({ oauthHeaderName: e.target.value })} className="h-9 font-mono text-[12.5px]" />
               </div>
               <div className="grid gap-1.5">
-                <Label className="text-xs">Prefix</Label>
+                <Label className="text-xs">{m.prefix}</Label>
                 <Input value={form.oauthPrefix} onChange={(e) => patch({ oauthPrefix: e.target.value })} className="h-9 font-mono text-[12.5px]" />
               </div>
             </div>
           </details>
           <div className="flex items-center gap-3">
             <Button variant="outline" size="sm" onClick={onGetToken} disabled={token.kind === "loading"}>
-              {token.kind === "loading" ? "Getting token…" : "Get token"}
+              {token.kind === "loading" ? m.gettingToken : m.getToken}
             </Button>
             {token.kind === "ok" && (
               <span className="flex min-w-0 items-center gap-1.5 text-[11px] text-ok">
@@ -206,7 +207,7 @@ export function SavedAuthEditor({ value, onChange, seedKey }: SavedAuthEditorPro
                 <Button
                   variant="ghost"
                   size="icon-xs"
-                  aria-label="Copy token"
+                  aria-label={m.copyToken}
                   className="text-muted-foreground hover:text-foreground"
                   onClick={() => void onCopyToken(token.token)}
                 >
@@ -225,8 +226,8 @@ export function SavedAuthEditor({ value, onChange, seedKey }: SavedAuthEditorPro
       <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
         <Key className="size-3 shrink-0" />
         <span>
-          OAuth2 fields accept <code>{"{{variables}}"}</code>; put the client secret in an
-          environment variable. Bearer / API key reference an OS env-var name.
+          {m.hintBefore} <code>{"{{variables}}"}</code>
+          {m.hintAfter}
         </span>
       </div>
     </div>

@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { SavedAuthEditor } from "./SavedAuthEditor";
 import type { SavedAuthConfigIpc } from "@/ipc/bindings";
+import { messages } from "@/lib/messages";
+
+const m = messages.catalog.overview.auth;
 
 vi.mock("@/ipc/client", () => ({
   ipc: {
@@ -43,13 +46,13 @@ describe("SavedAuthEditor", () => {
 
   it("shows the 'no auth' copy for a none config", async () => {
     await renderEditor(<SavedAuthEditor value={{ kind: "none" }} onChange={() => {}} />);
-    expect(screen.getByText(/No authentication/i)).toBeInTheDocument();
+    expect(screen.getByText(m.none)).toBeInTheDocument();
   });
 
   it("selecting Bearer emits an env_var config with authorization/'Bearer '", async () => {
     const onChange = vi.fn();
     await renderEditor(<SavedAuthEditor value={{ kind: "none" }} onChange={onChange} />);
-    fireEvent.click(screen.getByText("Bearer"));
+    fireEvent.click(screen.getByText(m.kinds.bearer));
     expect(onChange).toHaveBeenCalledWith({
       kind: "env_var", env_var: "", header_name: "authorization", prefix: "Bearer ",
       environments: [],
@@ -64,7 +67,7 @@ describe("SavedAuthEditor", () => {
         onChange={onChange}
       />,
     );
-    fireEvent.change(screen.getByPlaceholderText("BEARER_TOKEN_VAR"), { target: { value: "PROD_TOKEN" } });
+    fireEvent.change(screen.getByPlaceholderText(m.tokenPlaceholder), { target: { value: "PROD_TOKEN" } });
     expect(onChange).toHaveBeenCalledWith({
       kind: "env_var", env_var: "PROD_TOKEN", header_name: "authorization", prefix: "Bearer ",
       environments: [],
@@ -145,18 +148,18 @@ describe("SavedAuthEditor (oauth2)", () => {
 
   it("Get token resolves vars, calls the backend, and shows the lifetime", async () => {
     await renderEditor(<SavedAuthEditor value={oauth2} onChange={() => {}} />);
-    fireEvent.click(screen.getByRole("button", { name: /get token/i }));
+    fireEvent.click(screen.getByRole("button", { name: m.getToken }));
     await waitFor(() => expect(ipc.authOauth2FetchToken).toHaveBeenCalledTimes(1));
-    expect(await screen.findByText(/expires in 14 min/i)).toBeTruthy(); // 840s ≈ 14 min
+    expect(await screen.findByText(m.tokenExpiry(14))).toBeTruthy(); // 840s ≈ 14 min
   });
 
   it("Get token shows a truncated token and copies the full one to the clipboard", async () => {
     await renderEditor(<SavedAuthEditor value={oauth2} onChange={() => {}} />);
-    fireEvent.click(screen.getByRole("button", { name: /get token/i }));
+    fireEvent.click(screen.getByRole("button", { name: m.getToken }));
     // Truncated preview — never the full token in the DOM.
     expect(await screen.findByText(/eyJhbGciOiJSUzI1NiJ9…/)).toBeTruthy();
     expect(screen.queryByText("eyJhbGciOiJSUzI1NiJ9.payload.signature")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /copy token/i }));
+    fireEvent.click(screen.getByRole("button", { name: m.copyToken }));
     await waitFor(() =>
       expect(writeText).toHaveBeenCalledWith("eyJhbGciOiJSUzI1NiJ9.payload.signature"),
     );
