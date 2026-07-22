@@ -225,7 +225,10 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
     hooks,
     sandbox: docker(),
     name: "merger",
-    maxIterations: 1,
+    // Merging N branches + full gate (pnpm lint/test, cargo test) + closing
+    // issues doesn't fit in one iteration; the agent stops early via
+    // <promise>COMPLETE</promise> anyway.
+    maxIterations: 15,
     agent: sandcastle.claudeCode("claude-sonnet-5"),
     promptFile: "./.sandcastle/merge-prompt.md",
     promptArgs: {
