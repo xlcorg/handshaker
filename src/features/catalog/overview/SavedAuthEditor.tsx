@@ -28,6 +28,9 @@ export interface SavedAuthEditorProps {
   seedKey?: string;
 }
 
+/** Styling for a gating-list name whose environment no longer exists (see `deadEnvNames`). */
+const DEAD_ENV_CLASS = "line-through text-muted-foreground";
+
 const KIND_OPTIONS = [
   { value: "none", label: m.kinds.none },
   { value: "bearer", label: m.kinds.bearer },
@@ -131,7 +134,7 @@ export function SavedAuthEditor({ value, onChange, seedKey }: SavedAuthEditorPro
                   const dead = deadEnvNames.includes(name);
                   return (
                     <span key={name}>
-                      <span className={dead ? "line-through text-muted-foreground" : undefined} title={dead ? m.envDeletedTitle : undefined}>
+                      <span className={dead ? DEAD_ENV_CLASS : undefined} title={dead ? m.envDeletedTitle : undefined}>
                         {name}
                       </span>
                       {i < form.environments.length - 1 ? "," : ""}
@@ -155,7 +158,7 @@ export function SavedAuthEditor({ value, onChange, seedKey }: SavedAuthEditorPro
                 className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-accent"
               >
                 <span className="w-3">{form.environments.includes(name) ? "✓" : ""}</span>
-                <span className={dead ? "line-through text-muted-foreground" : undefined}>{name}</span>
+                <span className={dead ? DEAD_ENV_CLASS : undefined}>{name}</span>
                 {dead && <span className="ml-auto text-[10px] uppercase tracking-wide text-muted-foreground/70">{m.envDeletedHint}</span>}
               </button>
             );
