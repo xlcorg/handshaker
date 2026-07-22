@@ -1,4 +1,5 @@
 import { Input } from "@/components/ui/input";
+import { messages } from "@/lib/messages";
 
 interface EnvVarFieldProps {
   label: string;
@@ -11,7 +12,7 @@ export function EnvVarField({
   label,
   value,
   onChange,
-  placeholder = "ENV_VAR_NAME",
+  placeholder = messages.catalog.overview.auth.envVarNamePlaceholder,
 }: EnvVarFieldProps) {
   return (
     <label className="flex flex-col gap-1.5 min-w-0">

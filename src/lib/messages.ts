@@ -95,6 +95,45 @@ export const messages = {
       auth: {
         title: "Authorization",
         desc: "A single auth config applied to this collection's requests (a request can override it).",
+        /** Auth-kind toggle options. */
+        kinds: {
+          none: "None",
+          bearer: "Bearer",
+          apikey: "API key",
+          oauth2: "OAuth2",
+        },
+        /** Empty-state copy for the `none` kind. */
+        none: "No authentication is attached to this collection's requests.",
+        tokenLabel: "Token",
+        tokenPlaceholder: "BEARER_TOKEN_VAR",
+        headerName: "Header name",
+        valueLabel: "Value",
+        valuePlaceholder: "API_KEY_VAR",
+        tokenUrl: "Token URL",
+        tokenUrlPlaceholder: "https://idp/realms/x/protocol/openid-connect/token",
+        clientId: "Client ID",
+        clientSecret: "Client secret",
+        clientSecretPlaceholder: "{{secret}}",
+        scope: "Scope",
+        scopePlaceholder: "scope-a scope-b",
+        headerAndPrefix: "Header & prefix",
+        prefix: "Prefix",
+        getToken: "Get token",
+        gettingToken: "Getting token…",
+        /** Token lifetime shown next to a fetched token. */
+        tokenExpiry: (minutes: number) => `expires in ${minutes} min`,
+        copyToken: "Copy token",
+        tokenCopied: "Token copied",
+        copyTokenFailed: (reason: string) => `Couldn't copy token: ${reason}`,
+        applyInEnvironments: "Apply in environments:",
+        allEnvironments: "All environments",
+        noEnvironments: "No environments",
+        /** Default placeholder for the shared env-var field subcomponent. */
+        envVarNamePlaceholder: "ENV_VAR_NAME",
+        /** Footer hint; the `{{variables}}` sample stays a <code> element in the component. */
+        hintBefore: "OAuth2 fields accept",
+        hintAfter:
+          "; put the client secret in an environment variable. Bearer / API key reference an OS env-var name.",
       },
       variables: {
         title: "Variables",
