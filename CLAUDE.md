@@ -6,14 +6,17 @@ Workspace: `crates/handshaker-core` (OS-independent core) · `src-tauri` (IPC) �
 
 ## Active work
 
-Active: none — backlog empty (all links v3 tickets closed).
+Active: none — backlog empty (all auth-tab-cleanup tickets closed).
 
-Latest merged: **collection links v3** (spec #27, issues #24/#25/#26, closed) —
-scheme-less URLs open via an https-defaulted **effective URL** at the frontend link
-classifier (`linkTarget.ts`), drag-reorder of link rows in the edit dialog (user-defined
-order everywhere), and hyperlink-style chips (accent text, hover underline, no icon/border;
-broken=red, pending=muted). Spec archived at
-`docs/superpowers/specs/archive/2026-07-22-links-v3-design.md`. Details: `git log main`.
+Latest merged: **collection Authorization tab cleanup** (spec #28, issues
+#29/#30/#31/#32/#33, closed) — Header name is a placeholder field (default seeds empty,
+persists back to the kind default), the API-key section shows an editable Prefix, dead
+environment names in "Apply in environments" are struck-through and uncheckable, the
+OAuth2 fields (Token URL / Client ID / Client secret / Scope) use `VarHighlightInput`
+with env+collection candidates, and every editor string lives in `messages`. No storage
+or Send-spine change. Spec archived at
+`docs/superpowers/specs/archive/2026-07-22-auth-tab-cleanup-design.md`. Details:
+`git log main`.
 
 Integration branch is `main`; features run in isolated worktree branches (`claude/*`)
 and land fast-forward. Before merging, squash the branch into clean, cohesive history —
