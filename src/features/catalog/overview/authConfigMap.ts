@@ -21,17 +21,20 @@ export interface AuthForm {
 
 export const OAUTH_DEFAULT_HEADER = "authorization";
 export const OAUTH_DEFAULT_PREFIX = "Bearer ";
+export const APIKEY_DEFAULT_HEADER = "x-api-key";
 
 export const AUTH_FORM_DEFAULTS: AuthForm = {
   kind: "none",
   envVar: "",
-  headerName: "x-api-key",
+  // Header name fields seed empty so the kind default shows as a placeholder; empty
+  // normalizes back to the default only at persist (formToConfig).
+  headerName: "",
   prefix: "",
   tokenUrl: "",
   clientId: "",
   clientSecret: "",
   scope: "",
-  oauthHeaderName: OAUTH_DEFAULT_HEADER,
+  oauthHeaderName: "",
   oauthPrefix: OAUTH_DEFAULT_PREFIX,
   environments: [],
 };
@@ -50,7 +53,9 @@ export function configToForm(config: SavedAuthConfigIpc): AuthForm {
         ...AUTH_FORM_DEFAULTS,
         kind: isBearer ? "bearer" : "apikey",
         envVar: config.env_var,
-        headerName: config.header_name,
+        // A header equal to the kind default seeds empty (placeholder shows); a custom
+        // header is preserved verbatim. Prefix is never placeholder-mapped.
+        headerName: config.header_name === APIKEY_DEFAULT_HEADER ? "" : config.header_name,
         prefix: config.prefix,
         environments: config.environments ?? [],
       };
@@ -63,7 +68,8 @@ export function configToForm(config: SavedAuthConfigIpc): AuthForm {
         clientId: config.client_id,
         clientSecret: config.client_secret,
         scope: config.scopes.join(" "),
-        oauthHeaderName: config.header_name ?? OAUTH_DEFAULT_HEADER,
+        // Header equal to the OAuth2 default seeds empty (placeholder shows); custom preserved.
+        oauthHeaderName: !config.header_name || config.header_name === OAUTH_DEFAULT_HEADER ? "" : config.header_name,
         oauthPrefix: config.prefix ?? OAUTH_DEFAULT_PREFIX,
         environments: config.environments ?? [],
       };

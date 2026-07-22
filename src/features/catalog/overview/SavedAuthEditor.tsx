@@ -156,9 +156,15 @@ export function SavedAuthEditor({ value, onChange, seedKey }: SavedAuthEditorPro
 
       {form.kind === "apikey" && (
         <>
-          <div className="grid gap-1.5">
-            <Label className="text-xs">{m.headerName}</Label>
-            <Input value={form.headerName} onChange={(e) => patch({ headerName: e.target.value })} className="h-9 font-mono text-[12.5px]" />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-1.5">
+              <Label className="text-xs">{m.headerName}</Label>
+              <Input value={form.headerName} onChange={(e) => patch({ headerName: e.target.value })} placeholder={m.headerNamePlaceholderApiKey} className="h-9 font-mono text-[12.5px]" />
+            </div>
+            <div className="grid gap-1.5">
+              <Label className="text-xs">{m.prefix}</Label>
+              <Input value={form.prefix} onChange={(e) => patch({ prefix: e.target.value })} placeholder={m.prefixPlaceholder} className="h-9 font-mono text-[12.5px]" />
+            </div>
           </div>
           <EnvVarField label={m.valueLabel} value={form.envVar} onChange={(v) => patch({ envVar: v })} placeholder={m.valuePlaceholder} />
         </>
@@ -189,7 +195,7 @@ export function SavedAuthEditor({ value, onChange, seedKey }: SavedAuthEditorPro
             <div className="mt-2 grid grid-cols-2 gap-3">
               <div className="grid gap-1.5">
                 <Label className="text-xs">{m.headerName}</Label>
-                <Input value={form.oauthHeaderName} onChange={(e) => patch({ oauthHeaderName: e.target.value })} className="h-9 font-mono text-[12.5px]" />
+                <Input value={form.oauthHeaderName} onChange={(e) => patch({ oauthHeaderName: e.target.value })} placeholder={m.headerNamePlaceholderOauth} className="h-9 font-mono text-[12.5px]" />
               </div>
               <div className="grid gap-1.5">
                 <Label className="text-xs">{m.prefix}</Label>

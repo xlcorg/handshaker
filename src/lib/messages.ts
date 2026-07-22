@@ -107,6 +107,10 @@ export const messages = {
         tokenLabel: "Token",
         tokenPlaceholder: "BEARER_TOKEN_VAR",
         headerName: "Header name",
+        /** Grey placeholder = the kind default (shown when the field is left empty). */
+        headerNamePlaceholderApiKey: "x-api-key",
+        headerNamePlaceholderOauth: "authorization",
+        prefixPlaceholder: "Bearer ",
         valueLabel: "Value",
         valuePlaceholder: "API_KEY_VAR",
         tokenUrl: "Token URL",

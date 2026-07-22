@@ -74,15 +74,31 @@ describe("SavedAuthEditor", () => {
     });
   });
 
-  it("renders header + value for an api-key config", async () => {
+  it("renders header + value for an api-key config; the default header shows as a placeholder", async () => {
     await renderEditor(
       <SavedAuthEditor
         value={{ kind: "env_var", env_var: "KEY", header_name: "x-api-key", prefix: "", environments: [] }}
         onChange={() => {}}
       />,
     );
-    expect(screen.getByDisplayValue("x-api-key")).toBeInTheDocument();
+    // The kind-default header seeds an empty field showing the placeholder, not a value.
+    const header = screen.getByPlaceholderText(m.headerNamePlaceholderApiKey);
+    expect(header).toHaveValue("");
     expect(screen.getByDisplayValue("KEY")).toBeInTheDocument();
+  });
+
+  it("shows an editable Prefix field for an api-key config and persists it", async () => {
+    const onChange = vi.fn();
+    await renderEditor(
+      <SavedAuthEditor
+        value={{ kind: "env_var", env_var: "KEY", header_name: "x-custom", prefix: "Token", environments: [] }}
+        onChange={onChange}
+      />,
+    );
+    const prefix = screen.getByDisplayValue("Token");
+    fireEvent.change(prefix, { target: { value: "Api" } });
+    const last = onChange.mock.calls.at(-1)![0] as SavedAuthConfigIpc;
+    expect(last.kind === "env_var" && last.prefix).toBe("Api");
   });
 
   it("clearing Header name leaves the field empty on screen while the emitted config keeps the default", async () => {
@@ -109,7 +125,8 @@ describe("SavedAuthEditor", () => {
     const { rerender } = await renderEditor(
       <SavedAuthEditor value={value} onChange={onChange} seedKey="col-1" />,
     );
-    fireEvent.change(screen.getByDisplayValue("x-api-key"), { target: { value: "my-header" } });
+    // The default header seeds empty (placeholder); type a custom value into it.
+    fireEvent.change(screen.getByPlaceholderText(m.headerNamePlaceholderApiKey), { target: { value: "my-header" } });
     // Same collection re-renders with the stale (pre-edit) value — the buffer must win.
     rerender(<SavedAuthEditor value={value} onChange={onChange} seedKey="col-1" />);
     await act(async () => {});
