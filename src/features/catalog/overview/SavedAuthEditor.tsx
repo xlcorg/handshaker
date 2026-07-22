@@ -111,28 +111,55 @@ export function SavedAuthEditor({ value, onChange, seedKey }: SavedAuthEditorPro
     patch({ environments: has ? form.environments.filter((n) => n !== name) : [...form.environments, name] });
   };
 
+  // Names kept in the gating list but no longer existing (env deleted or renamed). Marked
+  // in the popover and the summary button; still gate-inert (they simply never match).
+  const deadEnvNames = form.environments.filter((n) => !envNames.includes(n));
+  // Popover rows = every live env, plus any dead selected names so they stay uncheckable.
+  const popoverNames = [...envNames, ...deadEnvNames];
+
   const envScopeRow = form.kind !== "none" && (
     <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
       <span>{m.applyInEnvironments}</span>
       <Popover>
         <PopoverTrigger asChild>
           <Button variant="outline" size="sm" className="h-7 text-xs">
-            {form.environments.length === 0 ? m.allEnvironments : form.environments.join(", ")}
+            {form.environments.length === 0 ? (
+              m.allEnvironments
+            ) : (
+              <span className="flex flex-wrap gap-x-1">
+                {form.environments.map((name, i) => {
+                  const dead = deadEnvNames.includes(name);
+                  return (
+                    <span key={name}>
+                      <span className={dead ? "line-through text-muted-foreground" : undefined} title={dead ? m.envDeletedTitle : undefined}>
+                        {name}
+                      </span>
+                      {i < form.environments.length - 1 ? "," : ""}
+                    </span>
+                  );
+                })}
+              </span>
+            )}
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-56 p-1">
-          {envNames.length === 0 && <div className="px-2 py-1.5 text-xs text-muted-foreground">{m.noEnvironments}</div>}
-          {envNames.map((name) => (
-            <button
-              key={name}
-              type="button"
-              onClick={() => toggleEnv(name)}
-              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-accent"
-            >
-              <span className="w-3">{form.environments.includes(name) ? "✓" : ""}</span>
-              <span>{name}</span>
-            </button>
-          ))}
+          {popoverNames.length === 0 && <div className="px-2 py-1.5 text-xs text-muted-foreground">{m.noEnvironments}</div>}
+          {popoverNames.map((name) => {
+            const dead = deadEnvNames.includes(name);
+            return (
+              <button
+                key={name}
+                type="button"
+                onClick={() => toggleEnv(name)}
+                title={dead ? m.envDeletedTitle : undefined}
+                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-accent"
+              >
+                <span className="w-3">{form.environments.includes(name) ? "✓" : ""}</span>
+                <span className={dead ? "line-through text-muted-foreground" : undefined}>{name}</span>
+                {dead && <span className="ml-auto text-[10px] uppercase tracking-wide text-muted-foreground/70">{m.envDeletedHint}</span>}
+              </button>
+            );
+          })}
         </PopoverContent>
       </Popover>
     </div>

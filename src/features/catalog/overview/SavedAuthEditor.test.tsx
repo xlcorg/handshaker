@@ -154,6 +154,46 @@ describe("SavedAuthEditor", () => {
   });
 });
 
+describe("SavedAuthEditor (dead env names in Apply in environments)", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const withEnvs = (environments: string[]): SavedAuthConfigIpc => ({
+    kind: "env_var",
+    env_var: "KEY",
+    header_name: "x-api-key",
+    prefix: "",
+    environments,
+  });
+
+  it("marks a dead env name struck-through in the summary button; live names unchanged", async () => {
+    // envList mock returns only "prod"; "staging" is dead.
+    await renderEditor(<SavedAuthEditor value={withEnvs(["prod", "staging"])} onChange={() => {}} />);
+    const staging = screen.getByTitle(m.envDeletedTitle);
+    expect(staging).toHaveTextContent("staging");
+    expect(staging.className).toContain("line-through");
+    // The live name has no deleted title.
+    expect(screen.getByText("prod").getAttribute("title")).toBeNull();
+  });
+
+  it("shows the dead name (marked) inside the popover so it can be unchecked", async () => {
+    await renderEditor(<SavedAuthEditor value={withEnvs(["prod", "staging"])} onChange={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: /prod|staging/ }));
+    // The deleted hint copy appears for the dead row.
+    expect(screen.getByText(m.envDeletedHint)).toBeInTheDocument();
+  });
+
+  it("unchecking a dead name removes it from the persisted gating list", async () => {
+    const onChange = vi.fn();
+    await renderEditor(<SavedAuthEditor value={withEnvs(["prod", "staging"])} onChange={onChange} />);
+    fireEvent.click(screen.getByRole("button", { name: /prod|staging/ }));
+    // Click the dead row inside the popover.
+    const deadRow = screen.getByText(m.envDeletedHint).closest("button")!;
+    fireEvent.click(deadRow);
+    const last = onChange.mock.calls.at(-1)![0] as SavedAuthConfigIpc;
+    expect(last.kind === "env_var" && last.environments).toEqual(["prod"]);
+  });
+});
+
 describe("SavedAuthEditor (oauth2)", () => {
   beforeEach(() => vi.clearAllMocks());
 

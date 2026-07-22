@@ -132,6 +132,10 @@ export const messages = {
         applyInEnvironments: "Apply in environments:",
         allEnvironments: "All environments",
         noEnvironments: "No environments",
+        /** Hint marking an environment name in the gating list that no longer exists (deleted/renamed). */
+        envDeletedHint: "deleted",
+        /** Native title on a dead env name; explains the strike-through and how to clean it. */
+        envDeletedTitle: "This environment no longer exists — uncheck to remove it from the list.",
         /** Default placeholder for the shared env-var field subcomponent. */
         envVarNamePlaceholder: "ENV_VAR_NAME",
         /** Footer hint; the `{{variables}}` sample stays a <code> element in the component. */
