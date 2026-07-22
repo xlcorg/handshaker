@@ -40,6 +40,28 @@ describe("QuickLinksStrip — chips", () => {
     expect(ipc.openExternal).toHaveBeenCalledWith("https://grafana.example/d/abc");
   });
 
+  it("a ready chip reads as a hyperlink: no icon, hover-underline, pointer cursor", async () => {
+    const resolve = resolver("https://grafana.example/d/abc");
+    r(<QuickLinksStrip rows={rows} onChange={vi.fn()} resolveUrl={resolve} resolveKey="k" />);
+    const chip = screen.getByText("Grafana").closest("button") as HTMLButtonElement;
+    await waitFor(() => expect(chip).toHaveAttribute("aria-disabled", "false"));
+    // No external-link icon and no chip border on the hyperlink look.
+    expect(chip.querySelector("svg")).toBeNull();
+    expect(chip.className).not.toContain("border");
+    expect(chip.className).toContain("hover:underline");
+    expect(chip.className).toContain("cursor-pointer");
+  });
+
+  it("a broken chip is red and inert with no underline", async () => {
+    const resolve = resolver("https://{{host}}/d/abc", ["host"]);
+    r(<QuickLinksStrip rows={rows} onChange={vi.fn()} resolveUrl={resolve} resolveKey="k" />);
+    const chip = screen.getByText("Grafana").closest("button") as HTMLButtonElement;
+    await waitFor(() => expect(chip.getAttribute("title")).toContain("host"));
+    expect(chip.className).toContain("vh-error-text");
+    expect(chip.className).not.toContain("hover:underline");
+    expect(chip.querySelector("svg")).toBeNull();
+  });
+
   it("a broken chip is inert and its title names the missing vars", async () => {
     const resolve = resolver("https://{{host}}/d/abc", ["host"]);
     r(<QuickLinksStrip rows={rows} onChange={vi.fn()} resolveUrl={resolve} resolveKey="k" />);

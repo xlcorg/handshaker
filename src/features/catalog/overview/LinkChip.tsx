@@ -1,13 +1,15 @@
-import { ExternalLink, Pencil, Plus } from "lucide-react";
+import { Pencil, Plus } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { messages } from "@/lib/messages";
 import { type LinkResolve, type LinkRow, linkLabel, openLink, useLinkTarget } from "./linkTarget";
 
 const m = messages.catalog.overview.links;
 
-/** One read-only link chip, shared by the strip and the header variant. Reuses the shared
- *  classification so both mark identically: `ready` clickable (title = resolved URL),
- *  `broken` error-toned and inert (title = missing vars / cycle), `pending` muted and inert. */
+/** One read-only link chip, shared by the strip, header, and overflow-menu variants.
+ *  Rendered as plain hyperlink-styled text — no icon, no border — so it reads as a link.
+ *  Reuses the shared classification so all mark identically: `ready` accent-colored,
+ *  underline-on-hover, pointer cursor (title = resolved URL); `broken` red, inert, no
+ *  underline (title = missing vars / cycle); `pending` muted and inert. */
 export function LinkChip({ row, resolveUrl, resolveKey }: { row: LinkRow } & LinkResolve) {
   const target = useLinkTarget(row.url, resolveUrl, resolveKey);
   const label = linkLabel(row.name, row.url);
@@ -21,14 +23,12 @@ export function LinkChip({ row, resolveUrl, resolveKey }: { row: LinkRow } & Lin
       aria-disabled={target.kind !== "ready"}
       title={target.title}
       className={cn(
-        "inline-flex h-6 max-w-[180px] items-center gap-1.5 rounded-md border px-2 text-[12px] transition-colors",
-        target.kind === "ready" &&
-          "border-border/70 text-foreground/80 hover:bg-accent hover:text-foreground",
-        target.kind === "broken" && "cursor-default border-destructive/40 vh-error-text",
-        target.kind === "pending" && "cursor-default border-border/50 text-muted-foreground/40",
+        "inline-flex h-6 max-w-[180px] items-center text-[12px] underline-offset-4 transition-colors",
+        target.kind === "ready" && "cursor-pointer text-primary hover:underline",
+        target.kind === "broken" && "cursor-default vh-error-text",
+        target.kind === "pending" && "cursor-default text-muted-foreground/40",
       )}
     >
-      <ExternalLink size={11} className="flex-none" />
       <span className="truncate">{label}</span>
     </button>
   );
