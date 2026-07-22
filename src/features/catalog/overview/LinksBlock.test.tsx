@@ -106,6 +106,35 @@ describe("LinksBlock — resolve + open", () => {
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith("Could not open grafana://board"));
   });
 
+  it("opens a scheme-less url with https:// prepended", () => {
+    r(
+      <LinksBlock
+        rows={[{ id: "l1", name: "Grafana", url: "grafana.corp/d/abc" }]}
+        onChange={vi.fn()}
+        resolveUrl={resolver("unused")}
+        resolveKey="k"
+      />,
+    );
+    fireEvent.click(screen.getByLabelText("Open link"));
+    expect(ipc.openExternal).toHaveBeenCalledWith("https://grafana.corp/d/abc");
+  });
+
+  it("marks an empty-URL row broken and inert (still shown in the dialog)", () => {
+    r(
+      <LinksBlock
+        rows={[{ id: "l1", name: "Grafana", url: "   " }]}
+        onChange={vi.fn()}
+        resolveUrl={resolver("unused")}
+        resolveKey="k"
+      />,
+    );
+    const open = screen.getByLabelText("Open link");
+    expect(open).toHaveAttribute("aria-disabled", "true");
+    expect(open).toHaveAttribute("title", "No URL set");
+    fireEvent.click(open);
+    expect(ipc.openExternal).not.toHaveBeenCalled();
+  });
+
   it("blocks the click while a templated url has not resolved yet", () => {
     const resolve = vi.fn(() => new Promise<never>(() => {}));
     r(<LinksBlock rows={rows} onChange={vi.fn()} resolveUrl={resolve} resolveKey="k" />);

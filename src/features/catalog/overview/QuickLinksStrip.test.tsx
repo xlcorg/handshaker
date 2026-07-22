@@ -71,6 +71,79 @@ describe("QuickLinksStrip — chips", () => {
     expect(screen.getByText("logs.example")).toBeInTheDocument();
   });
 
+  it("opens a scheme-less chip with https:// prepended", async () => {
+    const resolve = resolver("unused");
+    r(
+      <QuickLinksStrip
+        rows={[{ id: "l1", name: "Grafana", url: "grafana.corp/d/abc" }]}
+        onChange={vi.fn()}
+        resolveUrl={resolve}
+        resolveKey="k"
+      />,
+    );
+    const chip = screen.getByText("Grafana").closest("button") as HTMLButtonElement;
+    expect(chip).toHaveAttribute("title", "Open https://grafana.corp/d/abc");
+    fireEvent.click(chip);
+    expect(ipc.openExternal).toHaveBeenCalledWith("https://grafana.corp/d/abc");
+  });
+
+  it("opens a template that resolves scheme-less with https:// prepended", async () => {
+    const resolve = resolver("grafana.corp/dash");
+    r(
+      <QuickLinksStrip
+        rows={[{ id: "l1", name: "Grafana", url: "{{host}}/dash" }]}
+        onChange={vi.fn()}
+        resolveUrl={resolve}
+        resolveKey="k"
+      />,
+    );
+    const chip = screen.getByText("Grafana").closest("button") as HTMLButtonElement;
+    await waitFor(() => expect(chip).toHaveAttribute("aria-disabled", "false"));
+    fireEvent.click(chip);
+    expect(ipc.openExternal).toHaveBeenCalledWith("https://grafana.corp/dash");
+  });
+
+  it("labels a nameless scheme-less link by the effective host", () => {
+    r(
+      <QuickLinksStrip
+        rows={[{ id: "l1", name: "", url: "grafana.corp/d/abc" }]}
+        onChange={vi.fn()}
+        resolveUrl={resolver("unused")}
+        resolveKey="k"
+      />,
+    );
+    expect(screen.getByText("grafana.corp")).toBeInTheDocument();
+  });
+
+  it("does not render a chip for an empty-URL link", () => {
+    r(
+      <QuickLinksStrip
+        rows={[
+          { id: "l1", name: "Grafana", url: "https://grafana.corp" },
+          { id: "l2", name: "Blank", url: "  " },
+        ]}
+        onChange={vi.fn()}
+        resolveUrl={resolver("unused")}
+        resolveKey="k"
+      />,
+    );
+    expect(screen.getByText("Grafana")).toBeInTheDocument();
+    expect(screen.queryByText("Blank")).toBeNull();
+  });
+
+  it("shows the ghost chip when every stored link has an empty URL", () => {
+    r(
+      <QuickLinksStrip
+        rows={[{ id: "l1", name: "Grafana", url: "  " }]}
+        onChange={vi.fn()}
+        resolveUrl={resolver("unused")}
+        resolveKey="k"
+      />,
+    );
+    expect(screen.getByText("Add link")).toBeInTheDocument();
+    expect(screen.queryByText("Grafana")).toBeNull();
+  });
+
   it("shows a single ghost 'Add link' chip when there are no links", () => {
     r(<QuickLinksStrip rows={[]} onChange={vi.fn()} resolveUrl={resolver("x")} resolveKey="k" />);
     expect(screen.getByText("Add link")).toBeInTheDocument();

@@ -120,6 +120,7 @@ export const messages = {
         resolving: "Resolving…",
         unresolved: (vars: string[]) => `Unresolved: ${vars.join(", ")}`,
         cycle: (chain: string[]) => `Cycle: ${chain.join(" → ")}`,
+        emptyUrl: "No URL set",
         editAria: "Edit links",
         dialogTitle: "Links",
         dialogDesc: "External tooling for this collection — dashboards, logs, docs.",

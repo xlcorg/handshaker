@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { LinkChip, EditPencil, GhostChip } from "./LinkChip";
-import { type LinkResolve, type LinkRow } from "./linkTarget";
+import { type LinkResolve, type LinkRow, renderableLinks } from "./linkTarget";
 import { LinksEditDialog } from "./LinksEditDialog";
 import type { VarCandidate } from "@/features/vars/candidates";
 
@@ -16,14 +16,15 @@ export interface QuickLinksStripProps extends LinkResolve {
  *  (and the empty-state ghost chip), which opens the shared edit dialog. */
 export function QuickLinksStrip({ rows, onChange, resolveUrl, resolveKey, variables }: QuickLinksStripProps) {
   const [editing, setEditing] = useState(false);
+  const chips = renderableLinks(rows);
 
   return (
     <div className="flex-none flex items-center gap-1.5 border-b border-border/70 bg-card/20 px-4 py-1.5">
-      {rows.length === 0 ? (
+      {chips.length === 0 ? (
         <GhostChip onClick={() => setEditing(true)} />
       ) : (
         <>
-          {rows.map((row) => (
+          {chips.map((row) => (
             <LinkChip key={row.id} row={row} resolveUrl={resolveUrl} resolveKey={resolveKey} />
           ))}
           <EditPencil onClick={() => setEditing(true)} />

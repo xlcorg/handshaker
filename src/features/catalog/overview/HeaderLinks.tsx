@@ -8,7 +8,7 @@ import {
 import { messages } from "@/lib/messages";
 import { LinkChip, EditPencil, GhostChip } from "./LinkChip";
 import { LinksEditDialog } from "./LinksEditDialog";
-import type { LinkResolve, LinkRow } from "./linkTarget";
+import { type LinkResolve, type LinkRow, renderableLinks } from "./linkTarget";
 import type { VarCandidate } from "@/features/vars/candidates";
 
 const m = messages.catalog.overview.links;
@@ -31,12 +31,13 @@ export interface HeaderLinksProps extends LinkResolve {
 export function HeaderLinks({ rows, onChange, resolveUrl, resolveKey, variables }: HeaderLinksProps) {
   const [editing, setEditing] = useState(false);
 
-  const visible = rows.slice(0, HEADER_MAX_CHIPS);
-  const overflow = rows.slice(HEADER_MAX_CHIPS);
+  const chips = renderableLinks(rows);
+  const visible = chips.slice(0, HEADER_MAX_CHIPS);
+  const overflow = chips.slice(HEADER_MAX_CHIPS);
 
   return (
     <div className="flex min-w-0 items-center gap-1.5">
-      {rows.length === 0 ? (
+      {chips.length === 0 ? (
         <GhostChip onClick={() => setEditing(true)} />
       ) : (
         <>
