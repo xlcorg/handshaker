@@ -1,7 +1,8 @@
 # Collection links v3 — reliable open, user-defined order, hyperlink look
 
-> **Status: ACTIVE** · Spec issue: [#27](https://github.com/xlcorg/handshaker/issues/27)
-> · Tickets: #24 (open fix), #25 (reorder), #26 (hyperlink look)
+> **Status: 🎉 DONE** · Spec issue: [#27](https://github.com/xlcorg/handshaker/issues/27)
+> · Tickets: #24 (open fix), #25 (reorder), #26 (hyperlink look) — all merged to `main`
+> (`linkTarget.ts` effective-URL classifier, drag-reorder rows, hyperlink-style chips)
 > · Decisions from the 2026-07-22 grilling session. Glossary updated
 > (`crates/handshaker-core/CONTEXT.md` — Collection link: effective URL,
 > empty-link visibility, user-defined order).

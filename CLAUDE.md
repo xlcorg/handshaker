@@ -6,14 +6,14 @@ Workspace: `crates/handshaker-core` (OS-independent core) · `src-tauri` (IPC) �
 
 ## Active work
 
-Active: none — backlog empty (all issues through #23 closed).
+Active: none — backlog empty (all links v3 tickets closed).
 
-Latest merged: **collection links v2 + auth-editor edit buffer** (specs #18/#20,
-issues #19/#21/#22/#23, closed) — view-first quick-links strip with edit dialog,
-strip/header placement setting (persisted via `ui_state`), `VarHighlightInput` URL
-field, and a local edit buffer keeping cleared Header name / Prefix edits from being
-clobbered by persist→reload. Produced by the sandcastle sequential-reviewer loop,
-squashed + gated on merge. Details: `git log main`.
+Latest merged: **collection links v3** (spec #27, issues #24/#25/#26, closed) —
+scheme-less URLs open via an https-defaulted **effective URL** at the frontend link
+classifier (`linkTarget.ts`), drag-reorder of link rows in the edit dialog (user-defined
+order everywhere), and hyperlink-style chips (accent text, hover underline, no icon/border;
+broken=red, pending=muted). Spec archived at
+`docs/superpowers/specs/archive/2026-07-22-links-v3-design.md`. Details: `git log main`.
 
 Integration branch is `main`; features run in isolated worktree branches (`claude/*`)
 and land fast-forward. Before merging, squash the branch into clean, cohesive history —
