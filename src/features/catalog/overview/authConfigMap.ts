@@ -93,7 +93,7 @@ export function formToConfig(form: AuthForm): SavedAuthConfigIpc {
       return {
         kind: "env_var",
         env_var: form.envVar.trim(),
-        header_name: form.headerName.trim() || "x-api-key",
+        header_name: form.headerName.trim() || APIKEY_DEFAULT_HEADER,
         prefix: form.prefix,
         environments: form.environments,
       };
