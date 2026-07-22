@@ -83,6 +83,29 @@ export function SavedAuthEditor({ value, onChange, seedKey, resolver, resolveKey
     onChange(formToConfig(nextForm));
   };
 
+  // The OAuth2 fields all share the same var-highlight wiring (resolver context, `{{`-
+  // autocomplete candidates, and value-field framing). Bind it once so the four call
+  // sites can't drift. A plain function (not a component) keeps the <input> reconciled
+  // by position, so editing one field never remounts and drops focus.
+  const oauthField = (opts: {
+    value: string;
+    onChange: (v: string) => void;
+    ariaLabel: string;
+    placeholder?: string;
+  }) => (
+    <VarHighlightInput
+      value={opts.value}
+      onChange={opts.onChange}
+      ariaLabel={opts.ariaLabel}
+      placeholder={opts.placeholder}
+      resolver={resolver}
+      resolveKey={resolveKey}
+      variables={variables}
+      metrics={VAR_FIELD_METRICS}
+      className={VAR_FIELD_FRAME}
+    />
+  );
+
   const [envNames, setEnvNames] = useState<string[]>([]);
   // Re-fetch when env contents change (e.g. an import adds environments) so the
   // "Apply in environments" list stays fresh while the editor is open.
@@ -220,60 +243,40 @@ export function SavedAuthEditor({ value, onChange, seedKey, resolver, resolveKey
               with a resolve verdict honest to what Send does (env + collection vars). */}
           <div className="grid gap-1.5">
             <Label className="text-xs">{m.tokenUrl}</Label>
-            <VarHighlightInput
-              value={form.tokenUrl}
-              onChange={(v) => patch({ tokenUrl: v })}
-              resolver={resolver}
-              resolveKey={resolveKey}
-              variables={variables}
-              placeholder={m.tokenUrlPlaceholder}
-              ariaLabel={m.tokenUrl}
-              metrics={VAR_FIELD_METRICS}
-              className={VAR_FIELD_FRAME}
-            />
+            {oauthField({
+              value: form.tokenUrl,
+              onChange: (v) => patch({ tokenUrl: v }),
+              ariaLabel: m.tokenUrl,
+              placeholder: m.tokenUrlPlaceholder,
+            })}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-1.5">
               <Label className="text-xs">{m.clientId}</Label>
-              <VarHighlightInput
-                value={form.clientId}
-                onChange={(v) => patch({ clientId: v })}
-                resolver={resolver}
-                resolveKey={resolveKey}
-                variables={variables}
-                ariaLabel={m.clientId}
-                metrics={VAR_FIELD_METRICS}
-                className={VAR_FIELD_FRAME}
-              />
+              {oauthField({
+                value: form.clientId,
+                onChange: (v) => patch({ clientId: v }),
+                ariaLabel: m.clientId,
+              })}
             </div>
             <div className="grid gap-1.5">
               <Label className="text-xs">{m.clientSecret}</Label>
-              <VarHighlightInput
-                value={form.clientSecret}
-                onChange={(v) => patch({ clientSecret: v })}
-                resolver={resolver}
-                resolveKey={resolveKey}
-                variables={variables}
-                placeholder={m.clientSecretPlaceholder}
-                ariaLabel={m.clientSecret}
-                metrics={VAR_FIELD_METRICS}
-                className={VAR_FIELD_FRAME}
-              />
+              {oauthField({
+                value: form.clientSecret,
+                onChange: (v) => patch({ clientSecret: v }),
+                ariaLabel: m.clientSecret,
+                placeholder: m.clientSecretPlaceholder,
+              })}
             </div>
           </div>
           <div className="grid gap-1.5">
             <Label className="text-xs">{m.scope}</Label>
-            <VarHighlightInput
-              value={form.scope}
-              onChange={(v) => patch({ scope: v })}
-              resolver={resolver}
-              resolveKey={resolveKey}
-              variables={variables}
-              placeholder={m.scopePlaceholder}
-              ariaLabel={m.scope}
-              metrics={VAR_FIELD_METRICS}
-              className={VAR_FIELD_FRAME}
-            />
+            {oauthField({
+              value: form.scope,
+              onChange: (v) => patch({ scope: v }),
+              ariaLabel: m.scope,
+              placeholder: m.scopePlaceholder,
+            })}
           </div>
           <details className="text-xs text-muted-foreground">
             <summary className="cursor-pointer select-none">{m.headerAndPrefix}</summary>
