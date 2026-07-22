@@ -287,7 +287,14 @@ export function CollectionOverview({ collection, onChanged, onSelectRequest, onC
               title={mo.auth.title}
               desc={mo.auth.desc}
             >
-              <SavedAuthEditor value={collection.auth} onChange={persistAuth} seedKey={collection.id} />
+              <SavedAuthEditor
+                value={collection.auth}
+                onChange={persistAuth}
+                seedKey={collection.id}
+                resolver={resolveRow}
+                resolveKey={resolveKey}
+                variables={varCandidates}
+              />
             </COBlock>
           )}
 

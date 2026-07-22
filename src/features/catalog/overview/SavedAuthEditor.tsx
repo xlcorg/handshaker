@@ -7,12 +7,15 @@ import { Label } from "@/components/ui/label";
 import { ToggleGroup } from "@/components/ui/toggle-group";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import type { SavedAuthConfigIpc } from "@/ipc/bindings";
+import type { ResolutionReportIpc, SavedAuthConfigIpc } from "@/ipc/bindings";
 import { ipc } from "@/ipc/client";
 import { EnvVarField } from "./EnvVarField";
 import { configToForm, formToConfig, type AuthForm } from "./authConfigMap";
 import { resolveOauthConfig } from "@/features/workflow/actions";
 import { useEnvRevision } from "@/features/envs/envRevision";
+import { VarHighlightInput } from "@/features/vars/VarHighlightInput";
+import type { VarCandidate } from "@/features/vars/candidates";
+import { VAR_FIELD_FRAME, VAR_FIELD_METRICS } from "./varField";
 import { messages } from "@/lib/messages";
 
 const m = messages.catalog.overview.auth;
@@ -26,6 +29,16 @@ export interface SavedAuthEditorProps {
    * edit — a cleared Header name, a shortened Prefix — is never clobbered by the reload.
    */
   seedKey?: string;
+  /**
+   * Resolves a `{{var}}` template for the OAuth2 fields' inline highlighting — the same
+   * env + collection-vars context the sibling Links/Variables blocks use, so the verdict
+   * is honest to what Send resolves. Omit to render the OAuth2 fields as plain inputs.
+   */
+  resolver?: (t: string) => Promise<ResolutionReportIpc>;
+  /** Extra resolve inputs (active env, unsaved collection vars, env revision); change ⇒ re-resolve. */
+  resolveKey?: string;
+  /** Variable candidates for `{{`-autocomplete inside the OAuth2 fields. */
+  variables?: VarCandidate[];
 }
 
 /** Styling for a gating-list name whose environment no longer exists (see `deadEnvNames`). */
@@ -55,7 +68,7 @@ function msg(e: unknown): string {
   return String(e);
 }
 
-export function SavedAuthEditor({ value, onChange, seedKey }: SavedAuthEditorProps) {
+export function SavedAuthEditor({ value, onChange, seedKey, resolver, resolveKey, variables }: SavedAuthEditorProps) {
   // Local edit buffer, mirroring the sibling Variables/Links blocks: normalization (trim,
   // empty→default in formToConfig) happens only at persist time and never echoes back into
   // the live input. Re-seed only when the collection identity changes.
@@ -202,23 +215,65 @@ export function SavedAuthEditor({ value, onChange, seedKey }: SavedAuthEditorPro
 
       {form.kind === "oauth2" && (
         <div className="grid gap-3">
+          {/* OAuth2 fields carry `{{var}}` templates; give them the same highlight +
+              resolve-preview + `{{`-autocomplete treatment as the collection link URL,
+              with a resolve verdict honest to what Send does (env + collection vars). */}
           <div className="grid gap-1.5">
             <Label className="text-xs">{m.tokenUrl}</Label>
-            <Input value={form.tokenUrl} onChange={(e) => patch({ tokenUrl: e.target.value })} placeholder={m.tokenUrlPlaceholder} className="h-9 font-mono text-[12.5px]" />
+            <VarHighlightInput
+              value={form.tokenUrl}
+              onChange={(v) => patch({ tokenUrl: v })}
+              resolver={resolver}
+              resolveKey={resolveKey}
+              variables={variables}
+              placeholder={m.tokenUrlPlaceholder}
+              ariaLabel={m.tokenUrl}
+              metrics={VAR_FIELD_METRICS}
+              className={VAR_FIELD_FRAME}
+            />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-1.5">
               <Label className="text-xs">{m.clientId}</Label>
-              <Input value={form.clientId} onChange={(e) => patch({ clientId: e.target.value })} className="h-9 font-mono text-[12.5px]" />
+              <VarHighlightInput
+                value={form.clientId}
+                onChange={(v) => patch({ clientId: v })}
+                resolver={resolver}
+                resolveKey={resolveKey}
+                variables={variables}
+                ariaLabel={m.clientId}
+                metrics={VAR_FIELD_METRICS}
+                className={VAR_FIELD_FRAME}
+              />
             </div>
             <div className="grid gap-1.5">
               <Label className="text-xs">{m.clientSecret}</Label>
-              <Input value={form.clientSecret} onChange={(e) => patch({ clientSecret: e.target.value })} placeholder={m.clientSecretPlaceholder} className="h-9 font-mono text-[12.5px]" />
+              <VarHighlightInput
+                value={form.clientSecret}
+                onChange={(v) => patch({ clientSecret: v })}
+                resolver={resolver}
+                resolveKey={resolveKey}
+                variables={variables}
+                placeholder={m.clientSecretPlaceholder}
+                ariaLabel={m.clientSecret}
+                metrics={VAR_FIELD_METRICS}
+                className={VAR_FIELD_FRAME}
+              />
             </div>
           </div>
           <div className="grid gap-1.5">
             <Label className="text-xs">{m.scope}</Label>
-            <Input value={form.scope} onChange={(e) => patch({ scope: e.target.value })} placeholder={m.scopePlaceholder} className="h-9 font-mono text-[12.5px]" />
+            <VarHighlightInput
+              value={form.scope}
+              onChange={(v) => patch({ scope: v })}
+              resolver={resolver}
+              resolveKey={resolveKey}
+              variables={variables}
+              placeholder={m.scopePlaceholder}
+              ariaLabel={m.scope}
+              metrics={VAR_FIELD_METRICS}
+              className={VAR_FIELD_FRAME}
+            />
           </div>
           <details className="text-xs text-muted-foreground">
             <summary className="cursor-pointer select-none">{m.headerAndPrefix}</summary>

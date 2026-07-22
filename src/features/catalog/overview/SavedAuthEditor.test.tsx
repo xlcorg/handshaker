@@ -231,3 +231,36 @@ describe("SavedAuthEditor (oauth2)", () => {
     expect(last.kind === "oauth2_client_credentials" && last.client_id).toBe("cid2");
   });
 });
+
+describe("SavedAuthEditor (oauth2 var highlighting)", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  // Resolver honest to Send: `{{known}}` resolves (env/collection var), anything else fails.
+  const resolver = vi.fn(async (t: string) => {
+    const names = [...t.matchAll(/\{\{([^{}]+)\}\}/g)].map((mm) => mm[1]);
+    const unresolved = names.filter((n) => n !== "known");
+    return { resolved: t, unresolved_vars: unresolved, cycle_chain: null, dynamic_vars: [] };
+  });
+  const candidates = [{ name: "known", value: "v", origin: "collection" as const }];
+
+  it("exposes the four oauth2 fields as var-highlight comboboxes", async () => {
+    await renderEditor(
+      <SavedAuthEditor value={oauth2} onChange={() => {}} resolver={resolver} resolveKey="k" variables={candidates} />,
+    );
+    expect(screen.getByRole("combobox", { name: m.tokenUrl })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: m.clientId })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: m.clientSecret })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: m.scope })).toBeInTheDocument();
+  });
+
+  it("colors a resolvable var green and an unknown one red (matches Send)", async () => {
+    const cfg: SavedAuthConfigIpc = { ...oauth2, token_url: "{{known}}", client_id: "{{missing}}" };
+    await renderEditor(
+      <SavedAuthEditor value={cfg} onChange={() => {}} resolver={resolver} resolveKey="k" variables={candidates} />,
+    );
+    await waitFor(() => {
+      expect(document.querySelector(".vh-resolved")).toHaveTextContent("{{known}}");
+      expect(document.querySelector(".vh-error")).toHaveTextContent("{{missing}}");
+    });
+  });
+});
