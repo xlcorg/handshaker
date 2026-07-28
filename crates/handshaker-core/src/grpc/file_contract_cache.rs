@@ -8,24 +8,33 @@ use std::collections::HashMap;
 use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 use std::time::{Duration, UNIX_EPOCH};
 
-use prost_reflect::DescriptorPool;
+use prost::Message as _;
+use prost_types::FileDescriptorSet;
 use serde::{Deserialize, Serialize};
 
 use crate::error::CoreError;
 use crate::grpc::catalog::ServiceCatalog;
 use crate::grpc::contract_cache::{CachedContract, ContractCache, ContractKey};
+use crate::grpc::descriptor::build_pool_set;
 use crate::persist::{atomic_write_json, read_json, Envelope};
 
-/// On-disk shape of one cached contract. `pool` is `DescriptorPool::encode_to_vec()`
-/// (protobuf `FileDescriptorSet` bytes); `fetched_at` is epoch-ms.
+/// On-disk shape of one cached contract. `files` is the **raw** descriptor corpus as the
+/// server sent it, encoded as a protobuf `FileDescriptorSet`; the pools are rebuilt from
+/// it on load. Storing raw rather than post-assembly keeps restoration deterministic —
+/// after pruning, one file name can have different contents in different pools.
+/// `fetched_at` is epoch-ms.
+///
+/// The field rename `pool` → `files` is deliberately breaking: an entry written before it
+/// fails to deserialize and is skipped on load (a miss just re-reflects), and the next
+/// `put` for that endpoint overwrites the file.
 #[derive(Serialize, Deserialize)]
 struct PersistedContract {
     address: String,
     tls: bool,
-    pool: Vec<u8>,
+    files: Vec<u8>,
     catalog: ServiceCatalog,
     fetched_at: i64,
 }
@@ -49,7 +58,8 @@ pub struct FileContractCache {
 
 impl FileContractCache {
     /// Load every `*.json` under `dir` (creating `dir` if absent). A file that fails to
-    /// parse or whose pool fails to decode is **skipped** (logged), never fatal.
+    /// parse, or whose corpus fails to decode or reassemble, is **skipped** (logged), never
+    /// fatal.
     pub fn load(dir: PathBuf) -> Result<Self, CoreError> {
         fs::create_dir_all(&dir)
             .map_err(|e| CoreError::Persistence(format!("create dir {}: {e}", dir.display())))?;
@@ -76,11 +86,15 @@ impl FileContractCache {
 
     fn read_entry(path: &Path) -> Result<(ContractKey, CachedContract), CoreError> {
         let p: PersistedContract = read_json(path)?;
-        let pool = DescriptorPool::decode(p.pool.as_slice())
-            .map_err(|e| CoreError::DescriptorBuild(format!("decode cached pool: {e}")))?;
+        // Reassemble exactly as `activate()` does, from the same raw corpus: a contract that
+        // needed isolation gets its several pools back instead of being dropped.
+        let set = FileDescriptorSet::decode(p.files.as_slice())
+            .map_err(|e| CoreError::DescriptorBuild(format!("decode cached descriptors: {e}")))?;
+        let pools = build_pool_set(&set.file)?;
         let key = ContractKey { address: p.address, tls: p.tls };
         let contract = CachedContract {
-            pool,
+            files: Arc::new(set.file),
+            pools,
             catalog: p.catalog,
             fetched_at: UNIX_EPOCH + Duration::from_millis(p.fetched_at.max(0) as u64),
         };
@@ -100,7 +114,9 @@ impl FileContractCache {
         let payload = PersistedContract {
             address: key.address.clone(),
             tls: key.tls,
-            pool: contract.pool.encode_to_vec(),
+            // Cold path — one clone per cache miss, dwarfed by the reflection round trip it
+            // follows. The `Arc` on `CachedContract::files` is for `get`, which is per-send.
+            files: FileDescriptorSet { file: contract.files.as_ref().clone() }.encode_to_vec(),
             catalog: contract.catalog.clone(),
             fetched_at,
         };
@@ -138,7 +154,7 @@ mod tests {
     use super::*;
     use crate::grpc::catalog::build_catalog;
     use crate::grpc::contract_cache::ContractKey;
-    use crate::grpc::descriptor::build_pool;
+    use crate::grpc::descriptor::{build_pool, PoolSet};
     use prost_types::{
         DescriptorProto, FieldDescriptorProto, FileDescriptorProto, MethodDescriptorProto,
         ServiceDescriptorProto, field_descriptor_proto::Type as FieldType,
@@ -181,10 +197,13 @@ mod tests {
     }
 
     fn sample_contract() -> CachedContract {
-        let pool = sample_pool();
-        let catalog = build_catalog(&pool);
+        let files: Vec<prost_types::FileDescriptorProto> =
+            sample_pool().file_descriptor_protos().cloned().collect();
+        let pools = PoolSet::from_pool(sample_pool());
+        let catalog = build_catalog(&pools);
         CachedContract {
-            pool,
+            files: Arc::new(files),
+            pools,
             catalog,
             fetched_at: UNIX_EPOCH + Duration::from_millis(FETCHED_MS),
         }
@@ -192,6 +211,15 @@ mod tests {
 
     fn key(addr: &str, tls: bool) -> ContractKey {
         ContractKey { address: addr.into(), tls }
+    }
+
+    fn json_count(dir: &Path) -> usize {
+        std::fs::read_dir(dir)
+            .unwrap()
+            .filter(|e| {
+                e.as_ref().unwrap().path().extension().and_then(|s| s.to_str()) == Some("json")
+            })
+            .count()
     }
 
     #[test]
@@ -207,7 +235,7 @@ mod tests {
         let reloaded = FileContractCache::load(dir.path().to_path_buf()).unwrap();
         let got = reloaded.get(&k).expect("entry survives reload");
 
-        assert!(got.pool.get_service_by_name("test.Echo").is_some());
+        assert!(got.pools.for_service("test.Echo").is_some());
         assert_eq!(got.catalog, original.catalog);
         assert_eq!(
             got.fetched_at.duration_since(UNIX_EPOCH).unwrap().as_millis() as u64,
@@ -222,14 +250,11 @@ mod tests {
         let cache = FileContractCache::load(dir.path().to_path_buf()).unwrap();
         cache.put(k.clone(), sample_contract());
 
-        let json_count = || std::fs::read_dir(dir.path()).unwrap()
-            .filter(|e| e.as_ref().unwrap().path().extension().and_then(|s| s.to_str()) == Some("json"))
-            .count();
-        assert_eq!(json_count(), 1);
+        assert_eq!(json_count(dir.path()), 1);
 
         cache.invalidate(&k);
         assert!(cache.get(&k).is_none());
-        assert_eq!(json_count(), 0);
+        assert_eq!(json_count(dir.path()), 0);
         let reloaded = FileContractCache::load(dir.path().to_path_buf()).unwrap();
         assert!(reloaded.get(&k).is_none());
     }
@@ -244,7 +269,118 @@ mod tests {
 
         let reloaded = FileContractCache::load(dir.path().to_path_buf()).unwrap();
         assert!(reloaded.get(&key("good:1", false)).is_some());
-        assert!(reloaded.get(&key("good:1", false)).unwrap().pool.get_service_by_name("test.Echo").is_some());
+        assert!(reloaded
+            .get(&key("good:1", false))
+            .unwrap()
+            .pools
+            .for_service("test.Echo")
+            .is_some());
+    }
+
+    #[test]
+    fn conflicting_corpus_round_trips_as_multiple_pools() {
+        // Two files, same message name, one service each — the isolation case.
+        let mk = |file: &str, svc: &str| FileDescriptorProto {
+            name: Some(file.into()),
+            package: Some("test".into()),
+            syntax: Some("proto3".into()),
+            message_type: vec![DescriptorProto {
+                name: Some("Shared".into()),
+                ..Default::default()
+            }],
+            service: vec![ServiceDescriptorProto {
+                name: Some(svc.into()),
+                method: vec![MethodDescriptorProto {
+                    name: Some("Call".into()),
+                    input_type: Some(".test.Shared".into()),
+                    output_type: Some(".test.Shared".into()),
+                    ..Default::default()
+                }],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let files = vec![mk("a.proto", "SvcA"), mk("b.proto", "SvcB")];
+        let pools = crate::grpc::descriptor::build_pool_set(&files).unwrap();
+        let catalog = build_catalog(&pools);
+
+        let dir = tempfile::tempdir().unwrap();
+        let k = key("dupes:443", true);
+        let cache = FileContractCache::load(dir.path().to_path_buf()).unwrap();
+        cache.put(
+            k.clone(),
+            CachedContract {
+                files: Arc::new(files.clone()),
+                pools,
+                catalog: catalog.clone(),
+                fetched_at: UNIX_EPOCH + Duration::from_millis(FETCHED_MS),
+            },
+        );
+        drop(cache);
+
+        let reloaded = FileContractCache::load(dir.path().to_path_buf()).unwrap();
+        let got = reloaded.get(&k).expect("entry survives reload");
+        assert_eq!(*got.files, files, "the raw corpus survives the round trip unchanged");
+        assert_eq!(got.pools.pool_count(), 2);
+        assert!(got.pools.for_service("test.SvcA").is_some());
+        assert!(got.pools.for_service("test.SvcB").is_some());
+
+        // The catalog comes off disk while the pools are rebuilt from the corpus, so the two
+        // could drift. They must not: every service the stored catalog offers has to resolve
+        // through the rebuilt pools, and the rebuild must project that same catalog back.
+        assert_eq!(got.catalog, catalog);
+        for svc in &got.catalog.services {
+            assert!(
+                got.pools.for_service(&svc.full_name).is_some(),
+                "catalog offers {} but no rebuilt pool resolves it",
+                svc.full_name
+            );
+        }
+        assert_eq!(build_catalog(&got.pools), got.catalog);
+    }
+
+    /// An entry written before the field rename: `pool`, not `files`. Its bytes are already a
+    /// `FileDescriptorSet` (that part landed earlier), so the *only* thing wrong with this
+    /// fixture is the field name — which is exactly what has to reject it.
+    ///
+    /// Takes the `ContractKey` rather than a loose address so the JSON body cannot drift
+    /// from the file name the entry is written under: were they to disagree, the
+    /// "must be skipped" assertion would pass for the wrong reason (loaded under a
+    /// different key instead of rejected).
+    fn old_format_entry_json(key: &ContractKey) -> String {
+        let files: Vec<FileDescriptorProto> =
+            sample_pool().file_descriptor_protos().cloned().collect();
+        serde_json::json!({
+            "schema_version": 1,
+            "data": {
+                "address": key.address,
+                "tls": key.tls,
+                "pool": FileDescriptorSet { file: files }.encode_to_vec(),
+                "catalog": build_catalog(&PoolSet::from_pool(sample_pool())),
+                "fetched_at": FETCHED_MS as i64,
+            }
+        })
+        .to_string()
+    }
+
+    #[test]
+    fn old_format_entry_is_skipped_on_load_then_overwritten() {
+        let dir = tempfile::tempdir().unwrap();
+        let k = key("h:1", false);
+        let stale = dir.path().join(key_filename(&k));
+        std::fs::write(&stale, old_format_entry_json(&k)).unwrap();
+
+        let cache = FileContractCache::load(dir.path().to_path_buf()).unwrap();
+        assert!(cache.get(&k).is_none(), "a pre-rename entry must be skipped, not loaded");
+
+        // Skipped, not accumulated: the file name is derived from the key, so the next put
+        // for that endpoint replaces the stale file rather than adding a second one.
+        cache.put(k.clone(), sample_contract());
+        assert_eq!(json_count(dir.path()), 1);
+        drop(cache);
+
+        let reloaded = FileContractCache::load(dir.path().to_path_buf()).unwrap();
+        assert!(reloaded.get(&k).is_some(), "the rewritten entry loads");
     }
 
     #[test]

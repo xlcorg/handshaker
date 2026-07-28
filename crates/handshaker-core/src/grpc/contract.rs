@@ -1,5 +1,5 @@
 //! Top-level orchestration: open channel → (cache hit?) → run reflection → build
-//! pool → build catalog → cache. On a cache hit, reflection is skipped entirely.
+//! pools → build catalog → cache. On a cache hit, reflection is skipped entirely.
 
 use std::sync::Arc;
 
@@ -7,13 +7,16 @@ use crate::error::CoreError;
 use crate::grpc::catalog::build_catalog;
 use crate::grpc::connection::{GrpcConnection, GrpcTarget};
 use crate::grpc::contract_cache::{CachedContract, ContractCache, ContractKey};
-use crate::grpc::descriptor::build_pool;
+use crate::grpc::descriptor::build_pool_set;
 use crate::grpc::reflection::list_and_fetch_files;
 use crate::grpc::transport::GrpcTransport;
 
 /// Open a channel to `target`. If `cache` already holds the contract for
-/// `(address, tls)`, build the connection from the cached pool/catalog and skip
+/// `(address, tls)`, build the connection from the cached pools/catalog and skip
 /// reflection. Otherwise reflect, build, and populate the cache.
+///
+/// The catalog is always projected from the very `PoolSet` the connection carries, so the
+/// services it advertises are exactly the ones `PoolSet::for_service` can resolve.
 ///
 /// The channel is always opened fresh (it is per-connection, never cached).
 pub async fn activate(
@@ -29,7 +32,7 @@ pub async fn activate(
             target,
             transport,
             channel,
-            pool: cached.pool,
+            pools: cached.pools,
             catalog: cached.catalog,
         });
     }
@@ -37,17 +40,20 @@ pub async fn activate(
     // clone — TonicChannel is cheap to Clone (Arc internally); reflection consumes
     // its copy, the original stays in GrpcConnection for subsequent invokes.
     let (_services_listed, files) = list_and_fetch_files(channel.clone()).await?;
-    let pool = build_pool(files)?;
-    let catalog = build_catalog(&pool);
+    let pools = build_pool_set(&files)?;
+    let catalog = build_catalog(&pools);
 
     cache.put(
         key,
         CachedContract {
-            pool: pool.clone(),
+            // Wrapped after `build_pool_set` has read the corpus: the cache hands out a
+            // clone of this entry on every send, so the corpus must not be deep-cloned.
+            files: Arc::new(files),
+            pools: pools.clone(),
             catalog: catalog.clone(),
             fetched_at: std::time::SystemTime::now(),
         },
     );
 
-    Ok(GrpcConnection { target, transport, channel, pool, catalog })
+    Ok(GrpcConnection { target, transport, channel, pools, catalog })
 }

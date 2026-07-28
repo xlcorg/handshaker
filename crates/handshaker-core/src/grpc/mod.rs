@@ -25,9 +25,11 @@ pub use contract::activate;
 pub use contract_cache::{CachedContract, ContractCache, ContractKey, InMemoryContractCache};
 pub use error_class::{classify_connect_error, ConnectKind};
 pub use file_contract_cache::FileContractCache;
-pub use descriptor::build_pool;
+// `build_pool` is deliberately not re-exported: outside `descriptor` everything goes
+// through `build_pool_set`, which falls back to per-service pools instead of failing.
+pub use descriptor::{build_pool_set, PoolSet};
 pub use invoke::{
-    build_message_schema_from_pool, build_request_skeleton, build_request_skeleton_from_pool,
+    build_message_schema_from_pools, build_request_skeleton, build_request_skeleton_from_pools,
     extract_status_details, invoke_unary, CallOptions, EnumNode, EnumValueNode, FieldNode,
     FieldValueKind, FieldViolation, HelpLink, MessageNode, MessageSchema, MessageSide,
     PreconditionViolation, QuotaViolation, StatusDetail, UnaryOutcome,

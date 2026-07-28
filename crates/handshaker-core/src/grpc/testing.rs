@@ -118,13 +118,19 @@ impl GrpcTransport for FakeTransport {
     }
 }
 
+/// The raw corpus behind `fixture_pool()` — what a `CachedContract` persists.
+pub fn fixture_files() -> Vec<prost_types::FileDescriptorProto> {
+    fixture_pool().file_descriptor_protos().cloned().collect()
+}
+
 /// A `CachedContract` over the fixture pool — seed a `ContractCache` with it so
 /// `activate` composes with `FakeTransport` without running reflection.
 pub fn fixture_cached_contract() -> crate::grpc::contract_cache::CachedContract {
-    let pool = fixture_pool();
-    let catalog = crate::grpc::catalog::build::build_catalog(&pool);
+    let pools = crate::grpc::descriptor::PoolSet::from_pool(fixture_pool());
+    let catalog = crate::grpc::catalog::build::build_catalog(&pools);
     crate::grpc::contract_cache::CachedContract {
-        pool,
+        files: Arc::new(fixture_files()),
+        pools,
         catalog,
         fetched_at: std::time::SystemTime::UNIX_EPOCH,
     }
@@ -132,15 +138,15 @@ pub fn fixture_cached_contract() -> crate::grpc::contract_cache::CachedContract 
 
 /// A `GrpcConnection` over the fixture pool and the given (usually fake) transport.
 pub fn fake_connection(transport: Arc<dyn GrpcTransport>) -> GrpcConnection {
-    let pool = fixture_pool();
-    let catalog = crate::grpc::catalog::build::build_catalog(&pool);
+    let pools = crate::grpc::descriptor::PoolSet::from_pool(fixture_pool());
+    let catalog = crate::grpc::catalog::build::build_catalog(&pools);
     // Lazy channel to a bogus address — never used by FakeTransport, but the field must exist.
     let channel = tonic::transport::Channel::from_static("http://127.0.0.1:1").connect_lazy();
     GrpcConnection {
         target: GrpcTarget::new("127.0.0.1:1", false, false).unwrap(),
         transport,
         channel,
-        pool,
+        pools,
         catalog,
     }
 }

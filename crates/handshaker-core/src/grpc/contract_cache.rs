@@ -1,15 +1,17 @@
 //! Descriptor (contract) cache keyed by `(address, tls)` (master spec §5.8). Lets
 //! `activate()` skip reflection when the contract for an endpoint is already known.
 //! `skip_verify` is deliberately NOT part of the key (it does not change the
-//! contract). Session-only — not persisted.
+//! contract). The `InMemoryContractCache` below is session-only; see `file_contract_cache`
+//! for the disk-backed implementation.
 
 use std::collections::HashMap;
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 
-use prost_reflect::DescriptorPool;
+use prost_types::FileDescriptorProto;
 
 use crate::grpc::catalog::ServiceCatalog;
 use crate::grpc::connection::GrpcTarget;
+use crate::grpc::descriptor::PoolSet;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ContractKey {
@@ -23,10 +25,20 @@ impl ContractKey {
     }
 }
 
-/// A cached contract: the assembled descriptor pool + projected catalog.
+/// A cached contract: the raw descriptor corpus as fetched, the pools assembled from it,
+/// and the projected catalog. The corpus is kept because it — not the assembled pools —
+/// is what gets persisted: a disk-backed reload rebuilds the pool set from it, so a
+/// contract that needed isolation survives a restart with all of its pools.
+///
+/// `Clone` has to stay cheap: `ContractCache::get` hands out a clone, and `Sender::send`
+/// calls `activate()` — hence `get` — on **every** request, using only `pools` (itself
+/// `Arc`-backed) and the small `catalog`. Hence the `Arc` around the corpus: a bare `Vec`
+/// would deep-clone thousands of prost allocations per send, worst on exactly the bloated
+/// code-first corpora this cache exists for.
 #[derive(Clone)]
 pub struct CachedContract {
-    pub pool: DescriptorPool,
+    pub files: Arc<Vec<FileDescriptorProto>>,
+    pub pools: PoolSet,
     pub catalog: ServiceCatalog,
     pub fetched_at: std::time::SystemTime,
 }
@@ -77,7 +89,8 @@ mod tests {
 
     fn sample_contract() -> CachedContract {
         CachedContract {
-            pool: DescriptorPool::new(),
+            files: Arc::new(vec![]),
+            pools: PoolSet::from_pool(prost_reflect::DescriptorPool::new()),
             catalog: ServiceCatalog { services: vec![] },
             fetched_at: std::time::SystemTime::UNIX_EPOCH,
         }

@@ -56,7 +56,7 @@ async grpcRefreshContract(target: GrpcTargetIpc, requestId: string, timeoutMs: n
 }
 },
 /**
- * Build a JSON skeleton from the cached pool. On a cache miss, activate first.
+ * Build a JSON skeleton from the cached pools. On a cache miss, activate first.
  * 
  * The reflecting path (miss only) runs under `race_cancel_timeout`, so it honors the
  * caller's deadline and can be cancelled by `grpc_cancel(request_id)` — otherwise a
@@ -73,7 +73,7 @@ async grpcBuildRequestSkeleton(target: GrpcTargetIpc, service: string, method: s
 /**
  * Build the flat field-schema for a method's input or output message — drives autocomplete
  * and the contract view. Same cache discipline as `grpc_build_request_skeleton`: cache
- * hit → build from the pool; miss → `activate` first.
+ * hit → build from the pool set; miss → `activate` first.
  */
 async grpcMessageSchema(target: GrpcTargetIpc, service: string, method: string, side: MessageSideIpc, requestId: string, timeoutMs: number) : Promise<Result<MessageSchemaIpc, IpcError>> {
     try {

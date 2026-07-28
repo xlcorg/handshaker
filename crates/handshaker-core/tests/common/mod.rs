@@ -248,6 +248,87 @@ pub async fn spawn_reflection_server_v1_with_deps() -> (SocketAddr, oneshot::Sen
     (addr, tx)
 }
 
+/// Build a `FileDescriptorSet` shaped like a code-first .NET server: two services in two
+/// files, each carrying its OWN copy of a shared DTO message name.
+///
+/// ```proto
+/// // file: dupes/a.proto      // file: dupes/b.proto
+/// package dupes;              package dupes;
+/// message SharedDto {         message SharedDto {
+///   string a_only = 1; }        string b_only = 1; }
+///
+/// // and each file declares one service, identical but for its name:
+/// service SvcA / SvcB { rpc Call (SharedDto) returns (SharedDto); }
+/// ```
+///
+/// So `dupes.SharedDto` is defined twice, by two files that disagree about its fields —
+/// while `dupes.SvcA` and `dupes.SvcB` stay distinct, which is what lets the reflection
+/// crawl reach both copies.
+pub fn fixture_duplicate_symbol_set_bytes() -> Vec<u8> {
+    let build = |file: &str, svc: &str, field: &str| FileDescriptorProto {
+        name: Some(file.to_string()),
+        package: Some("dupes".to_string()),
+        syntax: Some("proto3".to_string()),
+        message_type: vec![DescriptorProto {
+            name: Some("SharedDto".to_string()),
+            field: vec![FieldDescriptorProto {
+                name: Some(field.to_string()),
+                number: Some(1),
+                r#type: Some(FieldType::String as i32),
+                ..Default::default()
+            }],
+            ..Default::default()
+        }],
+        service: vec![ServiceDescriptorProto {
+            name: Some(svc.to_string()),
+            method: vec![MethodDescriptorProto {
+                name: Some("Call".to_string()),
+                input_type: Some(".dupes.SharedDto".to_string()),
+                output_type: Some(".dupes.SharedDto".to_string()),
+                ..Default::default()
+            }],
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    let set = FileDescriptorSet {
+        file: vec![
+            build("dupes/a.proto", "SvcA", "a_only"),
+            build("dupes/b.proto", "SvcB", "b_only"),
+        ],
+    };
+    let mut buf = Vec::new();
+    set.encode(&mut buf).expect("encode FileDescriptorSet");
+    buf
+}
+
+/// Spawn a v1 reflection server hosting the duplicate-symbol fixture.
+///
+/// `tonic-reflection` indexes symbols into a `HashMap` with last-write-wins and never
+/// validates for duplicates, so it serves this conflicting set happily — which is what
+/// makes the end-to-end test possible at all.
+pub async fn spawn_reflection_server_v1_with_duplicate_symbol() -> (SocketAddr, oneshot::Sender<()>)
+{
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let reflection = tonic_reflection::server::Builder::configure()
+        .register_encoded_file_descriptor_set(&fixture_duplicate_symbol_set_bytes())
+        .build_v1()
+        .expect("build v1 reflection service");
+
+    let (tx, rx) = oneshot::channel::<()>();
+    tokio::spawn(async move {
+        let incoming = tokio_stream::wrappers::TcpListenerStream::new(listener);
+        let _ = tonic::transport::Server::builder()
+            .add_service(reflection)
+            .serve_with_incoming_shutdown(incoming, async {
+                rx.await.ok();
+            })
+            .await;
+    });
+    (addr, tx)
+}
+
 /// Spawn a tonic server with NO reflection service registered.
 ///
 /// We register `tonic_health::server::HealthServer` as a "filler" so the listener

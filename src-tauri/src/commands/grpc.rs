@@ -11,7 +11,7 @@ use tokio::sync::Notify;
 
 use handshaker_core::collections::{ItemId, SavedRequest};
 use handshaker_core::grpc::{
-    activate, build_message_schema_from_pool, build_request_skeleton_from_pool, CallOptions,
+    activate, build_message_schema_from_pools, build_request_skeleton_from_pools, CallOptions,
     ContractKey, GrpcTarget, TonicTransport,
 };
 use tauri::{AppHandle, State};
@@ -107,7 +107,7 @@ pub async fn grpc_refresh_contract(
     race_cancel_timeout(&state.in_flight, request_id, timeout_ms, work).await
 }
 
-/// Build a JSON skeleton from the cached pool. On a cache miss, activate first.
+/// Build a JSON skeleton from the cached pools. On a cache miss, activate first.
 ///
 /// The reflecting path (miss only) runs under `race_cancel_timeout`, so it honors the
 /// caller's deadline and can be cancelled by `grpc_cancel(request_id)` — otherwise a
@@ -126,20 +126,20 @@ pub async fn grpc_build_request_skeleton(
     let key = ContractKey::from_target(&target);
 
     if let Some(cached) = state.contract_cache.get(&key) {
-        return Ok(build_request_skeleton_from_pool(&cached.pool, &service, &method)?);
+        return Ok(build_request_skeleton_from_pools(&cached.pools, &service, &method)?);
     }
     let cache = state.contract_cache.clone();
     let work = async move {
         let transport = Arc::new(TonicTransport::new());
         let conn = activate(target, transport, cache.as_ref()).await?;
-        Ok::<String, IpcError>(build_request_skeleton_from_pool(&conn.pool, &service, &method)?)
+        Ok::<String, IpcError>(build_request_skeleton_from_pools(&conn.pools, &service, &method)?)
     };
     race_cancel_timeout(&state.in_flight, request_id, timeout_ms, work).await
 }
 
 /// Build the flat field-schema for a method's input or output message — drives autocomplete
 /// and the contract view. Same cache discipline as `grpc_build_request_skeleton`: cache
-/// hit → build from the pool; miss → `activate` first.
+/// hit → build from the pool set; miss → `activate` first.
 #[tauri::command]
 #[specta::specta]
 pub async fn grpc_message_schema(
@@ -155,14 +155,16 @@ pub async fn grpc_message_schema(
     let key = ContractKey::from_target(&target);
 
     if let Some(cached) = state.contract_cache.get(&key) {
-        return Ok(build_message_schema_from_pool(&cached.pool, &service, &method, side.into())?.into());
+        return Ok(
+            build_message_schema_from_pools(&cached.pools, &service, &method, side.into())?.into(),
+        );
     }
     let cache = state.contract_cache.clone();
     let work = async move {
         let transport = Arc::new(TonicTransport::new());
         let conn = activate(target, transport, cache.as_ref()).await?;
         Ok::<MessageSchemaIpc, IpcError>(
-            build_message_schema_from_pool(&conn.pool, &service, &method, side.into())?.into(),
+            build_message_schema_from_pools(&conn.pools, &service, &method, side.into())?.into(),
         )
     };
     race_cancel_timeout(&state.in_flight, request_id, timeout_ms, work).await

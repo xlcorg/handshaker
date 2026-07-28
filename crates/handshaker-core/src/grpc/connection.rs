@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use crate::error::CoreError;
 use crate::grpc::catalog::ServiceCatalog;
+use crate::grpc::descriptor::PoolSet;
 use crate::grpc::transport::TonicChannel;
 use serde::{Deserialize, Serialize};
 
@@ -68,8 +69,13 @@ impl GrpcTarget {
 }
 
 /// Live connection state — the result of `activate()`. Holds the channel-bearing transport
-/// plus the assembled descriptor pool and projected catalog. **NOT** `Clone`: there's at most
+/// plus the assembled descriptor pools and projected catalog. **NOT** `Clone`: there's at most
 /// one live connection in the app (per spec §4 "Activated gRPC connections = 1").
+///
+/// `pools` is a `PoolSet` rather than a single pool: a server that declares the same symbol
+/// in two descriptor files cannot be held by one pool, so each such service gets its own.
+/// Every lookup goes through `PoolSet::for_service`, which agrees with the catalog on which
+/// copy of a duplicated service name wins.
 ///
 /// `channel` is stored here so invoke doesn't perform a fresh h2 handshake per call —
 /// one Channel is acquired in `activate()` and reused. Plan #3 §3.1.1 explains why
@@ -79,7 +85,7 @@ pub struct GrpcConnection {
     pub target: GrpcTarget,
     pub transport: Arc<dyn crate::grpc::GrpcTransport>,
     pub channel: TonicChannel,
-    pub pool: prost_reflect::DescriptorPool,
+    pub pools: PoolSet,
     pub catalog: ServiceCatalog,
 }
 

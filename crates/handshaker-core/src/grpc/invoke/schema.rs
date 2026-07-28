@@ -6,7 +6,8 @@
 //! `docs/superpowers/specs/2026-06-10-body-autocomplete-schema-design.md`.
 
 use crate::error::CoreError;
-use prost_reflect::{DescriptorPool, EnumDescriptor, FieldDescriptor, Kind, MessageDescriptor};
+use crate::grpc::descriptor::PoolSet;
+use prost_reflect::{EnumDescriptor, FieldDescriptor, Kind, MessageDescriptor};
 use std::collections::{HashSet, VecDeque};
 
 /// Flat schema for one method's input or output message. Types are referenced by full-name
@@ -75,15 +76,16 @@ pub enum MessageSide {
 }
 
 /// Build a flat schema for the given method's input or output message from a
-/// descriptor pool.
-pub fn build_message_schema_from_pool(
-    pool: &DescriptorPool,
+/// descriptor pool set.
+pub fn build_message_schema_from_pools(
+    pools: &PoolSet,
     service: &str,
     method: &str,
     side: MessageSide,
 ) -> Result<MessageSchema, CoreError> {
-    let svc = pool
-        .get_service_by_name(service)
+    let svc = pools
+        .for_service(service)
+        .and_then(|p| p.get_service_by_name(service))
         .ok_or_else(|| CoreError::ServiceNotFound {
             service: service.to_string(),
         })?;
@@ -286,6 +288,7 @@ fn scalar_label(kind: &Kind) -> &'static str {
 mod tests {
     use super::*;
     use prost::Message as _;
+    use prost_reflect::DescriptorPool;
     use prost_types::field_descriptor_proto::{Label, Type as Ty};
     use prost_types::{
         DescriptorProto, EnumDescriptorProto, EnumValueDescriptorProto, FieldDescriptorProto,
@@ -654,17 +657,18 @@ mod tests {
         };
         let mut f = file("t", vec![m]);
         f.service = vec![svc];
-        let pool = pool_with(f);
+        let pools = PoolSet::from_pool(pool_with(f));
 
-        let ok = build_message_schema_from_pool(&pool, "t.Svc", "Call", MessageSide::Input).unwrap();
+        let ok =
+            build_message_schema_from_pools(&pools, "t.Svc", "Call", MessageSide::Input).unwrap();
         assert_eq!(ok.root, "t.M");
 
         assert!(matches!(
-            build_message_schema_from_pool(&pool, "t.Nope", "Call", MessageSide::Input),
+            build_message_schema_from_pools(&pools, "t.Nope", "Call", MessageSide::Input),
             Err(CoreError::ServiceNotFound { .. })
         ));
         assert!(matches!(
-            build_message_schema_from_pool(&pool, "t.Svc", "Nope", MessageSide::Input),
+            build_message_schema_from_pools(&pools, "t.Svc", "Nope", MessageSide::Input),
             Err(CoreError::MethodNotFound { .. })
         ));
     }
@@ -693,11 +697,13 @@ mod tests {
         };
         let mut f = file("t", vec![m_in, m_out]);
         f.service = vec![svc];
-        let pool = pool_with(f);
+        let pools = PoolSet::from_pool(pool_with(f));
 
-        let input = build_message_schema_from_pool(&pool, "t.Svc", "Call", MessageSide::Input).unwrap();
+        let input =
+            build_message_schema_from_pools(&pools, "t.Svc", "Call", MessageSide::Input).unwrap();
         assert_eq!(input.root, "t.In");
-        let output = build_message_schema_from_pool(&pool, "t.Svc", "Call", MessageSide::Output).unwrap();
+        let output =
+            build_message_schema_from_pools(&pools, "t.Svc", "Call", MessageSide::Output).unwrap();
         assert_eq!(output.root, "t.Out");
         assert!(output.messages.iter().any(|m| m.full_name == "t.Out"));
     }

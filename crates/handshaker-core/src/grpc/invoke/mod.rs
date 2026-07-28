@@ -8,6 +8,7 @@ use std::collections::HashMap;
 
 use crate::error::CoreError;
 use crate::grpc::connection::GrpcConnection;
+use crate::grpc::descriptor::PoolSet;
 use crate::grpc::transport::DynamicCodec;
 
 pub(crate) mod skeleton;
@@ -16,7 +17,7 @@ mod well_known;
 mod lenient;
 mod status_details;
 pub use schema::{
-    build_message_schema_from_pool, EnumNode, EnumValueNode, FieldNode, FieldValueKind,
+    build_message_schema_from_pools, EnumNode, EnumValueNode, FieldNode, FieldValueKind,
     MessageNode, MessageSchema, MessageSide,
 };
 pub use status_details::{
@@ -52,30 +53,33 @@ pub struct UnaryOutcome {
     pub elapsed_ms: u64,
 }
 
-/// Build a JSON skeleton for the request body of the given method.
+/// Build a JSON skeleton for the request body of the given method, from a live connection.
 ///
-/// Used by the UI when the user clicks a method in the catalog — populates the request
-/// body editor with default values.
+/// Convenience wrapper over `build_request_skeleton_from_pools` for callers that already
+/// hold a `GrpcConnection` — today only integration tests. The UI reaches the same code
+/// through the `grpc_build_request_skeleton` command, which calls the pool-set variant
+/// directly on both its cache-hit and its activate branch.
 pub fn build_request_skeleton(
     connection: &GrpcConnection,
     service: &str,
     method: &str,
 ) -> Result<String, CoreError> {
-    build_request_skeleton_from_pool(&connection.pool, service, method)
+    build_request_skeleton_from_pools(&connection.pools, service, method)
 }
 
-/// Build a pretty-printed JSON skeleton for a method's input message, from a pool.
+/// Build a pretty-printed JSON skeleton for a method's input message, from a pool set.
 ///
-/// Pool-based variant so callers without a live `GrpcConnection` (e.g. the lazy
+/// Pool-set-based variant so callers without a live `GrpcConnection` (e.g. the lazy
 /// connect-on-Send command surface) can build a skeleton straight from a cached
-/// descriptor pool.
-pub fn build_request_skeleton_from_pool(
-    pool: &prost_reflect::DescriptorPool,
+/// contract.
+pub fn build_request_skeleton_from_pools(
+    pools: &PoolSet,
     service: &str,
     method: &str,
 ) -> Result<String, CoreError> {
-    let svc = pool
-        .get_service_by_name(service)
+    let svc = pools
+        .for_service(service)
+        .and_then(|p| p.get_service_by_name(service))
         .ok_or_else(|| CoreError::ServiceNotFound {
             service: service.to_string(),
         })?;
@@ -93,7 +97,7 @@ pub fn build_request_skeleton_from_pool(
 
 /// Execute a unary RPC.
 ///
-/// 1. Resolves `service`/`method` from `connection.pool`. Not found → `ServiceNotFound` / `MethodNotFound`.
+/// 1. Resolves `service`/`method` from `connection.pools`. Not found → `ServiceNotFound` / `MethodNotFound`.
 /// 2. Checks the method is unary (not streaming). Streaming → `NotImplemented`.
 /// 3. Parses `request_json` to a `DynamicMessage` via prost-reflect serde. Fail → `EncodeRequest`.
 /// 4. Builds a `DynamicCodec` + path `/{service}/{method}`.
@@ -109,8 +113,9 @@ pub async fn invoke_unary(
     opts: CallOptions,
 ) -> Result<UnaryOutcome, CoreError> {
     let svc = connection
-        .pool
-        .get_service_by_name(service)
+        .pools
+        .for_service(service)
+        .and_then(|p| p.get_service_by_name(service))
         .ok_or_else(|| CoreError::ServiceNotFound {
             service: service.to_string(),
         })?;
@@ -162,15 +167,15 @@ mod tests {
 
     #[test]
     fn skeleton_from_pool_builds_for_known_method() {
-        let pool = fixture_pool();
-        let s = build_request_skeleton_from_pool(&pool, "test.Echo", "Send").expect("skeleton");
+        let pools = PoolSet::from_pool(fixture_pool());
+        let s = build_request_skeleton_from_pools(&pools, "test.Echo", "Send").expect("skeleton");
         assert!(s.contains("\"id\""), "got {s}");
     }
 
     #[test]
     fn skeleton_from_pool_unknown_service_errors() {
-        let pool = fixture_pool();
-        let err = build_request_skeleton_from_pool(&pool, "no.Such", "Send").unwrap_err();
+        let pools = PoolSet::from_pool(fixture_pool());
+        let err = build_request_skeleton_from_pools(&pools, "no.Such", "Send").unwrap_err();
         assert!(matches!(err, CoreError::ServiceNotFound { .. }), "got {err:?}");
     }
 
