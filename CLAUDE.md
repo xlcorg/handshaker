@@ -6,17 +6,15 @@ Workspace: `crates/handshaker-core` (OS-independent core) · `src-tauri` (IPC) �
 
 ## Active work
 
-Active: none — backlog empty (all auth-tab-cleanup tickets closed).
+Active: none — backlog empty.
 
-Latest merged: **collection Authorization tab cleanup** (spec #28, issues
-#29/#30/#31/#32/#33, closed) — Header name is a placeholder field (default seeds empty,
-persists back to the kind default), the API-key section shows an editable Prefix, dead
-environment names in "Apply in environments" are struck-through and uncheckable, the
-OAuth2 fields (Token URL / Client ID / Client secret / Scope) use `VarHighlightInput`
-with env+collection candidates, and every editor string lives in `messages`. No storage
-or Send-spine change. Spec archived at
-`docs/superpowers/specs/archive/2026-07-22-auth-tab-cleanup-design.md`. Details:
-`git log main`.
+Latest merged: **per-service descriptor pools** — a server whose reflection response
+declares the same symbol in two files no longer costs the whole endpoint. `build_pool_set`
+falls back from one pool → one pool per service closure → a first-wins symbol prune;
+`PoolSet` replaces the connection's single `DescriptorPool` and the contract cache
+persists the raw corpus (on-disk format break, old entries skipped). No IPC/DTO or
+frontend change. Plan banner:
+`docs/superpowers/plans/archive/2026-07-27-per-service-descriptor-pools.md`.
 
 Integration branch is `main`; features run in isolated worktree branches (`claude/*`)
 and land fast-forward. Before merging, squash the branch into clean, cohesive history —
