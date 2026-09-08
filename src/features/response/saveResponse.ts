@@ -1,12 +1,12 @@
 import { toast } from "sonner";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { savedFileToast } from "@/lib/savedFileToast";
 import { fileSaveText } from "@/ipc/client";
 import { messages } from "@/lib/messages";
 import { responseFileName } from "./responseFileName";
 
 /** Save the full response body `text` to a user-picked file. Suggests a
  *  `response-<localstamp>.json` default name, opens the native Save-As, and on
- *  success shows a toast with a "Show in folder" action (reveal-in-folder).
+ *  success shows a toast with open-file and reveal-in-folder actions.
  *  Cancellation is silent; failure shows an error toast. Returns the promise so
  *  callers can await in tests; UI call sites fire-and-forget with `void`. */
 export function saveResponseToFile(text: string): Promise<void> {
@@ -14,12 +14,7 @@ export function saveResponseToFile(text: string): Promise<void> {
   return fileSaveText(text, defaultName)
     .then((path) => {
       if (!path) return; // cancelled
-      toast.success(messages.response.save.savedTo(path), {
-        action: {
-          label: messages.response.save.showInFolder,
-          onClick: () => void revealItemInDir(path),
-        },
-      });
+      savedFileToast(path);
     })
     .catch((e) => {
       toast.error(typeof e === "string" ? e : messages.response.save.failed);

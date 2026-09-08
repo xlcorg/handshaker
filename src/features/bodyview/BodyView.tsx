@@ -17,6 +17,7 @@ import { GhostZone, computeGhostLines } from "./ghost";
 import { computeUnknownFieldMarkers } from "./validate";
 import { attachDecodeActions, type DecodeEditorLike } from "./decodeActions";
 import { messages } from "@/lib/messages";
+import { savedFileToast } from "@/lib/savedFileToast";
 import { copyToClipboard } from "@/lib/clipboard";
 import { toastSnippet } from "./copyValue";
 import { base64Save, base64SaveEncoded } from "@/ipc/client";
@@ -330,7 +331,7 @@ export function BodyView({ mode, value, onChange, onSubmit, schema, varCandidate
         const reportSave = (run: Promise<string | null>) =>
           void run
             .then((p) => {
-              if (p) toast.success(messages.response.save.savedTo(p));
+              if (p) savedFileToast(p);
             })
             .catch((e) => toast.error(typeof e === "string" ? e : messages.response.save.failed));
         live.current.decode = attachDecodeActions(editor as unknown as DecodeEditorLike, {

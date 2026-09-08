@@ -243,7 +243,11 @@ export const messages = {
       toFileTooltip: "Save response to file",
       /** Success-toast action button (reveal-in-folder). */
       showInFolder: "Show in folder",
-      savedTo: (path: string) => `Saved to ${path}`,
+      saved: "File saved",
+      openFile: "Open file in the default application",
+      openNamedFile: (name: string) => `Open ${name}`,
+      openFailed: "Couldn't open the file. It may have been moved or deleted, or no default application is available.",
+      revealFailed: "Couldn't show the file in its folder. It may have been moved or deleted.",
       failed: "Couldn't save",
     },
   },
