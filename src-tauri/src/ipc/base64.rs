@@ -1,5 +1,5 @@
 //! IPC DTO for the base64 decoder. See
-//! docs/superpowers/specs/2026-06-15-base64-value-decoder-design.md.
+//! docs/archive/specs/2026-06-15-base64-value-decoder-design.md.
 
 use handshaker_core::base64::Classified;
 use serde::Serialize;

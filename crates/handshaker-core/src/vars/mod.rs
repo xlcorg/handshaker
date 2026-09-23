@@ -7,7 +7,7 @@
 //!   with the best-effort substitution and lists of unresolved names / cycle chain.
 //!   Used by UI for live preview.
 //!
-//! See `docs/superpowers/specs/2026-05-27-plan-04-env-vars-design.md` §4 for full semantics.
+//! See `docs/archive/specs/2026-05-27-plan-04-env-vars-design.md` §4 for full semantics.
 
 use std::collections::HashMap;
 use std::sync::LazyLock;

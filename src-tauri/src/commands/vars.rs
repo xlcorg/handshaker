@@ -1,5 +1,5 @@
 //! Variable substitution IPC command. See spec §5.1 and
-//! docs/superpowers/specs/2026-06-13-collection-vars-resolve-design.md.
+//! docs/archive/specs/2026-06-13-collection-vars-resolve-design.md.
 
 use std::collections::HashMap;
 

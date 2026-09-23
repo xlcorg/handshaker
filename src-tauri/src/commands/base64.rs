@@ -1,5 +1,5 @@
 //! Base64 decode IPC: inspect (view) + save (native Save-As). See
-//! docs/superpowers/specs/2026-06-15-base64-value-decoder-design.md.
+//! docs/archive/specs/2026-06-15-base64-value-decoder-design.md.
 
 use handshaker_core::base64::{classify, decode_lenient, suggested_extension};
 

@@ -11,7 +11,7 @@ Cross-platform desktop client (macOS + Windows) for exploring and invoking inter
 
 ## Status
 
-MVP under construction. Plan #1 (project skeleton) is complete. See `docs/superpowers/plans/` and `docs/superpowers/specs/`.
+Under active development. Active specs/tickets live in `.scratch/`; shipped ones in `docs/archive/`.
 
 ## Prerequisites
 
@@ -59,7 +59,7 @@ handshaker/
 ├── crates/handshaker-core/   OS-independent core (errors, gRPC, auth, collections — grows plan-by-plan)
 ├── src-tauri/                Tauri 2 shell: capabilities, IPC commands, app state
 ├── src/                      React + TS frontend (Vite, Tailwind v4, shadcn dark)
-└── docs/superpowers/         specs + plans
+└── docs/archive/             shipped specs + plans
 ```
 
 ## Checks

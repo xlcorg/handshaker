@@ -3,7 +3,7 @@
 //! Unlike `skeleton` (which inlines default values with a depth cap), this references
 //! message/enum types by full-name in flat maps, so recursive/self-referential types
 //! terminate naturally with no depth cap. See
-//! `docs/superpowers/specs/2026-06-10-body-autocomplete-schema-design.md`.
+//! `docs/archive/specs/2026-06-10-body-autocomplete-schema-design.md`.
 
 use crate::error::CoreError;
 use crate::grpc::descriptor::PoolSet;

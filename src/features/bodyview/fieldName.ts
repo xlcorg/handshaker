@@ -3,7 +3,7 @@ import type { FieldNodeIpc } from "@/ipc/bindings";
 // The single source of the field-naming invariant: "write the proto name (snake_case),
 // recognize both forms". A mirror of the proto3-JSON wire deserializer, which emits
 // canonical camelCase but accepts both the camelCase and the original proto name.
-// See docs/superpowers/specs/2026-07-01-proto-field-names-snake-case-design.md.
+// See docs/archive/specs/2026-07-01-proto-field-names-snake-case-design.md.
 
 /** The key Handshaker writes into the JSON body — the proto (snake_case) name,
  *  matching the Contract tab. */

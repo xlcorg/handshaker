@@ -14,12 +14,13 @@ falls back from one pool → one pool per service closure → a first-wins symbo
 `PoolSet` replaces the connection's single `DescriptorPool` and the contract cache
 persists the raw corpus (on-disk format break, old entries skipped). No IPC/DTO or
 frontend change. Plan banner:
-`docs/superpowers/plans/archive/2026-07-27-per-service-descriptor-pools.md`.
+`docs/archive/plans/2026-07-27-per-service-descriptor-pools.md`.
 
 Integration branch is `main`; features run in isolated worktree branches (`claude/*`)
 and land fast-forward. Before merging, squash the branch into clean, cohesive history —
 `.claude/rules/squashing-feature-branches.md`. The source of truth for any feature's
-status is its `archive/` plan banner and `git log main`, not this section.
+status is its archived spec/tickets under `docs/archive/` and `git log main`, not this
+section.
 
 ## Build / test / run
 
@@ -71,21 +72,22 @@ per-context `CONTEXT.md`):
 
 - `ui-strings.md` — every user-facing string lives in `src/lib/messages.ts`
   (path-scoped to `src/**/*.{ts,tsx}`).
-- `archiving-completed-work.md` — move finished plans/specs into `archive/` and refresh
-  the "Active work" pointer.
+- `archiving-completed-work.md` — move a finished `.scratch/<feature>/` into
+  `docs/archive/` and refresh the "Active work" pointer.
+- `specs-plans-language.md` — specs/tickets are English regardless of chat language.
 - `squashing-feature-branches.md` — squash `claude/*` into cohesive history before ff.
 
 ## Compact instructions
 
-On compaction, **always preserve**: the active plan path and which task is in progress;
+On compaction, **always preserve**: the active spec path and which ticket is in progress;
 the list of files changed this session and any uncommitted work; the build/test commands
 used.
 
 ## Session cadence
 
-Multi-session plan execution (`/clear` between tasks, `/compact` mid-task, 🧹 checkpoints,
-the minimal post-`/clear` handoff). Default mode is **subagent-driven** — don't ask.
-Details: `docs/agents/session-cadence.md`.
+Spec → tickets → implement (`/to-spec`, `/to-tickets`, `/implement`); `/clear` between
+tickets, `/compact` mid-ticket, minimal post-`/clear` handoff. Default mode is
+**subagent-driven** — don't ask. Details: `docs/agents/session-cadence.md`.
 
 ## Agent skills
 
@@ -93,8 +95,9 @@ Config for Matt Pocock's engineering skills (`triage`, `to-tickets`, `to-spec`,
 `diagnosing-bugs`, `tdd`, `improve-codebase-architecture`, etc.). One-line summaries here;
 details in `docs/agents/*.md`.
 
-- **Issue tracker** — tasks live in GitHub Issues on `xlcorg/handshaker` (via `gh`);
-  external PRs are **not** a triage surface. See `docs/agents/issue-tracker.md`.
+- **Issue tracker** — local markdown: `.scratch/<feature>/spec.md` + one file per ticket in
+  `.scratch/<feature>/issues/NN-<slug>.md` (`Status:` line = triage state). Not GitHub.
+  See `docs/agents/issue-tracker.md`.
 - **Triage labels** — canonical vocabulary (`needs-triage`, `needs-info`,
   `ready-for-agent`, `ready-for-human`, `wontfix`); label strings match role names.
   See `docs/agents/triage-labels.md`.

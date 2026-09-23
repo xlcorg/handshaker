@@ -1,5 +1,5 @@
 //! Lenient base64 decode + content classification for the response decoder.
-//! Pure / OS-independent. See docs/superpowers/specs/2026-06-15-base64-value-decoder-design.md.
+//! Pure / OS-independent. See docs/archive/specs/2026-06-15-base64-value-decoder-design.md.
 
 use base64::{
     alphabet,
