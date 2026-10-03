@@ -6,15 +6,14 @@ Workspace: `crates/handshaker-core` (OS-independent core) · `src-tauri` (IPC) �
 
 ## Active work
 
-Active: none — backlog empty.
+No feature is active — the next one starts with `/to-spec` under `.scratch/<feature>/`.
 
-Latest merged: **per-service descriptor pools** — a server whose reflection response
-declares the same symbol in two files no longer costs the whole endpoint. `build_pool_set`
-falls back from one pool → one pool per service closure → a first-wins symbol prune;
-`PoolSet` replaces the connection's single `DescriptorPool` and the contract cache
-persists the raw corpus (on-disk format break, old entries skipped). No IPC/DTO or
-frontend change. Plan banner:
-`docs/archive/plans/2026-07-27-per-service-descriptor-pools.md`.
+Latest merged: **streaming RPCs** — Handshaker calls server-streaming, client-streaming and
+bidi methods: a core-owned stream call (ADR-0002), `stream_*` IPC over one `Channel` per
+call, a timeline response pane with Open / Send message / End stream / Cancel, Save
+messages and Assemble. Spec + tickets: `docs/archive/2026-10-04-streaming-rpcs/spec.md`.
+Memory: `project_streaming_rpcs_done.md`. Live-check server:
+`cargo run -p handshaker-core --example echo_server`.
 
 Integration branch is `main`; features run in isolated worktree branches (`claude/*`)
 and land fast-forward. Before merging, squash the branch into clean, cohesive history —

@@ -1,15 +1,18 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useEffect, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useBusyDelay } from "@/lib/use-busy-delay";
 import { Activity } from "lucide-react";
 import { ResponseBody } from "./ResponseBody";
 import { EmptyState } from "./EmptyState";
 import { ErrorView } from "./ErrorView";
 import { ClientErrorView } from "./ClientErrorView";
-import { KVTable, type KVRow } from "./KVTable";
+import { KVTable, kvRows, type KVRow } from "./KVTable";
+import { useTabBarStart } from "./useTabBarStart";
 import { RespMeta, type RespState } from "./RespMeta";
 import { UnderlineTabs } from "@/components/ui/underline-tabs";
 import { ContractView } from "@/features/contract/ContractView";
 import type { InvokeOutcomeIpc, MessageSchemaIpc } from "@/ipc/bindings";
+import type { MethodKind } from "@/lib/method-kind";
+import { messages } from "@/lib/messages";
 import type { ClientFault } from "@/features/workflow/netDiagnostics";
 import { isMacOS } from "@/lib/platform";
 import { saveResponseToFile } from "./saveResponse";
@@ -20,6 +23,8 @@ export interface ContractInfo {
   input: MessageSchemaIpc | null;
   output: MessageSchemaIpc | null;
   method: string;
+  /** Method kind derived live in the call panel; `null` while the catalog is unknown. */
+  kind: MethodKind | null;
 }
 
 export interface ResponsePanelProps {
@@ -49,23 +54,10 @@ export function ResponsePanel({ state, outcome, error, contract }: ResponsePanel
   // button swap (250ms) ⇒ comet and Cancel appear together.
   const showProgress = useBusyDelay(sending, 250);
 
-  // Anchor the progress comet's first pass under the active tab. Measure the tab's
-  // left relative to the header via bounding rects (NOT offsetLeft — the tab strip is
-  // `relative`, so it is the tabs' offsetParent and offsetLeft would be ~0 here).
-  const headerRef = useRef<HTMLDivElement>(null);
-  const [barStart, setBarStart] = useState(0);
-  useLayoutEffect(() => {
-    if (!sending) return;
-    const header = headerRef.current;
-    const activeTab = header?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
-    if (header && activeTab) {
-      setBarStart(activeTab.getBoundingClientRect().left - header.getBoundingClientRect().left);
-    }
-  }, [sending, tab]);
+  // Anchor the progress comet's first pass under the active tab.
+  const { headerRef, barStart } = useTabBarStart(sending, tab);
 
-  const trailers: KVRow[] = outcome
-    ? Object.entries(outcome.trailing_metadata).map(([k, v]) => ({ k, v: v ?? "" }))
-    : [];
+  const trailers = kvRows(outcome?.trailing_metadata);
   // Backend doesn't surface initial-metadata yet; headers stays empty until it does.
   const headers: KVRow[] = [];
 
@@ -93,10 +85,10 @@ export function ResponsePanel({ state, outcome, error, contract }: ResponsePanel
           onChange={(v) => setTab(v as ResponseTab)}
           busy={showProgress}
           items={[
-            { value: "body", label: "Body" },
-            { value: "trailers", label: "Trailers", hint: trailers.length || undefined },
-            { value: "headers", label: "Headers", hint: headers.length || undefined },
-            ...(contract ? [{ value: "contract", label: "Contract" }] : []),
+            { value: "body", label: messages.response.tabs.body },
+            { value: "trailers", label: messages.response.tabs.trailers, hint: trailers.length || undefined },
+            { value: "headers", label: messages.response.tabs.headers, hint: headers.length || undefined },
+            ...(contract ? [{ value: "contract", label: messages.response.tabs.contract }] : []),
           ]}
         />
         <div className="ml-auto flex items-center gap-2.5">
@@ -114,13 +106,13 @@ export function ResponsePanel({ state, outcome, error, contract }: ResponsePanel
       {state === "idle" && tab !== "contract" && (
         <EmptyState
           icon={<Activity className="size-[18px]" />}
-          title="Awaiting first call"
-          desc="Hit Send to invoke. Response body, trailers and timing will appear here."
+          title={messages.response.empty.awaitingFirstCall}
+          desc={messages.response.empty.awaitingFirstCallDesc}
         />
       )}
       {tab === "contract" && contract && (
         <div className="min-h-0 flex-1">
-          <ContractView method={contract.method} input={contract.input} output={contract.output} />
+          <ContractView method={contract.method} input={contract.input} output={contract.output} kind={contract.kind} />
         </div>
       )}
       {state === "success" && outcome && tab === "body" && outcome.response_json !== null && (

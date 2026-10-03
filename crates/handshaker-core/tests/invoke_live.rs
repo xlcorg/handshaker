@@ -61,7 +61,7 @@ async fn live_target_reflects_and_invokes_first_unary_method() {
         &method_name,
         &skeleton,
         HashMap::new(),
-        CallOptions { max_message_bytes: usize::MAX },
+        CallOptions { max_message_bytes: usize::MAX, phase_timeout: None },
     )
     .await
     {
@@ -79,9 +79,9 @@ async fn live_target_reflects_and_invokes_first_unary_method() {
                 assert!(!outcome.status_message.is_empty());
             }
         }
-        Err(handshaker_core::error::CoreError::NotImplemented(msg)) => {
-            // Streaming method accidentally picked — that's OK, skip.
-            println!("[invoke_live] picked method was streaming; skipping ({msg})");
+        Err(e @ handshaker_core::error::CoreError::MethodKindMismatch { .. }) => {
+            // Streaming method accidentally picked — the kind gate refused the unary path; skip.
+            println!("[invoke_live] picked method was streaming; skipping ({e})");
         }
         Err(e) => panic!("invoke_live unexpected client-side error: {e:?}"),
     }

@@ -2,6 +2,8 @@
 
 use thiserror::Error;
 
+use crate::stream::MethodKind;
+
 #[derive(Debug, Error)]
 pub enum CoreError {
     #[error("invalid target: {0}")]
@@ -37,6 +39,43 @@ pub enum CoreError {
     Auth(String),
     #[error("gRPC status {code}: {message}")]
     GrpcStatus { code: i32, message: String },
+    /// A core-owned phase timer of a stream call expired (Open → connected, or
+    /// half-close → stream start). Unary deadlines are the calling layer's race, so
+    /// they never produce this variant.
+    #[error("deadline exceeded after {timeout_ms} ms")]
+    DeadlineExceeded { timeout_ms: u64 },
+    /// A Stream store lookup missed: no call under `request_id`, or the call has no
+    /// inbound message with that 1-based `index` (released, never received, or a
+    /// stale id).
+    #[error("stream {request_id}: no message #{index}")]
+    StreamMessageNotFound { request_id: String, index: u32 },
+    /// A **Send message** / **Half-close** found no open outbound side under
+    /// `request_id`: the call is unknown (not yet `Opened`, or released), already
+    /// half-closed, ended, or cancelled. Never a silent drop.
+    #[error("stream {request_id}: outbound side is closed")]
+    StreamClosed { request_id: String },
+    /// A Stream store operation (Save messages, Assemble) found no call under
+    /// `request_id` — never `Opened`, or already released.
+    #[error("stream {request_id}: no such call")]
+    StreamNotFound { request_id: String },
+    /// **Assemble** was asked for a `field_path` that is not a candidate of the call's
+    /// response type (not a non-repeated `bytes` field reachable through single message
+    /// fields) — a stale menu or a contract that changed since Open.
+    #[error("stream {request_id}: no bytes field `{field_path}` in the response type")]
+    StreamFieldNotFound { request_id: String, field_path: String },
+    /// The **kind gate**: the call path does not match the method's **Method kind** in the
+    /// loaded contract, refused before anything reaches the wire. `expected` is the kind
+    /// the caller's path implied (the unary spine → `Unary`; `open_stream` → the kind the
+    /// UI chose), `actual` is the descriptor's kind — the path a re-route must take.
+    /// `expected == actual == Unary` arises only from `open_stream(Unary)`: the stream
+    /// path has no unary shape, so even an agreeing unary kind is refused there.
+    #[error("method kind mismatch: {service}/{method} is {actual}, called as {expected}")]
+    MethodKindMismatch {
+        service: String,
+        method: String,
+        expected: MethodKind,
+        actual: MethodKind,
+    },
     #[error("not implemented (MVP): {0}")]
     NotImplemented(String),
     #[error("persistence error: {0}")]

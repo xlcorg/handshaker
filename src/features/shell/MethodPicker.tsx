@@ -6,12 +6,13 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Badge } from "@/components/ui/badge";
 import { Kbd } from "@/components/ui/kbd";
 import { cn } from "@/lib/cn";
 import { usePrefs } from "@/lib/use-prefs";
+import { messages } from "@/lib/messages";
 import type { ServiceCatalogIpc } from "@/ipc/bindings";
-import { deriveKind, shortService, type MethodKind, type SelectedMethod } from "./SelectedMethod";
+import { deriveKind, shortService, type SelectedMethod } from "./SelectedMethod";
+import { KindBadge, KindDot } from "./KindBadge";
 
 export interface MethodPickerProps {
   selected: SelectedMethod;
@@ -70,12 +71,12 @@ export function MethodPicker({ selected, catalog, onSelect, className, reflectio
           <span className="text-foreground font-medium truncate min-w-0">
             {selected.method}
           </span>
-          {selected.kind !== "unary" && <KindBadge kind={selected.kind} />}
+          <KindBadge kind={selected.kind} className="ml-1" />
           <ChevronDown className="size-2.5 text-muted-foreground/70 ml-auto flex-none" />
         </>
       ) : (
         <>
-          <span className="text-muted-foreground truncate">Select a method</span>
+          <span className="text-muted-foreground truncate">{messages.shell.methodPicker.selectMethod}</span>
           <ChevronDown className="size-2.5 text-muted-foreground/70 ml-auto flex-none" />
         </>
       )}
@@ -110,7 +111,7 @@ export function MethodPicker({ selected, catalog, onSelect, className, reflectio
             ref={inputRef}
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Find service.method…"
+            placeholder={messages.shell.methodPicker.searchPlaceholder}
             className="w-full h-10 pl-9 pr-12 bg-transparent text-sm placeholder:text-muted-foreground focus:outline-none"
           />
           <span className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -119,7 +120,7 @@ export function MethodPicker({ selected, catalog, onSelect, className, reflectio
         </div>
         <div className="max-h-[360px] overflow-auto scroll-thin py-1" data-mp-style={prefs.methodGroupStyle}>
           {groups.length === 0 ? (
-            <div className="px-4 py-8 text-center text-xs text-muted-foreground">No methods match "{q}"</div>
+            <div className="px-4 py-8 text-center text-xs text-muted-foreground">{messages.shell.methodPicker.noMatch(q)}</div>
           ) : (
             groups.map((svc) => (
               <div key={svc.full} className="mp-grp pb-1">
@@ -151,8 +152,8 @@ export function MethodPicker({ selected, catalog, onSelect, className, reflectio
                         {onQuickAdd && (
                           <button
                             type="button"
-                            aria-label={`Add ${m.name} to collection`}
-                            title="Add to collection"
+                            aria-label={messages.shell.methodPicker.quickAddAria(m.name)}
+                            title={messages.shell.methodPicker.quickAddTitle}
                             onClick={(e) => {
                               e.stopPropagation();
                               onQuickAdd(svc.full, m.name);
@@ -201,24 +202,4 @@ export function ServiceGroupLabel({ full, short }: { full: string; short: string
       <span className="mp-spath min-w-0 truncate font-mono text-[11px] text-muted-foreground/55">{full}</span>
     </span>
   );
-}
-
-function KindBadge({ kind }: { kind: MethodKind }) {
-  if (kind === "unary") return null;
-  const label = kind === "server" ? "stream" : kind === "client" ? "client" : "bidi";
-  return (
-    <Badge variant="secondary" className="ml-1 font-mono text-[10px] gap-1 px-1.5 py-0 flex-none">
-      <KindDot kind={kind} />
-      {label}
-    </Badge>
-  );
-}
-
-function KindDot({ kind }: { kind: MethodKind }) {
-  const cls =
-    kind === "server" ? "bg-stream" :
-    kind === "client" ? "bg-warn" :
-    kind === "bidi"   ? "bg-kind-bidi" :
-                        "bg-muted-foreground/50";
-  return <span className={cn("h-1.5 w-1.5 rounded-full flex-none", cls)} aria-hidden />;
 }

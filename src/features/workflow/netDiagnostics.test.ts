@@ -1,5 +1,58 @@
 import { describe, it, expect } from "vitest";
-import { faultFromUnknown, isCancelError, faultHint } from "./netDiagnostics";
+import { faultFromIpcError, faultFromUnknown, isCancelError, faultHint } from "./netDiagnostics";
+import { messages } from "@/lib/messages";
+
+describe("faultFromIpcError", () => {
+  it("maps UnresolvedVars to the unary 'other' fault listing the vars", () => {
+    expect(faultFromIpcError({ type: "UnresolvedVars", unresolved: ["host", "uid"], cycle: null })).toEqual({
+      kind: "other",
+      message: "Unresolved variables: {{host}}, {{uid}}",
+    });
+  });
+
+  it("prefers the cycle message when UnresolvedVars carries a cycle", () => {
+    expect(faultFromIpcError({ type: "UnresolvedVars", unresolved: [], cycle: ["a", "b", "a"] })).toEqual({
+      kind: "other",
+      message: "Variable cycle: a → b → a",
+    });
+  });
+
+  it("maps DeadlineExceeded / Cancelled / Transport to their kinds", () => {
+    expect(faultFromIpcError({ type: "DeadlineExceeded", timeout_ms: 30000 })).toEqual({
+      kind: "timeout",
+      message: "Request timed out after 30000ms",
+    });
+    expect(faultFromIpcError({ type: "Cancelled" })).toEqual({ kind: "cancelled", message: "Request cancelled" });
+    expect(faultFromIpcError({ type: "Transport", kind: "Refused", message: "refused" }).kind).toBe("refused");
+  });
+
+  it("maps StreamMessageNotFound to a user-facing message, never the raw discriminator", () => {
+    const f = faultFromIpcError({ type: "StreamMessageNotFound", request_id: "s1", index: 3 });
+    expect(f.kind).toBe("other");
+    expect(f.message).toBe(messages.workflow.fault.streamMessageNotFound);
+    expect(f.message).not.toContain("StreamMessageNotFound");
+  });
+
+  it("maps StreamClosed (Send message / Half-close on a call that is not open) to a user-facing message", () => {
+    const f = faultFromIpcError({ type: "StreamClosed", request_id: "s1" });
+    expect(f.kind).toBe("other");
+    expect(f.message).toBe(messages.workflow.fault.streamClosed);
+    expect(f.message).not.toContain("StreamClosed");
+  });
+
+  it("maps MethodKindMismatch to kind_mismatch, keeping both kinds for the re-route and the hint", () => {
+    const f = faultFromIpcError({ type: "MethodKindMismatch", service: "pkg.Svc", method: "Watch", expected: "unary", actual: "server" });
+    expect(f.kind).toBe("kind_mismatch");
+    expect(f.mismatch).toEqual({ service: "pkg.Svc", method: "Watch", expected: "unary", actual: "server" });
+    expect(f.message).toContain("pkg.Svc/Watch");
+    expect(f.message).not.toContain("MethodKindMismatch");
+  });
+
+  it("falls back to the type tag / message for the remaining variants", () => {
+    expect(faultFromIpcError({ type: "NotConnected" })).toEqual({ kind: "other", message: "NotConnected" });
+    expect(faultFromIpcError({ type: "MethodNotFound", service: "s", method: "m" }).kind).toBe("other");
+  });
+});
 
 describe("faultFromUnknown", () => {
   it("maps a structured Transport error to its kind", () => {
@@ -47,7 +100,23 @@ describe("isCancelError", () => {
 
 describe("faultHint", () => {
   it("returns a non-empty hint for known kinds and empty for other", () => {
-    expect(faultHint("refused")).toMatch(/listening|server is running/i);
-    expect(faultHint("other")).toBe("");
+    expect(faultHint({ kind: "refused", message: "" })).toMatch(/listening|server is running/i);
+    expect(faultHint({ kind: "other", message: "" })).toBe("");
+  });
+
+  it("kind_mismatch: the message names the method and both kinds in human form; the hint is the remedy only", () => {
+    const fault = faultFromIpcError({ type: "MethodKindMismatch", service: "pkg.Svc", method: "Watch", expected: "unary", actual: "server" });
+    expect(fault.message).toContain("pkg.Svc/Watch");
+    expect(fault.message).toContain("server-streaming");
+    expect(fault.message).toContain("unary");
+    const hint = faultHint(fault);
+    expect(hint).toMatch(/refresh reflection/i);
+    // Not the message again: the face would show the same sentence twice.
+    expect(hint).not.toContain("pkg.Svc/Watch");
+    expect(hint).not.toContain("but was called as");
+    // Every kind has a human label.
+    const bidi = faultFromIpcError({ type: "MethodKindMismatch", service: "s", method: "m", expected: "client", actual: "bidi" });
+    expect(bidi.message).toContain("bidirectional");
+    expect(bidi.message).toContain("client-streaming");
   });
 });

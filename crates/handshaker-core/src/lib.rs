@@ -12,6 +12,7 @@ pub mod error;
 pub mod grpc;
 pub mod persist;
 pub mod send;
+pub mod stream;
 pub mod ui_state;
 pub mod vars;
 

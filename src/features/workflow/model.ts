@@ -3,7 +3,9 @@ import type { InvokeOutcomeIpc, SavedAuthConfigIpc } from "@/ipc/bindings";
 import type { ClientFault } from "./netDiagnostics";
 
 export type ViewMode = "ledger" | "list" | "focus";
-export type StepStatus = "draft" | "sending" | "ok" | "error";
+/** `"cancelled"` is a Stream call terminal state (rows stay); a cancelled unary Send
+ *  returns to `"draft"`. */
+export type StepStatus = "draft" | "sending" | "ok" | "error" | "cancelled";
 
 export interface MetadataRow {
   key: string;
@@ -30,6 +32,10 @@ export interface Step {
   outcome: InvokeOutcomeIpc | null;
   error: ClientFault | null; // client-side (non-gRPC) failure, structured for the face
   requestId: string | null; // transient: in-flight invoke id while status === "sending"
+  /** Stream call this step last opened (= its request id in the Stream store); null =
+   *  unary. Replaced by a fresh id on re-Open; the release rule frees ids no step
+   *  references any more. `outcome` stays unary-only. */
+  streamId: string | null;
 }
 
 export interface Workflow {
@@ -67,6 +73,7 @@ export function newStep(init: {
     outcome: null,
     error: null,
     requestId: null,
+    streamId: null,
   };
 }
 

@@ -25,20 +25,36 @@ pub async fn resolve_request(
     active_env: Option<&Environment>,
     tokens: &dyn TokenSource,
 ) -> Result<EffectiveRequest, CoreError> {
+    resolve_request_scoped(request, collection, active_env, tokens, true).await
+}
+
+/// [`resolve_request`] minus the body — **Open** of a client-streaming / bidi call, where
+/// nothing is sent at Open and the body is resolved per **Send message** instead
+/// ([`resolve_body`]). Address, metadata and auth resolve and materialize exactly as in
+/// `resolve_request`; `body_json` comes back empty and is never sent.
+pub async fn resolve_request_without_body(
+    request: &SavedRequest,
+    collection: Option<&Collection>,
+    active_env: Option<&Environment>,
+    tokens: &dyn TokenSource,
+) -> Result<EffectiveRequest, CoreError> {
+    resolve_request_scoped(request, collection, active_env, tokens, false).await
+}
+
+async fn resolve_request_scoped(
+    request: &SavedRequest,
+    collection: Option<&Collection>,
+    active_env: Option<&Environment>,
+    tokens: &dyn TokenSource,
+    with_body: bool,
+) -> Result<EffectiveRequest, CoreError> {
     // --- 1. Variables (priority env > collection) ---
-    // VariableSet borrows `&HashMap` (resolution is order-agnostic). The stored
-    // maps are now IndexMap, so convert here — the maps are tiny.
-    let env_vars: HashMap<String, String> = active_env
-        .map(|e| e.variables.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
-        .unwrap_or_default();
-    let collection_vars: HashMap<String, String> = collection
-        .map(|c| c.variables.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
-        .unwrap_or_default();
-    let vars = VariableSet { env: &env_vars, collection: &collection_vars };
+    let vars = variable_set(collection, active_env);
+    let vars = vars.as_set();
 
     let mut acc = ResolveAcc::default();
     let address = acc.take(&request.address_template, &vars);
-    let body_json = acc.take(&request.body_template, &vars);
+    let body_json = if with_body { acc.take(&request.body_template, &vars) } else { String::new() };
     let mut metadata = HashMap::with_capacity(request.metadata.len());
     for row in &request.metadata {
         if !row.enabled {
@@ -101,6 +117,52 @@ pub async fn resolve_request(
         invalidate_oauth,
         picked_auth,
     })
+}
+
+/// Body-only resolve for a **Send message** on an open stream call: the body template
+/// against the env/collection vars of *this* moment, through the same accumulator as
+/// [`resolve_request`] (every unresolved `{{var}}` reported at once, same
+/// `ResolveFailed` diagnosis). No auth pick and no materialization — those happened at
+/// Open and are not repeated per message.
+pub fn resolve_body(
+    body_template: &str,
+    collection: Option<&Collection>,
+    active_env: Option<&Environment>,
+) -> Result<String, CoreError> {
+    let vars = variable_set(collection, active_env);
+    let mut acc = ResolveAcc::default();
+    let body_json = acc.take(body_template, &vars.as_set());
+    match acc.into_failure() {
+        Some(err) => Err(err),
+        None => Ok(body_json),
+    }
+}
+
+/// The `{{var}}` sources of one resolve — env over collection — as owned maps.
+/// `VariableSet` borrows `&HashMap`s (resolution is order-agnostic) while the stored maps
+/// are `IndexMap`, so this is the one place they are converted; the maps are tiny.
+pub(crate) struct ResolveVars {
+    env: HashMap<String, String>,
+    collection: HashMap<String, String>,
+}
+
+impl ResolveVars {
+    pub(crate) fn as_set(&self) -> VariableSet<'_> {
+        VariableSet { env: &self.env, collection: &self.collection }
+    }
+}
+
+/// Collect the variables a resolve runs against: `None` collection = an unbound draft
+/// (no collection vars), `None` env = "No environment".
+pub(crate) fn variable_set(collection: Option<&Collection>, active_env: Option<&Environment>) -> ResolveVars {
+    ResolveVars {
+        env: active_env
+            .map(|e| e.variables.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+            .unwrap_or_default(),
+        collection: collection
+            .map(|c| c.variables.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
+            .unwrap_or_default(),
+    }
 }
 
 /// Accumulates unresolved vars (deduped, encounter order) + first cycle across fields.

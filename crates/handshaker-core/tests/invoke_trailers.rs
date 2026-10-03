@@ -16,6 +16,7 @@ async fn trailing_metadata_is_captured() {
     let config = common::EchoConfig {
         return_status: None, // OK response
         trailers: trailers.clone(),
+        ..Default::default()
     };
     let (addr, _stop) = common::spawn_echo_server(config).await;
     let target = GrpcTarget::new(addr.to_string(), false, false).unwrap();
@@ -30,7 +31,7 @@ async fn trailing_metadata_is_captured() {
         "Send",
         r#"{"id":"trail"}"#,
         HashMap::new(),
-        CallOptions { max_message_bytes: usize::MAX },
+        CallOptions { max_message_bytes: usize::MAX, phase_timeout: None },
     )
     .await
     .expect("invoke");

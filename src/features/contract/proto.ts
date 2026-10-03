@@ -1,5 +1,6 @@
 import type { MessageSchemaIpc, MessageNodeIpc, EnumNodeIpc, FieldNodeIpc } from "@/ipc/bindings";
 import { isScalarWkt } from "@/lib/wellKnown";
+import type { MethodKind } from "@/lib/method-kind";
 
 export type ProtoToken =
   | { kind: "keyword"; text: string }
@@ -155,11 +156,15 @@ function dedupeByFullName<T extends { full_name: string }>(items: T[]): T[] {
 /** Whole-method contract: an `rpc` signature line (fullName "" — never a scroll
  *  target), then one deduplicated listing of every type reachable from either
  *  side. Shared types print once — refs from both sides land on the same block;
- *  a missing side renders as `?` in the signature. */
+ *  a missing side renders as `?` in the signature. `kind` puts the proto-style
+ *  `stream` modifier inside the parentheses of each streaming side; while the
+ *  kind is unknown (`null`) the signature line is omitted altogether — the UI
+ *  never claims "unary" when it does not know. */
 export function renderContractDoc(
   method: string,
   input: MessageSchemaIpc | null,
   output: MessageSchemaIpc | null,
+  kind: MethodKind | null,
 ): ProtoDoc {
   const messages = dedupeByFullName([...(input?.messages ?? []), ...(output?.messages ?? [])]);
   const enums = dedupeByFullName([...(input?.enums ?? []), ...(output?.enums ?? [])]);
@@ -167,15 +172,19 @@ export function renderContractDoc(
   // response-side type with the same short name both print full names.
   const names = displayNames({ root: "", messages, enums });
 
-  const signature: ProtoToken[] = [
+  const side = (schema: MessageSchemaIpc | null, streaming: boolean): ProtoToken[] => [
+    ...(streaming ? [{ kind: "keyword", text: "stream " } as ProtoToken] : []),
+    schema ? typeRef(schema.root, names) : { kind: "punct", text: "?" },
+  ];
+  const signature: ProtoToken[] | null = kind === null ? null : [
     { kind: "keyword", text: "rpc " },
     { kind: "name", text: method },
     { kind: "punct", text: "(" },
-    input ? typeRef(input.root, names) : { kind: "punct", text: "?" },
+    ...side(input, kind === "client" || kind === "bidi"),
     { kind: "punct", text: ") " },
     { kind: "keyword", text: "returns " },
     { kind: "punct", text: "(" },
-    output ? typeRef(output.root, names) : { kind: "punct", text: "?" },
+    ...side(output, kind === "server" || kind === "bidi"),
     { kind: "punct", text: ");" },
   ];
 
@@ -189,7 +198,7 @@ export function renderContractDoc(
 
   return {
     blocks: [
-      { fullName: "", lines: [signature] },
+      ...(signature ? [{ fullName: "", lines: [signature] }] : []),
       ...[...roots, ...rest].map((m) => messageBlock(m, names)),
       ...enums.map((e) => enumBlock(e, names)),
     ],

@@ -4,6 +4,7 @@ import { render, screen, fireEvent, waitFor, act } from "@testing-library/react"
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { DraftAddressBar } from "./DraftAddressBar";
 import { newStep } from "./model";
+import { messages } from "@/lib/messages";
 
 const base = newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "GetX" });
 const cat = { services: [{ full_name: "p.v1.S", methods: [
@@ -19,7 +20,7 @@ function r(ui: ReactElement) {
 
 function props(over = {}) {
   return {
-    step: base, catalog: null, reflecting: false, reflectError: null, defaultTls: false,
+    step: base, catalog: null, kind: null, reflecting: false, reflectError: null, defaultTls: false,
     onAddress: vi.fn(), onTls: vi.fn(), onRefresh: vi.fn(), onReflectCancel: vi.fn(), onSelectMethod: vi.fn(),
     onSend: vi.fn(), onCancel: vi.fn(), ...over,
   };
@@ -92,6 +93,32 @@ describe("DraftAddressBar", () => {
     }
   });
 
+  describe("method kind badge", () => {
+    it.each([
+      ["server", messages.methodKind.badge.server],
+      ["client", messages.methodKind.badge.client],
+      ["bidi", messages.methodKind.badge.bidi],
+    ] as const)("shows the %s badge next to the method", (kind, label) => {
+      r(<DraftAddressBar {...props({ catalog: cat, kind })} />);
+      expect(screen.getByText(label)).toBeInTheDocument();
+    });
+
+    it("shows no badge for a unary method", () => {
+      r(<DraftAddressBar {...props({ catalog: cat, kind: "unary" })} />);
+      for (const label of Object.values(messages.methodKind.badge)) {
+        expect(screen.queryByText(label)).toBeNull();
+      }
+    });
+
+    it("shows no badge and the unary Send while the kind is unknown (no catalog yet)", () => {
+      r(<DraftAddressBar {...props({ catalog: null, kind: null })} />);
+      for (const label of Object.values(messages.methodKind.badge)) {
+        expect(screen.queryByText(label)).toBeNull();
+      }
+      expect(screen.getByRole("button", { name: /send/i })).toBeEnabled();
+    });
+  });
+
   it("has no standalone refresh button in the bar (refresh lives in the dropdown)", () => {
     r(<DraftAddressBar {...props({ catalog: cat })} />);
     expect(screen.queryByLabelText("refresh-reflection")).toBeNull();
@@ -127,5 +154,97 @@ describe("DraftAddressBar", () => {
       />,
     );
     await waitFor(() => expect(screen.getByText("{{host}}").className).toContain("vh-error"));
+  });
+
+  describe("two-way (client / bidi) controls", () => {
+    const twoWay = () => ({ canSend: true, onSendMessage: vi.fn(), onHalfClose: vi.fn() });
+
+    it.each(["client", "bidi"] as const)("idle %s method: the primary button reads ▶ Open and fires onSend", (kind) => {
+      const p = props({ catalog: cat, kind });
+      r(<DraftAddressBar {...p} />);
+      const open = screen.getByRole("button", { name: messages.workflow.addressBar.open });
+      expect(screen.queryByRole("button", { name: messages.workflow.addressBar.send })).toBeNull();
+      fireEvent.click(open);
+      expect(p.onSend).toHaveBeenCalledTimes(1);
+    });
+
+    it.each(["unary", "server", null] as const)("idle %s method keeps ▶ Send", (kind) => {
+      r(<DraftAddressBar {...props({ catalog: cat, kind })} />);
+      expect(screen.getByRole("button", { name: messages.workflow.addressBar.send })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: messages.workflow.addressBar.open })).toBeNull();
+    });
+
+    it("live two-way call: Open holds through the busy gate, then the segmented Send message / Half-close / Cancel", () => {
+      vi.useFakeTimers();
+      try {
+        const tw = twoWay();
+        const p = props({ kind: "bidi", step: { ...base, status: "sending" }, twoWay: tw });
+        r(<DraftAddressBar {...p} />);
+        expect(screen.getByRole("button", { name: messages.workflow.addressBar.open })).toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: /send message/i })).toBeNull();
+
+        act(() => vi.advanceTimersByTime(250));
+        expect(screen.queryByRole("button", { name: messages.workflow.addressBar.open })).toBeNull();
+        const sendMsg = screen.getByRole("button", { name: /send message/i });
+        const half = screen.getByRole("button", { name: /^end stream$/i });
+        const cancel = screen.getByRole("button", { name: /^cancel$/i });
+        expect(sendMsg).toBeEnabled();
+        expect(half).toBeEnabled();
+        fireEvent.click(sendMsg);
+        fireEvent.click(half);
+        fireEvent.click(cancel);
+        expect(tw.onSendMessage).toHaveBeenCalledTimes(1);
+        expect(tw.onHalfClose).toHaveBeenCalledTimes(1);
+        expect(p.onCancel).toHaveBeenCalledTimes(1);
+        expect(p.onSend).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("the half-close control reads 'End stream' with a real icon, not a fallback-font glyph", () => {
+      vi.useFakeTimers();
+      try {
+        const p = props({ kind: "bidi", step: { ...base, status: "sending" }, twoWay: twoWay() });
+        r(<DraftAddressBar {...p} />);
+        act(() => vi.advanceTimersByTime(250));
+        const end = screen.getByRole("button", { name: "End stream" });
+        expect(end.querySelector("svg")).not.toBeNull();
+        expect(end.textContent).toBe("End stream");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("after half-close (or while opening): Send message and Half-close are disabled, Cancel stays enabled", () => {
+      vi.useFakeTimers();
+      try {
+        const tw = { ...twoWay(), canSend: false };
+        const p = props({ kind: "client", step: { ...base, status: "sending" }, twoWay: tw });
+        r(<DraftAddressBar {...p} />);
+        act(() => vi.advanceTimersByTime(250));
+        expect(screen.getByRole("button", { name: /send message/i })).toBeDisabled();
+        expect(screen.getByRole("button", { name: /^end stream$/i })).toBeDisabled();
+        const cancel = screen.getByRole("button", { name: /^cancel$/i });
+        expect(cancel).toBeEnabled();
+        fireEvent.click(cancel);
+        expect(p.onCancel).toHaveBeenCalledTimes(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("live server stream (no twoWay) keeps the lone Cancel — no Send message / Half-close", () => {
+      vi.useFakeTimers();
+      try {
+        r(<DraftAddressBar {...props({ kind: "server", step: { ...base, status: "sending" } })} />);
+        act(() => vi.advanceTimersByTime(250));
+        expect(screen.getByRole("button", { name: /^cancel$/i })).toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: /send message/i })).toBeNull();
+        expect(screen.queryByRole("button", { name: /^end stream$/i })).toBeNull();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });

@@ -4,7 +4,7 @@ import { newStep, type MetadataRow, type Step } from "./model";
 import { lastExecutedFor, responseSeedPatch } from "./lastExecuted";
 import { newId } from "@/lib/ids";
 import { readPrefs } from "@/lib/use-prefs";
-import { faultFromUnknown, isCancelError, isObj, type ClientFault } from "./netDiagnostics";
+import { faultFromUnknown, isCancelError, type ClientFault } from "./netDiagnostics";
 
 /** A template resolver bound to a particular `{{var}}` source (collection/env ctx). */
 export type Resolver = (template: string) => Promise<ResolutionReportIpc>;
@@ -167,10 +167,11 @@ export async function createStepFromMethod(
   });
 }
 
+/** Outcome of one unary `sendStep`. `error` covers every client-side rejection — resolve
+ *  failure included — already mapped to its display fault by `faultFromIpcError`. */
 export type SendResult =
   | { kind: "ok"; report: SendReportIpc }
   | { kind: "error"; fault: ClientFault }
-  | { kind: "unresolved"; unresolved: string[]; cycle: string[] | null }
   | { kind: "cancelled" };
 
 type Oauth2Config = Extract<SavedAuthConfigIpc, { kind: "oauth2_client_credentials" }>;
@@ -216,25 +217,25 @@ export async function resolveOauthConfig(
 /** Live Send: forward the raw draft (templates + the step's own auth) + resolve ctx
  *  to `grpc_send`, which owns the whole pipeline (vars → auth pick/materialize → TLS →
  *  invoke → 16-invalidation). No frontend resolution left to do — this is call+map. */
-export async function sendStep(
-  step: {
-    address: string;
-    tls: boolean | null;
-    service: string;
-    method: string;
-    requestJson: string;
-    metadata: MetadataRow[];
-    auth: SavedAuthConfigIpc;
-    collectionId?: string | null;
-  },
-  ctx: { envName: string | null },
-  opts?: { requestId?: string; timeoutMs?: number; maxMessageBytes?: number },
-): Promise<SendResult> {
-  const requestId = opts?.requestId ?? newId();
-  const prefs = readPrefs();
-  const draft: SendDraftIpc = {
+/** The step fields a Send (unary or streaming) reads. `Step` satisfies it; tests
+ *  and history snapshots may pass a plain object. */
+export interface SendableStep {
+  address: string;
+  tls: boolean | null;
+  service: string;
+  method: string;
+  requestJson: string;
+  metadata: MetadataRow[];
+  auth: SavedAuthConfigIpc;
+  collectionId?: string | null;
+}
+
+/** Wire draft of a step: raw `{{var}}` templates (core resolves), the raw tri-state TLS
+ *  override (null ⇒ core inherits the ctx collection's `default_tls`), and only the
+ *  enabled, keyed metadata rows. Shared by the unary Send and the stream Open. */
+export function sendDraftOf(step: SendableStep): SendDraftIpc {
+  return {
     address_template: step.address,
-    // Raw tri-state override: null ⇒ core inherits the ctx collection's default_tls.
     tls_override: step.tls,
     service: step.service,
     method: step.method,
@@ -244,23 +245,34 @@ export async function sendStep(
       .map((m) => ({ key: m.key, value: m.value, enabled: true })),
     auth: step.auth,
   };
-  const sendCtx: SendCtxIpc = { collection_id: step.collectionId ?? null, env_name: ctx.envName };
-  const callOpts: CallOptionsIpc = {
+}
+
+/** Resolve context of a step: its owning collection (null when unbound) + the active env. */
+export function sendCtxOf(step: Pick<SendableStep, "collectionId">, envName: string | null): SendCtxIpc {
+  return { collection_id: step.collectionId ?? null, env_name: envName };
+}
+
+/** Per-call options: explicit overrides win, otherwise the user's prefs. */
+export function callOptionsOf(opts?: { timeoutMs?: number; maxMessageBytes?: number }): CallOptionsIpc {
+  const prefs = readPrefs();
+  return {
     timeout_ms: opts?.timeoutMs ?? prefs.requestTimeoutMs,
     max_message_bytes: opts?.maxMessageBytes ?? prefs.maxMessageBytes,
   };
+}
+
+export async function sendStep(
+  step: SendableStep,
+  ctx: { envName: string | null },
+  opts?: { requestId?: string; timeoutMs?: number; maxMessageBytes?: number },
+): Promise<SendResult> {
+  const requestId = opts?.requestId ?? newId();
   try {
-    const report = await ipc.grpcSend(draft, sendCtx, requestId, callOpts);
+    const report = await ipc.grpcSend(sendDraftOf(step), sendCtxOf(step, ctx.envName), requestId, callOptionsOf(opts));
     return { kind: "ok", report };
   } catch (e) {
     if (isCancelError(e)) return { kind: "cancelled" };
-    if (isObj(e) && e.type === "UnresolvedVars") {
-      return {
-        kind: "unresolved",
-        unresolved: e.unresolved as string[],
-        cycle: (e.cycle as string[] | null) ?? null,
-      };
-    }
+    // Every other rejection (incl. `UnresolvedVars`) is one client fault — the shared mapping.
     return { kind: "error", fault: faultFromUnknown(e) };
   }
 }

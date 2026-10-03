@@ -15,7 +15,7 @@ pub mod error_class;
 pub mod file_contract_cache;
 pub mod invoke;
 pub mod reflection;
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 pub mod testing;
 pub mod transport;
 

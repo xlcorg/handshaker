@@ -1,1 +1,8 @@
-export { type MethodKind, deriveKind, shortService } from "@/features/shell/SelectedMethod";
+export {
+  type MethodKind,
+  deriveKind,
+  isStreaming,
+  isTwoWay,
+  kindOf,
+  shortService,
+} from "@/features/shell/SelectedMethod";

@@ -5,6 +5,8 @@ use handshaker_core::CoreError;
 use serde::Serialize;
 use specta::Type;
 
+use crate::ipc::MethodKindIpc;
+
 /// Structured classification of a transport-connect failure. Lets the frontend
 /// narrow on a kind instead of regex-parsing the message string.
 #[derive(Debug, Serialize, Type, PartialEq)]
@@ -44,6 +46,27 @@ pub enum IpcError {
     Transport { kind: TransportKindIpc, message: String },
     Cancelled,
     DeadlineExceeded { timeout_ms: u32 },
+    /// `stream_message` (and later store reads) for an unknown call id or row index.
+    StreamMessageNotFound { request_id: String, index: u32 },
+    /// `stream_send` / `stream_half_close` found no open outbound side under the id: the
+    /// call is not `Opened` yet (or released), already half-closed, ended or cancelled.
+    StreamClosed { request_id: String },
+    /// `stream_save_messages` / `stream_assemble` for an id with no Stream store (never
+    /// `Opened`, or already released).
+    StreamNotFound { request_id: String },
+    /// `stream_assemble` for a `field_path` that is not a `bytes` candidate of the call's
+    /// response type (stale menu / changed contract).
+    StreamFieldNotFound { request_id: String, field_path: String },
+    /// The **kind gate**: the call path did not match the method's kind in the loaded
+    /// contract — nothing reached the wire. `expected` = the kind the path implied
+    /// (`grpc_send` → `unary`, `stream_open` → the kind the UI passed); `actual` = the
+    /// descriptor's kind, i.e. the path the one-shot re-route takes.
+    MethodKindMismatch {
+        service: String,
+        method: String,
+        expected: MethodKindIpc,
+        actual: MethodKindIpc,
+    },
     Auth { message: String },
     GrpcStatus { code: i32, message: String },
     NotImplemented { message: String },
@@ -72,6 +95,26 @@ impl From<CoreError> for IpcError {
             },
             CoreError::Auth(m) => IpcError::Auth { message: m },
             CoreError::GrpcStatus { code, message } => IpcError::GrpcStatus { code, message },
+            // Core phase timers of a stream call → the same face as the unary race.
+            CoreError::DeadlineExceeded { timeout_ms } => IpcError::DeadlineExceeded {
+                timeout_ms: timeout_ms.min(u64::from(u32::MAX)) as u32,
+            },
+            CoreError::StreamMessageNotFound { request_id, index } => {
+                IpcError::StreamMessageNotFound { request_id, index }
+            }
+            CoreError::StreamClosed { request_id } => IpcError::StreamClosed { request_id },
+            CoreError::StreamNotFound { request_id } => IpcError::StreamNotFound { request_id },
+            CoreError::StreamFieldNotFound { request_id, field_path } => {
+                IpcError::StreamFieldNotFound { request_id, field_path }
+            }
+            CoreError::MethodKindMismatch { service, method, expected, actual } => {
+                IpcError::MethodKindMismatch {
+                    service,
+                    method,
+                    expected: MethodKindIpc::from_core(expected),
+                    actual: MethodKindIpc::from_core(actual),
+                }
+            }
             CoreError::NotImplemented(m) => IpcError::NotImplemented { message: m },
             CoreError::Persistence(m) => IpcError::Persistence { message: m },
             CoreError::ResolveFailed { unresolved, cycle } => {
@@ -84,6 +127,8 @@ impl From<CoreError> for IpcError {
 #[cfg(test)]
 mod tests {
     use super::{IpcError, TransportKindIpc};
+    use crate::ipc::MethodKindIpc;
+    use handshaker_core::stream::MethodKind;
     use handshaker_core::CoreError;
 
     /// One-shot exhaustiveness check: every CoreError variant maps to the expected IpcError shape.
@@ -109,9 +154,20 @@ mod tests {
             CoreError::NotImplemented("n".into()),
             CoreError::Persistence("p".into()),
             CoreError::ResolveFailed { unresolved: vec!["v".into()], cycle: None },
+            CoreError::DeadlineExceeded { timeout_ms: 5 },
+            CoreError::StreamMessageNotFound { request_id: "r".into(), index: 1 },
+            CoreError::StreamClosed { request_id: "r".into() },
+            CoreError::MethodKindMismatch {
+                service: "s".into(),
+                method: "m".into(),
+                expected: MethodKind::Unary,
+                actual: MethodKind::Server,
+            },
+            CoreError::StreamNotFound { request_id: "r".into() },
+            CoreError::StreamFieldNotFound { request_id: "r".into(), field_path: "data".into() },
         ];
 
-        assert_eq!(cases.len(), 17, "Update this test when CoreError variants change");
+        assert_eq!(cases.len(), 23, "Update this test when CoreError variants change");
 
         for c in cases {
             // Smoke test: From impl must succeed for every variant. If a future CoreError variant
@@ -153,6 +209,74 @@ mod tests {
             }
             other => panic!("got {other:?}"),
         }
+    }
+
+    #[test]
+    fn core_deadline_maps_to_ipc_deadline_with_timeout() {
+        let e: IpcError = CoreError::DeadlineExceeded { timeout_ms: 30_000 }.into();
+        match e {
+            IpcError::DeadlineExceeded { timeout_ms } => assert_eq!(timeout_ms, 30_000),
+            other => panic!("got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn stream_closed_maps_with_the_request_id_and_tags_by_type() {
+        let e: IpcError = CoreError::StreamClosed { request_id: "rid".into() }.into();
+        match &e {
+            IpcError::StreamClosed { request_id } => assert_eq!(request_id, "rid"),
+            other => panic!("got {other:?}"),
+        }
+        let j = serde_json::to_string(&e).unwrap();
+        assert!(j.contains(r#""type":"StreamClosed""#) && j.contains(r#""request_id":"rid""#), "{j}");
+    }
+
+    /// The kind gate's error crosses IPC 1:1 with both kinds in the frontend's snake_case
+    /// spelling — `actual` is what the one-shot re-route routes by.
+    #[test]
+    fn method_kind_mismatch_maps_both_kinds_and_serializes_them_snake_case() {
+        let e: IpcError = CoreError::MethodKindMismatch {
+            service: "pkg.Svc".into(),
+            method: "Watch".into(),
+            expected: MethodKind::Unary,
+            actual: MethodKind::Server,
+        }
+        .into();
+        match &e {
+            IpcError::MethodKindMismatch { service, method, expected, actual } => {
+                assert_eq!((service.as_str(), method.as_str()), ("pkg.Svc", "Watch"));
+                assert_eq!((*expected, *actual), (MethodKindIpc::Unary, MethodKindIpc::Server));
+            }
+            other => panic!("got {other:?}"),
+        }
+        let j = serde_json::to_string(&e).unwrap();
+        assert!(j.contains(r#""type":"MethodKindMismatch""#), "{j}");
+        assert!(j.contains(r#""expected":"unary""#) && j.contains(r#""actual":"server""#), "{j}");
+        let bidi: IpcError = CoreError::MethodKindMismatch {
+            service: "s".into(), method: "m".into(), expected: MethodKind::Client, actual: MethodKind::Bidi,
+        }
+        .into();
+        let j = serde_json::to_string(&bidi).unwrap();
+        assert!(j.contains(r#""expected":"client""#) && j.contains(r#""actual":"bidi""#), "{j}");
+    }
+
+    /// The Stream store export errors cross 1:1 with the call id (and the path) so the
+    /// frontend can name them without regexing the message.
+    #[test]
+    fn stream_export_errors_map_with_their_ids_and_tag_by_type() {
+        let e: IpcError = CoreError::StreamNotFound { request_id: "rid".into() }.into();
+        let j = serde_json::to_string(&e).unwrap();
+        assert!(j.contains(r#""type":"StreamNotFound""#) && j.contains(r#""request_id":"rid""#), "{j}");
+        let e: IpcError =
+            CoreError::StreamFieldNotFound { request_id: "rid".into(), field_path: "chunk.data".into() }.into();
+        match &e {
+            IpcError::StreamFieldNotFound { request_id, field_path } => {
+                assert_eq!((request_id.as_str(), field_path.as_str()), ("rid", "chunk.data"));
+            }
+            other => panic!("got {other:?}"),
+        }
+        let j = serde_json::to_string(&e).unwrap();
+        assert!(j.contains(r#""type":"StreamFieldNotFound""#) && j.contains(r#""field_path":"chunk.data""#), "{j}");
     }
 
     #[test]

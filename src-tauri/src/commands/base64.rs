@@ -27,7 +27,7 @@ pub async fn base64_inspect(input: String) -> Result<Base64InspectIpc, String> {
 pub async fn base64_save(app: tauri::AppHandle, input: String) -> Result<Option<String>, String> {
     let bytes = decode_lenient(&input)?;
     let ext = suggested_extension(&classify(&bytes));
-    save_bytes_via_dialog(&app, &format!("decoded.{ext}"), &bytes).await
+    save_bytes_via_dialog(&app, &format!("decoded.{ext}"), bytes).await
 }
 
 /// Write the RAW base64 text (verbatim, no decode) to a user-picked file.
@@ -38,7 +38,7 @@ pub async fn base64_save_encoded(
     app: tauri::AppHandle,
     input: String,
 ) -> Result<Option<String>, String> {
-    save_bytes_via_dialog(&app, "base64.txt", input.as_bytes()).await
+    save_bytes_via_dialog(&app, "base64.txt", input.into_bytes()).await
 }
 
 #[cfg(test)]

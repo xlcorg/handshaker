@@ -1,20 +1,24 @@
 import { Lock, Unlock } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Kbd } from "@/components/ui/kbd";
 import { Tooltip } from "@/components/ui/tooltip";
 import { MethodPicker } from "@/features/shell/MethodPicker";
 import type { SelectedMethod } from "@/features/shell/SelectedMethod";
+import type { MethodKind } from "@/lib/method-kind";
 import type { ResolutionReportIpc, ServiceCatalogIpc } from "@/ipc/bindings";
 import { VarHighlightInput } from "@/features/vars/VarHighlightInput";
-import { useBusyDelay } from "@/lib/use-busy-delay";
 import type { VarCandidate } from "@/features/vars/candidates";
 import type { Step } from "./model";
 import { effectiveTls, nextTlsState } from "./tls";
 import { messages } from "@/lib/messages";
+import { CallControls, type TwoWayControls } from "./CallControls";
+
+export type { TwoWayControls } from "./CallControls";
 
 export interface DraftAddressBarProps {
   step: Step;
   catalog: ServiceCatalogIpc | null;
+  /** The **controls kind** the call panel derived (`controlsKind`: live call → catalog →
+   *  last executed → null): badge + `▶ Send` / `▶ Open`. `null` ⇒ no badge, unary controls. */
+  kind: MethodKind | null;
   reflecting: boolean;
   reflectError: string | null;
   onAddress: (address: string) => void;
@@ -28,6 +32,11 @@ export interface DraftAddressBarProps {
   onSelectMethod: (m: SelectedMethod) => void;
   onSend: () => void;
   onCancel: () => void;
+  /** Live two-way (client / bidi) call: the busy slot shows the segmented
+   *  `[Send message ▸] [End stream] [Cancel]` instead of the lone Cancel; while opening
+   *  and after half-close the first two disable, Cancel stays. Absent ⇒ lone Cancel
+   *  (unary / server-streaming). Decided by the live entry's kind, not the catalog. */
+  twoWay?: TwoWayControls;
   /** Hover «+» on a method row: one-click save to the collection. Omit to hide. */
   onQuickAdd?: (service: string, method: string) => void;
   /** Resolves the address template for in-field `{{var}}` highlighting + the field
@@ -38,21 +47,19 @@ export interface DraftAddressBarProps {
   variables?: VarCandidate[];
 }
 
-/** Editable Focus header for a draft: TLS lock + host → full-width MethodPicker → Send.
+/** Editable Focus header for a draft: TLS lock + host → full-width MethodPicker → one
+ *  morphing control slot: `▶ Send` (unary / server-streaming) or `▶ Open` (client / bidi)
+ *  idle; after the 250 ms busy gate `Cancel`, or the segmented two-way controls.
  *  Reflection status & reload live inside the MethodPicker dropdown (Postman-style).
  *  `{{var}}` tokens in the address are highlighted inline by resolve state (green =
  *  resolved, red = unresolved/cycle); the full resolved value is in the field tooltip. */
 export function DraftAddressBar({
-  step, catalog, reflecting, reflectError,
-  onAddress, onTls, defaultTls, onRefresh, onReflectCancel, onSelectMethod, onSend, onCancel, onQuickAdd,
+  step, catalog, kind, reflecting, reflectError,
+  onAddress, onTls, defaultTls, onRefresh, onReflectCancel, onSelectMethod, onSend, onCancel, twoWay, onQuickAdd,
   resolveAddress, resolveKey, variables,
 }: DraftAddressBarProps) {
-  const sending = step.status === "sending";
   const inherit = step.tls === null;
   const tlsOn = effectiveTls(step.tls, defaultTls);
-  // Delay the Send→Cancel swap so a sub-250ms call never twitches the button.
-  // Same 250ms as the response comet (ResponsePanel) ⇒ they appear in lockstep.
-  const showCancel = useBusyDelay(sending, 250);
   return (
     <div className="flex h-14 items-center gap-2 border-b border-border px-4">
       <div className="flex h-8 flex-1 min-w-[16rem] items-center gap-1.5 rounded-md border border-input bg-background pl-2 pr-1 focus-within:ring-1 focus-within:ring-ring">
@@ -72,7 +79,7 @@ export function DraftAddressBar({
           ariaLabel="draft-address"
           value={step.address}
           onChange={onAddress}
-          placeholder="host:port"
+          placeholder={messages.workflow.addressBar.hostPlaceholder}
           resolver={resolveAddress}
           resolveKey={resolveKey}
           variables={variables}
@@ -80,7 +87,7 @@ export function DraftAddressBar({
         />
       </div>
       <MethodPicker
-        selected={{ service: step.service, method: step.method, kind: "unary" }}
+        selected={{ service: step.service, method: step.method, kind: kind ?? "unary" }}
         catalog={catalog}
         onSelect={onSelectMethod}
         reflection={
@@ -91,22 +98,7 @@ export function DraftAddressBar({
         className="flex-1 min-w-0"
         onQuickAdd={onQuickAdd}
       />
-      {showCancel ? (
-        <Button size="sm" variant="ghost" onClick={onCancel} className="min-w-[5rem] text-muted-foreground">
-          Cancel
-        </Button>
-      ) : (
-        <Tooltip content={<span><Kbd>Ctrl</Kbd> <Kbd>Enter</Kbd> · <Kbd>Ctrl</Kbd> <Kbd>R</Kbd></span>}>
-          <Button
-            size="sm"
-            onClick={onSend}
-            disabled={step.method.trim().length === 0}
-            className="min-w-[5rem] active:scale-[.97]"
-          >
-            ▶ Send
-          </Button>
-        </Tooltip>
-      )}
+      <CallControls step={step} kind={kind} onSend={onSend} onCancel={onCancel} twoWay={twoWay} />
     </div>
   );
 }

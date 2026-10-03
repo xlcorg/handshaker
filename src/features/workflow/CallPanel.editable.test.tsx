@@ -41,8 +41,16 @@ import { newStep } from "./model";
 import { workflowStore } from "./store";
 import { messages } from "@/lib/messages";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { grpcMessageSchema, grpcRefreshContract, authEffective, varsResolve, grpcSend } from "@/ipc/client";
-import type { MessageSchemaIpc, SendReportIpc, ResolutionReportIpc } from "@/ipc/bindings";
+import { grpcMessageSchema, grpcRefreshContract, grpcDescribe, authEffective, varsResolve, grpcSend } from "@/ipc/client";
+import type { MessageSchemaIpc, SendReportIpc, ResolutionReportIpc, ServiceCatalogIpc } from "@/ipc/bindings";
+
+/** A one-method catalog for `p.v1.S/<method>` with the given streaming flags. */
+function catalogWith(method: string, client_streaming: boolean, server_streaming: boolean): ServiceCatalogIpc {
+  return { services: [{ full_name: "p.v1.S", methods: [{
+    name: method, path: `/p.v1.S/${method}`, input_message: "Req", output_message: "Resp",
+    client_streaming, server_streaming,
+  }] }] };
+}
 
 const draft = newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "GetX" });
 
@@ -149,6 +157,8 @@ describe("CallPanel contract tab", () => {
     // Distinct method → fresh useMessageSchema cache keys (the tests above already
     // cached null for `draft`'s keys, which would shadow this side-aware mock).
     const sideDraft = newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "GetSides" });
+    // The rpc line needs a known kind — the catalog says GetSides is unary.
+    vi.mocked(grpcDescribe).mockResolvedValue(catalogWith("GetSides", false, false));
     await renderPanel(<CallPanel step={sideDraft} onPatch={() => {}} editable />);
     // The panel defaults to Body; open the Contract tab explicitly. Schemas
     // resolve async — the tab then lists both sides at once.
@@ -156,12 +166,49 @@ describe("CallPanel contract tab", () => {
     expect(await screen.findByText("req_field")).toBeInTheDocument();
     expect(screen.getByText("resp_field")).toBeInTheDocument();
     // The rpc signature pins which root landed on which side — a swapped
-    // input/output wiring would print `rpc GetSides(Resp) returns (Req);`.
-    const rpcLine = screen
-      .getAllByText("GetSides")
-      .map((el) => el.closest("div.whitespace-pre"))
-      .find((d) => d !== null);
-    expect(rpcLine?.textContent).toBe("rpc GetSides(Req) returns (Resp);");
+    // input/output wiring would print `rpc GetSides(Resp) returns (Req);`. The line
+    // appears only once the (debounced) catalog has told the panel the method's kind.
+    await waitFor(
+      () => {
+        const rpcLine = screen
+          .getAllByText("GetSides")
+          .map((el) => el.closest("div.whitespace-pre"))
+          .find((d) => d !== null);
+        expect(rpcLine?.textContent).toBe("rpc GetSides(Req) returns (Resp);");
+      },
+      { timeout: 3000 },
+    );
+  });
+});
+
+describe("CallPanel method kind (derived live from the catalog)", () => {
+  it("shows no badge until the catalog arrives, then the streaming badge — without user action", async () => {
+    vi.mocked(grpcDescribe).mockResolvedValue(catalogWith("GetX", false, true));
+    await renderPanel(<CallPanel step={draft} onPatch={() => {}} editable />);
+    // Reflection is debounced: before the catalog lands the kind is unknown → no badge.
+    expect(screen.queryByText(messages.methodKind.badge.server)).toBeNull();
+    expect(await screen.findByText(messages.methodKind.badge.server, {}, { timeout: 3000 })).toBeInTheDocument();
+  });
+
+  it("feeds the same kind to the Contract tab: `stream` on the streaming side", async () => {
+    const schemaOf = (root: string): MessageSchemaIpc => ({ root, messages: [{ full_name: root, fields: [] }], enums: [] });
+    vi.mocked(grpcMessageSchema).mockImplementation((_t, _s, _m, side) =>
+      Promise.resolve(schemaOf(side === "input" ? "t.Req" : "t.Resp")),
+    );
+    vi.mocked(grpcDescribe).mockResolvedValue(catalogWith("Watch", true, true));
+    const watch = newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "Watch" });
+    await renderPanel(<CallPanel step={watch} onPatch={() => {}} editable />);
+    fireEvent.click(screen.getByRole("tab", { name: "Contract" }));
+    await waitFor(
+      () => {
+        const rpcLine = screen
+          .getAllByText("Watch")
+          .map((el) => el.closest("div.whitespace-pre"))
+          .find((d) => d !== null);
+        expect(rpcLine?.textContent).toBe("rpc Watch(stream Req) returns (stream Resp);");
+      },
+      { timeout: 3000 },
+    );
   });
 });
 

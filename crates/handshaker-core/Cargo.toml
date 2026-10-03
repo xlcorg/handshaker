@@ -7,6 +7,11 @@ license.workspace = true
 authors.workspace = true
 description = "OS-independent core for Handshaker: gRPC reflection, dynamic invoke, auth, collections."
 
+[features]
+# Exposes `grpc::testing` (FakeTransport, fixture pool/contract) to other crates'
+# tests — `src-tauri` enables it from its dev-dependencies only.
+test-support = []
+
 [lints.rust]
 unsafe_code = "forbid"
 
@@ -17,6 +22,8 @@ serde_json.workspace = true
 http.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync", "time"] }
 tokio-stream.workspace = true
+bytes.workspace = true
+futures-util.workspace = true
 async-trait.workspace = true
 
 # gRPC + reflection + descriptors

@@ -32,6 +32,9 @@ prost-reflect = { version = "0.14", features = ["serde"] }
 
 # Plan #2 — Reflection spine
 tokio-stream = "0.1"
+# Streaming RPCs — raw message bytes at the transport seam + stream combinators.
+bytes = "1"
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
 tonic-health = "0.14"   # dev-only filler service for bare-server integration tests
 
 # Plan #4 — Env + Vars

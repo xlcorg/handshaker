@@ -4,8 +4,9 @@ import { messages } from "./messages";
 
 const m = messages.response.save;
 
-/** Shared by full-response and encoded/decoded value saves. */
-export function savedFileToast(path: string): void {
+/** Shared by full-response, encoded/decoded value and stream-export saves. `detail` is an
+ *  optional line under the file name (Assemble: `<size> from N of M messages`). */
+export function savedFileToast(path: string, detail?: string): void {
   const separator = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
   const name = path.slice(separator + 1);
   const directory = path.slice(0, separator + 1);
@@ -35,6 +36,7 @@ export function savedFileToast(path: string): void {
           {name}
         </button>
         <div>{directory}</div>
+        {detail !== undefined && <div>{detail}</div>}
       </>
     ),
   });

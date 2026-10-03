@@ -12,6 +12,7 @@ async fn server_not_found_appears_as_status_code_5() {
     let config = common::EchoConfig {
         return_status: Some(5), // NOT_FOUND
         trailers: HashMap::new(),
+        ..Default::default()
     };
     let (addr, _stop) = common::spawn_echo_server(config).await;
     let target = GrpcTarget::new(addr.to_string(), false, false).unwrap();
@@ -26,7 +27,7 @@ async fn server_not_found_appears_as_status_code_5() {
         "Send",
         r#"{"id":"x"}"#,
         HashMap::new(),
-        CallOptions { max_message_bytes: usize::MAX },
+        CallOptions { max_message_bytes: usize::MAX, phase_timeout: None },
     )
     .await
     .expect("invoke (status != OK is Ok, not Err)");

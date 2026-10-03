@@ -87,7 +87,7 @@ const outSchema: MessageSchemaIpc = {
   messages: [{ full_name: "t.Out", fields: [] }],
   enums: [],
 };
-const contract = { input: inSchema, output: outSchema, method: "Search" };
+const contract = { input: inSchema, output: outSchema, method: "Search", kind: "unary" as const };
 
 describe("ResponsePanel contract tab", () => {
   it("shows no Contract tab without the contract prop (history panels)", () => {

@@ -3,6 +3,12 @@ export interface KVRow {
   v: string;
 }
 
+/** Metadata map → table rows (insertion order). `null`/`undefined` map ⇒ no rows; a
+ *  missing value (specta's `Partial` record) renders as an empty cell. */
+export function kvRows(m: Partial<Record<string, string>> | null | undefined): KVRow[] {
+  return m ? Object.entries(m).map(([k, v]) => ({ k, v: v ?? "" })) : [];
+}
+
 export function KVTable({ rows }: { rows: KVRow[] }) {
   if (rows.length === 0) {
     return <div className="p-4 text-xs text-muted-foreground italic">(no entries)</div>;

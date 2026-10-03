@@ -38,6 +38,7 @@ import { UpdateToast } from "@/features/updater/UpdateToast";
 import { UpdaterProvider } from "@/features/updater/updaterContext";
 import { useUiZoom } from "@/features/shell/zoom";
 import { useWordWrapHotkey } from "@/features/shell/wordWrap";
+import { installStreamReleaseRule } from "@/features/stream/releaseRule";
 import { useSplitDirectionHotkey } from "@/features/shell/splitDirection";
 import { useSuppressNativeContextMenu } from "@/features/shell/nativeContextMenu";
 import { dismissSplash } from "@/features/shell/splash";
@@ -84,6 +85,9 @@ export function WorkflowApp() {
   useUiZoom();
   // Глобальный Alt+Z → переключает prefs.wordWrap (перенос строк в редакторах тела).
   useWordWrapHotkey();
+  // The one place Stream store entries are freed: diff of referenced stream ids after
+  // every workflow-store transition → `stream_release`.
+  useEffect(() => installStreamReleaseRule(), []);
   // Глобальный Alt+V / ⌥⌘V → переключает prefs.split (ориентация request/response).
   useSplitDirectionHotkey();
   // Подавляет дефолтное меню WebView (кроме текстовых полей) в prod-сборке.

@@ -1,15 +1,11 @@
 import { X } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { summarizeStep, type StepTone } from "./stepView";
+import { summarizeStep, TONE_TEXT } from "./stepView";
 import type { RowDragProps } from "./dnd";
 import type { Step } from "./model";
 import { compactFocusRing } from "@/lib/focusRing";
-
-const TONE_DOT: Record<StepTone, string> = {
-  ok: "text-ok",
-  error: "text-destructive",
-  pending: "text-muted-foreground",
-};
+import { useStreamEntry } from "@/features/stream/streamStore";
+import { KindBadge } from "@/features/shell/KindBadge";
 
 export function StepRow({
   step,
@@ -26,7 +22,9 @@ export function StepRow({
   onDelete: () => void;
   dragProps?: RowDragProps;
 }) {
-  const s = summarizeStep(step, index);
+  // A stream step's status and kind badge come from its Stream store entry (its End /
+  // Cancel and the kind it ran as); unary steps have no entry and no badge.
+  const s = summarizeStep(step, index, useStreamEntry(step.streamId));
   return (
     <div
       role="listitem"
@@ -41,11 +39,12 @@ export function StepRow({
       <span className="w-4 flex-none text-right font-mono text-[10px] text-muted-foreground">
         {s.number}
       </span>
-      <span className={cn("flex-none", TONE_DOT[s.tone])} aria-hidden>
+      <span className={cn("flex-none", TONE_TEXT[s.tone])} aria-hidden>
         ●
       </span>
       <span className="min-w-0 flex-1 truncate font-mono">{s.title}</span>
-      <span className={cn("flex-none font-mono text-[11px]", TONE_DOT[s.tone])}>{s.statusText}</span>
+      <KindBadge kind={s.kind} />
+      <span className={cn("flex-none font-mono text-[11px]", TONE_TEXT[s.tone])}>{s.statusText}</span>
       {s.elapsedMs !== null ? (
         <span className="flex-none font-mono text-[10px] text-muted-foreground">{s.elapsedMs}ms</span>
       ) : null}

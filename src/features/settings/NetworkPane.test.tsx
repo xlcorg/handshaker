@@ -42,6 +42,15 @@ describe("NetworkPane request deadline", () => {
     expect(readPrefs().requestTimeoutMs).toBe(45000);
   });
 
+  it("explains the two-phase rule: connecting + the server's answer after the client finished sending; an open stream has no deadline", () => {
+    render(<NetworkPane />);
+    expect(
+      screen.getByText(
+        "Per-request deadline. Bounds connecting, and how long the server may take to answer once the client has finished sending; an open stream has no deadline.",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("clamps sub-second input to the 1000 ms floor", async () => {
     const user = userEvent.setup();
     render(<NetworkPane />);

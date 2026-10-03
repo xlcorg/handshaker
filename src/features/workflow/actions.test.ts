@@ -11,7 +11,7 @@ vi.mock("@/ipc/client", () => ({
 }));
 
 import * as ipc from "@/ipc/client";
-import { createStepFromMethod, sendStep, cancelStep } from "./actions";
+import { createStepFromMethod, sendStep, cancelStep, sendDraftOf, sendCtxOf, callOptionsOf } from "./actions";
 import { buildRequestSkeletonSafe, applyMethodSelection, isPristineBody, resetBodyToTemplate, fetchMessageSchemaSafe } from "./actions";
 import { varsCtxFor, varsResolverFor } from "./actions";
 import type { Step } from "./model";
@@ -159,24 +159,27 @@ describe("sendStep", () => {
     );
   });
 
-  it("maps an UnresolvedVars throw to kind 'unresolved'", async () => {
+  it("maps an UnresolvedVars throw to the shared client fault listing the vars", async () => {
     vi.mocked(ipc.grpcSend).mockRejectedValue({
       type: "UnresolvedVars",
       unresolved: ["host", "uid"],
       cycle: null,
     });
     const res = await sendStep(baseStep, { envName: null });
-    expect(res).toEqual({ kind: "unresolved", unresolved: ["host", "uid"], cycle: null });
+    expect(res).toEqual({
+      kind: "error",
+      fault: { kind: "other", message: "Unresolved variables: {{host}}, {{uid}}" },
+    });
   });
 
-  it("maps an UnresolvedVars cycle throw through, cycle intact", async () => {
+  it("maps an UnresolvedVars cycle throw to the cycle message", async () => {
     vi.mocked(ipc.grpcSend).mockRejectedValue({
       type: "UnresolvedVars",
       unresolved: [],
       cycle: ["a", "b", "a"],
     });
     const res = await sendStep(baseStep, { envName: null });
-    expect(res).toEqual({ kind: "unresolved", unresolved: [], cycle: ["a", "b", "a"] });
+    expect(res).toEqual({ kind: "error", fault: { kind: "other", message: "Variable cycle: a → b → a" } });
   });
 
   it("maps a Cancelled throw to kind 'cancelled'", async () => {
@@ -346,7 +349,7 @@ describe("applyMethodSelection", () => {
       { requestJson: "{}", service: "p.S", method: "Old" }, // pristine
       { service: "p.S", method: "New" },
     );
-    expect(patch).toHaveBeenNthCalledWith(1, { service: "p.S", method: "New", status: "draft", outcome: null, error: null });
+    expect(patch).toHaveBeenNthCalledWith(1, { service: "p.S", method: "New", status: "draft", outcome: null, error: null, streamId: null });
     expect(patch).toHaveBeenNthCalledWith(2, { requestJson: "{\n}" });
     // no autofill: the new method's skeleton is only built on demand (Reset-to-template)
     expect(ipc.grpcBuildRequestSkeleton).toHaveBeenCalledTimes(1);
@@ -374,7 +377,7 @@ describe("applyMethodSelection", () => {
       { service: "p.S", method: "New" },
     );
     expect(patch).toHaveBeenCalledTimes(1);
-    expect(patch).toHaveBeenCalledWith({ service: "p.S", method: "New", status: "draft", outcome: null, error: null });
+    expect(patch).toHaveBeenCalledWith({ service: "p.S", method: "New", status: "draft", outcome: null, error: null, streamId: null });
   });
 
   it("seeds the response fields from history for the newly selected method", async () => {
@@ -514,5 +517,46 @@ describe("fetchMessageSchemaSafe", () => {
       "M",
       "input",
     );
+  });
+});
+
+describe("send helpers shared by the unary and streaming paths", () => {
+  const step = {
+    address: "{{host}}:443",
+    tls: null,
+    service: "S",
+    method: "M",
+    requestJson: '{"a":1}',
+    metadata: [
+      { key: "x", value: "1", enabled: true },
+      { key: "off", value: "2", enabled: false },
+      { key: "", value: "3", enabled: true },
+    ],
+    auth: { kind: "none" as const },
+    collectionId: "c1",
+  };
+
+  it("sendDraftOf keeps templates raw and drops disabled / keyless metadata rows", () => {
+    expect(sendDraftOf(step)).toEqual({
+      address_template: "{{host}}:443",
+      tls_override: null,
+      service: "S",
+      method: "M",
+      body_template: '{"a":1}',
+      metadata: [{ key: "x", value: "1", enabled: true }],
+      auth: { kind: "none" },
+    });
+  });
+
+  it("sendCtxOf carries the collection and env; an unbound step has no collection", () => {
+    expect(sendCtxOf(step, "prod")).toEqual({ collection_id: "c1", env_name: "prod" });
+    expect(sendCtxOf({ collectionId: null }, null)).toEqual({ collection_id: null, env_name: null });
+  });
+
+  it("callOptionsOf prefers explicit overrides over the prefs", () => {
+    expect(callOptionsOf({ timeoutMs: 7, maxMessageBytes: 9 })).toEqual({ timeout_ms: 7, max_message_bytes: 9 });
+    const fromPrefs = callOptionsOf();
+    expect(fromPrefs.timeout_ms).toEqual(expect.any(Number));
+    expect(fromPrefs.max_message_bytes).toEqual(expect.any(Number));
   });
 });

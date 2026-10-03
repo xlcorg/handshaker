@@ -3,8 +3,11 @@
 use crate::error::CoreError;
 use crate::grpc::connection::GrpcTarget;
 use crate::grpc::invoke::{extract_status_details, CallOptions};
-use crate::grpc::transport::{DynamicCodec, GrpcTransport, TonicChannel};
+use crate::grpc::transport::{
+    DynamicCodec, GrpcTransport, OutboundStream, RawCodec, StreamEnd, StreamStart, TonicChannel,
+};
 use crate::grpc::UnaryOutcome;
+use bytes::Bytes;
 use prost_reflect::DynamicMessage;
 use std::collections::HashMap;
 use tonic::transport::{ClientTlsConfig, Endpoint};
@@ -96,6 +99,82 @@ impl GrpcTransport for TonicTransport {
             }),
         }
     }
+
+    async fn stream_dynamic(
+        &self,
+        channel: TonicChannel,
+        method_path: String,
+        outbound: OutboundStream,
+        metadata: HashMap<String, String>,
+        opts: CallOptions,
+    ) -> Result<StreamStart, CoreError> {
+        let mut grpc = tonic::client::Grpc::new(channel)
+            .max_decoding_message_size(opts.max_message_bytes)
+            .max_encoding_message_size(opts.max_message_bytes);
+        grpc.ready()
+            .await
+            .map_err(|e| CoreError::Transport(format!("channel not ready: {}", error_chain(&e))))?;
+
+        let path: http::uri::PathAndQuery = method_path
+            .parse()
+            .map_err(|e| CoreError::EncodeRequest(format!("invalid path `{method_path}`: {e}")))?;
+
+        let mut tonic_req = tonic::Request::new(outbound);
+        inject_ascii_metadata(tonic_req.metadata_mut(), &metadata)?;
+
+        // Always `streaming()`: `client_streaming()`/`unary()` merge trailers into the
+        // response metadata, which would hide the headers/trailers split.
+        match grpc.streaming(tonic_req, path, RawCodec).await {
+            Ok(response) => {
+                let headers = metadata_to_map(response.metadata());
+                let streaming: tonic::Streaming<Bytes> = response.into_inner();
+                Ok(StreamStart { headers, inbound: Box::pin(inbound_from(streaming)) })
+            }
+            // Trailers-only non-OK (or UNAVAILABLE from a dead channel): the call did
+            // start on the wire — surface it as an empty stream ending with that status.
+            // The metadata rides on the status: it is the *trailers* (`End`), so the
+            // stream start carries no headers — otherwise the same keys would show twice.
+            Err(status) => {
+                let end = stream_end_from_status(&status);
+                Ok(StreamStart {
+                    headers: HashMap::new(),
+                    inbound: Box::pin(tokio_stream::once(Err(end))),
+                })
+            }
+        }
+    }
+}
+
+/// Adapt tonic's `Streaming<Bytes>` to the trait's inbound shape: messages pass through,
+/// the terminal condition becomes exactly one `Err(StreamEnd)`. After a clean `Ok(None)`
+/// the trailers are already cached, so `trailers()` resolves without another read; a
+/// non-OK status carries its trailers in `status.metadata()`.
+fn inbound_from(
+    streaming: tonic::Streaming<Bytes>,
+) -> impl futures_util::Stream<Item = Result<Bytes, StreamEnd>> + Send {
+    futures_util::stream::unfold(Some(streaming), |state| async move {
+        let mut streaming = state?;
+        match streaming.message().await {
+            Ok(Some(bytes)) => Some((Ok(bytes), Some(streaming))),
+            Ok(None) => {
+                let trailing = match streaming.trailers().await {
+                    Ok(Some(md)) => metadata_to_map(&md),
+                    _ => HashMap::new(),
+                };
+                Some((Err(StreamEnd::ok(trailing)), None))
+            }
+            Err(status) => Some((Err(stream_end_from_status(&status)), None)),
+        }
+    })
+}
+
+fn stream_end_from_status(status: &tonic::Status) -> StreamEnd {
+    StreamEnd {
+        status_code: status.code() as i32,
+        status_message: status.message().to_string(),
+        status_details: extract_status_details(status),
+        trailing_metadata: metadata_to_map(status.metadata()),
+    }
 }
 
 /// Place ASCII metadata from a HashMap into a `tonic::metadata::MetadataMap`.
@@ -114,27 +193,10 @@ fn inject_ascii_metadata(
     Ok(())
 }
 
-/// Serialize a decoded response message to pretty JSON, **emitting fields that are at
-/// their proto3 default value**.
-///
-/// prost-reflect's default `Serialize` impl uses `SerializeOptions::skip_default_fields =
-/// true` (proto3 canonical JSON), which OMITS any field whose value is the default
-/// (`""` / `0` / `false` / empty). For a gRPC debugging tool that hides newly-added or
-/// zero-valued response fields entirely — Postman / grpcurl show them. We override with
-/// `skip_default_fields(false)` so the response view always shows the full message shape.
-/// We also set `use_proto_field_name(true)` so field names come out as the proto
-/// (snake_case) names — matching Handshaker's Contract tab and request body — instead
-/// of the canonical proto3-JSON lowerCamelCase.
-/// See <https://docs.rs/prost-reflect/latest/prost_reflect/struct.SerializeOptions.html>.
+/// Pretty proto3 JSON of a unary response — the shared serializer (default-valued
+/// fields emitted, proto snake_case names) so unary and stream bodies look alike.
 fn message_to_pretty_json(msg: &DynamicMessage) -> Result<String, CoreError> {
-    let mut buf = Vec::new();
-    let mut serializer = serde_json::Serializer::pretty(&mut buf);
-    let options = prost_reflect::SerializeOptions::new()
-        .skip_default_fields(false)
-        .use_proto_field_name(true);
-    msg.serialize_with_options(&mut serializer, &options)
-        .map_err(|e| CoreError::DecodeResponse(e.to_string()))?;
-    String::from_utf8(buf).map_err(|e| CoreError::DecodeResponse(e.to_string()))
+    crate::grpc::invoke::message_to_json(msg, true)
 }
 
 /// Pull ASCII keys out of a `MetadataMap`. Binary keys (`-bin` suffix) are skipped silently.
@@ -230,7 +292,7 @@ mod tests {
                 codec,
                 request,
                 HashMap::new(),
-                CallOptions { max_message_bytes: 16 * 1024 * 1024 },
+                CallOptions { max_message_bytes: 16 * 1024 * 1024, phase_timeout: None },
             )
             .await
             .expect("dead channel returns Ok(UnaryOutcome), not Err");

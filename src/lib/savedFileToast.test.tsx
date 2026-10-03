@@ -61,6 +61,15 @@ describe("savedFileToast", () => {
     },
   );
 
+  it("shows an optional detail line under the file name", async () => {
+    render(<Toaster />);
+    act(() => {
+      savedFileToast("/tmp/logo.png", "2.0KB from 2 of 3 messages");
+    });
+    await screen.findByRole("button", { name: "Open logo.png" });
+    expect(screen.getByText("2.0KB from 2 of 3 messages")).toBeInTheDocument();
+  });
+
   it("opens from the keyboard", async () => {
     const user = userEvent.setup();
     await show("/tmp/response.json");

@@ -22,8 +22,16 @@ async fn activate_against_v1_server_yields_catalog() {
         .iter()
         .find(|s| s.full_name == "test.Echo")
         .unwrap();
-    assert_eq!(echo.methods.len(), 1);
+    assert_eq!(echo.methods.len(), 5, "Send + ServerStream + ClientStream + Bidi + Download, in proto order");
     assert_eq!(echo.methods[0].path, "/test.Echo/Send");
+    assert_eq!(echo.methods[1].path, "/test.Echo/ServerStream");
+    assert!(echo.methods[1].server_streaming && !echo.methods[1].client_streaming);
+    assert_eq!(echo.methods[2].path, "/test.Echo/ClientStream");
+    assert!(echo.methods[2].client_streaming && !echo.methods[2].server_streaming);
+    assert_eq!(echo.methods[3].path, "/test.Echo/Bidi");
+    assert!(echo.methods[3].client_streaming && echo.methods[3].server_streaming);
+    assert_eq!(echo.methods[4].path, "/test.Echo/Download");
+    assert!(echo.methods[4].server_streaming && !echo.methods[4].client_streaming);
     // Smoke: the service's pool resolves the input message.
     assert!(conn
         .pools

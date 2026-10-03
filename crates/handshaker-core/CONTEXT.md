@@ -86,3 +86,66 @@ _Avoid_: оркестрация в IPC-команде (командный сло
 от UI до транспорта одним растущим значением, а не позиционными параметрами.
 Ключ отмены (request id) — не call option: у него свой жизненный цикл.
 _Avoid_: перечисление опций россыпью в сигнатурах
+
+**Method kind (вид метода)**:
+Четырёхзначная классификация метода по флагам дескриптора `client_streaming` /
+`server_streaming`: `unary` / `server` / `client` / `bidi` (= Unary / Server streaming /
+Client streaming / Bidirectional streaming RPC у grpc.io). Источник истины — загруженный
+контракт. Выполненный вызов запоминает вид, с которым он прошёл; на сохранённом запросе вид
+не хранится. Core отказывает вызову, чей путь (unary / stream с выбранным видом) не совпадает
+с видом метода, до того как что-либо уйдёт на провод.
+_Avoid_: method type / RPC type / call type / тип метода (путается с типами сообщений),
+streaming flag, stream kind (не покрывает unary)
+
+**Stream call (стриминговый вызов)**:
+Один вызов стримингового метода (server / client / bidi) от Send до stream end.
+Отличается от unary тем, что inbound messages приходят по одному и вызов живёт,
+пока сервер не завершит его или пользователь не отменит.
+_Avoid_: «стрим-запрос», streaming request (запрос — это то, что отправили; вызов — вся сессия)
+
+**Inbound message / Outbound message**:
+Одно proto-сообщение, полученное от сервера / отправленное серверу в рамках
+stream call. Термин совпадает с proto (`stream <Message>`) и с Contract-табом.
+_Avoid_: frame (HTTP/2-термин: один message может занимать несколько кадров), chunk
+
+**Open (открытие)**:
+Клиентское действие, начинающее stream call: resolve → auth → activate, initial metadata
+ушли на провод, ни одного outbound message. У client-streaming и bidi это отдельный шаг,
+за которым следуют отправки сообщений и half-close; у unary и server-streaming Send =
+Open + единственный outbound message + half-close одним шагом.
+_Avoid_: Invoke (Postman-термин), «подключиться» (activate — только часть Open)
+
+**Half-close**:
+Момент, когда клиент закончил отправку outbound messages; сервер может продолжать
+отвечать. У unary и server-streaming наступает сразу после единственного outbound message.
+_Avoid_: «закрыть стрим» (это отмена, а не half-close)
+
+**Stream end**:
+Завершение stream call сервером: финальный gRPC status + trailing metadata. До него
+у вызова есть только initial metadata (headers) и накопленные inbound messages.
+_Avoid_: «последний фрейм», EOF
+
+**Cancel (отмена)**:
+Клиент прерывает stream call до stream end. Полученные inbound messages сохраняются;
+серверного статуса нет — это клиентское терминальное состояние, а не stream end.
+_Avoid_: «закрыть стрим», «CANCELLED-статус» (это gRPC-код от сервера, при отмене его нет)
+
+**Stream start**:
+Момент, когда сервер принял stream call: initial metadata (headers) получены. Граница
+дедлайна и первое событие вызова. У client-streaming и bidi наступает поздно — после
+half-close или вместе с первым inbound message — и не гейтит отправку outbound messages.
+_Avoid_: «подключились» (это activate), «первое сообщение» (headers приходят раньше него)
+
+**Stream store**:
+Владелец всех сообщений одного stream call (inbound и outbound) в сыром закодированном
+виде на стороне core; живёт, пока на вызов ссылается хотя бы один шаг — черновик или
+снапшот истории. Единственный источник для раскрытия тела сообщения, сборки файла и
+истории; UI держит только мета и превью.
+_Avoid_: buffer, cache (не выселяется и не лимитируется), «лог сообщений»
+
+**Assemble (сборка файла)**:
+Конкатенация значения одного bytes-поля всех inbound messages одного stream call в
+порядке получения. Источник — Stream store; доступна только в терминальном состоянии
+(stream end или cancel). Сообщения без этого поля пропускаются.
+_Avoid_: download (файл не скачивается — он уже получен), export (это Save messages),
+«склеить чанки»

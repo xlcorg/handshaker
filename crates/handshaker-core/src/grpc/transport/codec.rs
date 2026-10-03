@@ -173,3 +173,75 @@ mod tests {
         assert_eq!(id, "");
     }
 }
+
+// ---------------------------------------------------------------------------
+// RawCodec — identity codec for stream calls: raw encoded protobuf bytes both ways.
+// ---------------------------------------------------------------------------
+
+/// Identity codec for stream calls. Core encodes an outbound `DynamicMessage` once (the
+/// same bytes go to the Stream store and the wire) and decodes inbound bytes lazily, so
+/// the transport only moves `Bytes`. tonic's per-message size limit still applies —
+/// `Streaming::decode_chunk` checks the length prefix before the decoder runs.
+/// `DynamicCodec` above stays unary-only.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct RawCodec;
+
+pub struct RawEncoder;
+pub struct RawDecoder;
+
+impl Codec for RawCodec {
+    type Encode = bytes::Bytes;
+    type Decode = bytes::Bytes;
+    type Encoder = RawEncoder;
+    type Decoder = RawDecoder;
+
+    fn encoder(&mut self) -> Self::Encoder {
+        RawEncoder
+    }
+
+    fn decoder(&mut self) -> Self::Decoder {
+        RawDecoder
+    }
+}
+
+impl Encoder for RawEncoder {
+    type Item = bytes::Bytes;
+    type Error = tonic::Status;
+
+    fn encode(&mut self, item: Self::Item, dst: &mut EncodeBuf<'_>) -> Result<(), Self::Error> {
+        use bytes::BufMut as _;
+        dst.put(item);
+        Ok(())
+    }
+}
+
+impl Decoder for RawDecoder {
+    type Item = bytes::Bytes;
+    type Error = tonic::Status;
+
+    fn decode(&mut self, src: &mut DecodeBuf<'_>) -> Result<Option<Self::Item>, Self::Error> {
+        use bytes::Buf as _;
+        let len = src.remaining();
+        Ok(Some(src.copy_to_bytes(len)))
+    }
+}
+
+#[cfg(test)]
+mod raw_tests {
+    use super::*;
+    use bytes::Bytes;
+    use tonic::codec::EncodeBody;
+
+    /// Round-trip through tonic's own framing (the same call stack `Grpc::streaming`
+    /// uses): the decoder must hand back exactly the bytes the encoder was given.
+    #[tokio::test]
+    async fn raw_codec_roundtrips_bytes_unchanged() {
+        let mut codec = RawCodec;
+        let payload = Bytes::from_static(b"\x0a\x05hello");
+        let stream = tokio_stream::once(Ok::<_, tonic::Status>(payload.clone()));
+        let body = EncodeBody::new_client(codec.encoder(), stream, None, None);
+        let mut streaming = tonic::Streaming::new_request(codec.decoder(), body, None, None);
+        let got = streaming.message().await.expect("decode").expect("one message");
+        assert_eq!(got, payload);
+    }
+}

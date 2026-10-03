@@ -1,18 +1,29 @@
-import { Button } from "@/components/ui/button";
-import { useBusyDelay } from "@/lib/use-busy-delay";
+import { cn } from "@/lib/cn";
+import type { MethodKind } from "@/lib/method-kind";
+import { useStreamEntry } from "@/features/stream/streamStore";
+import { CallControls, type TwoWayControls } from "./CallControls";
 import type { Step } from "./model";
+import { statusChip, TONE_TEXT } from "./stepView";
 
+/** Read-only history header: method · address / service · status chip · the call
+ *  controls. No kind badge here — the row (`StepRow`), the timeline and the footer already
+ *  say "stream"; the controls still follow `kind` (`▶ Open` for a client / bidi snapshot). */
 export function AddressBar({
   step,
+  kind,
   onSend,
   onCancel,
+  twoWay,
 }: {
   step: Step;
+  /** The **controls kind** (`controlsKind`) — for a history snapshot the executed kind. */
+  kind: MethodKind | null;
   onSend: () => void;
   onCancel: () => void;
+  twoWay?: TwoWayControls;
 }) {
-  const sending = step.status === "sending";
-  const showCancel = useBusyDelay(sending, 250); // mirror the draft bar + comet gate
+  // Stream snapshots read their End / Cancel off the store entry (`outcome` is unary-only).
+  const chip = statusChip(step, useStreamEntry(step.streamId));
   return (
     <div className="flex h-14 items-center gap-3 border-b border-border px-4">
       <span className="text-ok" aria-hidden>
@@ -25,23 +36,8 @@ export function AddressBar({
         {step.address} / {step.service}
       </span>
       <div className="flex-1" />
-      {step.status === "ok" && step.outcome ? (
-        <span className="text-xs text-ok">
-          ✓ OK · {step.outcome.elapsed_ms}ms
-        </span>
-      ) : null}
-      {step.status === "error" ? (
-        <span className="text-xs text-destructive">✕ error</span>
-      ) : null}
-      {showCancel ? (
-        <Button size="sm" variant="ghost" onClick={onCancel} className="min-w-[5rem] text-muted-foreground">
-          Cancel
-        </Button>
-      ) : (
-        <Button size="sm" onClick={onSend} className="min-w-[5rem] active:scale-[.97]">
-          ▶ Send
-        </Button>
-      )}
+      {chip ? <span className={cn("text-xs", TONE_TEXT[chip.tone])}>{chip.text}</span> : null}
+      <CallControls step={step} kind={kind} onSend={onSend} onCancel={onCancel} twoWay={twoWay} />
     </div>
   );
 }

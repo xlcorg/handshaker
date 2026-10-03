@@ -13,6 +13,7 @@ use handshaker_core::env::EnvironmentStore;
 use handshaker_core::error::CoreError;
 use handshaker_core::grpc::{ContractCache, FileContractCache, InMemoryContractCache, TonicTransport};
 use handshaker_core::send::Sender;
+use handshaker_core::stream::StreamRegistry;
 use handshaker_core::ui_state::FileUiStateStore;
 use handshaker_core::vars::builtins::SystemBuiltins;
 use tokio::sync::{Notify, RwLock};
@@ -57,6 +58,10 @@ pub struct AppState {
     /// (tonic transport, session token cache, contract cache, system builtins).
     /// `grpc_send` is an adapter over this — it never orchestrates the spine itself.
     pub sender: Arc<Sender>,
+    /// Open and finished **Stream calls** with their Stream stores, keyed by
+    /// `request_id` (ADR-0002: the registry is core's; the app state only holds it).
+    /// `grpc_cancel` falls through to it after `in_flight`; `stream_release` frees.
+    pub streams: Arc<StreamRegistry>,
     /// Files quarantined as corrupt during startup `load` (each moved to `<name>.corrupt`).
     /// Drained once by the frontend (`startup_recovery_take`) to show a recovery notice.
     pub recovered: Mutex<Vec<String>>,
@@ -94,6 +99,7 @@ impl Default for AppState {
             in_flight: Mutex::new(HashMap::new()),
             oauth2_provider,
             sender,
+            streams: Arc::new(StreamRegistry::new()),
             recovered: Mutex::new(Vec::new()),
         }
     }
@@ -148,6 +154,7 @@ impl AppState {
             in_flight: Mutex::new(HashMap::new()),
             oauth2_provider,
             sender,
+            streams: Arc::new(StreamRegistry::new()),
             recovered: Mutex::new(recovered),
         })
     }

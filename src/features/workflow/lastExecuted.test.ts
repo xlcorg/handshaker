@@ -40,10 +40,15 @@ describe("lastExecutedFor", () => {
 describe("responseSeedPatch", () => {
   it("copies status/outcome/error from the hit", () => {
     const hit = executed("p.S", "Get", "h:1", 5);
-    expect(responseSeedPatch(hit)).toEqual({ status: "error", outcome: outcome(5), error: null });
+    expect(responseSeedPatch(hit)).toEqual({ status: "error", outcome: outcome(5), error: null, streamId: null });
+  });
+
+  it("copies the stream reference of a stream hit", () => {
+    const hit = { ...executed("p.S", "Watch", "h:1", 0), outcome: null, streamId: "s1" };
+    expect(responseSeedPatch(hit)).toMatchObject({ status: "ok", streamId: "s1" });
   });
 
   it("null hit clears the response fields", () => {
-    expect(responseSeedPatch(null)).toEqual({ status: "draft", outcome: null, error: null });
+    expect(responseSeedPatch(null)).toEqual({ status: "draft", outcome: null, error: null, streamId: null });
   });
 });

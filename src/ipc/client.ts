@@ -1,3 +1,4 @@
+import { Channel } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
 import { commands } from "./bindings";
@@ -25,6 +26,10 @@ import type {
   SendCtxIpc,
   SendDraftIpc,
   SendReportIpc,
+  MethodKindIpc,
+  StreamEventIpc,
+  AssembleResultIpc,
+  OutboundMessageIpc,
 } from "./bindings";
 
 /**
@@ -109,9 +114,98 @@ export async function grpcSend(
   return r.data;
 }
 
+/** The one cancel entry point for unary and stream calls alike (unary registry first,
+ *  then the stream registry). */
 export async function grpcCancel(requestId: string): Promise<void> {
   const r = await commands.grpcCancel(requestId);
   if (r.status === "error") throw r.error;
+}
+
+/** Sink for one stream call's events (`Opened → Headers → Message* → End | Fault`). */
+export type StreamEventHandler = (event: StreamEventIpc) => void;
+
+/** Open a stream call: forwards the raw draft + resolve ctx + the kind the UI derived to
+ *  `stream_open`, wrapping `onEvent` in a per-call `Channel`. Resolves when the call is
+ *  open (`Opened` emitted); rejects only for a pre-Open fault — every later outcome
+ *  (`End`, `Fault`) arrives on `onEvent`. Cancel via `grpcCancel(requestId)`; free the
+ *  store via `streamRelease(requestId)`. */
+export async function streamOpen(
+  draft: SendDraftIpc,
+  ctx: SendCtxIpc,
+  requestId: string,
+  kind: MethodKindIpc,
+  opts: CallOptionsIpc,
+  onEvent: StreamEventHandler,
+): Promise<void> {
+  const channel = new Channel<StreamEventIpc>(onEvent);
+  const r = await commands.streamOpen(draft, ctx, requestId, kind, opts, channel);
+  if (r.status === "error") throw r.error;
+}
+
+/** **Send message** on the open stream call `requestId`: `bodyTemplate` is the current
+ *  body with its `{{var}}` / `{{$builtin}}` templates intact — core resolves it against
+ *  the `ctx` collection / env of this moment (auth is never re-materialized). Resolves to
+ *  the ack row for the timeline (`index` in the numbering shared with inbound rows,
+ *  `at_ms`, `size_bytes`, `preview`) plus the resolved `json` that went on the wire; the
+ *  ack means the transport accepted the message (headers need not have arrived yet).
+ *  Rejects with `StreamClosed` before `Opened` / after half-close, end or cancel, and with
+ *  `UnresolvedVars` / `EncodeRequest` for a bad body — the call stays open. */
+export async function streamSend(
+  requestId: string,
+  bodyTemplate: string,
+  ctx: SendCtxIpc,
+): Promise<OutboundMessageIpc> {
+  const r = await commands.streamSend(requestId, bodyTemplate, ctx);
+  if (r.status === "error") throw r.error;
+  return r.data;
+}
+
+/** **Half-close** the outbound side of the stream call `requestId`: the request stream
+ *  ends on the wire, later `streamSend`s are refused, and the deadline pref starts
+ *  bounding the server's answer (half-close → stream start). Idempotent while the call is
+ *  registered; rejects with `StreamClosed` for an unknown id. */
+export async function streamHalfClose(requestId: string): Promise<void> {
+  const r = await commands.streamHalfClose(requestId);
+  if (r.status === "error") throw r.error;
+}
+
+/** Full pretty JSON of one inbound message (1-based timeline `index`), decoded on demand
+ *  from the backend Stream store — the timeline calls this on expand for rows whose
+ *  `Message.json` came as `null` (> 64 KiB). Rejects with `StreamMessageNotFound` for an
+ *  unknown id / index (released store). */
+export async function streamMessage(requestId: string, index: number): Promise<string> {
+  const r = await commands.streamMessage(requestId, index);
+  if (r.status === "error") throw r.error;
+  return r.data;
+}
+
+/** Free the backend Stream store of a call no step references any more. */
+export async function streamRelease(requestId: string): Promise<void> {
+  const r = await commands.streamRelease(requestId);
+  if (r.status === "error") throw r.error;
+}
+
+/** **Save messages**: every inbound message of the stream call `requestId` as one JSON
+ *  array (oldest first, outbound excluded), built by core from the Stream store and written
+ *  through the native Save-As dialog (default `response-<localstamp>.json`). Resolves to
+ *  the saved path, or `null` when the user cancelled the dialog. Rejects with
+ *  `StreamNotFound` once the store was released. */
+export async function streamSaveMessages(requestId: string): Promise<string | null> {
+  const r = await commands.streamSaveMessages(requestId);
+  if (r.status === "error") throw r.error;
+  return r.data;
+}
+
+/** **Assemble**: one file from the `fieldPath` bytes field (one of `Opened.bytes_fields`)
+ *  of every inbound message of `requestId`, streamed to disk by core through the native
+ *  Save-As dialog (default name from the first message's `name` field, else
+ *  `stream-<stamp>.<ext>`). Resolves to `{ path, written, total, size_bytes }` — messages
+ *  without the field are skipped — or `null` when the user cancelled. Rejects with
+ *  `StreamNotFound` / `StreamFieldNotFound` before any dialog opens. */
+export async function streamAssemble(requestId: string, fieldPath: string): Promise<AssembleResultIpc | null> {
+  const r = await commands.streamAssemble(requestId, fieldPath);
+  if (r.status === "error") throw r.error;
+  return r.data;
 }
 
 export async function envList(): Promise<EnvironmentIpc[]> {
@@ -345,6 +439,13 @@ export const ipc = {
   grpcRefreshContract,
   grpcSend,
   grpcCancel,
+  streamOpen,
+  streamSend,
+  streamHalfClose,
+  streamMessage,
+  streamRelease,
+  streamSaveMessages,
+  streamAssemble,
   grpcBuildRequestSkeleton,
   grpcMessageSchema,
   envList,

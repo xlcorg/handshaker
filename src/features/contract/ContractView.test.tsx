@@ -28,32 +28,47 @@ const renderedLines = (container: HTMLElement) =>
 
 describe("ContractView", () => {
   it("renders both sides at once under the rpc signature", () => {
-    const { container } = render(<ContractView method="Search" input={IN} output={OUT} />);
+    const { container } = render(<ContractView method="Search" input={IN} output={OUT} kind="unary" />);
     const lines = renderedLines(container);
     expect(lines[0]).toBe("rpc Search(In) returns (Out);");
     expect(screen.getByText("query")).toBeInTheDocument(); // request field
     expect(lines).toContain("message Out {}"); // response root block
   });
 
+  it("prints the stream modifier on the streaming side, types still clickable", () => {
+    const { container } = render(<ContractView method="Watch" input={IN} output={OUT} kind="server" />);
+    expect(renderedLines(container)[0]).toBe("rpc Watch(In) returns (stream Out);");
+    expect(screen.getByRole("button", { name: "Out" })).toBeInTheDocument();
+    expect(screen.getByText("stream")).toHaveClass("hs-proto-kw");
+  });
+
+  it("omits the rpc line while the kind is unknown but still lists the messages", () => {
+    const { container } = render(<ContractView method="Search" input={IN} output={OUT} kind={null} />);
+    const lines = renderedLines(container);
+    expect(lines.some((l) => l?.startsWith("rpc "))).toBe(false);
+    expect(screen.getByText("query")).toBeInTheDocument();
+    expect(lines).toContain("message Out {}");
+  });
+
   it("asks to pick a method when none is selected", () => {
-    render(<ContractView method="" input={null} output={null} />);
+    render(<ContractView method="" input={null} output={null} kind="unary" />);
     expect(screen.getByText(messages.contract.pickMethod)).toBeInTheDocument();
   });
 
   it("shows the unavailable placeholder when both schemas are missing", () => {
-    render(<ContractView method="Search" input={null} output={null} />);
+    render(<ContractView method="Search" input={null} output={null} kind="unary" />);
     expect(screen.getByText(messages.contract.unavailable)).toBeInTheDocument();
   });
 
   it("renders the present side and notes the missing one", () => {
-    const { container } = render(<ContractView method="Search" input={null} output={OUT} />);
+    const { container } = render(<ContractView method="Search" input={null} output={OUT} kind="unary" />);
     expect(renderedLines(container)[0]).toBe("rpc Search(?) returns (Out);");
-    expect(screen.getByText(messages.contract.schemaUnavailable("Request"))).toBeInTheDocument();
+    expect(screen.getByText(messages.contract.schemaUnavailable("input"))).toBeInTheDocument();
   });
 
   it("notes a missing response side likewise", () => {
-    const { container } = render(<ContractView method="Search" input={IN} output={null} />);
+    const { container } = render(<ContractView method="Search" input={IN} output={null} kind="unary" />);
     expect(renderedLines(container)[0]).toBe("rpc Search(In) returns (?);");
-    expect(screen.getByText(messages.contract.schemaUnavailable("Response"))).toBeInTheDocument();
+    expect(screen.getByText(messages.contract.schemaUnavailable("output"))).toBeInTheDocument();
   });
 });

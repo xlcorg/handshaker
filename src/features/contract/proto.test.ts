@@ -184,7 +184,7 @@ describe("renderContractDoc", () => {
   };
 
   it("opens with the rpc signature line referencing both roots", () => {
-    const doc = renderContractDoc("Search", IN, OUT);
+    const doc = renderContractDoc("Search", IN, OUT, "unary");
     expect(doc.blocks[0].fullName).toBe("");
     expect(lineText(doc.blocks[0].lines[0])).toBe("rpc Search(Req) returns (Resp);");
     const refs = doc.blocks[0].lines[0].filter(
@@ -193,13 +193,44 @@ describe("renderContractDoc", () => {
     expect(refs.map((r) => r.target)).toEqual(["t.Req", "t.Resp"]);
   });
 
+  it("marks a server-streaming method with `stream` on the response side only", () => {
+    const line = renderContractDoc("Watch", IN, OUT, "server").blocks[0].lines[0];
+    expect(lineText(line)).toBe("rpc Watch(Req) returns (stream Resp);");
+    expect(line.filter((t) => t.kind === "keyword").map((t) => t.text)).toEqual([
+      "rpc ", "returns ", "stream ",
+    ]);
+    // Types stay clickable next to the modifier.
+    expect(line.filter((t) => t.kind === "typeRef").map((t) => t.text)).toEqual(["Req", "Resp"]);
+  });
+
+  it("marks a client-streaming method with `stream` on the request side only", () => {
+    const line = renderContractDoc("Upload", IN, OUT, "client").blocks[0].lines[0];
+    expect(lineText(line)).toBe("rpc Upload(stream Req) returns (Resp);");
+  });
+
+  it("marks a bidi method with `stream` on both sides", () => {
+    const line = renderContractDoc("Chat", IN, OUT, "bidi").blocks[0].lines[0];
+    expect(lineText(line)).toBe("rpc Chat(stream Req) returns (stream Resp);");
+  });
+
+  it("puts the modifier before a missing side's `?` too", () => {
+    const line = renderContractDoc("Watch", IN, null, "server").blocks[0].lines[0];
+    expect(lineText(line)).toBe("rpc Watch(Req) returns (stream ?);");
+  });
+
+  it("omits the signature line while the kind is unknown, keeping the message blocks", () => {
+    const doc = renderContractDoc("Search", IN, OUT, null);
+    expect(doc.blocks.map((b) => b.fullName)).toEqual(["t.Req", "t.Resp", "t.Item", "t.Status"]);
+    expect(doc.blocks.flatMap(allTokens).some((t) => t.text === "rpc ")).toBe(false);
+  });
+
   it("prints a shared type once, in root-first union order", () => {
-    const doc = renderContractDoc("Search", IN, OUT);
+    const doc = renderContractDoc("Search", IN, OUT, "unary");
     expect(doc.blocks.map((b) => b.fullName)).toEqual(["", "t.Req", "t.Resp", "t.Item", "t.Status"]);
   });
 
   it("all typeRef targets in the merged doc resolve to printed blocks", () => {
-    const doc = renderContractDoc("Search", IN, OUT);
+    const doc = renderContractDoc("Search", IN, OUT, "unary");
     const printed = new Set(doc.blocks.map((b) => b.fullName));
     const refs = doc.blocks
       .flatMap(allTokens)
@@ -209,13 +240,13 @@ describe("renderContractDoc", () => {
   });
 
   it("renders ? for a missing side and still lists the present side", () => {
-    const doc = renderContractDoc("Search", IN, null);
+    const doc = renderContractDoc("Search", IN, null, "unary");
     expect(lineText(doc.blocks[0].lines[0])).toBe("rpc Search(Req) returns (?);");
     expect(doc.blocks.map((b) => b.fullName)).toEqual(["", "t.Req", "t.Item"]);
   });
 
   it("an identical request and response root prints one block", () => {
-    const doc = renderContractDoc("Ping", IN, IN);
+    const doc = renderContractDoc("Ping", IN, IN, "unary");
     expect(lineText(doc.blocks[0].lines[0])).toBe("rpc Ping(Req) returns (Req);");
     expect(doc.blocks.map((b) => b.fullName)).toEqual(["", "t.Req", "t.Item"]);
   });
@@ -231,7 +262,7 @@ describe("renderContractDoc", () => {
       messages: [{ full_name: "b.Filter", fields: [] }],
       enums: [],
     };
-    const doc = renderContractDoc("F", a, b);
+    const doc = renderContractDoc("F", a, b, "unary");
     expect(lineText(doc.blocks[0].lines[0])).toBe("rpc F(a.Filter) returns (b.Filter);");
   });
 });
@@ -271,7 +302,7 @@ describe("scalar well-known types render atomically (name only, no wrapper block
   });
 
   it("renderContractDoc also omits wrapper blocks", () => {
-    const names = renderContractDoc("Call", WKT, null).blocks.map((b) => b.fullName);
+    const names = renderContractDoc("Call", WKT, null, "unary").blocks.map((b) => b.fullName);
     expect(names).not.toContain("google.protobuf.Int64Value");
     expect(names).not.toContain("google.protobuf.Timestamp");
   });

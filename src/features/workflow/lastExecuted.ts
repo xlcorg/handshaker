@@ -19,11 +19,12 @@ export function lastExecutedFor(steps: Step[], key: CallKey): Step | null {
   return null;
 }
 
-/** Response fields from the found step; null → a clean Response panel. */
+/** Response fields from the found step (incl. its Stream call reference, so the pane
+ *  re-shows the stream); null → a clean Response panel. */
 export function responseSeedPatch(
   last: Step | null,
-): Pick<Step, "status" | "outcome" | "error"> {
+): Pick<Step, "status" | "outcome" | "error" | "streamId"> {
   return last
-    ? { status: last.status, outcome: last.outcome, error: last.error }
-    : { status: "draft", outcome: null, error: null };
+    ? { status: last.status, outcome: last.outcome, error: last.error, streamId: last.streamId }
+    : { status: "draft", outcome: null, error: null, streamId: null };
 }

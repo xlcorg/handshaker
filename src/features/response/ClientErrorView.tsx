@@ -1,5 +1,6 @@
 import {
   AlertCircle,
+  ArrowLeftRight,
   Ban,
   FileWarning,
   Globe,
@@ -10,18 +11,22 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { faultHint, type ClientFault, type FaultKind } from "@/features/workflow/netDiagnostics";
+import { messages } from "@/lib/messages";
+
+const TITLE = messages.response.clientError.title;
 
 /** Per-kind face: a title + illustration icon. */
 const FACE: Record<FaultKind, { title: string; Icon: LucideIcon }> = {
-  refused: { title: "Service unavailable", Icon: ServerCrash },
-  tls: { title: "TLS handshake failed", Icon: ShieldAlert },
-  dns: { title: "Host not found", Icon: Globe },
-  timeout: { title: "Request timed out", Icon: TimerOff },
-  cancelled: { title: "Request cancelled", Icon: Ban },
-  encode: { title: "Request couldn't be encoded", Icon: FileWarning },
-  decode: { title: "Response couldn't be decoded", Icon: FileWarning },
-  auth: { title: "Authentication failed", Icon: KeyRound },
-  other: { title: "Request failed", Icon: AlertCircle },
+  refused: { title: TITLE.refused, Icon: ServerCrash },
+  tls: { title: TITLE.tls, Icon: ShieldAlert },
+  dns: { title: TITLE.dns, Icon: Globe },
+  timeout: { title: TITLE.timeout, Icon: TimerOff },
+  cancelled: { title: TITLE.cancelled, Icon: Ban },
+  encode: { title: TITLE.encode, Icon: FileWarning },
+  decode: { title: TITLE.decode, Icon: FileWarning },
+  auth: { title: TITLE.auth, Icon: KeyRound },
+  kind_mismatch: { title: TITLE.kind_mismatch, Icon: ArrowLeftRight },
+  other: { title: TITLE.other, Icon: AlertCircle },
 };
 
 /**
@@ -31,7 +36,7 @@ const FACE: Record<FaultKind, { title: string; Icon: LucideIcon }> = {
  */
 export function ClientErrorView({ fault }: { fault: ClientFault }) {
   const { title, Icon } = FACE[fault.kind];
-  const hint = faultHint(fault.kind);
+  const hint = faultHint(fault);
   return (
     <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 overflow-auto scroll-thin p-8 text-center">
       <div className="flex size-12 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground">
@@ -44,11 +49,13 @@ export function ClientErrorView({ fault }: { fault: ClientFault }) {
         </p>
       ) : (
         <p className="max-w-[400px] text-xs leading-relaxed text-muted-foreground">
-          The request could not be completed. Check the address, port and TLS setting, then try again.
+          {messages.response.clientError.fallbackHint}
         </p>
       )}
       <div className="w-full max-w-[460px] rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-left">
-        <p className="text-[10px] font-medium uppercase tracking-wide text-destructive/80">Error</p>
+        <p className="text-[10px] font-medium uppercase tracking-wide text-destructive/80">
+          {messages.response.clientError.errorLabel}
+        </p>
         <p className="mt-0.5 break-all font-mono text-xs leading-relaxed text-destructive">{fault.message}</p>
       </div>
     </div>

@@ -24,7 +24,7 @@ pub mod tree;
 pub use file_store::FileCollectionStore;
 pub use ids::{CollectionId, ItemId};
 pub use in_memory::InMemoryCollectionStore;
-pub use resolve::resolve_request;
+pub use resolve::{resolve_body, resolve_request, resolve_request_without_body};
 pub use store::CollectionStore;
 
 /// An ordered metadata header row (templated value, literal key).

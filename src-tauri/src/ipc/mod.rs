@@ -7,6 +7,7 @@ pub mod env;
 pub mod error;
 pub mod invoke;
 pub mod schema;
+pub mod stream;
 pub mod target;
 pub mod ui_state;
 pub mod vars;
@@ -18,4 +19,5 @@ pub use invoke::{
     CallOptionsIpc, InvokeOutcomeIpc, SendCtxIpc, SendDraftIpc, SendReportIpc,
 };
 pub use schema::{MessageSchemaIpc, MessageSideIpc};
+pub use stream::{AssembleResultIpc, MethodKindIpc, OutboundMessageIpc, StreamEventIpc};
 pub use target::GrpcTargetIpc;

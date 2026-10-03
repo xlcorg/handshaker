@@ -1,7 +1,7 @@
 import { ResponsePanel, type ContractInfo } from "@/features/response/ResponsePanel";
 import type { RespState } from "@/features/response/RespMeta";
 import { AddressBar } from "./AddressBar";
-import { DraftAddressBar } from "./DraftAddressBar";
+import { DraftAddressBar, type TwoWayControls } from "./DraftAddressBar";
 import { useDraftReflection } from "./useDraftReflection";
 import { useMessageSchema } from "./useMessageSchema";
 import { useEffectiveAuth } from "./useEffectiveAuth";
@@ -11,7 +11,9 @@ import {
   resetBodyToTemplate,
   varsResolverFor,
 } from "./actions";
-import { useSend } from "./useSend";
+import { useCall } from "./useCall";
+import { StreamView } from "@/features/stream/StreamView";
+import { isLivePhase, useStreamEntry, type StreamEntry } from "@/features/stream/streamStore";
 import { effectiveTls } from "./tls";
 import { workflowStore } from "./store";
 import type { DraftOrigin } from "./store";
@@ -23,6 +25,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { MetadataRow, Step } from "./model";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { usePrefs } from "@/lib/use-prefs";
+import { isTwoWay, kindOf } from "@/lib/method-kind";
+import { controlsKind, executedKind } from "./controlsKind";
 import { useActiveWorkflow } from "./store";
 
 interface CallPanelProps {
@@ -95,38 +99,6 @@ export function CallPanel({ step, onPatch, editable, onQuickAddMethod, originVar
     addressResolveKey,
   );
 
-  // The Send lifecycle lives in useSend: gate → send → patch → executed snapshot
-  // (auth/TLS from the Send report — fact, not a second fetch) → usage bump.
-  const { send, cancel } = useSend({
-    step,
-    envName: activeWf.envName,
-    onPatch,
-    record: !!editable,
-    origin,
-  });
-
-  // Ctrl/Cmd+Enter and Ctrl/Cmd+R send the active draft (mirrors the Send button).
-  // Bound only for the editable Focus draft so history re-send panels don't all
-  // fire at once. A ref holds the freshest send logic so the window listener binds
-  // once. (Monaco swallows these chords while the request editor has focus, so
-  // BodyView re-binds them as editor commands too.)
-  const sendShortcutRef = useRef<() => void>(() => {});
-  sendShortcutRef.current = () => {
-    if (step.status === "sending" || step.method.trim().length === 0) return;
-    void send();
-  };
-  useEffect(() => {
-    if (!editable) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (!isSendHotkey(e)) return;
-      // preventDefault also suppresses the WebView's built-in Ctrl+R reload.
-      e.preventDefault();
-      sendShortcutRef.current();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [editable]);
-
   // `addressResolveKey` carries the active env (name + revision + collection): the address is
   // a `{{var}}` template resolved against it, so an env switch/edit must re-reflect even though
   // `step.address` is unchanged. Without it the contract froze on the first env until a manual
@@ -150,6 +122,78 @@ export function CallPanel({ step, onPatch, editable, onQuickAddMethod, originVar
     setSchemaRevision((r) => r + 1);
   };
 
+  // Catalog kind — derived exactly once, live, from the reflected catalog (never stored
+  // on the step). `null` while the catalog is pending/failed or lacks the method. This
+  // is the *contract's* kind: it feeds the Contract tab and is the second rung of the
+  // controls-kind precedence below.
+  const catalogKind = useMemo(
+    () => kindOf(reflection.catalog, step.service, step.method),
+    [reflection.catalog, step.service, step.method],
+  );
+
+  // The step's Stream store entry (one subscription for the controls and the pane).
+  const entry = useStreamEntry(step.streamId);
+  const liveEntry = entry !== null && step.requestId === entry.id && isLivePhase(entry.phase) ? entry : null;
+
+  // Controls kind — live call → catalog → last executed → null (`controlsKind`, the one
+  // place the rule lives). Feeds the address-bar badge + controls and the path `useCall`
+  // drives, so a reflection refresh cannot flip the controls mid-call and a history
+  // snapshot (panels never reflect ⇒ `catalogKind` null) re-opens with the kind it ran as.
+  // `null` ⇒ no badge, unary controls; the UI never *claims* unary.
+  const kind = controlsKind({
+    liveKind: liveEntry?.kind ?? null,
+    catalogKind,
+    executedKind: executedKind(step, entry),
+  });
+
+  // The call lifecycle lives in `useCall`, which owns both paths — useSend (unary) and
+  // useStreamCall (Stream call): gate → send/open → patch → executed snapshot (auth/TLS
+  // from the report / `Opened` — fact, not a second fetch) → usage bump. `kind` picks the
+  // path Send drives: any streaming kind opens a stream (`server` = Send, `client` /
+  // `bidi` = Open), unary or `null` (unknown) takes the unary path — and a kind mismatch
+  // from core re-routes once through the other path. Cancel follows the live call.
+  const call = useCall({ step, envName: activeWf.envName, kind, onPatch, record: !!editable, origin });
+  const { send, cancel } = call;
+
+  // A live two-way entry — decided by the call's own kind, not the catalog — turns the
+  // busy slot into the segmented Send message / Half-close / Cancel controls.
+  const twoWay: TwoWayControls | undefined =
+    liveEntry !== null && isTwoWay(liveEntry.kind)
+      ? {
+          canSend: liveEntry.phase === "open" && !liveEntry.halfClosed,
+          onSendMessage: () => void call.sendMessage(),
+          onHalfClose: () => void call.halfClose(),
+        }
+      : undefined;
+
+  // Ctrl/Cmd+Enter and Ctrl/Cmd+R send the active draft (mirrors the primary button):
+  // Send / Open when idle or ended; Send message while a two-way stream is open; a
+  // no-op while a server stream is live (or after half-close), so a subscription is
+  // never cancelled by the chord. Bound only for the editable Focus draft so history
+  // re-send panels don't all fire at once. A ref holds the freshest send logic so the
+  // window listener binds once. (Monaco swallows these chords while the request editor
+  // has focus, so BodyView re-binds them as editor commands too.)
+  const sendShortcutRef = useRef<() => void>(() => {});
+  sendShortcutRef.current = () => {
+    if (step.method.trim().length === 0) return;
+    if (step.status === "sending") {
+      if (twoWay?.canSend) twoWay.onSendMessage();
+      return;
+    }
+    void send();
+  };
+  useEffect(() => {
+    if (!editable) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!isSendHotkey(e)) return;
+      // preventDefault also suppresses the WebView's built-in Ctrl+R reload.
+      e.preventDefault();
+      sendShortcutRef.current();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [editable]);
+
   // Schema for the draft's method — input side for request autocomplete + ghost,
   // output side for the Contract tab.
   // History panels pass an empty target so no fetch fires.
@@ -163,6 +207,7 @@ export function CallPanel({ step, onPatch, editable, onQuickAddMethod, originVar
     <DraftAddressBar
       step={step}
       catalog={reflection.catalog}
+      kind={kind}
       reflecting={reflection.loading}
       reflectError={reflection.error}
       onAddress={(address) => onPatch({ address })}
@@ -185,13 +230,14 @@ export function CallPanel({ step, onPatch, editable, onQuickAddMethod, originVar
         }}
       onSend={send}
       onCancel={cancel}
+      twoWay={twoWay}
       onQuickAdd={onQuickAddMethod}
       resolveAddress={varsResolverFor(step.collectionId)}
       resolveKey={addressResolveKey}
       variables={varCandidates}
     />
   ) : (
-    <AddressBar step={step} onSend={send} onCancel={cancel} />
+    <AddressBar step={step} kind={kind} onSend={send} onCancel={cancel} twoWay={twoWay} />
   );
 
   return (
@@ -226,7 +272,9 @@ export function CallPanel({ step, onPatch, editable, onQuickAddMethod, originVar
           <div className="flex h-full min-h-0 flex-col">
             <ResponseSlot
               step={step}
-              contract={editable ? { input: schema, output: outputSchema, method: step.method } : null}
+              entry={entry}
+              // The Contract tab prints the *contract* — the catalog kind, never the controls kind.
+              contract={editable ? { input: schema, output: outputSchema, method: step.method, kind: catalogKind } : null}
             />
           </div>
         </ResizablePanel>
@@ -237,11 +285,21 @@ export function CallPanel({ step, onPatch, editable, onQuickAddMethod, originVar
 
 function ResponseSlot({
   step,
+  entry,
   contract,
 }: {
   step: Step;
+  /** The step's Stream store entry (the panel's one subscription); null when released. */
+  entry: StreamEntry | null;
   contract: ContractInfo | null;
 }) {
+  // A step that opened a Stream call renders the stream pane off its store entry;
+  // `outcome` stays unary-only. A call that faulted after Open never reached stream
+  // start (no rows to show), so it wears the unary client-error face off `Step.error` —
+  // the spec's "client fault before stream start keeps the existing face". A rejected
+  // Send message is NOT such a fault: it stays on the live entry (`sendFault`) and the
+  // stream pane shows it as a strip.
+  if (step.streamId !== null && entry?.phase !== "faulted") return <StreamView entry={entry} contract={contract} />;
   const respState: RespState =
     step.status === "sending"
       ? "sending"

@@ -17,7 +17,8 @@ use commands::env::{env_active_get, env_active_set, env_delete, env_list, env_re
 use commands::events::ContractUpdated;
 use commands::grpc::{
     grpc_build_request_skeleton, grpc_cancel, grpc_describe, grpc_message_schema,
-    grpc_refresh_contract, grpc_send,
+    grpc_refresh_contract, grpc_send, stream_assemble, stream_half_close, stream_message, stream_open,
+    stream_release, stream_save_messages, stream_send,
 };
 use commands::meta::{app_version, startup_recovery_take};
 use commands::bundle::{bundle_export, bundle_import_apply, bundle_import_inspect};
@@ -41,6 +42,13 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             grpc_message_schema,
             grpc_send,
             grpc_cancel,
+            stream_message,
+            stream_open,
+            stream_release,
+            stream_send,
+            stream_half_close,
+            stream_save_messages,
+            stream_assemble,
             env_list,
             env_active_get,
             env_active_set,

@@ -41,6 +41,85 @@ export const messages = {
       aria: (override: boolean | null): string =>
         override === null ? "TLS inherit" : override ? "TLS on" : "TLS off",
     },
+    send: {
+      variableCycle: (chain: string[]) => `Variable cycle: ${chain.join(" → ")}`,
+      unresolvedVariables: (names: string[]) =>
+        `Unresolved variables: ${names.map((v) => `{{${v}}}`).join(", ")}`,
+    },
+    /** Client-side (non-gRPC-status) failure faces — `netDiagnostics.ts`. */
+    fault: {
+      timedOut: (timeoutMs: number) => `Request timed out after ${timeoutMs}ms`,
+      cancelled: "Request cancelled",
+      unresolvedVariable: (name: string) => `Unresolved variable: ${name}`,
+      /** `stream_message` for a released store or a stale row (expanded timeline row). */
+      streamMessageNotFound: "Message no longer available — the stream was released",
+      /** `stream_send` / `stream_half_close` on a call that is not open (not yet Opened,
+       *  half-closed, ended or cancelled). */
+      streamClosed: "Stream is not open — the message was not sent",
+      /** `stream_save_messages` / `stream_assemble` on a released (or never opened) call. */
+      streamNotFound: "Stream no longer available — it was released",
+      /** `stream_assemble` for a field that is not a `bytes` candidate of the response type. */
+      streamFieldNotFound: "This field is not a bytes field of the response type",
+      /** The kind gate refused the call: `actual` is the contract's kind, `expected` the
+       *  path it was called through. Kinds in human form (`methodKind.label`). */
+      kindMismatch: (service: string, method: string, expected: string, actual: string) =>
+        `${service}/${method} is ${actual} but was called as ${expected}`,
+      /** The `kind_mismatch` face hint — the remedy only (the pinned message already names
+       *  the method and both kinds). */
+      kindMismatchHint: "Refresh reflection, then send again.",
+      /** Actionable hint per fault kind (empty ⇒ no hint shown); `kind_mismatch` has its
+       *  own entry — see `kindMismatchHint`. */
+      hint: {
+        refused:
+          "Nothing is listening at that address/port. Check the host, port, and that the server is running.",
+        tls: "TLS negotiation failed. Verify the scheme, the server certificate, or disable verification for self-signed certs.",
+        dns: "The hostname could not be resolved. Check the address for typos or your network/DNS.",
+        timeout:
+          "The server did not respond before the request deadline. Raise it in Settings → Network or check the server.",
+        cancelled: "Request was cancelled.",
+        encode: "The request body could not be encoded for this method. Check the JSON against the contract.",
+        decode:
+          "The server's response could not be decoded — the method's contract may be stale. Refresh reflection.",
+        auth: "Authentication could not be prepared. Check the auth configuration and its variables.",
+        other: "",
+      },
+    },
+    /** Collapsed step row / rail status text (`stepView.ts`). */
+    step: {
+      draft: "draft",
+      sending: "…",
+      cancelled: "cancelled",
+      ok: (code: number) => `✓ ${code}`,
+      errorCode: (code: number) => `✕ ${code}`,
+      error: "✕ error",
+      /** Rail dot tooltip: `1. OrderService · GetOrder — ✓ 0`. */
+      railTitle: (number: number, title: string, statusText: string) => `${number}. ${title} — ${statusText}`,
+    },
+    addressBar: {
+      hostPlaceholder: "host:port",
+      send: "▶ Send",
+      /** Primary button of a client-streaming / bidi method: Open sends no message. */
+      open: "▶ Open",
+      /** Segmented controls while a two-way stream is open. */
+      sendMessage: "Send message ▸",
+      /** Half-close of the outbound side (glossary term stays in core / docs); the icon
+       *  lives in `CallControls`, never as a glyph in this string. */
+      halfClose: "End stream",
+      /** ARIA label of the segmented group. */
+      streamControlsAria: "Stream controls",
+      cancel: "Cancel",
+      /** History header status chip (`statusChip`): a unary outcome or a stream's End /
+       *  Cancel, the same vocabulary as the stream footer. */
+      chip: {
+        ok: (elapsed: string) => `✓ OK · ${elapsed}`,
+        /** OK whose timing is gone (a released stream entry). */
+        okNoElapsed: "✓ OK",
+        /** Non-OK gRPC status: `✕ <code> <NAME>`. */
+        status: (code: number, name: string) => `✕ ${code} ${name}`,
+        cancelled: "○ Cancelled",
+        error: "✕ error",
+      },
+    },
     toast: {
       alreadyInCollection: (name: string) => `Already in "${name}"`,
       savedTo: (collection: string, folder: string) => `Saved to ${collection} / ${folder}`,
@@ -201,7 +280,8 @@ export const messages = {
   },
   contract: {
     pickMethod: "Pick a method — its contract appears here.",
-    schemaUnavailable: (side: string) => `${side} schema unavailable.`,
+    schemaUnavailable: (side: "input" | "output") =>
+      `${side === "input" ? "Request" : "Response"} schema unavailable.`,
     unavailable:
       "Contract unavailable — the method schema was not received (reflection is off or the server is unreachable).",
   },
@@ -233,8 +313,37 @@ export const messages = {
     },
   },
   response: {
+    tabs: {
+      body: "Body",
+      trailers: "Trailers",
+      headers: "Headers",
+      contract: "Contract",
+    },
+    empty: {
+      awaitingFirstCall: "Awaiting first call",
+      awaitingFirstCallDesc: "Hit Send to invoke. Response body, trailers and timing will appear here.",
+    },
     error: {
       noDetails: "No google.rpc details attached.",
+    },
+    /** Client-side (non-gRPC-status) failure face (`ClientErrorView.tsx`). */
+    clientError: {
+      title: {
+        refused: "Service unavailable",
+        tls: "TLS handshake failed",
+        dns: "Host not found",
+        timeout: "Request timed out",
+        cancelled: "Request cancelled",
+        encode: "Request couldn't be encoded",
+        decode: "Response couldn't be decoded",
+        auth: "Authentication failed",
+        kind_mismatch: "Method kind mismatch",
+        other: "Request failed",
+      },
+      /** Shown when the fault kind has no specific hint. */
+      fallbackHint: "The request could not be completed. Check the address, port and TLS setting, then try again.",
+      /** Label above the raw error text. */
+      errorLabel: "Error",
     },
     save: {
       /** Context-menu item — trailing ellipsis signals a dialog opens. */
@@ -251,7 +360,110 @@ export const messages = {
       failed: "Couldn't save",
     },
   },
+  /** Stream call response pane (glossary: Stream call, Stream end, Cancel — core `CONTEXT.md`). */
+  stream: {
+    tabs: {
+      messages: "Messages",
+    },
+    empty: {
+      awaitingTitle: "Stream open — awaiting messages",
+      awaitingDesc: "Messages appear here as the server sends them, newest first.",
+      /** Two-way (client / bidi) call open, nothing sent or received yet. */
+      sendTitle: "Stream open — send messages",
+      sendDesc: "Send message emits the current body as one message; End stream ends your side.",
+      /** Two-way call after Half-close, nothing received yet. */
+      halfClosedTitle: "Half-closed — waiting for the server",
+      halfClosedDesc: "Your side is closed; the server's messages and status appear here.",
+      /** Search matched no row (the rows are still there — clear the box). */
+      noMatch: "No messages match",
+    },
+    /** Thin toolbar above the timeline: search over previews + `shown / total`. */
+    toolbar: {
+      searchPlaceholder: "Search messages…",
+      /** ARIA label of the search box. */
+      searchAria: "Search messages",
+      /** Counter shown only while a filter hides rows. */
+      shownOfTotal: (shown: number, total: number) => `${shown} / ${total}`,
+      /** Direction chips (two-way streams only). */
+      directionAria: "Filter by direction",
+      all: "All",
+      received: "Received",
+      sent: "Sent",
+    },
+    /** Strip above the rows after a rejected Send message (the stream stays open). */
+    sendFault: {
+      title: "Message not sent",
+      dismiss: "Dismiss",
+    },
+    row: {
+      /** ARIA label of the direction arrow on a row. */
+      received: "received",
+      sent: "sent",
+      /** Ordinal of a message in the timeline (one numbering for both directions). */
+      index: (n: number) => `#${n}`,
+      /** ARIA label of the expandable row button. */
+      toggleAria: (n: number) => `Message #${n}`,
+    },
+    /** Expanded row body (Monaco) states while a `> 64 KiB` message is fetched on demand. */
+    body: {
+      loading: "Loading message…",
+      loadFailed: (reason: string) => `Could not load message: ${reason}`,
+    },
+    /** Red strip above the rows after a non-OK End: `<code> <NAME> · message`. */
+    strip: {
+      seeTrailers: "See trailers",
+    },
+    /** Export menu behind the toolbar icon (Save messages / Assemble) and its toasts. */
+    export: {
+      /** ARIA label + tooltip of the toolbar icon. */
+      menuAria: "Export",
+      /** All inbound messages as one JSON array — also Ctrl/Cmd+S on the pane. */
+      saveMessages: "Save messages to file…",
+      /** Single candidate: one item naming the field path. */
+      assembleFrom: (path: string) => `Assemble file from \`${path}\`…`,
+      /** Several candidates: the submenu trigger; one `assembleFrom` item per path inside. */
+      assembleSubmenu: "Assemble file from…",
+      /** Saved-file toast detail: bytes written, messages that carried the field, of all. */
+      assembled: (size: string, written: number, total: number) =>
+        `${size} from ${written} of ${total} messages`,
+      /** Appended (`· …`) when the assembled call was cancelled — the file may be partial. */
+      streamCancelled: "stream cancelled",
+    },
+    /** Footer statusline (status only; the controls stay in the address bar). */
+    footer: {
+      opening: "OPENING",
+      streaming: "STREAMING",
+      halfClosed: "HALF-CLOSED",
+      ok: "OK",
+      cancelled: "Cancelled",
+      msgs: (n: number) => (n === 1 ? "1 msg" : `${n} msgs`),
+    },
+  },
+  /** Method kind (see `src/CONTEXT.md`): badge labels for the three streaming kinds.
+   *  Unary shows no badge, and so does an unknown kind (catalog not there yet). */
+  methodKind: {
+    badge: {
+      server: "stream",
+      client: "client",
+      bidi: "bidi",
+    } satisfies Record<"server" | "client" | "bidi", string>,
+    /** Human form of a kind for prose (faces, hints). */
+    label: {
+      unary: "unary",
+      server: "server-streaming",
+      client: "client-streaming",
+      bidi: "bidirectional",
+    } satisfies Record<"unary" | "server" | "client" | "bidi", string>,
+  },
   shell: {
+    methodPicker: {
+      selectMethod: "Select a method",
+      searchPlaceholder: "Find service.method…",
+      noMatch: (query: string) => `No methods match "${query}"`,
+      /** Hover «+» on a method row. */
+      quickAddAria: (method: string) => `Add ${method} to collection`,
+      quickAddTitle: "Add to collection",
+    },
     keyboard: {
       shortcutsTitle: "Shortcuts",
       sendRequest: "Send request",
@@ -281,7 +493,9 @@ export const messages = {
     network: {
       timeoutsGroup: "Timeouts",
       requestDeadline: "Request deadline",
-      requestDeadlineHint: "Per-request deadline; the call is cancelled if it exceeds this.",
+      /** Two-phase rule (spec "Deadline and cancel"): Open → connected, Half-close → stream start. */
+      requestDeadlineHint:
+        "Per-request deadline. Bounds connecting, and how long the server may take to answer once the client has finished sending; an open stream has no deadline.",
       seconds: "s",
       messageSizeGroup: "Message size",
       maxMessageSize: "Max message size",

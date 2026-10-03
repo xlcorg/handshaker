@@ -156,15 +156,167 @@ export const commands = {
     }
   },
   /**
-   * Fire the cancel `Notify` for an in-flight `request_id`. No-op if unknown (already
-   * finished or never started). Uses `notify_one()` so a cancel racing the `select!` first
-   * poll still stores a permit.
+   * Cancel the call under `request_id` — unary in-flight registry first, then the stream
+   * registry. No-op if unknown. See `grpc_cancel_impl`.
    */
   async grpcCancel(requestId: string): Promise<Result<null, IpcError>> {
     try {
       return {
         status: "ok",
         data: await TAURI_INVOKE("grpc_cancel", { requestId }),
+      };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  /**
+   * Full pretty proto3-JSON of one inbound message of a Stream call: `index` is the
+   * 1-based timeline ordinal of the row under `request_id`, decoded lazily from the core
+   * Stream store. The timeline calls this when a row whose `Message.json` arrived as
+   * `null` (> 64 KiB) is expanded. `Err(StreamMessageNotFound)` when the call id is
+   * unknown (store already released) or the index is out of range (stale snapshot).
+   */
+  async streamMessage(
+    requestId: string,
+    index: number,
+  ): Promise<Result<string, IpcError>> {
+    try {
+      return {
+        status: "ok",
+        data: await TAURI_INVOKE("stream_message", { requestId, index }),
+      };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  async streamOpen(
+    draft: SendDraftIpc,
+    ctx: SendCtxIpc,
+    requestId: string,
+    kind: MethodKindIpc,
+    opts: CallOptionsIpc,
+    onEvent: TAURI_CHANNEL<StreamEventIpc>,
+  ): Promise<Result<null, IpcError>> {
+    try {
+      return {
+        status: "ok",
+        data: await TAURI_INVOKE("stream_open", {
+          draft,
+          ctx,
+          requestId,
+          kind,
+          opts,
+          onEvent,
+        }),
+      };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  /**
+   * Free the **Stream store** of `request_id` (and abort the call if still running).
+   * No-op if unknown. The frontend's release rule is the only caller.
+   */
+  async streamRelease(requestId: string): Promise<Result<null, IpcError>> {
+    try {
+      return {
+        status: "ok",
+        data: await TAURI_INVOKE("stream_release", { requestId }),
+      };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  /**
+   * **Send message** on the open stream call under `request_id`: `body_template` is the
+   * current body (templates intact — core resolves `{{var}}` / `{{$builtin}}` against the
+   * `ctx` collection / env of this moment); the ack carries the row for the timeline
+   * (`index` shared with inbound rows, `at_ms`, `size_bytes`, `preview`) plus the
+   * **resolved** JSON that went on the wire. `Err(StreamClosed)` when the call is not
+   * `Opened` yet, half-closed, ended or cancelled — never a silent drop;
+   * `Err(UnresolvedVars | EncodeRequest)` blocks this message only, the call stays open.
+   */
+  async streamSend(
+    requestId: string,
+    bodyTemplate: string,
+    ctx: SendCtxIpc,
+  ): Promise<Result<OutboundMessageIpc, IpcError>> {
+    try {
+      return {
+        status: "ok",
+        data: await TAURI_INVOKE("stream_send", {
+          requestId,
+          bodyTemplate,
+          ctx,
+        }),
+      };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  /**
+   * **Half-close** the outbound side of the stream call under `request_id`: the request
+   * stream ends on the wire, later `stream_send`s are refused, and the deadline pref
+   * starts bounding the server's answer (half-close → stream start). Idempotent while the
+   * call is registered; `Err(StreamClosed)` for an unknown id.
+   */
+  async streamHalfClose(requestId: string): Promise<Result<null, IpcError>> {
+    try {
+      return {
+        status: "ok",
+        data: await TAURI_INVOKE("stream_half_close", { requestId }),
+      };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  /**
+   * **Save messages** of the Stream call under `request_id`: all inbound messages as one
+   * JSON array (oldest first, outbound excluded), written to a user-picked file via the
+   * native Save-As dialog under the unary default name `response-<localstamp>.json`.
+   * `Ok(Some(path))` = saved, `Ok(None)` = the user cancelled the dialog;
+   * `Err(StreamNotFound)` for an unknown / released call (before any dialog opens).
+   *
+   * The JSON build decodes every stored row, so it runs on a blocking thread like the
+   * write itself — never on a tokio worker.
+   */
+  async streamSaveMessages(
+    requestId: string,
+  ): Promise<Result<string | null, IpcError>> {
+    try {
+      return {
+        status: "ok",
+        data: await TAURI_INVOKE("stream_save_messages", { requestId }),
+      };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  /**
+   * **Assemble** one file from the `field_path` `bytes` field (one of `Opened.bytes_fields`)
+   * of every inbound message of the Stream call under `request_id`: the native Save-As
+   * dialog opens with core's default name, then core streams the chunks through a buffered
+   * file sink — messages without the field are skipped (0 bytes), the whole file is never
+   * buffered. `Ok(Some(result))` = saved (`path`, `written` of `total` messages,
+   * `size_bytes`); `Ok(None)` = the user cancelled; `Err(StreamNotFound)` /
+   * `Err(StreamFieldNotFound)` before any dialog opens. Decode + write run on a blocking
+   * thread (`save_via_dialog_with`), so a multi-GB assembly never pins a tokio worker.
+   */
+  async streamAssemble(
+    requestId: string,
+    fieldPath: string,
+  ): Promise<Result<AssembleResultIpc | null, IpcError>> {
+    try {
+      return {
+        status: "ok",
+        data: await TAURI_INVOKE("stream_assemble", { requestId, fieldPath }),
       };
     } catch (e) {
       if (e instanceof Error) throw e;
@@ -688,6 +840,17 @@ export const events = __makeEvents__<{
 
 export type ActiveRequestRefIpc = { collection_id: string; item_id: string };
 export type AppVersion = { version: string };
+/**
+ * What `stream_assemble` wrote: the chosen `path`, `written` = inbound messages that
+ * carried the field, `total` = all inbound messages, `size_bytes` as `f64` (a multi-GB
+ * assembly overflows `u32`, and specta forbids `u64`).
+ */
+export type AssembleResultIpc = {
+  path: string;
+  written: number;
+  total: number;
+  size_bytes: number;
+};
 export type AuthCredentialsIpc = { header_name: string; header_value: string };
 export type Base64InspectIpc = {
   kind: Base64KindIpc;
@@ -830,6 +993,38 @@ export type IpcError =
   | { type: "Transport"; kind: TransportKindIpc; message: string }
   | { type: "Cancelled" }
   | { type: "DeadlineExceeded"; timeout_ms: number }
+  /**
+   * `stream_message` (and later store reads) for an unknown call id or row index.
+   */
+  | { type: "StreamMessageNotFound"; request_id: string; index: number }
+  /**
+   * `stream_send` / `stream_half_close` found no open outbound side under the id: the
+   * call is not `Opened` yet (or released), already half-closed, ended or cancelled.
+   */
+  | { type: "StreamClosed"; request_id: string }
+  /**
+   * `stream_save_messages` / `stream_assemble` for an id with no Stream store (never
+   * `Opened`, or already released).
+   */
+  | { type: "StreamNotFound"; request_id: string }
+  /**
+   * `stream_assemble` for a `field_path` that is not a `bytes` candidate of the call's
+   * response type (stale menu / changed contract).
+   */
+  | { type: "StreamFieldNotFound"; request_id: string; field_path: string }
+  /**
+   * The **kind gate**: the call path did not match the method's kind in the loaded
+   * contract — nothing reached the wire. `expected` = the kind the path implied
+   * (`grpc_send` → `unary`, `stream_open` → the kind the UI passed); `actual` = the
+   * descriptor's kind, i.e. the path the one-shot re-route takes.
+   */
+  | {
+      type: "MethodKindMismatch";
+      service: string;
+      method: string;
+      expected: MethodKindIpc;
+      actual: MethodKindIpc;
+    }
   | { type: "Auth"; message: string }
   | { type: "GrpcStatus"; code: number; message: string }
   | { type: "NotImplemented"; message: string }
@@ -869,6 +1064,10 @@ export type MethodEntryIpc = {
   server_streaming: boolean;
 };
 /**
+ * **Method kind** on the wire: `"unary" | "server" | "client" | "bidi"`.
+ */
+export type MethodKindIpc = "unary" | "server" | "client" | "bidi";
+/**
  * Result of a forced token fetch (the "Get token" button). The token is cached in
  * the backend either way; it is returned so the UI can show/copy it on demand —
  * session memory only, never persisted.
@@ -877,6 +1076,18 @@ export type MethodEntryIpc = {
 export type OAuth2TokenInfoIpc = {
   access_token: string;
   expires_in_secs: number;
+};
+/**
+ * The `stream_send` ack — one **outbound message** row for the timeline: the same meta
+ * as an inbound `Message` (`index` in the numbering shared with inbound rows, `at_ms`,
+ * `size_bytes`, `preview`) plus the **resolved** pretty JSON that went on the wire.
+ */
+export type OutboundMessageIpc = {
+  index: number;
+  at_ms: number;
+  size_bytes: number;
+  preview: string;
+  json: string;
 };
 export type PreconditionViolationIpc = {
   kind: string;
@@ -987,6 +1198,41 @@ export type StatusDetailIpc =
     }
   | { type: "Help"; links: HelpLinkIpc[] }
   | { type: "LocalizedMessage"; locale: string; message: string };
+/**
+ * One event of a stream call, discriminated by `"type"` like `IpcError`:
+ * `Opened → Headers → Message* → End | Fault`. Cancel is not an event.
+ *
+ * Numbers: `index` / `message_count` / `size_bytes` / `elapsed_ms` are `u32` (specta
+ * forbids u64); `at_ms` (epoch ms) and `total_bytes` (multi-GB streams) are `f64`.
+ */
+export type StreamEventIpc =
+  | {
+      type: "Opened";
+      kind: MethodKindIpc;
+      auth_used: SavedAuthConfigIpc;
+      tls_used: boolean;
+      bytes_fields: string[];
+    }
+  | { type: "Headers"; metadata: Partial<{ [key in string]: string }> }
+  | {
+      type: "Message";
+      index: number;
+      at_ms: number;
+      size_bytes: number;
+      preview: string;
+      json: string | null;
+    }
+  | {
+      type: "End";
+      status_code: number;
+      status_message: string;
+      status_details: StatusDetailIpc[];
+      trailing_metadata: Partial<{ [key in string]: string }>;
+      elapsed_ms: number;
+      message_count: number;
+      total_bytes: number;
+    }
+  | { type: "Fault"; error: IpcError };
 /**
  * Structured classification of a transport-connect failure. Lets the frontend
  * narrow on a kind instead of regex-parsing the message string.
