@@ -424,6 +424,8 @@ pub async fn spawn_bare_server() -> (SocketAddr, oneshot::Sender<()>) {
 /// Behavior knobs for `EchoService` — used by invoke_status / invoke_trailers tests.
 #[derive(Clone, Default, Debug)]
 pub struct EchoConfig {
+    pub required_unary_authorization: Option<String>,
+    pub seen_unary_requests: Arc<std::sync::Mutex<Vec<(String, String)>>>,
     /// If `Some(code)`, `Echo.Send` returns a gRPC status with this code instead of OK.
     pub return_status: Option<i32>,
     /// Extra trailing metadata the server injects in the response.
@@ -932,6 +934,25 @@ impl tower::Service<tonic::Request<prost_reflect::DynamicMessage>> for EchoHandl
 
         Box::pin(async move {
             let cfg = config.lock().await;
+
+            let authorization = req
+                .metadata()
+                .get("authorization")
+                .and_then(|value| value.to_str().ok())
+                .unwrap_or_default()
+                .to_string();
+            let id = req
+                .get_ref()
+                .get_field_by_name("id")
+                .and_then(|value| value.as_str().map(str::to_owned))
+                .unwrap_or_default();
+            cfg.seen_unary_requests.lock().unwrap().push((authorization.clone(), id));
+            if cfg.required_unary_authorization
+                .as_ref()
+                .is_some_and(|expected| expected != &authorization)
+            {
+                return Err(tonic::Status::unauthenticated("expired token"));
+            }
 
             // If configured to return a gRPC error status, do so.
             if let Some(code) = cfg.return_status {

@@ -3,7 +3,7 @@
 //!
 //! Order inside [`Sender::send`]: resolve pipeline → builtin expansion (body + user
 //! metadata VALUES only) → inject materialized auth header → activate via contract
-//! cache → invoke → on gRPC status 16 with an OAuth2 pick, invalidate that token.
+//! cache → invoke → on gRPC status 16 with an OAuth2 pick, refresh and retry once.
 //! Expansion runs BEFORE header injection, so a materialized auth header is a fact,
 //! not a template — it is never expanded. Cancel and timeout are the calling layer's
 //! concern, not part of the spine.
@@ -30,8 +30,7 @@ pub(crate) const GRPC_UNAUTHENTICATED: i32 = 16;
 
 /// **Rule 16**, in one place for both spines: on `UNAUTHENTICATED` drop the cached token
 /// of the OAuth2 config that materialized this call's header (the *resolved* config, so
-/// the next Send fetches fresh). Any other status, or a non-OAuth2 pick, is a no-op. No
-/// auto-retry (design choice).
+/// the next token lookup fetches fresh). Any other status, or a non-OAuth2 pick, is a no-op.
 pub(crate) fn invalidate_on_unauthenticated(
     tokens: &dyn TokenSource,
     status_code: i32,
@@ -90,12 +89,12 @@ impl Sender {
         // Unary keeps its deadline in the calling layer's race — no phase timer here.
         let p = self.prepare(request, collection, active_env, None, MethodKind::Unary).await?;
 
-        let outcome = crate::grpc::invoke_unary(
+        let mut outcome = crate::grpc::invoke_unary(
             &p.conn,
             &p.service,
             &p.method,
             &p.body_json,
-            p.metadata,
+            p.metadata.clone(),
             opts,
         )
         .await?;
@@ -106,7 +105,30 @@ impl Sender {
             p.invalidate_oauth.as_ref(),
         );
 
-        Ok(SendReport { outcome, auth_used: p.auth_used, tls_used: p.tls_used })
+        if outcome.status_code == GRPC_UNAUTHENTICATED {
+            if let Some(cfg) = p.invalidate_oauth.as_ref() {
+                let refreshed = self.tokens.header_for(cfg).await?;
+                let mut metadata = p.metadata;
+                metadata.remove(&cfg.header_name);
+                metadata.insert(refreshed.header_name, refreshed.header_value);
+                outcome = crate::grpc::invoke_unary(
+                    &p.conn,
+                    &p.service,
+                    &p.method,
+                    &p.body_json,
+                    metadata,
+                    opts,
+                )
+                .await?;
+                invalidate_on_unauthenticated(self.tokens.as_ref(), outcome.status_code, Some(cfg));
+            }
+        }
+
+        Ok(SendReport {
+            outcome,
+            auth_used: p.auth_used,
+            tls_used: p.tls_used,
+        })
     }
 
     /// **Open** a stream call: the shared prefix (phase-1 deadline around activate),
@@ -364,6 +386,7 @@ pub(crate) mod tests {
     pub(crate) struct RecordingTokens {
         header: AuthCredentials,
         pub(crate) invalidated: std::sync::Mutex<Vec<OAuth2ClientCredentialsConfig>>,
+        retry_outcome: Option<(Arc<FakeTransport>, UnaryOutcome)>,
         /// How many times a header was materialized (`header_for`).
         pub(crate) header_calls: std::sync::atomic::AtomicU32,
     }
@@ -375,8 +398,15 @@ pub(crate) mod tests {
                     header_value: "Bearer tok".into(),
                 },
                 invalidated: std::sync::Mutex::new(Vec::new()),
+                retry_outcome: None,
                 header_calls: std::sync::atomic::AtomicU32::new(0),
             })
+        }
+
+        fn with_retry_outcome(transport: Arc<FakeTransport>, outcome: UnaryOutcome) -> Arc<Self> {
+            let mut tokens = Self::new();
+            Arc::get_mut(&mut tokens).unwrap().retry_outcome = Some((transport, outcome));
+            tokens
         }
     }
     #[async_trait::async_trait]
@@ -390,7 +420,167 @@ pub(crate) mod tests {
         }
         fn invalidate(&self, cfg: &OAuth2ClientCredentialsConfig) {
             self.invalidated.lock().unwrap().push(cfg.clone());
+            if let Some((transport, outcome)) = &self.retry_outcome {
+                *transport.outcome.try_lock().unwrap() = Some(Ok(outcome.clone()));
+            }
         }
+    }
+
+    struct RefreshTokens {
+        transport: Arc<FakeTransport>,
+        next_outcome: UnaryOutcome,
+        fail_on_refresh: bool,
+        invalidations: std::sync::atomic::AtomicU32,
+    }
+
+    #[async_trait::async_trait]
+    impl TokenSource for RefreshTokens {
+        async fn header_for(
+            &self,
+            _cfg: &OAuth2ClientCredentialsConfig,
+        ) -> Result<AuthCredentials, CoreError> {
+            let invalidations = self.invalidations.load(std::sync::atomic::Ordering::SeqCst);
+            if invalidations > 0 && self.fail_on_refresh {
+                return Err(CoreError::Auth("refresh failed".into()));
+            }
+            let token = if invalidations == 0 { "stale" } else { "fresh" };
+            Ok(AuthCredentials {
+                header_name: "authorization".into(),
+                header_value: format!("Bearer {token}"),
+            })
+        }
+
+        fn invalidate(&self, _cfg: &OAuth2ClientCredentialsConfig) {
+            self.invalidations
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            *self
+                .transport
+                .outcome
+                .try_lock()
+                .expect("prior call released outcome") = Some(Ok(self.next_outcome.clone()));
+        }
+    }
+
+    #[tokio::test]
+    async fn oauth_unauthenticated_refreshes_and_retries_the_same_send_once() {
+        let mut request = fixture_request(false);
+        request.auth = oauth_template();
+        let transport = FakeTransport::with_outcome(Ok(unauthenticated_outcome()));
+        let tokens = Arc::new(RefreshTokens {
+            transport: transport.clone(),
+            next_outcome: ok_outcome(),
+            fail_on_refresh: false,
+            invalidations: std::sync::atomic::AtomicU32::new(0),
+        });
+        let sender = Sender::new(
+            transport.clone(),
+            tokens.clone(),
+            seeded_cache(false),
+            Arc::new(NoBuiltins),
+        );
+
+        let report = sender
+            .send(&request, None, Some(&env_with_sec()), unlimited_opts())
+            .await
+            .unwrap();
+
+        assert_eq!(report.outcome.status_code, 0);
+        assert_eq!(
+            report.outcome.response_json.as_deref(),
+            Some(r#"{"id":"echo"}"#)
+        );
+        assert_eq!(
+            transport
+                .unary_calls
+                .load(std::sync::atomic::Ordering::SeqCst),
+            2
+        );
+        assert_eq!(
+            transport.last_metadata.lock().await.as_ref().unwrap()["authorization"],
+            "Bearer fresh"
+        );
+        assert_eq!(
+            tokens
+                .invalidations
+                .load(std::sync::atomic::Ordering::SeqCst),
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn repeated_oauth_unauthenticated_stops_after_one_retry() {
+        let mut request = fixture_request(false);
+        request.auth = oauth_template();
+        let transport = FakeTransport::with_outcome(Ok(unauthenticated_outcome()));
+        let tokens = Arc::new(RefreshTokens {
+            transport: transport.clone(),
+            next_outcome: unauthenticated_outcome(),
+            fail_on_refresh: false,
+            invalidations: std::sync::atomic::AtomicU32::new(0),
+        });
+        let sender = Sender::new(
+            transport.clone(),
+            tokens.clone(),
+            seeded_cache(false),
+            Arc::new(NoBuiltins),
+        );
+
+        let report = sender
+            .send(&request, None, Some(&env_with_sec()), unlimited_opts())
+            .await
+            .unwrap();
+
+        assert_eq!(report.outcome.status_code, 16);
+        assert_eq!(
+            transport
+                .unary_calls
+                .load(std::sync::atomic::Ordering::SeqCst),
+            2
+        );
+        assert_eq!(
+            tokens
+                .invalidations
+                .load(std::sync::atomic::Ordering::SeqCst),
+            2
+        );
+    }
+
+    #[tokio::test]
+    async fn oauth_refresh_failure_returns_auth_error_without_retrying() {
+        let mut request = fixture_request(false);
+        request.auth = oauth_template();
+        let transport = FakeTransport::with_outcome(Ok(unauthenticated_outcome()));
+        let tokens = Arc::new(RefreshTokens {
+            transport: transport.clone(),
+            next_outcome: ok_outcome(),
+            fail_on_refresh: true,
+            invalidations: std::sync::atomic::AtomicU32::new(0),
+        });
+        let sender = Sender::new(
+            transport.clone(),
+            tokens.clone(),
+            seeded_cache(false),
+            Arc::new(NoBuiltins),
+        );
+
+        let err = sender
+            .send(&request, None, Some(&env_with_sec()), unlimited_opts())
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, CoreError::Auth(message) if message == "refresh failed"));
+        assert_eq!(
+            transport
+                .unary_calls
+                .load(std::sync::atomic::Ordering::SeqCst),
+            1
+        );
+        assert_eq!(
+            tokens
+                .invalidations
+                .load(std::sync::atomic::Ordering::SeqCst),
+            1
+        );
     }
 
     pub(crate) fn oauth_template() -> SavedAuthConfig {
@@ -612,9 +802,9 @@ pub(crate) mod tests {
         request.auth = oauth_template();
         let env = env_with_sec();
         let transport = FakeTransport::with_outcome(Ok(unauthenticated_outcome()));
-        let tokens = RecordingTokens::new();
+        let tokens = RecordingTokens::with_retry_outcome(transport.clone(), unauthenticated_outcome());
         let sender = Sender::new(
-            transport,
+            transport.clone(),
             tokens.clone(),
             seeded_cache(false),
             Arc::new(NoBuiltins),
@@ -633,7 +823,8 @@ pub(crate) mod tests {
             prefix: "Bearer ".into(),
             environments: vec![],
         };
-        assert_eq!(invalidated, vec![expected_resolved]);
+        assert_eq!(invalidated, vec![expected_resolved.clone(), expected_resolved]);
+        assert_eq!(transport.unary_calls.load(std::sync::atomic::Ordering::SeqCst), 2);
     }
 
     #[tokio::test]
