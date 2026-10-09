@@ -1,4 +1,5 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Check, ChevronDown } from "lucide-react";
 
 import {
   Dialog,
@@ -17,30 +18,106 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/cn";
+import { messages } from "@/lib/messages";
 import { ipc } from "@/ipc/client";
 import type { EnvironmentIpc } from "@/ipc/bindings";
 
-import { ENV_COLORS, colorHex, defaultColorKeyForName } from "./colors";
+import { ENV_COLORS, colorHex, defaultColorKeyForName, resolveColorKey } from "./colors";
+import { isEnvEditorDirty, loadColor, loadVars } from "./editorDirty";
 import { VariablesTable } from "./VariablesTable";
 
-/** Read the target env's variables from the env list. `null` (create mode) ⇒ empty. */
-function loadVars(originalName: string | null, envs: EnvironmentIpc[]): Record<string, string> {
-  if (originalName === null) return {};
-  const cur = envs.find((e) => e.name === originalName);
-  const out: Record<string, string> = {};
-  if (cur) {
-    // Defensive coerce — tauri-specta emits Partial<Record<...>> for HashMap.
-    for (const [k, v] of Object.entries(cur.variables)) {
-      if (typeof v === "string") out[k] = v;
-    }
-  }
-  return out;
-}
+const m = messages.envs.editor;
 
-/** The env's stored color (edit mode) or null (create mode). */
-function loadColor(originalName: string | null, envs: EnvironmentIpc[]): string | null {
-  if (originalName === null) return null;
-  return envs.find((e) => e.name === originalName)?.color ?? null;
+function EnvSubjectMenu({
+  envs,
+  originalName,
+  subjectEnv,
+  onPick,
+  disabled,
+}: {
+  envs: EnvironmentIpc[];
+  originalName: string | null;
+  subjectEnv: EnvironmentIpc | null;
+  onPick: (name: string) => void;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      // Window capture runs before the dialog's document listener, so Escape
+      // closes this menu and leaves the editor open.
+      event.stopPropagation();
+      setOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointer);
+    window.addEventListener("keydown", onKey, true);
+    return () => {
+      document.removeEventListener("pointerdown", onPointer);
+      window.removeEventListener("keydown", onKey, true);
+    };
+  }, [open]);
+  return (
+    <div ref={rootRef} className="relative">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="shrink-0 gap-1.5 font-normal"
+        aria-label={m.switchAria}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        disabled={disabled}
+        onClick={() => setOpen((value) => !value)}
+      >
+        {subjectEnv && (
+          <span
+            aria-hidden
+            className="size-2 shrink-0 rounded-full"
+            style={{ backgroundColor: colorHex(resolveColorKey(subjectEnv)) }}
+          />
+        )}
+        <span className="max-w-[160px] truncate">{originalName ?? m.createTitle}</span>
+        <ChevronDown className="size-3.5 opacity-60" aria-hidden />
+      </Button>
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 top-full z-50 mt-1 min-w-[180px] rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
+        >
+          {envs.map((env) => {
+            const current = env.name === originalName;
+            return (
+              <button
+                key={env.name}
+                type="button"
+                role="menuitem"
+                disabled={current}
+                className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent disabled:opacity-50"
+                onClick={() => {
+                  setOpen(false);
+                  onPick(env.name);
+                }}
+              >
+                <span
+                  aria-hidden
+                  className="size-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: colorHex(resolveColorKey(env)) }}
+                />
+                <span className="truncate">{env.name}</span>
+                {current && <Check className="ml-auto size-3.5" aria-hidden />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export interface EnvEditorDialogProps {
@@ -56,6 +133,11 @@ export interface EnvEditorDialogProps {
   onSaved: (savedName: string, becameActive: boolean) => void;
   /** Edit mode only: request deletion of this env (parent opens the confirm dialog). */
   onRequestDelete?: (name: string) => void;
+  /**
+   * Switch the editor subject to another persisted env. Does not change the
+   * workflow's active env. Parent remounts this dialog (`key={originalName}`).
+   */
+  onSwitch?: (name: string) => void;
 }
 
 export function EnvEditorDialog({
@@ -66,6 +148,7 @@ export function EnvEditorDialog({
   onOpenChange,
   onSaved,
   onRequestDelete,
+  onSwitch,
 }: EnvEditorDialogProps) {
   const isCreate = originalName === null;
   const [name, setName] = useState<string>(originalName ?? "");
@@ -79,6 +162,13 @@ export function EnvEditorDialog({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [colorOpen, setColorOpen] = useState(false);
+  const [pendingSwitch, setPendingSwitch] = useState<string | null>(null);
+  const alive = useRef(true);
+  useEffect(() => {
+    return () => {
+      alive.current = false;
+    };
+  }, []);
 
   // Preview resolves against the EDITED rows (not the persisted env) — honest for
   // unsaved changes and for a non-active environment. No collection ctx here.
@@ -98,6 +188,20 @@ export function EnvEditorDialog({
   const canSave = !nameEmpty && !nameIsDuplicate;
 
   const effectiveColor = pickedColor ?? defaultColorKeyForName(trimmedName);
+  const switchTargets = onSwitch ? envs.filter((e) => e.name !== originalName) : [];
+  const showSwitcher = switchTargets.length > 0;
+  const subjectEnv =
+    originalName === null ? null : (envs.find((e) => e.name === originalName) ?? null);
+
+  function requestSwitch(next: string) {
+    if (busy || !onSwitch || next === originalName) return;
+    const dirty = isEnvEditorDirty({ originalName, name, vars, pickedColor }, envs);
+    if (dirty) {
+      setPendingSwitch(next);
+      return;
+    }
+    onSwitch(next);
+  }
 
   async function handleSave() {
     if (!canSave) return;
@@ -132,10 +236,12 @@ export function EnvEditorDialog({
       }
 
       onSaved(trimmedName, becameActive);
-      onOpenChange(false);
+      // A switch during this save unmounted us. Closing now would dismiss the
+      // environment the user already moved to.
+      if (alive.current) onOpenChange(false);
     } catch (e) {
       const t = e as { type?: string; message?: string };
-      setError(t.message ?? t.type ?? "save failed");
+      setError(t.message ?? t.type ?? m.saveFailed);
     } finally {
       setBusy(false);
     }
@@ -145,11 +251,20 @@ export function EnvEditorDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[85vh] min-h-[70vh] w-full max-w-[min(90vw,960px)] flex-col sm:max-w-[min(90vw,960px)]">
         <DialogHeader>
-          <DialogTitle>{isCreate ? "New environment" : "Edit environment"}</DialogTitle>
+          <div className={cn("flex items-center justify-between gap-2", showSwitcher && "pr-8")}>
+            <DialogTitle>{isCreate ? m.createTitle : m.editTitle}</DialogTitle>
+            {showSwitcher && (
+              <EnvSubjectMenu
+                envs={envs}
+                originalName={originalName}
+                subjectEnv={subjectEnv}
+                onPick={requestSwitch}
+                disabled={busy}
+              />
+            )}
+          </div>
           <DialogDescription className="sr-only">
-            {isCreate
-              ? "Create a new environment and define its variables."
-              : "Rename or update variables."}
+            {isCreate ? m.createDescription : m.editDescription}
           </DialogDescription>
         </DialogHeader>
 
@@ -158,19 +273,19 @@ export function EnvEditorDialog({
           <div className="flex items-center gap-2">
             <Input
               id="env-name"
-              aria-label="Name"
+              aria-label={m.nameAria}
               value={name}
               onChange={(e) => setName(e.target.value)}
               className={cn("font-mono text-sm", nameIsDuplicate && "border-destructive")}
               aria-invalid={nameIsDuplicate}
               autoFocus
-              placeholder="e.g. prod"
+              placeholder={m.namePlaceholder}
             />
             <Popover open={colorOpen} onOpenChange={setColorOpen}>
               <PopoverTrigger asChild>
                 <button
                   type="button"
-                  aria-label="Environment color"
+                  aria-label={m.colorAria}
                   className="flex size-9 shrink-0 items-center justify-center rounded-md border border-input"
                 >
                   <span
@@ -209,13 +324,13 @@ export function EnvEditorDialog({
             </Popover>
           </div>
           {nameIsDuplicate && (
-            <p className="text-xs text-destructive mt-1">name already exists</p>
+            <p className="text-xs text-destructive mt-1">{m.nameDuplicate}</p>
           )}
         </div>
 
         {/* Variables (scrolls internally) */}
         <div className="min-h-0 flex-1 space-y-1.5 overflow-auto">
-          <Label>Variables</Label>
+          <Label>{m.variables}</Label>
           <VariablesTable
             value={vars}
             onChange={setVars}
@@ -230,6 +345,36 @@ export function EnvEditorDialog({
           </div>
         )}
 
+        {pendingSwitch !== null && (
+          // The draft stays visible while the user decides.
+          <div
+            role="group"
+            aria-label={m.discardTitle}
+            className="flex flex-wrap items-center justify-between gap-3 border-l-2 border-destructive bg-destructive/5 px-3 py-2"
+          >
+            <div className="min-w-0">
+              <p className="text-sm font-medium">{m.discardTitle}</p>
+              <p className="text-xs text-muted-foreground">{m.discardDescription}</p>
+            </div>
+            <div className="flex gap-2">
+              <Button type="button" variant="ghost" size="sm" onClick={() => setPendingSwitch(null)}>
+                {m.cancel}
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                onClick={() => {
+                  if (!onSwitch) return;
+                  onSwitch(pendingSwitch);
+                }}
+              >
+                {m.discard}
+              </Button>
+            </div>
+          </div>
+        )}
+
         <DialogFooter>
           {!isCreate && onRequestDelete && (
             <Button
@@ -238,14 +383,14 @@ export function EnvEditorDialog({
               disabled={busy}
               className="mr-auto text-destructive hover:bg-destructive/10 hover:text-destructive"
             >
-              Delete
+              {m.delete}
             </Button>
           )}
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>
-            Cancel
+            {m.cancel}
           </Button>
           <Button onClick={handleSave} disabled={!canSave || busy}>
-            {busy ? "Saving…" : isCreate ? "Create" : "Save"}
+            {busy ? m.saving : isCreate ? m.create : m.save}
           </Button>
         </DialogFooter>
       </DialogContent>

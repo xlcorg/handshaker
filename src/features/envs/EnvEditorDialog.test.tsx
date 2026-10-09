@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 vi.mock("@/ipc/client", () => ({
@@ -14,6 +14,9 @@ vi.mock("@/ipc/client", () => ({
 
 import { EnvEditorDialog } from "./EnvEditorDialog";
 import { ipc } from "@/ipc/client";
+import { messages } from "@/lib/messages";
+
+const m = messages.envs.editor;
 
 function renderDialog() {
   render(
@@ -245,5 +248,144 @@ describe("EnvEditorDialog rename order preservation", () => {
     );
     await user.click(screen.getByRole("button", { name: "Save" }));
     expect(ipc.envReorder).not.toHaveBeenCalled();
+  });
+});
+
+describe("EnvEditorDialog environment switcher", () => {
+  const twoEnvs = [
+    { name: "staging", variables: { host: "stg" }, color: null },
+    { name: "prod", variables: { host: "prd" }, color: "blue" },
+  ];
+
+  it("does not close a switched editor when the save it left behind finishes", async () => {
+    const user = userEvent.setup();
+    let finishSave: (() => void) | undefined;
+    vi.mocked(ipc.envUpsert).mockImplementationOnce(
+      () => new Promise((resolve) => {
+        finishSave = () => resolve(undefined);
+      }),
+    );
+    const onOpenChange = vi.fn();
+    const { unmount } = render(
+      <EnvEditorDialog
+        open
+        originalName="staging"
+        activeEnv="staging"
+        envs={twoEnvs}
+        onOpenChange={onOpenChange}
+        onSaved={() => {}}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    unmount();
+    finishSave?.();
+    await act(async () => {});
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it("closes the menu on Escape without closing the editor", async () => {
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+    render(
+      <EnvEditorDialog
+        open
+        originalName="staging"
+        activeEnv="staging"
+        envs={twoEnvs}
+        onOpenChange={onOpenChange}
+        onSaved={() => {}}
+        onSwitch={() => {}}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: m.switchAria }));
+    expect(screen.getByRole("menuitem", { name: "prod" })).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("menuitem", { name: "prod" })).not.toBeInTheDocument();
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it("hides the switcher when there is no other env", () => {
+    render(
+      <EnvEditorDialog
+        open
+        originalName="prod"
+        activeEnv="prod"
+        envs={[{ name: "prod", variables: {}, color: null }]}
+        onOpenChange={() => {}}
+        onSaved={() => {}}
+        onSwitch={() => {}}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: m.switchAria })).not.toBeInTheDocument();
+  });
+
+  it("switches to another env without changing the active env", async () => {
+    const user = userEvent.setup();
+    const onSwitch = vi.fn();
+    render(
+      <EnvEditorDialog
+        open
+        originalName="staging"
+        activeEnv="staging"
+        envs={twoEnvs}
+        onOpenChange={() => {}}
+        onSaved={() => {}}
+        onSwitch={onSwitch}
+      />,
+    );
+    const trigger = screen.getByRole("button", { name: m.switchAria });
+    expect(trigger).toHaveTextContent("staging");
+    await user.click(trigger);
+    await user.click(await screen.findByRole("menuitem", { name: "prod" }));
+    expect(onSwitch).toHaveBeenCalledWith("prod");
+    expect(ipc.envActiveSet).not.toHaveBeenCalled();
+  });
+
+  it("asks before discarding unsaved edits, and cancel keeps the current env", async () => {
+    const user = userEvent.setup();
+    const onSwitch = vi.fn();
+    render(
+      <EnvEditorDialog
+        open
+        originalName="staging"
+        activeEnv="staging"
+        envs={twoEnvs}
+        onOpenChange={() => {}}
+        onSaved={() => {}}
+        onSwitch={onSwitch}
+      />,
+    );
+    const nameInput = screen.getByLabelText(m.nameAria);
+    await user.clear(nameInput);
+    await user.type(nameInput, "staging-2");
+    await user.click(screen.getByRole("button", { name: m.switchAria }));
+    await user.click(await screen.findByRole("menuitem", { name: "prod" }));
+    const confirm = screen.getByRole("group", { name: m.discardTitle });
+    expect(within(confirm).getByText(m.discardDescription)).toBeInTheDocument();
+    await user.click(within(confirm).getByRole("button", { name: m.cancel }));
+    expect(onSwitch).not.toHaveBeenCalled();
+    expect(screen.getByLabelText(m.nameAria)).toHaveValue("staging-2");
+  });
+
+  it("discards unsaved edits and switches when confirmed", async () => {
+    const user = userEvent.setup();
+    const onSwitch = vi.fn();
+    render(
+      <EnvEditorDialog
+        open
+        originalName="staging"
+        activeEnv="staging"
+        envs={twoEnvs}
+        onOpenChange={() => {}}
+        onSaved={() => {}}
+        onSwitch={onSwitch}
+      />,
+    );
+    await user.type(screen.getByLabelText(m.nameAria), "-x");
+    await user.click(screen.getByRole("button", { name: m.switchAria }));
+    await user.click(await screen.findByRole("menuitem", { name: "prod" }));
+    await user.click(screen.getByRole("button", { name: m.discard }));
+    expect(onSwitch).toHaveBeenCalledWith("prod");
+    expect(ipc.envActiveSet).not.toHaveBeenCalled();
   });
 });

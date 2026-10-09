@@ -96,11 +96,14 @@ export function WorkflowEnvControl() {
       if (e.repeat || !isEnvEditHotkey(e)) return;
       e.preventDefault();
       e.stopPropagation();
+      // The editor is already open. Replacing its subject here would drop the
+      // draft. Switching belongs to the in-dialog control, which asks first.
+      if (editor !== null) return;
       setEditor({ originalName: activeEnv });
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [activeEnv]);
+  }, [activeEnv, editor]);
 
   return (
     <>
@@ -129,10 +132,12 @@ export function WorkflowEnvControl() {
       />
       {editor && (
         <EnvEditorDialog
+          key={editor.originalName ?? "__new__"}
           open={true}
           originalName={editor.originalName}
           activeEnv={activeEnv}
           envs={envs}
+          onSwitch={(name) => setEditor({ originalName: name })}
           onOpenChange={(open) => {
             if (!open) setEditor(null);
           }}

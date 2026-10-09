@@ -489,6 +489,30 @@ export const messages = {
         split === "horizontal" ? "Switch to left / right layout" : "Switch to top / bottom layout",
     },
   },
+  envs: {
+    editor: {
+      createTitle: "New environment",
+      editTitle: "Edit environment",
+      createDescription: "Create a new environment and define its variables.",
+      editDescription: "Rename or update variables.",
+      nameAria: "Name",
+      namePlaceholder: "e.g. prod",
+      nameDuplicate: "name already exists",
+      colorAria: "Environment color",
+      variables: "Variables",
+      delete: "Delete",
+      cancel: "Cancel",
+      create: "Create",
+      save: "Save",
+      saving: "Saving…",
+      saveFailed: "save failed",
+      switchAria: "Switch environment",
+      discardTitle: "Discard unsaved changes?",
+      discardDescription:
+        "Switching environments will lose unsaved edits to this environment.",
+      discard: "Discard",
+    },
+  },
   settings: {
     network: {
       timeoutsGroup: "Timeouts",

@@ -172,6 +172,34 @@ describe("WorkflowEnvControl", () => {
     await waitFor(() => expect(envList).toHaveBeenCalledTimes(2));
   });
 
+  it("Ctrl+Shift+E while the editor is open keeps the draft", async () => {
+    const user = userEvent.setup();
+    render(<WorkflowEnvControl />);
+    await screen.findByText("No environment");
+    await act(async () => {});
+
+    const pressEdit = () =>
+      act(() => {
+        window.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            code: "KeyE",
+            ctrlKey: true,
+            shiftKey: true,
+            bubbles: true,
+          }),
+        );
+      });
+
+    pressEdit();
+    const name = await screen.findByLabelText("Name");
+    await user.type(name, "draft");
+    act(() => {
+      workflowStore.setWorkflowEnv("prod");
+    });
+    pressEdit();
+    expect(screen.getByLabelText("Name")).toHaveValue("draft");
+  });
+
   it("does NOT swallow Cmd+E when there are no envs — lets Monaco handle it", async () => {
     vi.mocked(envList).mockResolvedValueOnce([]); // zero envs → no-op cycle
     render(<WorkflowEnvControl />);
