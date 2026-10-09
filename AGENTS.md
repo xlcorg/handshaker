@@ -44,3 +44,11 @@ Use scoped Conventional Commits, such as `feat(grpc): ...` or `fix(tls): ...`. S
 ## Agent-Specific Instructions
 
 When `.codegraph/` exists, use `codegraph explore "<symbol or question>"` or the CodeGraph MCP tool before text searches or source reads. Do not create an index automatically.
+
+## Cursor Cloud specific instructions
+
+- Verify the UI with `pnpm tauri:dev` on the desktop session. A plain browser crashes on `getCurrentWindow`. Do not start a second Vite process next to `tauri:dev`.
+- If the WebView stays blank, relaunch with `WEBKIT_DISABLE_COMPOSITING_MODE=1` and `WEBKIT_DISABLE_DMABUF_RENDERER=1`.
+- Live gRPC check: `cargo run -p handshaker-core --example echo_server` (plaintext `127.0.0.1:50051`, service `test.Echo`). New request → that address, TLS off → method `Send` → body `{"id":"hello"}`.
+- `src-tauri` does not compile until `dist/` exists (`pnpm build`). The Cloud Agent install step does this.
+- The base image has Node 22 and pnpm 9. `.nvmrc` says Node 20; the app, `pnpm test`, and `pnpm lint` pass on Node 22.
