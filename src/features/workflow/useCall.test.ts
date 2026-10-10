@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => {
     grpcCancel: vi.fn().mockResolvedValue(undefined),
     streamRelease: vi.fn().mockResolvedValue(undefined),
     envActiveSet: vi.fn().mockResolvedValue(undefined),
+    historyRecord: vi.fn().mockResolvedValue({ revision: 2, rows: [] }),
   };
   return { api, bumpUsage: vi.fn(() => Promise.resolve()) };
 });
@@ -212,5 +213,22 @@ describe("useCall one-shot re-route on a kind mismatch", () => {
     expect(mocks.api.grpcSend).toHaveBeenCalledTimes(1);
     expect(b.patches).toHaveLength(0);
     expect(a.patches[a.patches.length - 1]).toMatchObject({ status: "ok" });
+  });
+
+  it("record carries the origin into the call record; without it nothing is recorded", async () => {
+    mocks.api.grpcSend.mockResolvedValue(report);
+    const recorded = renderHook(() =>
+      useCall({
+        step: draft(), envName: null, kind: null, onPatch: () => {}, record: true,
+        origin: { collectionId: "c1", requestId: "r1" },
+      }),
+    );
+    await act(() => recorded.result.current.send());
+    const inPlace = renderHook(() => useCall({ step: draft(), envName: null, kind: null, onPatch: () => {} }));
+    await act(() => inPlace.result.current.send());
+
+    expect(mocks.api.grpcSend).toHaveBeenCalledTimes(2);
+    expect(mocks.api.historyRecord).toHaveBeenCalledTimes(1);
+    expect(mocks.api.historyRecord.mock.calls[0][0]).toMatchObject({ origin: { collection_id: "c1", request_id: "r1" } });
   });
 });

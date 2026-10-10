@@ -11,21 +11,24 @@ import {
   type KindMismatchFault,
 } from "./netDiagnostics";
 import { isLivePhase, streamStore, type StreamEntry } from "@/features/stream/streamStore";
+import { buildRecord, streamKindOf } from "@/features/history/record";
+import { historyStore } from "@/features/history/store";
 import { isStreaming, type MethodKind } from "@/lib/method-kind";
 import { newId } from "@/lib/ids";
 
 export type BumpUsage = (collectionId: string, requestId: string, at: number) => Promise<unknown>;
 
 /** What a Focus draft call leaves behind. `null` on `CallArgs` means an in-place List/Ledger
- *  send: no executed snapshot and no usage bump. */
+ *  send: no executed snapshot, no call record and no usage bump. */
 export interface Recording {
-  /** The draft's origin at call start. */
+  /** The draft's origin at call start. It becomes the record's origin. */
   origin: DraftOrigin | null;
   bumpUsage: BumpUsage;
 }
 
 export interface CallArgs {
-  /** The step as it is sent. The executed snapshot freezes this value, not a later one. */
+  /** The step as it is sent. The executed snapshot and the call record freeze this value,
+   *  not a later one. */
   step: Step;
   envName: string | null;
   /** The controls kind (CallPanel) or a recorded kind. `null` takes the unary path. */
@@ -123,7 +126,8 @@ export async function halfCloseStream({ step }: Pick<CallArgs, "step">): Promise
 }
 
 /** Called by the release rule before it frees `id`. A live call is frozen and settled
- *  without a patch, because the step it belonged to is gone. Any other id is a no-op. */
+ *  without a patch, because the step it belonged to is gone. After Open it is recorded as
+ *  cancelled. Any other id is a no-op. */
 export function abandonStream(id: string): void {
   if (!liveCalls.has(id)) return;
   if (streamStore.cancel(id)) settleStream(id, { by: "release" });
@@ -131,23 +135,34 @@ export function abandonStream(id: string): void {
 }
 
 async function runUnary({ step, envName, onPatch, recording }: CallArgs): Promise<KindMismatchFault | null> {
+  const startedAt = Date.now();
   const requestId = newId();
   onPatch({ status: "sending", error: null, requestId, streamId: null });
   const res = await sendStep(step, { envName }, { requestId });
   if (res.kind === "error" && isKindMismatch(res.fault)) return res.fault;
   const patch = { ...stepPatch(res), requestId: null };
   onPatch(patch);
-  if (recording && res.kind === "ok") {
+  if (!recording || res.kind === "cancelled") return null;
+  if (res.kind === "ok") {
     workflowStore.commitExecutedStep(executedSnapshot(step, res.report, patch));
     void bumpOriginUsage(recording);
   }
+  void historyStore.record(
+    buildRecord(
+      { id: requestId, step, startedAt, origin: recording.origin },
+      res.kind === "ok"
+        ? { type: "unary", outcome: res.report.outcome }
+        : { type: "unary_fault", fault: res.fault, elapsedMs: Date.now() - startedAt },
+    ),
+  );
   return null;
 }
 
 async function openStream(args: CallArgs, kind: MethodKind): Promise<KindMismatchFault | null> {
-  const { step, envName, onPatch } = args;
+  const { step, envName, onPatch, recording } = args;
+  const startedAt = Date.now();
   const id = newId();
-  streamStore.open(id, kind, Date.now());
+  streamStore.open(id, kind, startedAt);
   liveCalls.set(id, { args, opened: false });
   onPatch({ status: "sending", error: null, outcome: null, requestId: id, streamId: id });
   const onEvent = (ev: StreamEventIpc) => {
@@ -177,6 +192,14 @@ async function openStream(args: CallArgs, kind: MethodKind): Promise<KindMismatc
     const fault = faultFromUnknown(e);
     if (isKindMismatch(fault)) return fault;
     onPatch({ status: "error", outcome: null, error: fault, requestId: null, streamId: null });
+    if (recording) {
+      void historyStore.record(
+        buildRecord(
+          { id, step, startedAt, origin: recording.origin },
+          { type: "stream_refused", kind: streamKindOf(kind), fault, elapsedMs: Date.now() - startedAt },
+        ),
+      );
+    }
   }
   return null;
 }
@@ -195,9 +218,19 @@ function settleStream(id: string, how: Settle): void {
   const { args, opened } = live;
   const patch = how.by === "release" ? null : { ...settlePatch(how), requestId: null };
   if (patch) args.onPatch(patch);
-  if (!opened || !args.recording || !patch) return;
-  workflowStore.commitExecutedStep(streamSnapshot(args.step, streamStore.get(id), id, patch));
-  void bumpOriginUsage(args.recording);
+  if (!opened || !args.recording) return;
+  const entry = streamStore.get(id);
+  if (patch) {
+    workflowStore.commitExecutedStep(streamSnapshot(args.step, entry, id, patch));
+    void bumpOriginUsage(args.recording);
+  }
+  if (!entry) return;
+  void historyStore.record(
+    buildRecord(
+      { id, step: args.step, startedAt: entry.openedAt, origin: args.recording.origin },
+      { type: "stream", entry, elapsedMs: entry.elapsedMs ?? Date.now() - entry.openedAt },
+    ),
+  );
 }
 
 function settlePatch(how: Exclude<Settle, { by: "release" }>): Partial<Step> {

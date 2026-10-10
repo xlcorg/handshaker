@@ -2,18 +2,26 @@ import type { IpcError } from "@/ipc/bindings";
 import type { MethodKind } from "@/lib/method-kind";
 import { messages } from "@/lib/messages";
 
+export const FAULT_KINDS = [
+  "refused",
+  "tls",
+  "dns",
+  "timeout",
+  "cancelled",
+  "encode",
+  "decode",
+  "auth",
+  "kind_mismatch",
+  "other",
+] as const;
+
 /** Display face selector for a client-side (non-gRPC-status) failure. */
-export type FaultKind =
-  | "refused"
-  | "tls"
-  | "dns"
-  | "timeout"
-  | "cancelled"
-  | "encode"
-  | "decode"
-  | "auth"
-  | "kind_mismatch"
-  | "other";
+export type FaultKind = (typeof FAULT_KINDS)[number];
+
+/** A persisted fault kind (call history stores it as text). Unknown text reads as `other`. */
+export function parseFaultKind(s: string): FaultKind {
+  return (FAULT_KINDS as readonly string[]).includes(s) ? (s as FaultKind) : "other";
+}
 
 /** The kind gate's verdict: the call path (`expected`) did not match the contract's
  *  **Method kind** (`actual`) — nothing reached the wire. `actual` is the path a

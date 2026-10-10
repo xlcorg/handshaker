@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { faultFromIpcError, faultFromUnknown, isCancelError, faultHint } from "./netDiagnostics";
+import { faultFromIpcError, faultFromUnknown, isCancelError, faultHint, parseFaultKind } from "./netDiagnostics";
 import { messages } from "@/lib/messages";
 
 describe("faultFromIpcError", () => {
@@ -118,5 +118,14 @@ describe("faultHint", () => {
     const bidi = faultFromIpcError({ type: "MethodKindMismatch", service: "s", method: "m", expected: "client", actual: "bidi" });
     expect(bidi.message).toContain("bidirectional");
     expect(bidi.message).toContain("client-streaming");
+  });
+});
+
+describe("parseFaultKind", () => {
+  it("keeps a known kind and reads unknown text as other", () => {
+    expect(parseFaultKind("timeout")).toBe("timeout");
+    expect(parseFaultKind("kind_mismatch")).toBe("kind_mismatch");
+    expect(parseFaultKind("Timeout")).toBe("other");
+    expect(parseFaultKind("")).toBe("other");
   });
 });

@@ -533,4 +533,15 @@ export const messages = {
       unlimitedHint: "No limit — guards nothing against very large replies.",
     },
   },
+  /** Call history: the bottom dock of past Focus calls and its detail. */
+  history: {
+    status: { cancelled: "Cancelled" },
+    notice: {
+      originMissing: "The saved request this call came from no longer exists. It opened as an unsaved draft.",
+    },
+    toast: {
+      unavailable: "This call's details are no longer available.",
+      recordFailed: "Couldn't save this call to history.",
+    },
+  },
 } as const;

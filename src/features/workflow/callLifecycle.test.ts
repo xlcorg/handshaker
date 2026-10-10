@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { MethodKindIpc, SendReportIpc, StreamEventIpc } from "@/ipc/bindings";
+import type { CallRecordIpc, HistoryPageIpc, MethodKindIpc, SendReportIpc, StreamEventIpc } from "@/ipc/bindings";
 
 // Two shapes of the facade: named exports (what `import * as ipc` reads) AND the `ipc`
 // object — mocking one alone leaves the other path silently unreachable.
@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => {
     streamHalfClose: vi.fn<(id: string) => Promise<void>>().mockResolvedValue(undefined),
     streamRelease: vi.fn().mockResolvedValue(undefined),
     envActiveSet: vi.fn().mockResolvedValue(undefined),
+    historyRecord: vi.fn<(r: CallRecordIpc) => Promise<HistoryPageIpc>>(),
   };
   return { api, bumpUsage: vi.fn<(...a: unknown[]) => Promise<unknown>>(() => Promise.resolve()) };
 });
@@ -19,6 +20,7 @@ vi.mock("@/ipc/client", () => ({ ...mocks.api, ipc: mocks.api }));
 
 import { abandonStream, cancelCall, halfCloseStream, runCall, sendStreamMessage, type CallArgs } from "./callLifecycle";
 import { streamStore } from "@/features/stream/streamStore";
+import { historyStore } from "@/features/history/store";
 import { workflowStore } from "./store";
 import { newStep, type Step } from "./model";
 
@@ -69,9 +71,11 @@ function openResolves() {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.api.streamOpen.mockReset();
+  mocks.api.historyRecord.mockResolvedValue({ revision: 2, rows: [] });
   vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => { cb(0); return 1; });
   workflowStore.reset();
   streamStore.reset();
+  historyStore.reset();
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -292,6 +296,183 @@ describe("runCall stream", () => {
     expect(streamStore.get(id)?.phase).toBe("cancelled");
     expect(workflowStore.activeWorkflow().steps).toHaveLength(0);
     expect(mocks.bumpUsage).not.toHaveBeenCalled();
+  });
+});
+
+describe("call records", () => {
+  const T0 = 1_700_000_000_000;
+  let now = T0;
+  let clock: { mockRestore(): void } | null = null;
+  /** Freeze Date.now at T0. A mocked wire call moves it with `now += ms`. */
+  function clockAtT0() {
+    now = T0;
+    clock = vi.spyOn(Date, "now").mockImplementation(() => now);
+  }
+  afterEach(() => {
+    clock?.mockRestore();
+    clock = null;
+  });
+
+  const recording = () => ({ origin, bumpUsage: mocks.bumpUsage });
+  const recorded = () => mocks.api.historyRecord.mock.calls.map(([r]) => r);
+  const authoredRequest = {
+    address_template: "{{host}}", tls_override: null, service: "pkg.Svc", method: "Watch", body_template: '{"a":1}',
+    metadata: [{ key: "x", value: "1", enabled: true }, { key: "off", value: "2", enabled: false }],
+    auth: { kind: "none" },
+  };
+  const status = (code: number, message = "") => ({ code, message, trailers: {} });
+
+  it("a unary status, OK or not, is one record each, of the request as authored", async () => {
+    clockAtT0();
+    mocks.api.grpcSend
+      .mockResolvedValueOnce(report)
+      .mockResolvedValueOnce({ ...report, outcome: { ...report.outcome, status_code: 5, status_message: "gone", response_json: null } });
+
+    await runCall(setup(streamStep(), { recording: recording() }).args);
+    await runCall(setup(streamStep(), { recording: recording() }).args);
+
+    expect(recorded()).toEqual([
+      {
+        id: mocks.api.grpcSend.mock.calls[0][2], started_at_ms: T0, origin: { collection_id: "c1", request_id: "r1" },
+        request: authoredRequest, elapsed_ms: 5,
+        outcome: { type: "unary", status: status(0), response: { type: "inline", json: "{}" } },
+      },
+      {
+        id: mocks.api.grpcSend.mock.calls[1][2], started_at_ms: T0, origin: { collection_id: "c1", request_id: "r1" },
+        request: authoredRequest, elapsed_ms: 5,
+        outcome: { type: "unary", status: status(5, "gone"), response: { type: "absent" } },
+      },
+    ]);
+  });
+
+  it("a unary fault is a unary_fault record timed from the attempt's start", async () => {
+    clockAtT0();
+    mocks.api.grpcSend.mockImplementationOnce(async () => {
+      now += 40;
+      throw { type: "DeadlineExceeded", timeout_ms: 30_000 };
+    });
+    await runCall(setup(streamStep(), { recording: { origin: null, bumpUsage: mocks.bumpUsage } }).args);
+    expect(recorded()).toEqual([
+      {
+        id: mocks.api.grpcSend.mock.calls[0][2], started_at_ms: T0, origin: null, request: authoredRequest, elapsed_ms: 40,
+        outcome: { type: "unary_fault", fault: { kind: "timeout", message: "Request timed out after 30000ms" } },
+      },
+    ]);
+  });
+
+  it("a unary cancel and an in-place send are never recorded", async () => {
+    mocks.api.grpcSend.mockRejectedValueOnce({ type: "Cancelled" }).mockResolvedValueOnce(report);
+    await runCall(setup(unaryStep(), { recording: recording() }).args);
+    await runCall(setup(unaryStep()).args);
+    expect(mocks.api.grpcSend).toHaveBeenCalledTimes(2);
+    expect(recorded()).toEqual([]);
+  });
+
+  it("a kind mismatch is not recorded; the re-routed attempt records once", async () => {
+    mocks.api.grpcSend.mockRejectedValue({
+      type: "MethodKindMismatch", service: "pkg.Svc", method: "Watch", expected: "unary", actual: "server",
+    });
+    const events = openResolves();
+    await runCall(setup(streamStep(), { kind: "unary", recording: recording() }).args);
+    events()(end(0));
+    expect(recorded()).toHaveLength(1);
+    expect(recorded()[0]).toMatchObject({ id: mocks.api.streamOpen.mock.calls[0][2], outcome: { type: "stream", kind: "server" } });
+  });
+
+  it("a stream End records headers, messages and status, started at the entry's openedAt", async () => {
+    clockAtT0();
+    const events = openResolves();
+    const { args, patches } = setup(streamStep(), { kind: "server", recording: recording() });
+    await runCall(args);
+    const id = patches[0].streamId!;
+    events()({ type: "Headers", metadata: { "content-type": "application/grpc" } });
+    events()({ type: "Message", index: 1, at_ms: T0 + 10, size_bytes: 7, preview: '{"n":1}', json: '{"n":1}' });
+    events()(end(0));
+
+    expect(streamStore.get(id)!.openedAt).toBe(T0);
+    expect(recorded()).toEqual([
+      {
+        id, started_at_ms: T0, origin: { collection_id: "c1", request_id: "r1" }, request: authoredRequest, elapsed_ms: 0,
+        outcome: {
+          type: "stream", kind: "server", headers: { "content-type": "application/grpc" },
+          messages: [{ direction: "in", index: 1, at_ms: T0 + 10, size_bytes: 7, preview: '{"n":1}', json: '{"n":1}' }],
+          omitted_messages: 0, end: { type: "status", status: status(0) },
+        },
+      },
+    ]);
+  });
+
+  it("a Fault after Open records the fault; a Cancel after Open records cancelled with no headers", async () => {
+    const events = openResolves();
+    await runCall(setup(streamStep(), { kind: "server", recording: recording() }).args);
+    events()({ type: "Fault", error: { type: "DeadlineExceeded", timeout_ms: 30_000 } });
+
+    const second = setup(streamStep(), { kind: "server", recording: recording() });
+    await runCall(second.args);
+    await cancelCall({ step: second.current() });
+
+    expect(recorded().map((r) => r.outcome)).toEqual([
+      expect.objectContaining({ headers: null, end: { type: "fault", fault: { kind: "timeout", message: "Request timed out after 30000ms" } } }),
+      expect.objectContaining({ headers: null, end: { type: "cancelled" } }),
+    ]);
+  });
+
+  it("a Cancel before Open and an abandon while opening are never recorded", async () => {
+    mocks.api.streamOpen.mockImplementation(() => new Promise(() => {}));
+    const first = setup(streamStep(), { kind: "server", recording: recording() });
+    void runCall(first.args);
+    await Promise.resolve();
+    await cancelCall({ step: first.current() });
+
+    const second = setup(streamStep(), { kind: "server", recording: recording() });
+    void runCall(second.args);
+    await Promise.resolve();
+    abandonStream(second.patches[0].streamId!);
+
+    expect(recorded()).toEqual([]);
+  });
+
+  it("a refusal before Open is a stream_refused record of the asked kind", async () => {
+    clockAtT0();
+    mocks.api.streamOpen.mockImplementation(async () => {
+      now += 12;
+      throw { type: "Transport", kind: "Refused", message: "connection refused" };
+    });
+    const { args, patches } = setup(streamStep(), { kind: "bidi", recording: recording() });
+    await runCall(args);
+    expect(recorded()).toEqual([
+      {
+        id: patches[0].streamId, started_at_ms: T0, origin: { collection_id: "c1", request_id: "r1" },
+        request: authoredRequest, elapsed_ms: 12,
+        outcome: { type: "stream_refused", kind: "bidi", fault: { kind: "refused", message: "connection refused" } },
+      },
+    ]);
+  });
+
+  it("abandonStream records a live opened stream as cancelled once; a later End adds nothing", async () => {
+    const events = openResolves();
+    const { args, patches } = setup(streamStep(), { kind: "server", recording: recording() });
+    await runCall(args);
+    abandonStream(patches[0].streamId!);
+    events()(end(0));
+    expect(recorded()).toHaveLength(1);
+    expect(recorded()[0].outcome).toMatchObject({ type: "stream", end: { type: "cancelled" } });
+  });
+
+  it("an in-place stream is never recorded", async () => {
+    const events = openResolves();
+    await runCall(setup(streamStep(), { kind: "server" }).args);
+    events()(end(0));
+    expect(recorded()).toEqual([]);
+  });
+
+  it("a refused record leaves the call finished in the editor", async () => {
+    mocks.api.historyRecord.mockRejectedValue({ type: "Persistence", message: "too large" });
+    mocks.api.grpcSend.mockResolvedValue(report);
+    const { args, patches } = setup(unaryStep(), { recording: recording() });
+    await expect(runCall(args)).resolves.toBeUndefined();
+    expect(patches[1]).toMatchObject({ status: "ok" });
+    expect(workflowStore.activeWorkflow().steps).toHaveLength(1);
   });
 });
 

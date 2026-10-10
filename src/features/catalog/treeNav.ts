@@ -105,7 +105,7 @@ export function pathNamesToItem(
 
 /** Deep-search `collectionId` for a request leaf with `itemId`. Null if either is missing. */
 export function findSavedRequest(
-  collections: CollectionIpc[],
+  collections: readonly CollectionIpc[],
   collectionId: string,
   itemId: string,
 ): SavedRequestIpc | null {
