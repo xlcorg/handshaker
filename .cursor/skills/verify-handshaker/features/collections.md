@@ -31,10 +31,14 @@ rename, named `New collection`.
 The same steps by hand, against the session `launch.sh` started:
 
 ```sh
+.cursor/skills/verify-handshaker/scripts/hsdrv.py screenshot collections-before
 .cursor/skills/verify-handshaker/scripts/hsdrv.py click "[aria-label='new-item']"
 .cursor/skills/verify-handshaker/scripts/hsdrv.py click "[aria-label='new-collection']"
+.cursor/skills/verify-handshaker/scripts/hsdrv.py screenshot collections-renaming
 .cursor/skills/verify-handshaker/scripts/hsdrv.py eval 'const i=document.querySelector("[aria-label=rename-input]"); return i?i.value:""'
 ```
+
+`collections-before.png` is the idle sidebar. `collections-renaming.png` is the new row in the rename field.
 
 `drive-collections.sh` then reads `data-node-id` on the rename row and opens
 `collections/<id>.json` under the run's data dir.
@@ -44,6 +48,7 @@ A new request draft, instead of a collection:
 ```sh
 .cursor/skills/verify-handshaker/scripts/hsdrv.py click "[aria-label='new-item']"
 .cursor/skills/verify-handshaker/scripts/hsdrv.py click "[aria-label='new-request']"
+.cursor/skills/verify-handshaker/scripts/hsdrv.py screenshot collections-new-request
 ```
 
 The main pane then shows `[aria-label="draft-address"]` (placeholder

@@ -33,8 +33,10 @@ Click it. The right-hand pane leaves `Awaiting first call` and shows `OK`.
 ## Driving it with Tauri WebDriver
 
 ```sh
+.cursor/skills/verify-handshaker/scripts/hsdrv.py screenshot unary-before
 .cursor/skills/verify-handshaker/scripts/hsdrv.py click "[aria-label='new-item']"
 .cursor/skills/verify-handshaker/scripts/hsdrv.py click "[aria-label='new-request']"
+.cursor/skills/verify-handshaker/scripts/hsdrv.py screenshot unary-draft
 .cursor/skills/verify-handshaker/scripts/hsdrv.py click "[aria-label='draft-address']"
 ```
 
@@ -43,6 +45,7 @@ native value setter and an input event, then blur so React commits:
 
 ```sh
 .cursor/skills/verify-handshaker/scripts/hsdrv.py eval 'const el=document.querySelector("[aria-label=draft-address]"); const proto=Object.getPrototypeOf(el); const set=Object.getOwnPropertyDescriptor(proto,"value").set; set.call(el,"127.0.0.1:50051"); el.dispatchEvent(new Event("input",{bubbles:true})); el.blur(); return el.value'
+.cursor/skills/verify-handshaker/scripts/hsdrv.py screenshot unary-address
 ```
 
 Open the picker by clicking the button whose text is `Select a method`:
@@ -55,6 +58,7 @@ Reflection status is the footer of that menu (`aria-label="Refresh server reflec
 
 ```sh
 .cursor/skills/verify-handshaker/scripts/hsdrv.py click "xpath=//button[contains(@class,\"mp-mrow\")][.//span[contains(@class,\"mp-mname\") and text()=\"Send\"]]"
+.cursor/skills/verify-handshaker/scripts/hsdrv.py screenshot unary-method
 .cursor/skills/verify-handshaker/scripts/hsdrv.py click "xpath=//button[contains(.,\"Send\") and not(contains(@class,\"mp-mrow\"))]"
 ```
 
@@ -63,6 +67,7 @@ includes `Send`). Afterwards:
 
 ```sh
 .cursor/skills/verify-handshaker/scripts/hsdrv.py eval 'return document.body.innerText.includes("OK") && document.body.innerText.includes("echoed")'
+.cursor/skills/verify-handshaker/scripts/hsdrv.py screenshot unary-result
 ```
 
 That last expression is the check for this feature. Run the echo server

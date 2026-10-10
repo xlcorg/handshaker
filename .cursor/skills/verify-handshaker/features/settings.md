@@ -28,9 +28,12 @@ drive unless you mean to end the session.
 ## Driving it with Tauri WebDriver
 
 ```sh
+.cursor/skills/verify-handshaker/scripts/hsdrv.py screenshot settings-before
 .cursor/skills/verify-handshaker/scripts/hsdrv.py click "[aria-label='Settings']"
+.cursor/skills/verify-handshaker/scripts/hsdrv.py screenshot settings-appearance
 .cursor/skills/verify-handshaker/scripts/hsdrv.py eval 'return document.body.innerText.includes("Preferences persist locally") && document.body.innerText.includes("gRPC icon")'
 .cursor/skills/verify-handshaker/scripts/hsdrv.py click "xpath=//button[normalize-space()=\"About\"]"
+.cursor/skills/verify-handshaker/scripts/hsdrv.py screenshot settings-about
 .cursor/skills/verify-handshaker/scripts/hsdrv.py eval 'return document.body.innerText.includes("version") && document.body.innerText.includes("tauri 2")'
 ```
 
@@ -39,6 +42,7 @@ closes the dialog:
 
 ```sh
 .cursor/skills/verify-handshaker/scripts/hsdrv.py eval 'document.dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",bubbles:true})); return document.body.innerText.includes("Preferences persist locally")'
+.cursor/skills/verify-handshaker/scripts/hsdrv.py screenshot settings-closed
 ```
 
 After a real close that expression is false. Appearance edits persist in

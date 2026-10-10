@@ -80,8 +80,8 @@ seeds a collection named `My Collection`
 The latest run is symlinked from `/tmp/handshaker-verify/current`. Point
 `HANDSHAKER_VERIFY_RUN` at a run directory to target an older one.
 
-Teardown is `cleanup.sh` in the next section. It does not run on success by
-itself.
+Teardown is the Cleanup section. Run `cleanup.sh` when the drive is finished.
+It does not run on success by itself.
 
 ## Doctor
 
@@ -142,6 +142,14 @@ Do not point the app at a stand-in IPC layer. The echo server used by the
 unary and streaming notes is the real example binary, and only when that
 feature is the one being driven.
 
+Save the window at any step. `<name>` is one file name. A missing `.png`
+suffix is added. The PNG lands in that run's `evidence/` directory, and
+Cleanup leaves the directory in place.
+
+```sh
+.cursor/skills/verify-handshaker/scripts/hsdrv.py screenshot <name>
+```
+
 ## Cleanup
 
 ```sh
@@ -175,6 +183,7 @@ written under `evidence/` remains.
 | `scripts/hsdrv.py` | `.cursor/skills/verify-handshaker/scripts/hsdrv.py click "<selector>"` |
 | `scripts/hsdrv.py` | `.cursor/skills/verify-handshaker/scripts/hsdrv.py eval '<javascript that returns a value>'` |
 | `scripts/hsdrv.py` | `.cursor/skills/verify-handshaker/scripts/hsdrv.py text` |
+| `scripts/hsdrv.py` | `.cursor/skills/verify-handshaker/scripts/hsdrv.py screenshot <name>` |
 
 All five files are executable. `hsdrv.py` is the implementation; the shell
 scripts call it.

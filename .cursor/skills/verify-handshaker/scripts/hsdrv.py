@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Drive the Handshaker Tauri window through tauri-driver.
 
-Commands: launch, doctor, drive-collections, cleanup, click, eval, text.
 State for the latest launch is the symlink /tmp/handshaker-verify/current.
 Override with HANDSHAKER_VERIFY_RUN=/tmp/handshaker-verify/<run>.
 """
@@ -608,6 +607,28 @@ def cmd_text() -> None:
     print(value if isinstance(value, str) else json.dumps(value))
 
 
+def evidence_png_name(raw: str) -> str:
+    name = raw.strip()
+    if not name or name in {".", ".."} or "/" in name or "\\" in name:
+        fail("usage: hsdrv.py screenshot <name>")
+    if not name.endswith(".png"):
+        name = f"{name}.png"
+    return name
+
+
+def cmd_screenshot() -> None:
+    if len(sys.argv) != 3:
+        fail("usage: hsdrv.py screenshot <name>")
+    _run, sess = load_session()
+    evidence = Path(sess["evidence"])
+    evidence.mkdir(parents=True, exist_ok=True)
+    dest = (evidence / evidence_png_name(sys.argv[2])).resolve()
+    if dest.parent != evidence.resolve():
+        fail("screenshot name must stay inside the evidence directory")
+    screenshot(sess, dest)
+    print(f"screenshot {dest}")
+
+
 def main() -> None:
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
     commands = {
@@ -618,9 +639,10 @@ def main() -> None:
         "click": cmd_click,
         "eval": cmd_eval,
         "text": cmd_text,
+        "screenshot": cmd_screenshot,
     }
     if cmd not in commands:
-        fail("usage: hsdrv.py launch|doctor|drive-collections|cleanup|click|eval|text")
+        fail("usage: hsdrv.py launch|doctor|drive-collections|cleanup|click|eval|text|screenshot")
     commands[cmd]()
 
 
