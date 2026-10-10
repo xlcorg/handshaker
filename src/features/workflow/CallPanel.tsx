@@ -12,6 +12,7 @@ import {
   varsResolverFor,
 } from "./actions";
 import { useCall } from "./useCall";
+import { takeRerun } from "@/features/history/actions";
 import { StreamView } from "@/features/stream/StreamView";
 import { isLivePhase, useStreamEntry, type StreamEntry } from "@/features/stream/streamStore";
 import { effectiveTls } from "./tls";
@@ -154,6 +155,12 @@ export function CallPanel({ step, onPatch, editable, onQuickAddMethod, originVar
   // from core re-routes once through the other path. Cancel follows the live call.
   const call = useCall({ step, envName: activeWf.envName, kind, onPatch, record: !!editable, origin });
   const { send, cancel } = call;
+
+  useEffect(() => {
+    if (!editable) return;
+    if (!takeRerun(step.id)) return;
+    void send();
+  }, [editable, step.id, send]);
 
   // A live two-way entry — decided by the call's own kind, not the catalog — turns the
   // busy slot into the segmented Send message / Half-close / Cancel controls.
