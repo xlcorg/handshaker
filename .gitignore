@@ -48,6 +48,8 @@ Thumbs.db
 # codegraph local index/daemon artifacts
 .codegraph/
 .mcp.json
+# Local Cursor plugin toggles (project skills under .cursor/skills stay tracked)
+.cursor/settings.json
 
 # Sandcastle backup (contains .env with tokens)
 .sandcastle.bak/
