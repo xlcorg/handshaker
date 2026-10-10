@@ -824,6 +824,44 @@ export const commands = {
       else return { status: "error", error: e as any };
     }
   },
+  async historyList(): Promise<Result<HistoryPageIpc, IpcError>> {
+    try {
+      return { status: "ok", data: await TAURI_INVOKE("history_list") };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  /**
+   * `None` when the call was evicted, never recorded, or its body is gone.
+   */
+  async historyGet(
+    id: string,
+  ): Promise<Result<CallRecordIpc | null, IpcError>> {
+    try {
+      return { status: "ok", data: await TAURI_INVOKE("history_get", { id }) };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  /**
+   * Persist one finished call and return the page after it. Appending an id twice is a
+   * no-op that returns the current page.
+   */
+  async historyRecord(
+    record: CallRecordIpc,
+  ): Promise<Result<HistoryPageIpc, IpcError>> {
+    try {
+      return {
+        status: "ok",
+        data: await TAURI_INVOKE("history_record", { record }),
+      };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
 };
 
 /** user-defined events **/
@@ -872,11 +910,64 @@ export type Base64InspectIpc = {
   extension: string | null;
 };
 export type Base64KindIpc = "json" | "text" | "binary";
+export type CallEndingIpc =
+  | { type: "status"; code: number }
+  | { type: "fault"; kind: string }
+  | { type: "cancelled" };
+export type CallFaultIpc = { kind: string; message: string };
 /**
  * Per-call invoke options, as they cross the wire. `request_id` is NOT here — it's a
  * separate `grpc_send` param (cancel key, distinct lifecycle from call options).
  */
 export type CallOptionsIpc = { timeout_ms: number; max_message_bytes: number };
+export type CallOriginIpc = { collection_id: string; request_id: string };
+export type CallOutcomeIpc =
+  | { type: "unary"; status: CallStatusIpc; response: RecordedBodyIpc }
+  | { type: "unary_fault"; fault: CallFaultIpc }
+  | {
+      type: "stream";
+      kind: StreamKindIpc;
+      headers: Partial<{ [key in string]: string }> | null;
+      messages: RecordedMessageIpc[];
+      omitted_messages: number;
+      end: StreamTerminationIpc;
+    }
+  | { type: "stream_refused"; kind: StreamKindIpc; fault: CallFaultIpc };
+export type CallRecordIpc = {
+  id: string;
+  started_at_ms: number;
+  origin: CallOriginIpc | null;
+  request: CallRequestIpc;
+  elapsed_ms: number;
+  outcome: CallOutcomeIpc;
+};
+export type CallRequestIpc = {
+  address_template: string;
+  tls_override: boolean | null;
+  service: string;
+  method: string;
+  body_template: string;
+  metadata: MetadataRowIpc[];
+  auth: SavedAuthConfigIpc;
+};
+export type CallStatusIpc = {
+  code: number;
+  message: string;
+  trailers: Partial<{ [key in string]: string }>;
+};
+/**
+ * One dock row. `kind` reuses `MethodKindIpc` so TS gets `MethodKind`.
+ */
+export type CallSummaryIpc = {
+  id: string;
+  started_at_ms: number;
+  kind: MethodKindIpc;
+  service: string;
+  method: string;
+  address_template: string;
+  elapsed_ms: number;
+  ending: CallEndingIpc;
+};
 export type CollectionIpc = {
   id: string;
   name: string;
@@ -947,6 +1038,7 @@ export type GrpcTargetIpc = {
   skip_verify: boolean;
 };
 export type HelpLinkIpc = { description: string; url: string };
+export type HistoryPageIpc = { revision: number; rows: CallSummaryIpc[] };
 /**
  * Result of applying an import (merge).
  */
@@ -1044,6 +1136,7 @@ export type ItemSnapshotIpc = {
  * Where the collection quick-links render — mirrors [`LinksPlacement`].
  */
 export type LinksPlacementIpc = "strip" | "header";
+export type MessageDirectionIpc = "in" | "out";
 export type MessageNodeIpc = { full_name: string; fields: FieldNodeIpc[] };
 export type MessageSchemaIpc = {
   root: string;
@@ -1095,6 +1188,18 @@ export type PreconditionViolationIpc = {
   description: string;
 };
 export type QuotaViolationIpc = { subject: string; description: string };
+export type RecordedBodyIpc =
+  | { type: "absent" }
+  | { type: "inline"; json: string }
+  | { type: "omitted"; size_bytes: number };
+export type RecordedMessageIpc = {
+  direction: MessageDirectionIpc;
+  index: number;
+  at_ms: number;
+  size_bytes: number;
+  preview: string;
+  json: string | null;
+};
 export type ResolutionReportIpc = {
   resolved: string;
   unresolved_vars: string[];
@@ -1233,6 +1338,14 @@ export type StreamEventIpc =
       total_bytes: number;
     }
   | { type: "Fault"; error: IpcError };
+/**
+ * `"server" | "client" | "bidi"`: a streaming kind, assignable to `MethodKind` in TS.
+ */
+export type StreamKindIpc = "server" | "client" | "bidi";
+export type StreamTerminationIpc =
+  | { type: "status"; status: CallStatusIpc }
+  | { type: "fault"; fault: CallFaultIpc }
+  | { type: "cancelled" };
 /**
  * Structured classification of a transport-connect failure. Lets the frontend
  * narrow on a kind instead of regex-parsing the message string.

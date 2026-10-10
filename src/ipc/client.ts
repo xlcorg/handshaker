@@ -30,6 +30,8 @@ import type {
   StreamEventIpc,
   AssembleResultIpc,
   OutboundMessageIpc,
+  CallRecordIpc,
+  HistoryPageIpc,
 } from "./bindings";
 
 /**
@@ -426,6 +428,26 @@ export async function fileSaveText(text: string, defaultName: string): Promise<s
   return r.data;
 }
 
+export async function historyList(): Promise<HistoryPageIpc> {
+  const r = await commands.historyList();
+  if (r.status === "error") throw r.error;
+  return r.data;
+}
+
+/** `null` when the call was evicted or its body is gone. */
+export async function historyGet(id: string): Promise<CallRecordIpc | null> {
+  const r = await commands.historyGet(id);
+  if (r.status === "error") throw r.error;
+  return r.data;
+}
+
+/** Persist one finished call and return the page after the append. */
+export async function historyRecord(record: CallRecordIpc): Promise<HistoryPageIpc> {
+  const r = await commands.historyRecord(record);
+  if (r.status === "error") throw r.error;
+  return r.data;
+}
+
 /** Hand `url` to the OS default browser. The single seam for leaving the app —
  *  callers pass a FULLY RESOLVED url; `{{var}}` templates never cross it. */
 export async function openExternal(url: string): Promise<void> {
@@ -483,5 +505,8 @@ export const ipc = {
   base64Save,
   base64SaveEncoded,
   fileSaveText,
+  historyList,
+  historyGet,
+  historyRecord,
   openExternal,
 };

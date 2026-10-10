@@ -12,6 +12,7 @@ use handshaker_core::env::in_memory::InMemoryEnvironmentStore;
 use handshaker_core::env::EnvironmentStore;
 use handshaker_core::error::CoreError;
 use handshaker_core::grpc::{ContractCache, FileContractCache, InMemoryContractCache, TonicTransport};
+use handshaker_core::history::FileHistoryStore;
 use handshaker_core::send::Sender;
 use handshaker_core::stream::StreamRegistry;
 use handshaker_core::ui_state::FileUiStateStore;
@@ -48,6 +49,9 @@ pub struct AppState {
     /// store has no in-memory variant, so isolation per-instance is the next best
     /// thing for tests).
     pub ui_state_store: Arc<FileUiStateStore>,
+    /// Call history under `history/`. Like `ui_state_store`, `default()` points it at a
+    /// throwaway unique temp dir.
+    pub history_store: Arc<FileHistoryStore>,
     /// In-flight gRPC requests: `request_id` → cancellation `Notify`.
     pub in_flight: InFlight,
     /// OAuth2 client-credentials token cache + HTTP client (session-lived).
@@ -84,6 +88,8 @@ impl Default for AppState {
         // instance behind a unique throwaway dir under the OS temp dir. The dir is
         // created lazily on first `set`; tests only need read-after-write isolation.
         let ui_dir = std::env::temp_dir().join(format!("handshaker-ui-state-{}", unique_temp_suffix()));
+        let history_dir =
+            std::env::temp_dir().join(format!("handshaker-history-{}", unique_temp_suffix()));
         let contract_cache: Arc<dyn ContractCache> = Arc::new(InMemoryContractCache::new());
         let oauth2_provider = Arc::new(Oauth2TokenProvider::new());
         let sender = build_sender(&oauth2_provider, &contract_cache);
@@ -95,6 +101,9 @@ impl Default for AppState {
             contract_cache,
             ui_state_store: Arc::new(
                 FileUiStateStore::load(&ui_dir).expect("temp ui-state store load"),
+            ),
+            history_store: Arc::new(
+                FileHistoryStore::load(&history_dir).expect("temp history store load"),
             ),
             in_flight: Mutex::new(HashMap::new()),
             oauth2_provider,
@@ -117,6 +126,7 @@ impl AppState {
         let env_store = FileEnvironmentStore::load(environment_file)?;
         let collection_store = FileCollectionStore::load(data_dir.join("collections"))?;
         let ui_state_store = FileUiStateStore::load(data_dir)?;
+        let history_store = FileHistoryStore::load(&data_dir.join("history"))?;
 
         // Restore the persisted active-env selection, validating it against the
         // store: a dangling pointer (env deleted out-of-band) collapses to None. A
@@ -136,6 +146,7 @@ impl AppState {
             .iter()
             .chain(collection_store.recovered_files())
             .chain(ui_state_store.recovered_files())
+            .chain(history_store.recovered_files())
             .chain(active_recovered.iter())
             .map(|p| p.display().to_string())
             .collect();
@@ -151,6 +162,7 @@ impl AppState {
             collection_store: Arc::new(collection_store),
             contract_cache,
             ui_state_store: Arc::new(ui_state_store),
+            history_store: Arc::new(history_store),
             in_flight: Mutex::new(HashMap::new()),
             oauth2_provider,
             sender,
@@ -193,6 +205,36 @@ mod tests {
         assert!(recovered[0].contains("environments.json"));
         // Draining is one-shot so the UI only notifies once.
         assert!(state.take_recovered().is_empty());
+    }
+
+    #[test]
+    fn load_reports_a_corrupt_history_body_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let history = dir.path().join("history");
+        std::fs::create_dir_all(&history).unwrap();
+        std::fs::write(history.join("00000000-0000-0000-0000-000000000009.json"), b"{ torn").unwrap();
+
+        let state = AppState::load(dir.path()).unwrap();
+        let recovered = state.take_recovered();
+        assert_eq!(recovered.len(), 1);
+        assert!(recovered[0].contains("history"));
+        assert!(state.take_recovered().is_empty());
+        assert!(state.history_store.list().rows.is_empty());
+    }
+
+    #[test]
+    fn recorded_call_survives_reload() {
+        let dir = tempfile::tempdir().unwrap();
+        let record = crate::ipc::history::tests::record();
+        let state = AppState::load(dir.path()).unwrap();
+        state.history_store.append(record.clone()).unwrap();
+
+        drop(state);
+        let state2 = AppState::load(dir.path()).unwrap();
+        let ids: Vec<_> = state2.history_store.list().rows.into_iter().map(|r| r.id).collect();
+        assert_eq!(ids, vec![record.id]);
+        assert_eq!(state2.history_store.get(record.id).unwrap(), Some(record));
+        assert!(state2.take_recovered().is_empty());
     }
 
     #[tokio::test]

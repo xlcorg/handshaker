@@ -20,6 +20,7 @@ use commands::grpc::{
     grpc_refresh_contract, grpc_send, stream_assemble, stream_half_close, stream_message, stream_open,
     stream_release, stream_save_messages, stream_send,
 };
+use commands::history::{history_get, history_list, history_record};
 use commands::meta::{app_version, startup_recovery_take};
 use commands::bundle::{bundle_export, bundle_import_apply, bundle_import_inspect};
 use commands::ui_state::{app_settings_get, app_settings_set};
@@ -84,6 +85,9 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             bundle_export,
             bundle_import_inspect,
             bundle_import_apply,
+            history_list,
+            history_get,
+            history_record,
         ])
         .events(collect_events![ContractUpdated])
 }
