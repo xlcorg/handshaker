@@ -59,11 +59,10 @@ Reflection status is the footer of that menu (`aria-label="Refresh server reflec
 ```sh
 .cursor/skills/control-app/scripts/hsdrv.py click "xpath=//button[contains(@class,\"mp-mrow\")][.//span[contains(@class,\"mp-mname\") and text()=\"Send\"]]"
 .cursor/skills/control-app/scripts/hsdrv.py screenshot unary-method
-.cursor/skills/control-app/scripts/hsdrv.py click "xpath=//button[contains(.,\"Send\") and not(contains(@class,\"mp-mrow\"))]"
+.cursor/skills/control-app/scripts/hsdrv.py click "xpath=//button[contains(.,\"▶ Send\")]"
 ```
 
-The second click is the address-bar `▶ Send` button (its accessible name
-includes `Send`). Afterwards:
+The second click is the address-bar button whose label is `▶ Send`. Afterwards:
 
 ```sh
 .cursor/skills/control-app/scripts/hsdrv.py eval 'return document.body.innerText.includes("OK") && document.body.innerText.includes("echoed")'
@@ -81,4 +80,4 @@ Handshaker session.
 - A new draft's TLS state is inherit, and a new collection's `default_tls` is false, so inherit already means plaintext. Clicking the lock cycles inherit → on → off. On will try TLS against the echo server and fail.
 - The method list is empty until reflection returns. The picker footer is the status, not a second address-bar button.
 - Server-streaming `ServerStream` still uses `▶ Send`. `▶ Open` is only for client-streaming and bidi. Those are the streaming feature.
-- The Send button's tooltip is a portal; the visible label is `▶ Send`. Match the button element, not the tooltip.
+- The Send button's tooltip is a portal; the visible label is `▶ Send`. Match that label. A button whose text merely contains `Send` is also the method picker once the chosen method is `Send`, and clicking it reopens the list.

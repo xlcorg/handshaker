@@ -3,8 +3,8 @@ name: control-app
 description: >-
   Drive the Handshaker desktop gRPC client (Tauri window, Linux WebKitGTK
   via tauri-driver). Use when checking that the real window starts, or when
-  verifying collections, a unary call, environments, a streaming RPC, or
-  settings against the running app.
+  verifying collections, a unary call, environments, a streaming RPC,
+  settings, or the Ctrl+Tab recent switcher against the running app.
 ---
 
 # control-app

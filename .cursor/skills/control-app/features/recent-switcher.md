@@ -20,6 +20,14 @@ Open a saved request, then open its collection overview. Hold Ctrl and press Tab
 
 ## Driving it with Tauri WebDriver
 
+A fresh window has no switchable history, so the chord does nothing. Open a new request, then open a collection. The overview is showing, and the new-request draft is the previous location.
+
+```sh
+.cursor/skills/control-app/scripts/hsdrv.py click "[aria-label='new-item']"
+.cursor/skills/control-app/scripts/hsdrv.py click "[aria-label='new-request']"
+.cursor/skills/control-app/scripts/hsdrv.py click "[aria-label='open-collection']"
+```
+
 The overlay is absent until the chord is held. Dispatch the chord on `window`. Do not click a backdrop, and do not wait for focus to move.
 
 ```sh
