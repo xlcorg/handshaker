@@ -10,6 +10,7 @@ pub mod collections;
 pub mod env;
 pub mod error;
 pub mod grpc;
+pub mod history;
 pub mod persist;
 pub mod send;
 pub mod stream;
