@@ -1,4 +1,24 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+
+const switcherFixtures = vi.hoisted(() => {
+  const alpha = {
+    type: "request" as const,
+    id: "a",
+    name: "Alpha",
+    address_template: "h:443",
+    service: "pkg.Svc",
+    method: "GetAlpha",
+    body_template: "{}",
+    metadata: [] as { key: string; value: string; enabled: boolean }[],
+    auth: { kind: "none" as const },
+    tls_override: null as boolean | null,
+    last_used_at: null as number | null,
+    use_count: 0,
+  };
+  const beta = { ...alpha, id: "b", name: "Beta", method: "GetBeta" };
+  return { alpha, beta };
+});
+
 import { messages } from "@/lib/messages";
 import { render as rtlRender, screen, act, waitFor } from "@testing-library/react";
 import type * as React from "react";
@@ -22,6 +42,8 @@ vi.mock("@/features/catalog/SidebarShell", () => ({
     <div>
       <button type="button" onClick={() => onOpenCollection("c1")}>open-col</button>
       <button type="button" onClick={() => onOpenRequest?.("c2", { id: "rX" } as never)}>open-req</button>
+      <button type="button" onClick={() => onOpenRequest?.("c1", switcherFixtures.alpha)}>open-alpha</button>
+      <button type="button" onClick={() => onOpenRequest?.("c1", switcherFixtures.beta)}>open-beta</button>
       <button type="button" onClick={() => onAddRequest?.()}>add-req</button>
     </div>
   ),
@@ -107,7 +129,7 @@ vi.mock("@/features/catalog/DiscardDraftDialog", () => ({
 }));
 vi.mock("@/features/catalog/CatalogProvider", () => ({
   useCatalog: () => ({
-    tree: [{ id: "c1", name: "C1", items: [], variables: {}, auth: { kind: "none" } }],
+    tree: [{ id: "c1", name: "C1", items: [switcherFixtures.alpha, switcherFixtures.beta], variables: {}, auth: { kind: "none" } }],
     loading: false,
     error: null,
     reload: vi.fn().mockResolvedValue(undefined),
@@ -148,6 +170,8 @@ import { envActiveGet } from "@/ipc/client";
 beforeEach(() => {
   vi.clearAllMocks();
   workflowStore.reset();
+  vi.mocked(openSavedRequest).mockReset();
+  vi.mocked(newRequestDraft).mockReset();
 });
 
 function createCall() {
@@ -349,6 +373,74 @@ describe("WorkflowApp env hydration + settings", () => {
     expect(screen.queryByText("SETTINGS-DIALOG")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Settings" }));
     expect(screen.getByText("SETTINGS-DIALOG")).toBeInTheDocument();
+  });
+});
+
+describe("WorkflowApp recent switcher", () => {
+  async function useRealOpen() {
+    const actual = await vi.importActual<typeof import("@/features/catalog/actions")>(
+      "@/features/catalog/actions",
+    );
+    vi.mocked(openSavedRequest).mockImplementation(actual.openSavedRequest);
+  }
+
+  it("returns the previous saved request to Focus on Ctrl+Tab", async () => {
+    const user = userEvent.setup();
+    await useRealOpen();
+    render(<WorkflowApp />);
+    await user.click(screen.getByText("open-alpha"));
+    await user.click(screen.getByText("open-beta"));
+    expect(workflowStore.getState().draft?.method).toBe("GetBeta");
+
+    act(() => {
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Tab", ctrlKey: true, bubbles: true, cancelable: true }),
+      );
+    });
+    expect(screen.getByRole("option", { selected: true })).toHaveTextContent("Alpha");
+    act(() => {
+      window.dispatchEvent(
+        new KeyboardEvent("keyup", { key: "Control", bubbles: true, cancelable: true }),
+      );
+    });
+
+    expect(screen.getByText("FOCUS")).toBeInTheDocument();
+    expect(screen.queryByText("OVERVIEW:c1")).not.toBeInTheDocument();
+    expect(workflowStore.getState().draft?.method).toBe("GetAlpha");
+    expect(workflowStore.getState().draftOrigin).toEqual({
+      collectionId: "c1",
+      requestId: "a",
+      requestName: "Alpha",
+    });
+  });
+
+  it("reveals the same draft when Ctrl+Tab leaves the collection overview", async () => {
+    const user = userEvent.setup();
+    await useRealOpen();
+    render(<WorkflowApp />);
+    await user.click(screen.getByText("open-alpha"));
+    const draft = workflowStore.getState().draft;
+    expect(draft?.method).toBe("GetAlpha");
+
+    await user.click(screen.getByText("open-col"));
+    expect(screen.getByText("OVERVIEW:c1")).toBeInTheDocument();
+    expect(workflowStore.getState().draft).toBe(draft);
+
+    act(() => {
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Tab", ctrlKey: true, bubbles: true, cancelable: true }),
+      );
+    });
+    expect(screen.getByRole("option", { selected: true })).toHaveTextContent("Alpha");
+    act(() => {
+      window.dispatchEvent(
+        new KeyboardEvent("keyup", { key: "Control", bubbles: true, cancelable: true }),
+      );
+    });
+
+    expect(workflowStore.getState().draft).toBe(draft);
+    expect(screen.queryByText("OVERVIEW:c1")).not.toBeInTheDocument();
+    expect(screen.getByText("FOCUS")).toBeInTheDocument();
   });
 });
 

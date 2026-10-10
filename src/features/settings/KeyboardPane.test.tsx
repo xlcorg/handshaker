@@ -18,4 +18,11 @@ describe("KeyboardPane", () => {
     expect(within(row).getByText("Alt")).toBeInTheDocument();
     expect(within(row).getByText("V")).toBeInTheDocument();
   });
+
+  it("lists the Recently opened → Ctrl+Tab shortcut", () => {
+    render(<KeyboardPane />);
+    const row = screen.getByText("Recently opened").closest("div.flex") as HTMLElement;
+    expect(within(row).getByText("Ctrl")).toBeInTheDocument();
+    expect(within(row).getByText("Tab")).toBeInTheDocument();
+  });
 });

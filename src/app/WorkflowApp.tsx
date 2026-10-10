@@ -24,6 +24,7 @@ import { useAutosaveDraft } from "@/features/catalog/useAutosaveDraft";
 import { findSavedLocations } from "@/features/catalog/grouping";
 import { planQuickAdd } from "@/features/catalog/quickAdd";
 import { CommandPalette } from "@/features/catalog/CommandPalette";
+import { RecentSwitcher } from "@/features/catalog/RecentSwitcher";
 import { isPaletteHotkey } from "@/features/catalog/paletteHotkey";
 import { EMPTY_BODY_TEMPLATE } from "@/features/workflow/actions";
 import { toast } from "sonner";
@@ -384,6 +385,14 @@ export function WorkflowApp() {
           setPaletteOpen(false);
           setPanelCollectionId(cid);
         }}
+      />
+
+      <RecentSwitcher
+        overviewId={panelCollection?.id ?? null}
+        collections={cat.tree}
+        onOpenRequest={openRequest}
+        onOpenCollection={setPanelCollectionId}
+        onRevealDraft={() => setPanelCollectionId(null)}
       />
 
       <UpdateToast

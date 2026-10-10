@@ -16,6 +16,7 @@ const ROWS: Array<[string, string[][]]> = [
   [messages.shell.keyboard.toggleSidebar, [["Ctrl", "B"]]],
   [messages.shell.keyboard.wordWrap, [WORD_WRAP_KEYS]],
   [messages.shell.keyboard.splitDirection, [SPLIT_KEYS]],
+  [messages.shell.keyboard.recentSwitcher, [["Ctrl", "Tab"]]],
 ];
 
 export function KeyboardPane() {
