@@ -53,6 +53,23 @@ describe("useCatalogTree.reload", () => {
     expect(result.current.tree[0].name).toBe("My Collection");
     expect(ipc.collectionUpsert).toHaveBeenCalledTimes(1);
   });
+
+  it("currentTree from an earlier render returns the tree a later reload applied", async () => {
+    vi.mocked(ipc.collectionList).mockResolvedValue([{ id: "c1", name: "c1" }]);
+    vi.mocked(ipc.collectionGet).mockResolvedValue(col("c1"));
+    const { result } = renderHook(() => useCatalogTree());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    const { currentTree, reload } = result.current;
+
+    vi.mocked(ipc.collectionList).mockResolvedValue([{ id: "c2", name: "c2" }]);
+    vi.mocked(ipc.collectionGet).mockResolvedValue(col("c2"));
+    let seen: string[] = [];
+    await act(async () => {
+      await reload();
+      seen = currentTree().map((c) => c.id);
+    });
+    expect(seen).toEqual(["c2"]);
+  });
 });
 
 describe("optimistic mutations + rollback", () => {

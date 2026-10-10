@@ -159,6 +159,13 @@ describe("setPref (module-level setter)", () => {
   });
 });
 
+describe("history dock prefs", () => {
+  it("the dock starts expanded at 28% of the main column", () => {
+    expect(PREFS_DEFAULTS.historyDock).toBe(true);
+    expect(PREFS_DEFAULTS.historyDockPanel).toBe(28);
+  });
+});
+
 describe("maxMessageBytes pref + helpers", () => {
   it("defaults to 16 MiB", () => {
     expect(PREFS_DEFAULTS.maxMessageBytes).toBe(16 * 1024 * 1024);

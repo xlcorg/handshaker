@@ -14,3 +14,4 @@ collection named `My Collection`.
 | [Streaming](streaming.md) | Opening `test.Echo/ServerStream` fills the Messages timeline and the footer (`data-testid="stream-footer"`) ends on `OK`. |
 | [Settings](settings.md) | The Settings dialog shows `Preferences persist locally` and the About pane shows the Cargo version. |
 | [Recent switcher](recent-switcher.md) | Ctrl+Tab shows a list named `Recently opened`. Releasing Ctrl opens the highlighted row. |
+| [Call history](call-history.md) | After a unary Send, the first `history-row-open` button reads `Echo.Send` and `OK`, and the run's `history/` dir holds that call's `<uuid>.json`. |

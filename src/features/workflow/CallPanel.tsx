@@ -52,7 +52,7 @@ interface CallPanelProps {
     prev: { service: string; method: string },
     next: { service: string; method: string },
   ) => void;
-  /** Focus(draft) only: origin of the bound draft — lets useSend credit the saved
+  /** Focus(draft) only: origin of the bound draft — lets the call lifecycle credit the saved
    *  request with one execution. Absent/null for unbound drafts and history panels. */
   origin?: DraftOrigin | null;
 }
@@ -146,12 +146,6 @@ export function CallPanel({ step, onPatch, editable, onQuickAddMethod, originVar
     executedKind: executedKind(step, entry),
   });
 
-  // The call lifecycle lives in `useCall`, which owns both paths — useSend (unary) and
-  // useStreamCall (Stream call): gate → send/open → patch → executed snapshot (auth/TLS
-  // from the report / `Opened` — fact, not a second fetch) → usage bump. `kind` picks the
-  // path Send drives: any streaming kind opens a stream (`server` = Send, `client` /
-  // `bidi` = Open), unary or `null` (unknown) takes the unary path — and a kind mismatch
-  // from core re-routes once through the other path. Cancel follows the live call.
   const call = useCall({ step, envName: activeWf.envName, kind, onPatch, record: !!editable, origin });
   const { send, cancel } = call;
 

@@ -1,0 +1,18 @@
+---
+description: Commit messages never include Co-authored-by or other trailers
+alwaysApply: true
+---
+
+# Commits without trailers
+
+Commit messages are Conventional Commits only. Do not add `Co-authored-by`, `Co-Authored-By`, `Signed-off-by`, or `Generated with` trailers. Same rule as `.claude/rules/commit-messages.md`.
+
+`git commit` and `git commit-tree` in this environment may append `Co-authored-by` after the message you wrote. Before pushing, read `git log -1 --format=full`. If that trailer is on an unpushed commit you just created, rewrite the commit so the message has no trailer, then push the rewritten commit.
+
+Do not approve or retry a commit whose message still contains `Co-authored-by`.
+
+```
+chore: ignore local Cursor plugin settings
+
+.cursor/settings.json only stores per-checkout plugin toggles.
+```

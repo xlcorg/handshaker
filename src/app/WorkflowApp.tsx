@@ -44,6 +44,8 @@ import { useSplitDirectionHotkey } from "@/features/shell/splitDirection";
 import { useSuppressNativeContextMenu } from "@/features/shell/nativeContextMenu";
 import { dismissSplash } from "@/features/shell/splash";
 import { useStartupRecovery } from "@/features/shell/startupRecovery";
+import { HistoryDock } from "@/features/history/HistoryDock";
+import { openHistoryCall, type HistoryIntent } from "@/features/history/navigate";
 
 function renderView(
   view: ViewMode,
@@ -271,6 +273,14 @@ export function WorkflowApp() {
       newRequestDraft();
     });
 
+  const openCall = (id: string, intent: HistoryIntent) =>
+    void openHistoryCall(id, intent, {
+      tree: cat.currentTree,
+      guard: guardedRun,
+      revealFocus: () => setPanelCollectionId(null),
+      bumpUsage: cat.bumpUsage,
+    });
+
   return (
     <UpdaterProvider value={update}>
       <div className="flex h-screen flex-col bg-background text-foreground">
@@ -309,26 +319,28 @@ export function WorkflowApp() {
           </ResizablePanel>
           <ResizableHandle />
           <ResizablePanel id="main" minSize="40%">
-            <div className="h-full min-h-0">
-              {panelCollection ? (
-                <CollectionOverview
-                  collection={panelCollection}
-                  onChanged={() => void cat.reload()}
-                  onSelectRequest={openRequest}
-                  onClose={() => setPanelCollectionId(null)}
-                />
-              ) : (
-                renderView(
-                  wf.view,
-                  () => {
-                    // A direct save is not a continuation of a deferred open — drop any pending action.
-                    pendingOpenRef.current = null;
-                    setSaveOpen(true);
-                  },
-                  (service: string, method: string) => void quickAddMethod(service, method).catch(() => {}),
-                )
-              )}
-            </div>
+            <HistoryDock onOpen={openCall}>
+              <div className="h-full min-h-0">
+                {panelCollection ? (
+                  <CollectionOverview
+                    collection={panelCollection}
+                    onChanged={() => void cat.reload()}
+                    onSelectRequest={openRequest}
+                    onClose={() => setPanelCollectionId(null)}
+                  />
+                ) : (
+                  renderView(
+                    wf.view,
+                    () => {
+                      // A direct save is not a continuation of a deferred open — drop any pending action.
+                      pendingOpenRef.current = null;
+                      setSaveOpen(true);
+                    },
+                    (service: string, method: string) => void quickAddMethod(service, method).catch(() => {}),
+                  )
+                )}
+              </div>
+            </HistoryDock>
           </ResizablePanel>
         </ResizablePanelGroup>
       </SidebarProvider>

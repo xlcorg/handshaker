@@ -4,8 +4,6 @@ import { act, render, screen, fireEvent } from "@testing-library/react";
 vi.mock("@/features/invoke/BodyEditor", () => ({
   BodyEditor: ({ value }: { value: string }) => <div data-testid="body-editor">{value}</div>,
 }));
-// Both facade shapes (named exports AND `ipc`) — `actions.ts` / `useStreamCall` read the
-// namespace, other modules the object; mocking one alone hides the other path.
 const api = vi.hoisted(() => ({
   authResolve: vi.fn().mockResolvedValue(null),
   authEffective: vi.fn().mockResolvedValue({ kind: "none" }),
@@ -33,6 +31,7 @@ vi.mock("@/features/catalog/CatalogProvider", () => ({
 }));
 
 import { CallPanel } from "./CallPanel";
+import { runCall } from "./callLifecycle";
 import { newStep } from "./model";
 import { workflowStore } from "./store";
 import { streamStore } from "@/features/stream/streamStore";
@@ -118,10 +117,11 @@ describe("CallPanel picks the call hook by the derived kind", () => {
   });
 
   it("live stream: Send morphs into Cancel after the busy delay; Cancel → grpcCancel + status cancelled", async () => {
-    streamStore.open("rid", "server");
-    const live = { ...newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "Watch" }),
-      status: "sending" as const, requestId: "rid", streamId: "rid" };
+    const idle = newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "Watch" });
     const onPatch = vi.fn();
+    await runCall({ step: idle, envName: null, kind: "server", onPatch, recording: null });
+    const rid = api.streamOpen.mock.calls[0][2] as string;
+    const live = { ...idle, ...onPatch.mock.calls[0][0] };
     vi.useFakeTimers();
     await renderPanel(<CallPanel step={live} onPatch={onPatch} editable />);
     expect(screen.getByRole("button", { name: /send/i })).toBeInTheDocument();
@@ -131,8 +131,8 @@ describe("CallPanel picks the call hook by the derived kind", () => {
     fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
     await act(async () => {});
 
-    expect(api.grpcCancel).toHaveBeenCalledWith("rid");
-    expect(streamStore.get("rid")?.phase).toBe("cancelled");
+    expect(api.grpcCancel).toHaveBeenCalledWith(rid);
+    expect(streamStore.get(rid)?.phase).toBe("cancelled");
     expect(onPatch).toHaveBeenCalledWith(expect.objectContaining({ status: "cancelled", requestId: null }));
   });
 });
@@ -141,7 +141,7 @@ describe("CallPanel send hotkeys around a server stream", () => {
   const streamStep = () => newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "Watch" });
 
   it("Ctrl/Cmd+Enter and Ctrl+R are a no-op while a server stream is open — never Cancel, never re-open", async () => {
-    streamStore.open("rid", "server");
+    streamStore.open("rid", "server", Date.now());
     const live = { ...streamStep(), status: "sending" as const, requestId: "rid", streamId: "rid" };
     const onPatch = vi.fn();
     await renderPanel(<CallPanel step={live} onPatch={onPatch} editable />);
@@ -160,7 +160,7 @@ describe("CallPanel send hotkeys around a server stream", () => {
 
   it("once the stream ended, Ctrl+Enter Sends again (a fresh Stream call)", async () => {
     api.grpcDescribe.mockResolvedValue(catalogWith("Watch", false, true));
-    streamStore.open("old", "server");
+    streamStore.open("old", "server", Date.now());
     streamStore.push("old", { type: "End", status_code: 0, status_message: "", status_details: [], trailing_metadata: {}, elapsed_ms: 5, message_count: 0, total_bytes: 0 });
     const ended = { ...streamStep(), status: "ok" as const, requestId: null, streamId: "old" };
     const onPatch = vi.fn();
@@ -194,7 +194,7 @@ describe("CallPanel send hotkeys around a server stream", () => {
 
 describe("CallPanel response slot", () => {
   it("a step with a streamId shows the stream pane (Messages tab + footer) instead of the unary pane", async () => {
-    streamStore.open("rid", "server");
+    streamStore.open("rid", "server", Date.now());
     const step = { ...newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "Watch" }),
       status: "sending" as const, requestId: "rid", streamId: "rid" };
     await renderPanel(<CallPanel step={step} onPatch={() => {}} />);
@@ -204,7 +204,7 @@ describe("CallPanel response slot", () => {
   });
 
   it("a stream step whose call faulted after Open wears the unary client-error face, not the stream pane", async () => {
-    streamStore.open("rid", "server");
+    streamStore.open("rid", "server", Date.now());
     streamStore.push("rid", { type: "Fault", error: { type: "DeadlineExceeded", timeout_ms: 30_000 } });
     const step = { ...newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "Watch" }),
       status: "error" as const, requestId: null, streamId: "rid",
@@ -248,7 +248,7 @@ describe("CallPanel two-way (client / bidi) calls", () => {
   });
 
   it("live two-way call: segmented controls after the busy delay; Send message → streamSend(rid, body template, ctx) and a → row; Half-close → streamHalfClose(rid) and the controls disable", async () => {
-    streamStore.open("rid", "bidi");
+    streamStore.open("rid", "bidi", Date.now());
     streamStore.push("rid", openedBidi);
     api.streamSend.mockResolvedValue(ack);
     const live = { ...bidiStep(), status: "sending" as const, requestId: "rid", streamId: "rid", collectionId: "c1" };
@@ -272,7 +272,7 @@ describe("CallPanel two-way (client / bidi) calls", () => {
   });
 
   it("while opening (Opened not yet in): the segmented controls show but Send message / Half-close are disabled", async () => {
-    streamStore.open("rid", "client");
+    streamStore.open("rid", "client", Date.now());
     const live = { ...bidiStep(), status: "sending" as const, requestId: "rid", streamId: "rid" };
     vi.useFakeTimers();
     await renderPanel(<CallPanel step={live} onPatch={vi.fn()} editable />);
@@ -283,7 +283,7 @@ describe("CallPanel two-way (client / bidi) calls", () => {
   });
 
   it("Ctrl/Cmd+Enter and Ctrl+R while a two-way stream is open = Send message (never Cancel, never re-open)", async () => {
-    streamStore.open("rid", "bidi");
+    streamStore.open("rid", "bidi", Date.now());
     streamStore.push("rid", openedBidi);
     let n = 0;
     api.streamSend.mockImplementation(async () => ({ ...ack, index: ++n }));
@@ -306,7 +306,7 @@ describe("CallPanel two-way (client / bidi) calls", () => {
   });
 
   it("Ctrl+Enter after half-close is a no-op (nothing sent, nothing cancelled)", async () => {
-    streamStore.open("rid", "client");
+    streamStore.open("rid", "client", Date.now());
     streamStore.push("rid", { ...openedBidi, kind: "client" });
     streamStore.halfClose("rid");
     const live = { ...bidiStep(), status: "sending" as const, requestId: "rid", streamId: "rid" };
@@ -334,7 +334,7 @@ describe("CallPanel two-way (client / bidi) calls", () => {
   });
 
   it("a rejected Send message (UnresolvedVars) shows the strip in the stream pane; the stream stays open, the step is not patched", async () => {
-    streamStore.open("rid", "bidi");
+    streamStore.open("rid", "bidi", Date.now());
     streamStore.push("rid", openedBidi);
     api.streamSend.mockRejectedValue({ type: "UnresolvedVars", unresolved: ["v"], cycle: null });
     const live = { ...bidiStep(), status: "sending" as const, requestId: "rid", streamId: "rid" };

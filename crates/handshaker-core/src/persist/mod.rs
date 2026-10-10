@@ -41,17 +41,25 @@ fn tmp_path(path: &Path) -> PathBuf {
 /// Serialize `value` and atomically replace `path`. Creates parent dirs on demand.
 /// On any failure the previous contents of `path` are left intact.
 pub fn atomic_write_json<T: Serialize>(path: &Path, value: &Envelope<T>) -> Result<(), CoreError> {
+    atomic_write_bytes(path, &to_json_bytes(path, value)?)
+}
+
+/// The bytes [`atomic_write_json`] would write for `value`.
+pub fn to_json_bytes<T: Serialize>(path: &Path, value: &Envelope<T>) -> Result<Vec<u8>, CoreError> {
+    serde_json::to_vec_pretty(value).map_err(|e| CoreError::Persistence(format!("serialize {}: {e}", path.display())))
+}
+
+/// Atomically replace `path` with `bytes` (tmp + fsync + rename). Creates parent dirs.
+pub fn atomic_write_bytes(path: &Path, bytes: &[u8]) -> Result<(), CoreError> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .map_err(|e| CoreError::Persistence(format!("create dir {}: {e}", parent.display())))?;
     }
-    let bytes = serde_json::to_vec_pretty(value)
-        .map_err(|e| CoreError::Persistence(format!("serialize {}: {e}", path.display())))?;
     let tmp = tmp_path(path);
     {
         let mut f = fs::File::create(&tmp)
             .map_err(|e| CoreError::Persistence(format!("create tmp {}: {e}", tmp.display())))?;
-        f.write_all(&bytes)
+        f.write_all(bytes)
             .map_err(|e| CoreError::Persistence(format!("write tmp {}: {e}", tmp.display())))?;
         f.sync_all()
             .map_err(|e| CoreError::Persistence(format!("fsync tmp {}: {e}", tmp.display())))?;

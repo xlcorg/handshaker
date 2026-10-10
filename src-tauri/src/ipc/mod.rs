@@ -5,6 +5,7 @@ pub mod catalog;
 pub mod collection;
 pub mod env;
 pub mod error;
+pub mod history;
 pub mod invoke;
 pub mod schema;
 pub mod stream;

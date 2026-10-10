@@ -34,7 +34,7 @@ afterEach(() => {
 
 describe("streamStore", () => {
   it("open creates an opening entry stamped with the request kind and openedAt", () => {
-    streamStore.open("rid", "server");
+    streamStore.open("rid", "server", Date.now());
     const e = streamStore.get("rid")!;
     expect(e).toMatchObject({
       id: "rid", kind: "server", phase: "opening", headers: null, messages: [], end: null,
@@ -43,7 +43,7 @@ describe("streamStore", () => {
   });
 
   it("batches non-terminal events per animation frame and notifies once", () => {
-    streamStore.open("rid", "server");
+    streamStore.open("rid", "server", Date.now());
     const listener = vi.fn();
     streamStore.subscribe(listener);
     streamStore.push("rid", opened);
@@ -69,7 +69,7 @@ describe("streamStore", () => {
   });
 
   it("End applies immediately (with anything queued before it) and freezes elapsed on the local clock", () => {
-    streamStore.open("rid", "server");
+    streamStore.open("rid", "server", Date.now());
     streamStore.push("rid", opened);
     streamStore.push("rid", msg(1));
     vi.mocked(Date.now).mockReturnValue(11_500);
@@ -84,7 +84,7 @@ describe("streamStore", () => {
   });
 
   it("cancel freezes elapsed at cancel time and ignores later events", () => {
-    streamStore.open("rid", "server");
+    streamStore.open("rid", "server", Date.now());
     streamStore.push("rid", opened);
     streamStore.push("rid", msg(1));
     flushFrames();
@@ -103,14 +103,14 @@ describe("streamStore", () => {
   });
 
   it("cancel after End is a no-op that reports false", () => {
-    streamStore.open("rid", "server");
+    streamStore.open("rid", "server", Date.now());
     streamStore.push("rid", end(0));
     expect(streamStore.cancel("rid")).toBe(false);
     expect(streamStore.get("rid")!.phase).toBe("ended");
   });
 
   it("a post-Open Fault ends the entry with a client fault, elapsed frozen on the same local clock", () => {
-    streamStore.open("rid", "server");
+    streamStore.open("rid", "server", Date.now());
     vi.mocked(Date.now).mockReturnValue(10_800);
     streamStore.push("rid", { type: "Fault", error: { type: "DeadlineExceeded", timeout_ms: 30_000 } });
     const e = streamStore.get("rid")!;
@@ -120,7 +120,7 @@ describe("streamStore", () => {
   });
 
   it("setMessageJson caches a lazily fetched body on the row, notifies once, and is a no-op for unknown rows", () => {
-    streamStore.open("rid", "server");
+    streamStore.open("rid", "server", Date.now());
     streamStore.push("rid", opened);
     const big = (index: number): StreamEventIpc => ({
       type: "Message", index, at_ms: 1_700_000_000_000 + index, size_bytes: 70_000, preview: "{…", json: null,
@@ -145,7 +145,7 @@ describe("streamStore", () => {
   });
 
   it("drop removes the entry and discards its queued events", () => {
-    streamStore.open("rid", "server");
+    streamStore.open("rid", "server", Date.now());
     streamStore.push("rid", msg(1));
     streamStore.drop("rid");
     flushFrames();
@@ -159,12 +159,12 @@ describe("streamStore two-way (client / bidi) additions", () => {
   });
 
   it("open stamps halfClosed false and no send fault", () => {
-    streamStore.open("rid", "bidi");
+    streamStore.open("rid", "bidi", Date.now());
     expect(streamStore.get("rid")).toMatchObject({ kind: "bidi", halfClosed: false, sendFault: null });
   });
 
   it("pushOutbound appends a → row synchronously in the shared numbering, inbound bytes untouched, and clears a send fault", () => {
-    streamStore.open("rid", "bidi");
+    streamStore.open("rid", "bidi", Date.now());
     streamStore.push("rid", { ...opened, kind: "bidi" });
     flushFrames();
     streamStore.setSendFault("rid", { kind: "other", message: "Unresolved variables: {{x}}" });
@@ -186,7 +186,7 @@ describe("streamStore two-way (client / bidi) additions", () => {
   });
 
   it("pushOutbound on a terminal or unknown entry is a no-op", () => {
-    streamStore.open("rid", "client");
+    streamStore.open("rid", "client", Date.now());
     streamStore.push("rid", end(0));
     const before = streamStore.get("rid")!;
     streamStore.pushOutbound("rid", ack(1));
@@ -196,7 +196,7 @@ describe("streamStore two-way (client / bidi) additions", () => {
   });
 
   it("halfClose marks the live entry half-closed (phase stays live); End still ends it; terminal entries ignore it", () => {
-    streamStore.open("rid", "client");
+    streamStore.open("rid", "client", Date.now());
     streamStore.push("rid", { ...opened, kind: "client" });
     flushFrames();
     const listener = vi.fn();
@@ -209,7 +209,7 @@ describe("streamStore two-way (client / bidi) additions", () => {
     streamStore.push("rid", end(0));
     expect(streamStore.get("rid")).toMatchObject({ phase: "ended", halfClosed: true });
 
-    streamStore.open("done", "client");
+    streamStore.open("done", "client", Date.now());
     streamStore.push("done", end(0));
     const before = streamStore.get("done")!;
     streamStore.halfClose("done");
@@ -217,7 +217,7 @@ describe("streamStore two-way (client / bidi) additions", () => {
   });
 
   it("setSendFault stores the fault on a live entry without ending it; clearSendFault removes it; terminal entries ignore both", () => {
-    streamStore.open("rid", "bidi");
+    streamStore.open("rid", "bidi", Date.now());
     streamStore.push("rid", { ...opened, kind: "bidi" });
     flushFrames();
     const fault = { kind: "encode" as const, message: "bad json" };
@@ -235,7 +235,7 @@ describe("streamStore two-way (client / bidi) additions", () => {
   });
 
   it("a successful halfClose clears a pending send fault (the outbound side is over)", () => {
-    streamStore.open("rid", "client");
+    streamStore.open("rid", "client", Date.now());
     streamStore.push("rid", { ...opened, kind: "client" });
     flushFrames();
     streamStore.setSendFault("rid", { kind: "encode", message: "bad json" });
@@ -249,7 +249,7 @@ describe("streamStore two-way (client / bidi) additions", () => {
     ["Fault", (id: string) => streamStore.push(id, { type: "Fault", error: { type: "DeadlineExceeded", timeout_ms: 5 } }), "faulted"],
     ["cancel", (id: string) => streamStore.cancel(id), "cancelled"],
   ] as const)("%s clears a pending send fault — the strip never outlives the live call", (_name, terminate, phase) => {
-    streamStore.open("rid", "bidi");
+    streamStore.open("rid", "bidi", Date.now());
     streamStore.push("rid", { ...opened, kind: "bidi" });
     flushFrames();
     streamStore.setSendFault("rid", { kind: "other", message: "Unresolved variables: {{x}}" });

@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => {
     grpcCancel: vi.fn().mockResolvedValue(undefined),
     streamRelease: vi.fn().mockResolvedValue(undefined),
     envActiveSet: vi.fn().mockResolvedValue(undefined),
+    historyRecord: vi.fn().mockResolvedValue({ revision: 2, rows: [] }),
   };
   return { api, bumpUsage: vi.fn(() => Promise.resolve()) };
 });
@@ -181,12 +182,53 @@ describe("useCall one-shot re-route on a kind mismatch", () => {
   });
 
   it("cancel follows the live call: a stream step cancels through the stream path", async () => {
-    streamStore.open("rid", "server");
-    const live = { ...draft(), status: "sending" as const, requestId: "rid", streamId: "rid" };
-    const { result, patches } = renderCall(live, "server");
-    await act(() => result.current.cancel());
-    expect(mocks.api.grpcCancel).toHaveBeenCalledWith("rid");
-    expect(streamStore.get("rid")?.phase).toBe("cancelled");
+    openResolves();
+    const step = draft();
+    const patches: Partial<Step>[] = [];
+    const hook = renderHook(({ s }: { s: Step }) =>
+      useCall({ step: s, envName: null, kind: "server", onPatch: (p) => patches.push(p) }), { initialProps: { s: step } });
+    await act(() => hook.result.current.send());
+    const rid = patches[0].requestId!;
+    hook.rerender({ s: { ...step, ...patches[0] } });
+
+    await act(() => hook.result.current.cancel());
+
+    expect(mocks.api.grpcCancel).toHaveBeenCalledWith(rid);
+    expect(streamStore.get(rid)?.phase).toBe("cancelled");
     expect(patches[patches.length - 1]).toMatchObject({ status: "cancelled", requestId: null });
+  });
+
+  it("shares the runCall gate by step id: two panels on one step send once", async () => {
+    let resolve!: (r: SendReportIpc) => void;
+    mocks.api.grpcSend.mockImplementation(() => new Promise((r) => { resolve = r; }));
+    const step = draft();
+    const a = renderCall(step, null);
+    const b = renderCall(step, null);
+
+    let first!: Promise<void>;
+    act(() => { first = a.result.current.send(); });
+    await act(() => b.result.current.send());
+    await act(async () => { resolve(report); await first; });
+
+    expect(mocks.api.grpcSend).toHaveBeenCalledTimes(1);
+    expect(b.patches).toHaveLength(0);
+    expect(a.patches[a.patches.length - 1]).toMatchObject({ status: "ok" });
+  });
+
+  it("record carries the origin into the call record; without it nothing is recorded", async () => {
+    mocks.api.grpcSend.mockResolvedValue(report);
+    const recorded = renderHook(() =>
+      useCall({
+        step: draft(), envName: null, kind: null, onPatch: () => {}, record: true,
+        origin: { collectionId: "c1", requestId: "r1" },
+      }),
+    );
+    await act(() => recorded.result.current.send());
+    const inPlace = renderHook(() => useCall({ step: draft(), envName: null, kind: null, onPatch: () => {} }));
+    await act(() => inPlace.result.current.send());
+
+    expect(mocks.api.grpcSend).toHaveBeenCalledTimes(2);
+    expect(mocks.api.historyRecord).toHaveBeenCalledTimes(1);
+    expect(mocks.api.historyRecord.mock.calls[0][0]).toMatchObject({ origin: { collection_id: "c1", request_id: "r1" } });
   });
 });

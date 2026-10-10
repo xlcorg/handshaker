@@ -16,7 +16,8 @@ const switcherFixtures = vi.hoisted(() => {
     use_count: 0,
   };
   const beta = { ...alpha, id: "b", name: "Beta", method: "GetBeta" };
-  return { alpha, beta };
+  const tree = [{ id: "c1", name: "C1", items: [alpha, beta], variables: {}, auth: { kind: "none" } }];
+  return { alpha, beta, tree };
 });
 
 import { messages } from "@/lib/messages";
@@ -129,7 +130,9 @@ vi.mock("@/features/catalog/DiscardDraftDialog", () => ({
 }));
 vi.mock("@/features/catalog/CatalogProvider", () => ({
   useCatalog: () => ({
-    tree: [{ id: "c1", name: "C1", items: [switcherFixtures.alpha, switcherFixtures.beta], variables: {}, auth: { kind: "none" } }],
+    tree: switcherFixtures.tree,
+    currentTree: () => switcherFixtures.tree,
+    bumpUsage: vi.fn().mockResolvedValue(undefined),
     loading: false,
     error: null,
     reload: vi.fn().mockResolvedValue(undefined),
@@ -152,7 +155,11 @@ vi.mock("@/ipc/client", () => ({
   envActiveGet: vi.fn().mockResolvedValue(null),
   // AppVersionBadge calls ipc.appVersion(); keep it distinct from the 9.9.9 update toast
   // so findByText(/9.9.9/) stays unambiguous.
-  ipc: { appVersion: vi.fn().mockResolvedValue("0.0.0-test") },
+  ipc: {
+    appVersion: vi.fn().mockResolvedValue("0.0.0-test"),
+    historyList: vi.fn().mockResolvedValue({ revision: 1, rows: [] }),
+    historyGet: vi.fn().mockResolvedValue(null),
+  },
 }));
 vi.mock("@tauri-apps/plugin-updater", () => ({
   check: vi.fn().mockResolvedValue({ version: "9.9.9", downloadAndInstall: vi.fn() }),
@@ -165,11 +172,14 @@ import { addStep, setView } from "@/features/workflow/reducers";
 import { newStep } from "@/features/workflow/model";
 import { saveNewRequest } from "@/features/catalog/save";
 import { openSavedRequest, newRequestDraft } from "@/features/catalog/actions";
-import { envActiveGet } from "@/ipc/client";
+import { envActiveGet, ipc } from "@/ipc/client";
+import { historyStore } from "@/features/history/store";
+import { callRecord, summary } from "@/features/history/testFixtures";
 
 beforeEach(() => {
   vi.clearAllMocks();
   workflowStore.reset();
+  historyStore.reset();
   vi.mocked(openSavedRequest).mockReset();
   vi.mocked(newRequestDraft).mockReset();
 });
@@ -197,7 +207,7 @@ function setBoundDraft() {
 function setDirtyUnboundDraft() {
   act(() => {
     workflowStore.setDraft(newStep({ address: "h:443", tls: false, service: "p.S", method: "GetX" }));
-    workflowStore.updateDraft({ requestJson: '{"a":1}' });
+    workflowStore.updateDraft(workflowStore.getState().draft!.id, { requestJson: '{"a":1}' });
   });
 }
 
@@ -357,6 +367,41 @@ describe("WorkflowApp open-over-dirty guard", () => {
     await user.click(await screen.findByText("do-save"));
     await waitFor(() => expect(saveNewRequest).toHaveBeenCalledTimes(1));
     expect(openSavedRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe("WorkflowApp history dock", () => {
+  beforeEach(() => {
+    vi.mocked(ipc.historyList).mockResolvedValue({ revision: 1, rows: [summary()] });
+    vi.mocked(ipc.historyGet).mockResolvedValue(callRecord({ origin: { collection_id: "c1", request_id: "a" } }));
+  });
+
+  it("asks before a history row replaces a dirty unbound draft, then opens the call bound to its request", async () => {
+    const user = userEvent.setup();
+    render(<WorkflowApp />);
+    setDirtyUnboundDraft();
+    const dirty = workflowStore.getState().draft;
+
+    await user.click(await screen.findByTestId("history-row-open"));
+    expect(await screen.findByText("discard-confirm")).toBeInTheDocument();
+    expect(workflowStore.getState().draft).toBe(dirty);
+
+    await user.click(screen.getByText("discard-confirm"));
+    const st = workflowStore.getState();
+    expect(st.draft).toMatchObject({ address: "{{host}}:50051", service: "echo.v1.Echo", method: "Say", status: "draft" });
+    expect(st.draftOrigin).toEqual({ collectionId: "c1", requestId: "a", requestName: "Alpha" });
+  });
+
+  it("opens a row in Focus over an open collection overview", async () => {
+    const user = userEvent.setup();
+    render(<WorkflowApp />);
+    await user.click(screen.getByText("open-col"));
+    expect(screen.getByText("OVERVIEW:c1")).toBeInTheDocument();
+
+    await user.click(await screen.findByTestId("history-row-open"));
+    await waitFor(() => expect(screen.getByText("FOCUS")).toBeInTheDocument());
+    expect(screen.queryByText("OVERVIEW:c1")).not.toBeInTheDocument();
+    expect(workflowStore.getState().draft?.method).toBe("Say");
   });
 });
 
