@@ -28,16 +28,16 @@ profile that text is `No environment`, and the menu is unmounted until the
 pill is clicked, so this xpath matches only the pill:
 
 ```sh
-.cursor/skills/verify-handshaker/scripts/hsdrv.py screenshot env-before
-.cursor/skills/verify-handshaker/scripts/hsdrv.py click "xpath=//button[contains(.,\"No environment\")]"
-.cursor/skills/verify-handshaker/scripts/hsdrv.py screenshot env-during-menu
-.cursor/skills/verify-handshaker/scripts/hsdrv.py click "[aria-label='New environment']"
-.cursor/skills/verify-handshaker/scripts/hsdrv.py screenshot env-during-dialog
-.cursor/skills/verify-handshaker/scripts/hsdrv.py click "[aria-label='Name']"
-.cursor/skills/verify-handshaker/scripts/hsdrv.py eval 'const el=document.querySelector("[aria-label=Name]"); const set=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el),"value").set; set.call(el,"staging"); el.dispatchEvent(new Event("input",{bubbles:true})); return el.value'
-.cursor/skills/verify-handshaker/scripts/hsdrv.py screenshot env-during-named
-.cursor/skills/verify-handshaker/scripts/hsdrv.py click "xpath=//button[normalize-space()=\"Create\"]"
-.cursor/skills/verify-handshaker/scripts/hsdrv.py screenshot env-after
+.cursor/skills/control-app/scripts/hsdrv.py screenshot env-before
+.cursor/skills/control-app/scripts/hsdrv.py click "xpath=//button[contains(.,\"No environment\")]"
+.cursor/skills/control-app/scripts/hsdrv.py screenshot env-during-menu
+.cursor/skills/control-app/scripts/hsdrv.py click "[aria-label='New environment']"
+.cursor/skills/control-app/scripts/hsdrv.py screenshot env-during-dialog
+.cursor/skills/control-app/scripts/hsdrv.py click "[aria-label='Name']"
+.cursor/skills/control-app/scripts/hsdrv.py eval 'const el=document.querySelector("[aria-label=Name]"); const set=Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el),"value").set; set.call(el,"staging"); el.dispatchEvent(new Event("input",{bubbles:true})); return el.value'
+.cursor/skills/control-app/scripts/hsdrv.py screenshot env-during-named
+.cursor/skills/control-app/scripts/hsdrv.py click "xpath=//button[normalize-space()=\"Create\"]"
+.cursor/skills/control-app/scripts/hsdrv.py screenshot env-after
 ```
 
 `env-before.png` shows the pill reading `No environment`. `env-during-menu.png` shows the open menu. `env-during-dialog.png` shows the empty editor. `env-during-named.png` shows `staging` in the name field. `env-after.png` shows the pill reading `staging`. All five files are in the run's `evidence/` directory.
@@ -45,7 +45,7 @@ pill is clicked, so this xpath matches only the pill:
 Then confirm both surfaces:
 
 ```sh
-.cursor/skills/verify-handshaker/scripts/hsdrv.py eval 'return document.body.innerText.includes("staging")'
+.cursor/skills/control-app/scripts/hsdrv.py eval 'return document.body.innerText.includes("staging")'
 ```
 
 and read `environments.json` under the run's `dataDir` from `session.json`.

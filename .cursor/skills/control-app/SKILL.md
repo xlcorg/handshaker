@@ -1,5 +1,5 @@
 ---
-name: verify-handshaker
+name: control-app
 description: >-
   Drive the Handshaker desktop gRPC client (Tauri window, Linux WebKitGTK
   via tauri-driver). Use when checking that the real window starts, or when
@@ -7,7 +7,7 @@ description: >-
   settings against the running app.
 ---
 
-# Verify Handshaker
+# control-app
 
 Handshaker's user-facing surface is the Tauri desktop window (React inside the
 web view). The frontend never calls gRPC itself; buttons go through Tauri IPC
@@ -53,7 +53,7 @@ cargo install tauri-driver --locked --version 2.0.5
 `DISPLAY` must be set. Start a session:
 
 ```sh
-.cursor/skills/verify-handshaker/scripts/launch.sh
+.cursor/skills/control-app/scripts/launch.sh
 ```
 
 The script exports `WEBKIT_DISABLE_COMPOSITING_MODE=1`, `GDK_BACKEND=x11`,
@@ -88,7 +88,7 @@ It does not run on success by itself.
 With the launch still up:
 
 ```sh
-.cursor/skills/verify-handshaker/scripts/doctor.sh
+.cursor/skills/control-app/scripts/doctor.sh
 ```
 
 Read-only. It reads the WebDriver title and URL and evaluates a script that
@@ -106,17 +106,17 @@ ARIA labels. `xpath=` is the prefix when the control has no label (the env
 pill, a method row).
 
 ```sh
-.cursor/skills/verify-handshaker/scripts/hsdrv.py click "[aria-label='Settings']"
-.cursor/skills/verify-handshaker/scripts/hsdrv.py eval 'return document.body.innerText'
-.cursor/skills/verify-handshaker/scripts/hsdrv.py text
-.cursor/skills/verify-handshaker/scripts/hsdrv.py click "xpath=//button[contains(@class,'mp-mrow')][.//span[contains(@class,'mp-mname') and text()='Send']]"
+.cursor/skills/control-app/scripts/hsdrv.py click "[aria-label='Settings']"
+.cursor/skills/control-app/scripts/hsdrv.py eval 'return document.body.innerText'
+.cursor/skills/control-app/scripts/hsdrv.py text
+.cursor/skills/control-app/scripts/hsdrv.py click "xpath=//button[contains(@class,'mp-mrow')][.//span[contains(@class,'mp-mname') and text()='Send']]"
 ```
 
 The mapped flow that was executed end to end is the sidebar's New collection
 action:
 
 ```sh
-.cursor/skills/verify-handshaker/scripts/drive-collections.sh
+.cursor/skills/control-app/scripts/drive-collections.sh
 ```
 
 It clicks `[aria-label="new-item"]`, then `[aria-label="new-collection"]`,
@@ -147,13 +147,13 @@ suffix is added. The PNG lands in that run's `evidence/` directory, and
 Cleanup leaves the directory in place.
 
 ```sh
-.cursor/skills/verify-handshaker/scripts/hsdrv.py screenshot <name>
+.cursor/skills/control-app/scripts/hsdrv.py screenshot <name>
 ```
 
 ## Cleanup
 
 ```sh
-.cursor/skills/verify-handshaker/scripts/cleanup.sh
+.cursor/skills/control-app/scripts/cleanup.sh
 ```
 
 Reads `session.json` for that run and:
@@ -176,14 +176,14 @@ written under `evidence/` remains.
 
 | Script | Invocation |
 | --- | --- |
-| `scripts/launch.sh` | `.cursor/skills/verify-handshaker/scripts/launch.sh` |
-| `scripts/doctor.sh` | `.cursor/skills/verify-handshaker/scripts/doctor.sh` |
-| `scripts/drive-collections.sh` | `.cursor/skills/verify-handshaker/scripts/drive-collections.sh` |
-| `scripts/cleanup.sh` | `.cursor/skills/verify-handshaker/scripts/cleanup.sh` |
-| `scripts/hsdrv.py` | `.cursor/skills/verify-handshaker/scripts/hsdrv.py click "<selector>"` |
-| `scripts/hsdrv.py` | `.cursor/skills/verify-handshaker/scripts/hsdrv.py eval '<javascript that returns a value>'` |
-| `scripts/hsdrv.py` | `.cursor/skills/verify-handshaker/scripts/hsdrv.py text` |
-| `scripts/hsdrv.py` | `.cursor/skills/verify-handshaker/scripts/hsdrv.py screenshot <name>` |
+| `scripts/launch.sh` | `.cursor/skills/control-app/scripts/launch.sh` |
+| `scripts/doctor.sh` | `.cursor/skills/control-app/scripts/doctor.sh` |
+| `scripts/drive-collections.sh` | `.cursor/skills/control-app/scripts/drive-collections.sh` |
+| `scripts/cleanup.sh` | `.cursor/skills/control-app/scripts/cleanup.sh` |
+| `scripts/hsdrv.py` | `.cursor/skills/control-app/scripts/hsdrv.py click "<selector>"` |
+| `scripts/hsdrv.py` | `.cursor/skills/control-app/scripts/hsdrv.py eval '<javascript that returns a value>'` |
+| `scripts/hsdrv.py` | `.cursor/skills/control-app/scripts/hsdrv.py text` |
+| `scripts/hsdrv.py` | `.cursor/skills/control-app/scripts/hsdrv.py screenshot <name>` |
 
 All five files are executable. `hsdrv.py` is the implementation; the shell
 scripts call it.

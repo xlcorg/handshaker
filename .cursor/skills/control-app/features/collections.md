@@ -25,17 +25,17 @@ rename, named `New collection`.
 ## Driving it with Tauri WebDriver
 
 ```sh
-.cursor/skills/verify-handshaker/scripts/drive-collections.sh
+.cursor/skills/control-app/scripts/drive-collections.sh
 ```
 
 The same steps by hand, against the session `launch.sh` started:
 
 ```sh
-.cursor/skills/verify-handshaker/scripts/hsdrv.py screenshot collections-before
-.cursor/skills/verify-handshaker/scripts/hsdrv.py click "[aria-label='new-item']"
-.cursor/skills/verify-handshaker/scripts/hsdrv.py click "[aria-label='new-collection']"
-.cursor/skills/verify-handshaker/scripts/hsdrv.py screenshot collections-renaming
-.cursor/skills/verify-handshaker/scripts/hsdrv.py eval 'const i=document.querySelector("[aria-label=rename-input]"); return i?i.value:""'
+.cursor/skills/control-app/scripts/hsdrv.py screenshot collections-before
+.cursor/skills/control-app/scripts/hsdrv.py click "[aria-label='new-item']"
+.cursor/skills/control-app/scripts/hsdrv.py click "[aria-label='new-collection']"
+.cursor/skills/control-app/scripts/hsdrv.py screenshot collections-renaming
+.cursor/skills/control-app/scripts/hsdrv.py eval 'const i=document.querySelector("[aria-label=rename-input]"); return i?i.value:""'
 ```
 
 `collections-before.png` is the idle sidebar. `collections-renaming.png` is the new row in the rename field.
@@ -46,9 +46,9 @@ The same steps by hand, against the session `launch.sh` started:
 A new request draft, instead of a collection:
 
 ```sh
-.cursor/skills/verify-handshaker/scripts/hsdrv.py click "[aria-label='new-item']"
-.cursor/skills/verify-handshaker/scripts/hsdrv.py click "[aria-label='new-request']"
-.cursor/skills/verify-handshaker/scripts/hsdrv.py screenshot collections-new-request
+.cursor/skills/control-app/scripts/hsdrv.py click "[aria-label='new-item']"
+.cursor/skills/control-app/scripts/hsdrv.py click "[aria-label='new-request']"
+.cursor/skills/control-app/scripts/hsdrv.py screenshot collections-new-request
 ```
 
 The main pane then shows `[aria-label="draft-address"]` (placeholder

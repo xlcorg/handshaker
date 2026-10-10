@@ -36,18 +36,18 @@ Use the same address and picker sequence as `unary-call.md`, with the method
 name `ServerStream` instead of `Send`:
 
 ```sh
-.cursor/skills/verify-handshaker/scripts/hsdrv.py screenshot stream-before
-.cursor/skills/verify-handshaker/scripts/hsdrv.py click "xpath=//button[contains(@class,\"mp-mrow\")][.//span[contains(@class,\"mp-mname\") and text()=\"ServerStream\"]]"
-.cursor/skills/verify-handshaker/scripts/hsdrv.py click "xpath=//button[contains(.,\"▶ Send\")]"
-.cursor/skills/verify-handshaker/scripts/hsdrv.py screenshot stream-live
+.cursor/skills/control-app/scripts/hsdrv.py screenshot stream-before
+.cursor/skills/control-app/scripts/hsdrv.py click "xpath=//button[contains(@class,\"mp-mrow\")][.//span[contains(@class,\"mp-mname\") and text()=\"ServerStream\"]]"
+.cursor/skills/control-app/scripts/hsdrv.py click "xpath=//button[contains(.,\"▶ Send\")]"
+.cursor/skills/control-app/scripts/hsdrv.py screenshot stream-live
 ```
 
 Poll the footer rather than sleeping a fixed time. `--delay-ms 50` and
 `--count 3` finish well under the WebDriver script timeout:
 
 ```sh
-.cursor/skills/verify-handshaker/scripts/hsdrv.py eval 'const el=document.querySelector("[data-testid=stream-footer]"); return el?el.innerText:""'
-.cursor/skills/verify-handshaker/scripts/hsdrv.py screenshot stream-done
+.cursor/skills/control-app/scripts/hsdrv.py eval 'const el=document.querySelector("[data-testid=stream-footer]"); return el?el.innerText:""'
+.cursor/skills/control-app/scripts/hsdrv.py screenshot stream-done
 ```
 
 Done when that text contains `OK` and `3 msgs`. The Messages tab label is

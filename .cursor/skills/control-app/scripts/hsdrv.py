@@ -139,7 +139,7 @@ def load_session() -> tuple[Path, dict]:
     elif CURRENT_LINK.exists():
         run = CURRENT_LINK.resolve()
     else:
-        fail("no verify run. Launch first: .cursor/skills/verify-handshaker/scripts/launch.sh")
+        fail("no verify run. Launch first: .cursor/skills/control-app/scripts/launch.sh")
     path = session_path(run)
     if not path.exists():
         fail(f"missing {path}")
