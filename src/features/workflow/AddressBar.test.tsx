@@ -46,7 +46,7 @@ describe("AddressBar status chip for stream snapshots", () => {
 
   it("End OK → ✓ OK chip (a stream snapshot is not a draft)", () => {
     streamStore.reset();
-    streamStore.open("s1", "server");
+    streamStore.open("s1", "server", Date.now());
     streamStore.push("s1", end(0));
     renderBar({ ...base, status: "ok", streamId: "s1" });
     expect(screen.getByText(/^✓ OK · /)).toBeInTheDocument();
@@ -54,7 +54,7 @@ describe("AddressBar status chip for stream snapshots", () => {
 
   it("End non-OK → ✕ <code> <NAME>", () => {
     streamStore.reset();
-    streamStore.open("s1", "server");
+    streamStore.open("s1", "server", Date.now());
     streamStore.push("s1", end(5));
     renderBar({ ...base, status: "error", streamId: "s1" });
     expect(screen.getByText("✕ 5 NOT_FOUND")).toBeInTheDocument();
@@ -62,7 +62,7 @@ describe("AddressBar status chip for stream snapshots", () => {
 
   it("Cancelled → ○ Cancelled", () => {
     streamStore.reset();
-    streamStore.open("s1", "client");
+    streamStore.open("s1", "client", Date.now());
     streamStore.cancel("s1");
     renderBar({ ...base, status: "cancelled", streamId: "s1" });
     expect(screen.getByText(messages.workflow.addressBar.chip.cancelled)).toBeInTheDocument();
@@ -70,7 +70,7 @@ describe("AddressBar status chip for stream snapshots", () => {
 
   it("shows no kind badge even for a stream snapshot", () => {
     streamStore.reset();
-    streamStore.open("s1", "client");
+    streamStore.open("s1", "client", Date.now());
     streamStore.push("s1", end(0));
     renderBar({ ...base, status: "ok", streamId: "s1" });
     expect(screen.queryByText(messages.methodKind.badge.client)).toBeNull();

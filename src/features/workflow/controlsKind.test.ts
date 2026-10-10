@@ -34,7 +34,7 @@ describe("executedKind — the kind of the step's last executed call", () => {
 
   it("a stream step reads the kind kept on its Stream store entry (core's Opened.kind)", () => {
     streamStore.reset();
-    streamStore.open("s1", "client");
+    streamStore.open("s1", "client", Date.now());
     const step = { ...newStep(base), streamId: "s1", status: "ok" as const };
     expect(executedKind(step, streamStore.get(step.streamId))).toBe("client");
   });

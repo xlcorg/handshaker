@@ -119,14 +119,26 @@ describe("global pending-draft", () => {
 
   it("updateDraft merges a patch onto the current draft", () => {
     workflowStore.setDraft(newStep({ address: "h", tls: false, service: "S", method: "M" }));
-    workflowStore.updateDraft({ status: "sending", requestId: "req-1" });
+    workflowStore.updateDraft(workflowStore.getState().draft!.id, { status: "sending", requestId: "req-1" });
     expect(workflowStore.getState().draft?.status).toBe("sending");
     expect(workflowStore.getState().draft?.requestId).toBe("req-1");
   });
 
   it("updateDraft is a no-op when there is no draft", () => {
-    workflowStore.updateDraft({ status: "ok" });
+    workflowStore.updateDraft("gone", { status: "ok" });
     expect(workflowStore.getState().draft).toBeNull();
+  });
+
+  it("updateDraft drops a patch addressed to a replaced draft", () => {
+    const old = newStep({ address: "h", tls: false, service: "S", method: "M" });
+    workflowStore.setDraft(old);
+    const next = newStep({ address: "h2", tls: false, service: "S", method: "N" });
+    workflowStore.setDraft(next);
+    workflowStore.updateDraft(old.id, { status: "ok", requestJson: '{"late":1}' });
+    expect(workflowStore.getState().draft).toBe(next);
+    expect(workflowStore.getState().draftDirty).toBe(false);
+    workflowStore.updateDraft(next.id, { status: "sending" });
+    expect(workflowStore.getState().draft).toEqual({ ...next, status: "sending" });
   });
 
   it("commitExecutedStep appends a snapshot to the active workflow and activates it; draft untouched", () => {
@@ -174,13 +186,13 @@ describe("draft origin + dirty", () => {
 
   it("content edits on an UNBOUND draft set dirty", () => {
     workflowStore.setDraft(newStep({ address: "h", tls: false, service: "S", method: "M" }));
-    workflowStore.updateDraft({ requestJson: '{"a":1}' });
+    workflowStore.updateDraft(workflowStore.getState().draft!.id, { requestJson: '{"a":1}' });
     expect(workflowStore.getState().draftDirty).toBe(true);
   });
 
   it("transient (non-content) edits never set dirty", () => {
     workflowStore.setDraft(newStep({ address: "h", tls: false, service: "S", method: "M" }));
-    workflowStore.updateDraft({ status: "sending", requestId: "req-1" });
+    workflowStore.updateDraft(workflowStore.getState().draft!.id, { status: "sending", requestId: "req-1" });
     expect(workflowStore.getState().draftDirty).toBe(false);
   });
 
@@ -188,13 +200,13 @@ describe("draft origin + dirty", () => {
     workflowStore.setDraft(newStep({ address: "h", tls: false, service: "S", method: "M" }), {
       collectionId: "c1", requestId: "r1",
     });
-    workflowStore.updateDraft({ requestJson: '{"a":1}' });
+    workflowStore.updateDraft(workflowStore.getState().draft!.id, { requestJson: '{"a":1}' });
     expect(workflowStore.getState().draftDirty).toBe(false);
   });
 
   it("setDraftOrigin binds and clears dirty (used after Save)", () => {
     workflowStore.setDraft(newStep({ address: "h", tls: false, service: "S", method: "M" }));
-    workflowStore.updateDraft({ requestJson: '{"a":1}' }); // dirty now
+    workflowStore.updateDraft(workflowStore.getState().draft!.id, { requestJson: '{"a":1}' }); // dirty now
     workflowStore.setDraftOrigin({ collectionId: "c1", requestId: "r1" });
     expect(workflowStore.getState().draftOrigin).toEqual({ collectionId: "c1", requestId: "r1" });
     expect(workflowStore.getState().draftDirty).toBe(false);

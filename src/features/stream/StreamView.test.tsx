@@ -121,7 +121,7 @@ describe("StreamView expand row", () => {
   it("a large row (json null) fetches stream_message once on expand, shows a loading state, then the body; re-expand hits the cache", async () => {
     let resolve!: (s: string) => void;
     api.streamMessage.mockImplementation(() => new Promise<string>((r) => { resolve = r; }));
-    streamStore.open("s1", "server");
+    streamStore.open("s1", "server", Date.now());
     streamStore.push("s1", { type: "Opened", kind: "server", auth_used: { kind: "none" }, tls_used: false, bytes_fields: [] });
     streamStore.push("s1", { type: "Message", index: 1, at_ms: T0, size_bytes: 70_000, preview: "{…", json: null });
     act(() => { vi.advanceTimersByTime(20); }); // rAF batch
@@ -155,7 +155,7 @@ describe("StreamView expand row", () => {
   it("a row collapsed mid-fetch still caches the body on the store; re-expand needs no second fetch", async () => {
     let resolve!: (s: string) => void;
     api.streamMessage.mockImplementation(() => new Promise<string>((r) => { resolve = r; }));
-    streamStore.open("s1", "server");
+    streamStore.open("s1", "server", Date.now());
     streamStore.push("s1", { type: "Opened", kind: "server", auth_used: { kind: "none" }, tls_used: false, bytes_fields: [] });
     streamStore.push("s1", { type: "Message", index: 1, at_ms: T0, size_bytes: 70_000, preview: "{…", json: null });
     act(() => { vi.advanceTimersByTime(20); });
@@ -451,7 +451,7 @@ describe("StreamView two-way footer", () => {
 
 describe("StreamView send fault strip", () => {
   it("a rejected Send message shows a dismissible strip above the rows; the stream stays live and its rows stay", () => {
-    streamStore.open("s1", "bidi");
+    streamStore.open("s1", "bidi", Date.now());
     streamStore.push("s1", { type: "Opened", kind: "bidi", auth_used: { kind: "none" }, tls_used: false, bytes_fields: [] });
     streamStore.pushOutbound("s1", { index: 1, at_ms: T0, size_bytes: 3, preview: "{}", json: "{}" });
     streamStore.setSendFault("s1", { kind: "other", message: "Unresolved variables: {{v}}" });

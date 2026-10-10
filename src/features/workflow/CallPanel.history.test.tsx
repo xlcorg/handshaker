@@ -4,7 +4,7 @@ import { act, render, screen, fireEvent } from "@testing-library/react";
 vi.mock("@/features/invoke/BodyEditor", () => ({
   BodyEditor: ({ value }: { value: string }) => <div data-testid="body-editor">{value}</div>,
 }));
-// Both facade shapes (named exports AND `ipc`) — `actions.ts` / `useStreamCall` /
+// Both facade shapes (named exports AND `ipc`) — `actions.ts` / `callLifecycle` /
 // `releaseRule` read the namespace, other modules the object.
 const api = vi.hoisted(() => ({
   authResolve: vi.fn().mockResolvedValue(null),
@@ -59,7 +59,7 @@ const opened = (kind: MethodKindIpc): StreamEventIpc =>
 
 /** A history snapshot of an ended Stream call opened with `kind` (no catalog anywhere). */
 function streamSnapshot(kind: MethodKindIpc, id = "old"): Step {
-  streamStore.open(id, kind);
+  streamStore.open(id, kind, Date.now());
   streamStore.push(id, opened(kind));
   streamStore.push(id, endOk);
   return { ...newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "M" }), status: "ok", streamId: id };
@@ -183,7 +183,7 @@ describe("controls-kind precedence in the editable panel", () => {
 
   it("while a client call is live, a catalog that now says server-streaming does not flip the controls", async () => {
     api.grpcDescribe.mockResolvedValue(catalogWith("M", false, true));
-    streamStore.open("rid", "client");
+    streamStore.open("rid", "client", Date.now());
     streamStore.push("rid", opened("client"));
     const live: Step = { ...newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "M" }),
       status: "sending", requestId: "rid", streamId: "rid" };

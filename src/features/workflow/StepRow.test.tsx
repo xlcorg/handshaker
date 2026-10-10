@@ -46,7 +46,7 @@ const endOk = { type: "End" as const, status_code: 0, status_message: "", status
 describe("StepRow kind badge and stream status", () => {
   it("a stream step shows the badge of the kind it ran as and its End status", () => {
     streamStore.reset();
-    streamStore.open("s1", "client");
+    streamStore.open("s1", "client", Date.now());
     streamStore.push("s1", endOk);
     const snap = { ...step, status: "ok" as const, streamId: "s1" };
     render(<StepRow step={snap} index={0} active={false} onSelect={() => {}} onDelete={() => {}} />);
@@ -57,7 +57,7 @@ describe("StepRow kind badge and stream status", () => {
 
   it("a cancelled stream step reads cancelled", () => {
     streamStore.reset();
-    streamStore.open("s1", "server");
+    streamStore.open("s1", "server", Date.now());
     streamStore.cancel("s1");
     const snap = { ...step, status: "cancelled" as const, streamId: "s1" };
     render(<StepRow step={snap} index={0} active={false} onSelect={() => {}} onDelete={() => {}} />);
@@ -77,8 +77,8 @@ describe("StepRow kind badge and stream status", () => {
 describe("StepRow subscribes per row", () => {
   it("a message on stream A re-renders only A's row, never B's", () => {
     streamStore.reset();
-    streamStore.open("a", "server");
-    streamStore.open("b", "server");
+    streamStore.open("a", "server", Date.now());
+    streamStore.open("b", "server", Date.now());
     const stepA = { ...newStep({ address: "h", tls: true, service: "p.v1.S", method: "A" }), status: "sending" as const, streamId: "a" };
     const stepB = { ...newStep({ address: "h", tls: true, service: "p.v1.S", method: "B" }), status: "sending" as const, streamId: "b" };
     const rendersA = vi.fn();

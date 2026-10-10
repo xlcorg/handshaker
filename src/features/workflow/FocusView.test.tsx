@@ -117,7 +117,7 @@ describe("FocusView Save affordance", () => {
 
   it("shows a dirty dot once the unbound draft is edited", () => {
     workflowStore.setDraft(newStep({ address: "h:443", tls: false, service: "p.S", method: "GetX" }));
-    workflowStore.updateDraft({ requestJson: '{"a":1}' });
+    workflowStore.updateDraft(workflowStore.getState().draft!.id, { requestJson: '{"a":1}' });
     renderFV(<FocusView onRequestSave={vi.fn()} />);
     expect(screen.getByTestId("draft-dirty-dot")).toBeInTheDocument();
   });
@@ -164,7 +164,7 @@ describe("FocusView Save affordance", () => {
     expect(screen.getByTestId("draft-breadcrumb")).toHaveTextContent("Notes › Staging › Create");
   });
 
-  it("passes the origin to CallPanel for a bound draft (useSend credits the saved request)", () => {
+  it("passes the origin to CallPanel for a bound draft (the call lifecycle credits the saved request)", () => {
     workflowStore.setDraft(
       newStep({ address: "h:443", tls: false, service: "p.S", method: "GetX" }),
       { collectionId: "c1", requestId: "r1" },
@@ -225,8 +225,8 @@ describe("FocusView Save affordance", () => {
     renderFV(<FocusView onQuickAddMethod={vi.fn()} />);
     expect(screen.getByTestId("quickadd-wired")).toHaveTextContent("no");
   });
-  // The usage-bump-on-execute behavior now lives inside useSend (invoked by the real
-  // CallPanel, which this suite mocks away) — covered by useSend.test.ts.
+  // The usage-bump-on-execute behavior now lives in callLifecycle (invoked by the real
+  // CallPanel, which this suite mocks away) — covered by callLifecycle.test.ts.
 });
 
 describe("FocusView auto-rename on method change", () => {

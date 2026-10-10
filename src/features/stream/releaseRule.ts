@@ -1,5 +1,6 @@
 import * as ipc from "@/ipc/client";
 import { workflowStore, type WorkflowState } from "@/features/workflow/store";
+import { abandonStream } from "@/features/workflow/callLifecycle";
 import { streamStore } from "./streamStore";
 
 /** Every stream id any step still references: workflow history (all workflows) + the draft. */
@@ -22,6 +23,7 @@ export function installStreamReleaseRule(
     const next = referencedStreamIds(workflowStore.getState());
     for (const id of prev) {
       if (next.has(id)) continue;
+      abandonStream(id);
       streamStore.drop(id);
       void release(id).catch(() => {});
     }

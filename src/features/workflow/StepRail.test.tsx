@@ -46,8 +46,8 @@ describe("StepRail", () => {
 describe("StepRail per-row stream subscription", () => {
   it("a message on stream A re-summarizes only A's dot, never B's", () => {
     streamStore.reset();
-    streamStore.open("a", "server");
-    streamStore.open("b", "server");
+    streamStore.open("a", "server", Date.now());
+    streamStore.open("b", "server", Date.now());
     workflowStore.update((w) =>
       addStep(w, { ...newStep({ address: "h", tls: true, service: "p.v1.S", method: "A" }), status: "sending", streamId: "a" }),
     );

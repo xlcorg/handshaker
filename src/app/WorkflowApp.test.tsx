@@ -197,7 +197,7 @@ function setBoundDraft() {
 function setDirtyUnboundDraft() {
   act(() => {
     workflowStore.setDraft(newStep({ address: "h:443", tls: false, service: "p.S", method: "GetX" }));
-    workflowStore.updateDraft({ requestJson: '{"a":1}' });
+    workflowStore.updateDraft(workflowStore.getState().draft!.id, { requestJson: '{"a":1}' });
   });
 }
 

@@ -13,7 +13,7 @@ vi.mock("@/ipc/client", () => ({
   grpcBuildRequestSkeleton: vi.fn().mockResolvedValue("{}"),
   varsResolve: vi.fn(),
   // Safe default so tests that merely trigger Send (without asserting on the outcome)
-  // don't crash downstream in useSend's `stepPatch` reading `res.report.outcome.status_code`
+  // don't crash downstream in the call lifecycle's `stepPatch` reading `res.report.outcome.status_code`
   // — mirrors the other IPC mocks' safe defaults above.
   grpcSend: vi.fn().mockResolvedValue({
     outcome: {

@@ -60,7 +60,7 @@ export interface StreamEntry {
   /** Auth / TLS the core pipeline actually used, from `Opened` — feeds the executed snapshot. */
   authUsed: SavedAuthConfigIpc | null;
   tlsUsed: boolean | null;
-  /** `Date.now()` at `open()` — the one clock the footer runs on, live and frozen. */
+  /** Epoch ms passed to `open()` — the one clock the footer runs on, live and frozen. */
   openedAt: number;
   /** Frozen elapsed, `terminal time − openedAt` for End, Fault and Cancel alike (the same
    *  clock the live footer ticked on, so it never snaps); null while live. The wire's
@@ -172,11 +172,12 @@ export const streamStore = {
   get(id: string | null | undefined): StreamEntry | null {
     return id ? entries.get(id) ?? null : null;
   },
-  /** Register a call about to be opened (`stream_open` in flight). */
-  open(id: string, kind: MethodKindIpc) {
+  /** Register a call about to be opened (`stream_open` in flight). `openedAt` is the
+   *  attempt's start, the same epoch ms its call record keeps. */
+  open(id: string, kind: MethodKindIpc, openedAt: number) {
     const entry: StreamEntry = {
       id, kind, phase: "opening", halfClosed: false, sendFault: null, headers: null, messages: [], end: null,
-      cancelled: false, fault: null, bytesFields: [], authUsed: null, tlsUsed: null, openedAt: Date.now(),
+      cancelled: false, fault: null, bytesFields: [], authUsed: null, tlsUsed: null, openedAt,
       elapsedMs: null, totalBytes: 0,
     };
     entries = new Map(entries).set(id, entry);

@@ -80,8 +80,10 @@ export const workflowStore = {
     state = { ...state, draft, draftOrigin: origin, draftDirty: false };
     emit();
   },
-  updateDraft(patch: Partial<Step>) {
-    if (!state.draft) return;
+  /** Patch the draft whose id is `id`. A patch addressed to a draft that was replaced since
+   *  (a late call result) is dropped. */
+  updateDraft(id: string, patch: Partial<Step>) {
+    if (state.draft?.id !== id) return;
     const dirty =
       state.draftDirty || (state.draftOrigin === null && isContentPatch(patch));
     state = { ...state, draft: { ...state.draft, ...patch }, draftDirty: dirty };

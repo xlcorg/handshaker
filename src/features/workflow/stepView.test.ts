@@ -18,7 +18,7 @@ function outcome(code: number, ms = 12): InvokeOutcomeIpc {
 /** An ended / cancelled Stream store entry, as the store would leave it. */
 function streamEntry(kind: MethodKindIpc, end: { code: number; elapsedMs: number } | "cancelled"): StreamEntry {
   streamStore.reset();
-  streamStore.open("s1", kind);
+  streamStore.open("s1", kind, Date.now());
   if (end === "cancelled") streamStore.cancel("s1");
   else {
     streamStore.push("s1", {

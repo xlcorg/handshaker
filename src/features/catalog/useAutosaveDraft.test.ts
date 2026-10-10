@@ -30,7 +30,7 @@ describe("useAutosaveDraft", () => {
       workflowStore.setDraft(step()); // unbound
     });
     act(() => {
-      workflowStore.updateDraft({ requestJson: '{"a":1}' });
+      workflowStore.updateDraft(workflowStore.getState().draft!.id, { requestJson: '{"a":1}' });
     });
     act(() => {
       vi.advanceTimersByTime(1000);
@@ -55,7 +55,7 @@ describe("useAutosaveDraft", () => {
       workflowStore.setDraft(step(), { collectionId: "c1", requestId: "r1" });
     });
     act(() => {
-      workflowStore.updateDraft({ requestJson: '{"a":1}' });
+      workflowStore.updateDraft(workflowStore.getState().draft!.id, { requestJson: '{"a":1}' });
     });
     expect(autosaveDraft).not.toHaveBeenCalled(); // still within debounce window
     act(() => {
@@ -75,13 +75,13 @@ describe("useAutosaveDraft", () => {
       workflowStore.setDraft(step(), { collectionId: "c1", requestId: "r1" });
     });
     act(() => {
-      workflowStore.updateDraft({ requestJson: '{"a":1}' });
+      workflowStore.updateDraft(workflowStore.getState().draft!.id, { requestJson: '{"a":1}' });
     });
     act(() => {
       vi.advanceTimersByTime(300);
     });
     act(() => {
-      workflowStore.updateDraft({ requestJson: '{"a":2}' });
+      workflowStore.updateDraft(workflowStore.getState().draft!.id, { requestJson: '{"a":2}' });
     });
     act(() => {
       vi.advanceTimersByTime(300);
