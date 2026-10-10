@@ -271,6 +271,13 @@ def launch() -> None:
     run = VERIFY_ROOT / f"{stamp}-{os.getpid()}"
     for name in ("xdg", "config", "cache", "evidence", "logs"):
         (run / name).mkdir(parents=True)
+    seed = os.environ.get("HANDSHAKER_SEED_DATA", "").strip()
+    if seed:
+        src = Path(seed)
+        if not src.is_dir():
+            fail(f"HANDSHAKER_SEED_DATA is not a directory: {src}")
+        shutil.copytree(src, run / "xdg" / IDENTIFIER, dirs_exist_ok=True)
+        print(f"seeded {run / 'xdg' / IDENTIFIER} from {src}")
     snapshot_bindings(run)
     port, native = free_port_pair()
     tmux_name = f"handshaker-verify-{os.getpid()}"

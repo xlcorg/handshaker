@@ -87,8 +87,10 @@ ls "$(readlink -f /tmp/handshaker-verify/current)/xdg/dev.handshaker.app/history
 ```
 
 The count after the reload equals the count before it. A reload keeps the
-backend process. A cold restart over the same data needs a launch that reuses
-the old run's `xdg/`, and `launch.sh` always creates a fresh one.
+backend process. A cold restart copies that app-data directory and launches
+again with `HANDSHAKER_SEED_DATA` set to it. `launch.sh` still creates a fresh
+run directory, then copies the seed in before the binary starts. The dock
+comes back with the same rows, and `history/index.json` is unchanged.
 
 ## Gotchas
 
