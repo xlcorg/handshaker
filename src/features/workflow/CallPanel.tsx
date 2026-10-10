@@ -146,12 +146,6 @@ export function CallPanel({ step, onPatch, editable, onQuickAddMethod, originVar
     executedKind: executedKind(step, entry),
   });
 
-  // The call lifecycle lives in `callLifecycle` (through `useCall`), which owns both paths,
-  // unary and Stream call: gate → send/open → patch → executed snapshot (auth/TLS
-  // from the report / `Opened` — fact, not a second fetch) → usage bump. `kind` picks the
-  // path Send drives: any streaming kind opens a stream (`server` = Send, `client` /
-  // `bidi` = Open), unary or `null` (unknown) takes the unary path — and a kind mismatch
-  // from core re-routes once through the other path. Cancel follows the live call.
   const call = useCall({ step, envName: activeWf.envName, kind, onPatch, record: !!editable, origin });
   const { send, cancel } = call;
 

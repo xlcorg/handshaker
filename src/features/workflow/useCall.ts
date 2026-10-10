@@ -10,7 +10,6 @@ export interface UseCallArgs {
   /** The **controls kind** the call panel derived (`controlsKind`: live call → catalog →
    *  last executed → null); `null` = unknown — the unary path, never a guessed stream. */
   kind: MethodKind | null;
-  /** Apply a patch to the edited step, addressed by its id. */
   onPatch: (patch: Partial<Step>) => void;
   /** Focus(draft) only: record a finished call as an executed snapshot. */
   record?: boolean;
@@ -18,7 +17,6 @@ export interface UseCallArgs {
   origin?: DraftOrigin | null;
 }
 
-/** CallPanel's adapter over `callLifecycle`: props in, the lifecycle's functions out. */
 export function useCall({ step, envName, kind, onPatch, record = false, origin = null }: UseCallArgs) {
   const { bumpUsage } = useCatalog();
   const args: CallArgs = { step, envName, kind, onPatch, recording: record ? { origin, bumpUsage } : null };

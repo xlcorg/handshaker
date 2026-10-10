@@ -1,8 +1,3 @@
-//! IPC mirrors for **call history**. A record crosses both ways: the frontend sends it to
-//! `history_record` and receives it from `history_get`. Specta forbids `u64`, so elapsed,
-//! sizes, indexes and the omitted count are `u32` (`from_core` saturates) and epoch ms are
-//! `f64`. `into_core` is the boundary check: ids must be UUIDs and timestamps finite.
-
 use std::collections::BTreeMap;
 
 use handshaker_core::error::CoreError;
@@ -117,7 +112,6 @@ pub enum MessageDirectionIpc {
     Out,
 }
 
-/// `"server" | "client" | "bidi"`: a streaming kind, assignable to `MethodKind` in TS.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case")]
 pub enum StreamKindIpc {
@@ -126,7 +120,6 @@ pub enum StreamKindIpc {
     Bidi,
 }
 
-/// One dock row. `kind` reuses `MethodKindIpc` so TS gets `MethodKind`.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct CallSummaryIpc {
     pub id: String,

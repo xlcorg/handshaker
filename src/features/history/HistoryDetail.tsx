@@ -17,8 +17,6 @@ export interface HistoryDetailProps {
   onRerun: () => void;
 }
 
-/** The inspector for one recorded call. It reads the record only, never a Step or the
- *  stream store, so it shows the same thing before and after a restart. */
 export function HistoryDetail({ row, onRerun }: HistoryDetailProps) {
   const view = useCallRecord(row.id);
   const label = methodLabelOf(row);

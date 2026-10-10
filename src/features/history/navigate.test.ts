@@ -32,8 +32,6 @@ const report: SendReportIpc = {
   tls_used: false,
 };
 
-/** WorkflowApp's guardedRun with the discard dialog held open: `confirm` is Discard (or a
- *  Save that already reloaded the catalog), `cancel` is Cancel. */
 function dialogGuard() {
   let pending: (() => void) | null = null;
   return {

@@ -955,9 +955,6 @@ export type CallStatusIpc = {
   message: string;
   trailers: Partial<{ [key in string]: string }>;
 };
-/**
- * One dock row. `kind` reuses `MethodKindIpc` so TS gets `MethodKind`.
- */
 export type CallSummaryIpc = {
   id: string;
   started_at_ms: number;
@@ -1338,9 +1335,6 @@ export type StreamEventIpc =
       total_bytes: number;
     }
   | { type: "Fault"; error: IpcError };
-/**
- * `"server" | "client" | "bidi"`: a streaming kind, assignable to `MethodKind` in TS.
- */
 export type StreamKindIpc = "server" | "client" | "bidi";
 export type StreamTerminationIpc =
   | { type: "status"; status: CallStatusIpc }

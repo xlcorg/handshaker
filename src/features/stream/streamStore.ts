@@ -172,8 +172,6 @@ export const streamStore = {
   get(id: string | null | undefined): StreamEntry | null {
     return id ? entries.get(id) ?? null : null;
   },
-  /** Register a call about to be opened (`stream_open` in flight). `openedAt` is the
-   *  attempt's start, the same epoch ms its call record keeps. */
   open(id: string, kind: MethodKindIpc, openedAt: number) {
     const entry: StreamEntry = {
       id, kind, phase: "opening", halfClosed: false, sendFault: null, headers: null, messages: [], end: null,

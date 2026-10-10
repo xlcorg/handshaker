@@ -4,8 +4,6 @@ import { act, render, screen, fireEvent } from "@testing-library/react";
 vi.mock("@/features/invoke/BodyEditor", () => ({
   BodyEditor: ({ value }: { value: string }) => <div data-testid="body-editor">{value}</div>,
 }));
-// Both facade shapes (named exports AND `ipc`) — `actions.ts` / `callLifecycle` read the
-// namespace, other modules the object; mocking one alone hides the other path.
 const api = vi.hoisted(() => ({
   authResolve: vi.fn().mockResolvedValue(null),
   authEffective: vi.fn().mockResolvedValue({ kind: "none" }),

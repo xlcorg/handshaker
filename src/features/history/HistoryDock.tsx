@@ -22,20 +22,15 @@ import type { HistoryIntent } from "./navigate";
 import { useHistory } from "./store";
 
 const m = messages.history;
-/** The header strip's height. A collapsed dock keeps exactly this much. */
 const HEADER_PX = 32;
 const COLUMNS = "grid-cols-[7.5rem_minmax(8rem,1.5fr)_minmax(5rem,1fr)_4rem_minmax(6rem,1fr)]";
 const CHIPS: readonly HistoryChip[] = ["all", "ok", "failed"];
 
 export interface HistoryDockProps {
-  /** Bound by WorkflowApp to `openHistoryCall` behind its discard guard. */
   onOpen: (id: string, intent: HistoryIntent) => void;
-  /** The workspace above the dock. It stays mounted while the dock collapses and expands. */
   children: ReactNode;
 }
 
-/** The main column split into the workspace and the History dock below it. Expanded state
- *  and size live in prefs (`historyDock`, `historyDockPanel`). */
 export function HistoryDock({ onOpen, children }: HistoryDockProps) {
   const [prefs, setPref] = usePrefs();
   const panelRef = useRef<PanelImperativeHandle>(null);
@@ -194,8 +189,6 @@ function DockBody({
   );
 }
 
-/** The list is one tab stop. Up/Down/Home/End move focus between the rows' open buttons,
- *  and focus selects. */
 function moveFocusOnArrows(e: KeyboardEvent<HTMLUListElement>) {
   const items = Array.from(e.currentTarget.children);
   const at = items.findIndex((li) => li.contains(e.target as Node));

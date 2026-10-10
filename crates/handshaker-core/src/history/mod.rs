@@ -1,15 +1,3 @@
-//! **Call history**: the persisted, capped log of finished Focus calls.
-//!
-//! One immutable [`CallRecord`] per wire attempt, keyed by that attempt's request id. The
-//! frontend builds it at the call's terminal transition, because the frontend owns the
-//! call's live view (the message timeline, the frozen elapsed time, the authored request
-//! with disabled metadata rows). Core persists it through [`file_store::FileHistoryStore`],
-//! which alone enforces order, the cap and the size bound. Core never builds a record and
-//! never interprets the request.
-//!
-//! Distinct from the workflow's executed steps, which live in frontend memory for List and
-//! Ledger.
-
 pub mod file_store;
 
 use std::collections::BTreeMap;
@@ -31,8 +19,6 @@ pub const INLINE_JSON_BUDGET: usize = 256 * 1024;
 /// Serialized size of one record file. A record still over it after trimming is refused.
 pub const MAX_RECORD_BYTES: usize = 512 * 1024;
 
-/// Identity of one wire attempt: the request id the frontend sent it under (unary
-/// `requestId`, stream id). A UUID v7, so it also breaks `started_at_ms` ties by time.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct CallId(pub Uuid);
@@ -68,8 +54,6 @@ pub struct CallRequest {
     pub auth: SavedAuthConfig,
 }
 
-/// How the attempt ended, by shape. Each variant carries only what that shape can have:
-/// a unary call has no headers field because the transport does not split them out.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum CallOutcome {
@@ -102,8 +86,6 @@ pub struct CallStatus {
     pub trailers: BTreeMap<String, String>,
 }
 
-/// A client-side fault. `kind` is the frontend's classification, stored as text: the
-/// fault-kind list lives in one place, the frontend, which parses it back.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CallFault {
     pub kind: String,
@@ -157,7 +139,6 @@ pub enum MessageDirection {
     Out,
 }
 
-/// A streaming kind. It cannot be unary by construction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StreamKind {
@@ -185,8 +166,6 @@ impl From<StreamKind> for CallKind {
     }
 }
 
-/// One dock row: the only projection of a record. What the table, the filter and the
-/// chips need, and nothing else.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CallSummary {
     pub id: CallId,
@@ -199,7 +178,6 @@ pub struct CallSummary {
     pub ending: CallEnding,
 }
 
-/// The status column and chip input.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum CallEnding {

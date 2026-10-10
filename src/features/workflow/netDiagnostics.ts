@@ -18,7 +18,6 @@ export const FAULT_KINDS = [
 /** Display face selector for a client-side (non-gRPC-status) failure. */
 export type FaultKind = (typeof FAULT_KINDS)[number];
 
-/** A persisted fault kind (call history stores it as text). Unknown text reads as `other`. */
 export function parseFaultKind(s: string): FaultKind {
   return (FAULT_KINDS as readonly string[]).includes(s) ? (s as FaultKind) : "other";
 }

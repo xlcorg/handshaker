@@ -49,8 +49,6 @@ pub struct AppState {
     /// store has no in-memory variant, so isolation per-instance is the next best
     /// thing for tests).
     pub ui_state_store: Arc<FileUiStateStore>,
-    /// Call history under `history/`. Like `ui_state_store`, `default()` points it at a
-    /// throwaway unique temp dir.
     pub history_store: Arc<FileHistoryStore>,
     /// In-flight gRPC requests: `request_id` → cancellation `Notify`.
     pub in_flight: InFlight,

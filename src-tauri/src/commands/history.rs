@@ -1,6 +1,3 @@
-//! Call history commands: thin adapters over [`AppState::history_store`].
-//! `history_record` is the only write. There is no edit, delete or clear.
-
 use tauri::State;
 
 use crate::ipc::error::IpcError;

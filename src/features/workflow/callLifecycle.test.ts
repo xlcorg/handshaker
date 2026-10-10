@@ -1,8 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CallRecordIpc, HistoryPageIpc, MethodKindIpc, SendReportIpc, StreamEventIpc } from "@/ipc/bindings";
 
-// Two shapes of the facade: named exports (what `import * as ipc` reads) AND the `ipc`
-// object — mocking one alone leaves the other path silently unreachable.
 const mocks = vi.hoisted(() => {
   const api = {
     grpcSend: vi.fn<(...a: unknown[]) => Promise<SendReportIpc>>(),
@@ -50,7 +48,6 @@ function streamStep(over: Partial<Step> = {}): Step {
   };
 }
 
-/** A call on `step` whose patches fold into `current()`, the way the store applies them. */
 function setup(step: Step, over: Partial<CallArgs> = {}) {
   const patches: Partial<Step>[] = [];
   const args: CallArgs = { step, envName: null, kind: null, onPatch: (p) => patches.push(p), recording: null, ...over };
@@ -58,7 +55,6 @@ function setup(step: Step, over: Partial<CallArgs> = {}) {
   return { args, patches, current };
 }
 
-/** Resolve `streamOpen` at Opened (with the kind asked for) and hand back the channel handler. */
 function openResolves() {
   let onEvent: ((e: StreamEventIpc) => void) | null = null;
   mocks.api.streamOpen.mockImplementation(async (...a: unknown[]) => {
@@ -303,7 +299,6 @@ describe("call records", () => {
   const T0 = 1_700_000_000_000;
   let now = T0;
   let clock: { mockRestore(): void } | null = null;
-  /** Freeze Date.now at T0. A mocked wire call moves it with `now += ms`. */
   function clockAtT0() {
     now = T0;
     clock = vi.spyOn(Date, "now").mockImplementation(() => now);

@@ -225,8 +225,6 @@ describe("FocusView Save affordance", () => {
     renderFV(<FocusView onQuickAddMethod={vi.fn()} />);
     expect(screen.getByTestId("quickadd-wired")).toHaveTextContent("no");
   });
-  // The usage-bump-on-execute behavior now lives in callLifecycle (invoked by the real
-  // CallPanel, which this suite mocks away) — covered by callLifecycle.test.ts.
 });
 
 describe("FocusView auto-rename on method change", () => {

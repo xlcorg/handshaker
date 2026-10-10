@@ -14,7 +14,6 @@ const LOADING: HistoryState = { phase: "loading" };
 
 let state: HistoryState = LOADING;
 let hydrating = false;
-/** Records are immutable, so a loaded one is good for the session while its row lives. */
 const records = new Map<string, CallRecordIpc>();
 const listeners = new Set<() => void>();
 
@@ -22,8 +21,6 @@ function emit() {
   for (const l of listeners) l();
 }
 
-/** A page applies only when it is newer than the one shown, so a slow `history_list`
- *  never rolls back an append that landed after it. */
 function apply(page: HistoryPageIpc) {
   if (state.phase === "ready" && page.revision <= state.revision) return;
   state = { phase: "ready", revision: page.revision, rows: page.rows };
@@ -42,13 +39,10 @@ async function hydrate() {
   }
 }
 
-/** The frontend view of core's call history. Core is the one writer and the one order;
- *  this store only applies whole pages. */
 export const historyStore = {
   getState(): HistoryState {
     return state;
   },
-  /** The first subscriber triggers the one `history_list` hydrate. */
   subscribe(fn: () => void): () => void {
     listeners.add(fn);
     if (!hydrating) {
@@ -92,7 +86,6 @@ export function useHistory(): HistoryState {
 
 export type RecordView = { phase: "loading" } | { phase: "ready"; record: CallRecordIpc } | { phase: "missing" };
 
-/** The record behind a selected row. `null` when nothing is selected. */
 export function useCallRecord(id: string | null): RecordView | null {
   const [loaded, setLoaded] = useState<{ id: string; record: CallRecordIpc | null } | null>(null);
   useEffect(() => {

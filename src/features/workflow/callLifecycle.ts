@@ -42,15 +42,12 @@ export interface CallArgs {
 interface Gate {
   cancelled: boolean;
 }
-/** Keyed by step id. Present while a `runCall` is in flight, across the re-route. */
 const gates = new Map<string, Gate>();
 
 interface LiveCall {
   args: CallArgs;
-  /** `Opened` arrived: separates a Cancel after Open from one before it. */
   opened: boolean;
 }
-/** Keyed by stream id. Set before `stream_open` is awaited, deleted by `settleStream`. */
 const liveCalls = new Map<string, LiveCall>();
 
 type Settle =
@@ -58,9 +55,6 @@ type Settle =
   | { by: "cancel" }
   | { by: "release" };
 
-/** Send or Open by `kind`, re-routing once on a kind mismatch (core refused the path and
- *  nothing reached the wire). Inert while this step id has a call in flight or the step is
- *  `sending`. A Cancel during the refusal-to-retry gap wins: the retry is never issued. */
 export async function runCall(args: CallArgs): Promise<void> {
   const id = args.step.id;
   if (args.step.status === "sending" || gates.has(id)) return;
@@ -81,9 +75,6 @@ export async function runCall(args: CallArgs): Promise<void> {
   }
 }
 
-/** Cancel whatever is live on `step`: a stream (the entry freezes and settles as cancelled)
- *  or a unary request (its result arrives as `cancelled`). It also raises the re-route
- *  gate's cancelled flag. */
 export async function cancelCall({ step }: Pick<CallArgs, "step">): Promise<void> {
   const gate = gates.get(step.id);
   if (gate) gate.cancelled = true;
@@ -93,10 +84,6 @@ export async function cancelCall({ step }: Pick<CallArgs, "step">): Promise<void
   if (step.streamId === id && streamStore.cancel(id)) settleStream(id, { by: "cancel" });
 }
 
-/** **Send message** (two-way calls): the current body template and the resolve ctx of this
- *  moment go to `stream_send`; core resolves per message. The ack becomes the `→` row. A
- *  rejection lands on the entry as `sendFault` and the stream stays open. No-op without a
- *  live call or once half-closed. */
 export async function sendStreamMessage({ step, envName }: Pick<CallArgs, "step" | "envName">): Promise<void> {
   const id = step.requestId;
   if (!id || step.streamId !== id) return;
@@ -110,8 +97,6 @@ export async function sendStreamMessage({ step, envName }: Pick<CallArgs, "step"
   }
 }
 
-/** **Half-close** (two-way calls): ends the outbound side; the call stays live until the
- *  server's End. The half-closed state is set on the entry when `stream_half_close` resolves. */
 export async function halfCloseStream({ step }: Pick<CallArgs, "step">): Promise<void> {
   const id = step.requestId;
   if (!id || step.streamId !== id) return;
@@ -209,8 +194,6 @@ function markOpened(id: string): void {
   if (live) live.opened = true;
 }
 
-/** The terminal transition of a stream call: End, Fault, Cancel and release all land here,
- *  and the first one wins. */
 function settleStream(id: string, how: Settle): void {
   const live = liveCalls.get(id);
   if (!live) return;
@@ -246,8 +229,6 @@ function stepPatch(res: SendResult): Partial<Step> {
   return { status: "error", outcome: null, error: res.fault };
 }
 
-/** The step as sent, with the auth/TLS the core pipeline actually used, the outcome patch
- *  applied, a fresh id and no in-flight request. */
 function executedSnapshot(
   step: Step,
   used: Pick<SendReportIpc, "auth_used" | "tls_used">,
@@ -263,7 +244,6 @@ function streamSnapshot(step: Step, entry: StreamEntry | null, id: string, patch
     : { ...step, ...snapPatch, id: newId(), requestId: null };
 }
 
-/** Best-effort: a failing bump never disturbs the call. No origin means no bump. */
 async function bumpOriginUsage({ origin, bumpUsage }: Recording): Promise<void> {
   if (!origin) return;
   await bumpUsage(origin.collectionId, origin.requestId, Date.now()).catch(() => {});

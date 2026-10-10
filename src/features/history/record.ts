@@ -14,9 +14,7 @@ import type { MessageMeta, StreamEntry } from "@/features/stream/streamStore";
 import type { MethodKind } from "@/lib/method-kind";
 
 export interface CallStart {
-  /** The attempt's request id (the unary request id, the stream id). It becomes `CallRecord.id`. */
   id: string;
-  /** The step as sent. */
   step: Step;
   startedAt: number;
   origin: DraftOrigin | null;
@@ -25,7 +23,6 @@ export interface CallStart {
 export type CallFinish =
   | { type: "unary"; outcome: InvokeOutcomeIpc }
   | { type: "unary_fault"; fault: ClientFault; elapsedMs: number }
-  /** A terminal entry: `end` is a status, `fault` a fault, anything else a cancel. */
   | { type: "stream"; entry: StreamEntry; elapsedMs: number }
   | { type: "stream_refused"; kind: StreamKindIpc; fault: ClientFault; elapsedMs: number };
 
@@ -59,7 +56,6 @@ export function buildRecord(start: CallStart, finish: CallFinish): CallRecordIpc
   };
 }
 
-/** The stream kind of a streaming `MethodKind`. Unary is a programming error. */
 export function streamKindOf(kind: MethodKind): StreamKindIpc {
   if (kind === "unary") throw new Error("streamKindOf: unary is not a stream kind");
   return kind;

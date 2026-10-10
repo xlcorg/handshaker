@@ -1,10 +1,3 @@
-//! Disk-backed call history: `<dir>/index.json` plus one `<call-uuid>.json` per record.
-//!
-//! Bodies are the source of truth; the index is a cache that `load` can always rebuild.
-//! Every mutation runs under one write lock. A crash at any point leaves a state `load`
-//! converges from: a stale tmp is deleted, an orphan body (written, never indexed) is
-//! adopted, and a body that outlived its eviction is evicted again.
-
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -24,7 +17,6 @@ use crate::CoreError;
 
 const INDEX: &str = "index.json";
 
-/// A consistent view of the log at one revision.
 #[derive(Debug, Clone, PartialEq)]
 pub struct HistoryPage {
     /// 1 after `load`, bumped on every committed append. The frontend applies a page only
@@ -38,8 +30,6 @@ pub struct HistoryPage {
 pub struct FileHistoryStore {
     dir: PathBuf,
     log: RwLock<HistoryPage>,
-    /// Bodies quarantined during `load`. A corrupt index is rebuilt and not listed here,
-    /// because nothing was lost.
     recovered: Vec<PathBuf>,
 }
 
@@ -76,7 +66,6 @@ impl FileHistoryStore {
         })
     }
 
-    /// Files quarantined as corrupt during `load`, chained into the startup notice.
     pub fn recovered_files(&self) -> &[PathBuf] {
         &self.recovered
     }
@@ -126,9 +115,6 @@ impl FileHistoryStore {
     }
 }
 
-/// The log's one ordering and retention rule: newest `started_at_ms` first, ties broken by
-/// id (UUID v7, so later first), duplicate ids collapsed, at most [`HISTORY_CAP`] kept.
-/// Returns (kept, evicted).
 fn retain_newest(mut rows: Vec<CallSummary>) -> (Vec<CallSummary>, Vec<CallId>) {
     rows.sort_by(|a, b| {
         b.started_at_ms
@@ -145,9 +131,6 @@ fn retain_newest(mut rows: Vec<CallSummary>) -> (Vec<CallSummary>, Vec<CallId>) 
     (rows, evicted)
 }
 
-/// Drop what does not fit: message rows past [`MAX_MESSAGE_ROWS`] (oldest first, counted),
-/// then inline JSON past [`INLINE_JSON_BUDGET`] (oldest first, previews kept). The request
-/// is never touched: a truncated template would autosave onto a bound saved request.
 fn fit_budget(mut record: CallRecord) -> CallRecord {
     match &mut record.outcome {
         CallOutcome::Unary { response, .. } => {
@@ -188,7 +171,6 @@ fn fit_budget(mut record: CallRecord) -> CallRecord {
     record
 }
 
-/// Ids of the `<uuid>.json` bodies in `dir`, deleting any stale `*.tmp` on the way.
 fn scan_bodies(dir: &Path) -> Result<HashSet<CallId>, CoreError> {
     let entries = match fs::read_dir(dir) {
         Ok(entries) => entries,

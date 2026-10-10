@@ -12,9 +12,6 @@ vi.mock("@/ipc/client", () => ({
   grpcRefreshContract: vi.fn().mockResolvedValue({ services: [] }),
   grpcBuildRequestSkeleton: vi.fn().mockResolvedValue("{}"),
   varsResolve: vi.fn(),
-  // Safe default so tests that merely trigger Send (without asserting on the outcome)
-  // don't crash downstream in the call lifecycle's `stepPatch` reading `res.report.outcome.status_code`
-  // — mirrors the other IPC mocks' safe defaults above.
   grpcSend: vi.fn().mockResolvedValue({
     outcome: {
       status_code: 0, status_message: "", response_json: "{}",

@@ -533,7 +533,6 @@ export const messages = {
       unlimitedHint: "No limit — guards nothing against very large replies.",
     },
   },
-  /** Call history: the bottom dock of past Focus calls and its detail. */
   history: {
     dock: {
       title: "History",
