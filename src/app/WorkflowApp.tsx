@@ -4,7 +4,12 @@ import { FocusView } from "@/features/workflow/FocusView";
 import { LedgerView } from "@/features/workflow/LedgerView";
 import { ListView } from "@/features/workflow/ListView";
 import { useActiveWorkflow, useDraft, useDraftOrigin, workflowStore } from "@/features/workflow/store";
-import type { ViewMode } from "@/features/workflow/model";
+import type { Step, ViewMode } from "@/features/workflow/model";
+import { HistoryBar, type HistoryVariant } from "@/features/history/HistoryBar";
+import { TimelineHistory } from "@/features/history/TimelineHistory";
+import { TableHistory } from "@/features/history/TableHistory";
+import { PaletteHistory } from "@/features/history/PaletteHistory";
+import { applyHistoryStep, type HistoryMode } from "@/features/history/actions";
 import type { SavedRequestIpc } from "@/ipc/bindings";
 import { Titlebar } from "@/features/shell/Titlebar";
 import { AppVersionBadge } from "@/features/shell/AppVersionBadge";
@@ -71,6 +76,8 @@ export function WorkflowApp() {
   const [saveOpen, setSaveOpen] = useState(false);
   const [discardOpen, setDiscardOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [variant, setVariant] = useState<HistoryVariant>("timeline");
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [prefs, setPref] = usePrefs();
   const update = useUpdateCheck();
   const sidebarPanelRef = useRef<PanelImperativeHandle>(null);
@@ -154,6 +161,19 @@ export function WorkflowApp() {
       e.preventDefault();
       e.stopPropagation();
       setPaletteOpen(true);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.repeat || e.altKey || e.code !== "KeyH") return;
+      if (!e.shiftKey || !(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setVariant("palette");
+      setHistoryOpen(true);
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
@@ -271,6 +291,33 @@ export function WorkflowApp() {
       newRequestDraft();
     });
 
+  const onHistoryAction = (step: Step, mode: HistoryMode) => {
+    applyHistoryStep(step, mode);
+    setPanelCollectionId(null);
+  };
+
+  const mainPane = (
+    <div className="h-full min-h-0">
+      {panelCollection ? (
+        <CollectionOverview
+          collection={panelCollection}
+          onChanged={() => void cat.reload()}
+          onSelectRequest={openRequest}
+          onClose={() => setPanelCollectionId(null)}
+        />
+      ) : (
+        renderView(
+          wf.view,
+          () => {
+            pendingOpenRef.current = null;
+            setSaveOpen(true);
+          },
+          (service: string, method: string) => void quickAddMethod(service, method).catch(() => {}),
+        )
+      )}
+    </div>
+  );
+
   return (
     <UpdaterProvider value={update}>
       <div className="flex h-screen flex-col bg-background text-foreground">
@@ -279,6 +326,18 @@ export function WorkflowApp() {
         onCheckForUpdates={update.recheck}
         updatePhase={update.phase}
         updateAvailable={update.hasUpdate}
+      />
+
+      <HistoryBar
+        variant={variant}
+        onVariant={(next) => {
+          setVariant(next);
+          if (next !== "palette") setHistoryOpen(false);
+        }}
+        onOpenPalette={() => {
+          setVariant("palette");
+          setHistoryOpen(true);
+        }}
       />
 
       <SidebarProvider className="min-h-0 flex-1">
@@ -309,26 +368,16 @@ export function WorkflowApp() {
           </ResizablePanel>
           <ResizableHandle />
           <ResizablePanel id="main" minSize="40%">
-            <div className="h-full min-h-0">
-              {panelCollection ? (
-                <CollectionOverview
-                  collection={panelCollection}
-                  onChanged={() => void cat.reload()}
-                  onSelectRequest={openRequest}
-                  onClose={() => setPanelCollectionId(null)}
-                />
-              ) : (
-                renderView(
-                  wf.view,
-                  () => {
-                    // A direct save is not a continuation of a deferred open — drop any pending action.
-                    pendingOpenRef.current = null;
-                    setSaveOpen(true);
-                  },
-                  (service: string, method: string) => void quickAddMethod(service, method).catch(() => {}),
-                )
-              )}
-            </div>
+            {variant === "timeline" ? (
+              <TimelineHistory onHistoryAction={onHistoryAction}>{mainPane}</TimelineHistory>
+            ) : variant === "table" ? (
+              <div className="flex h-full min-h-0 flex-col">
+                <div className="min-h-0 flex-1 overflow-hidden">{mainPane}</div>
+                <TableHistory onHistoryAction={onHistoryAction} />
+              </div>
+            ) : (
+              mainPane
+            )}
           </ResizablePanel>
         </ResizablePanelGroup>
       </SidebarProvider>
@@ -372,6 +421,12 @@ export function WorkflowApp() {
       />
 
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+
+      <PaletteHistory
+        open={variant === "palette" && historyOpen}
+        onOpenChange={setHistoryOpen}
+        onHistoryAction={onHistoryAction}
+      />
 
       <CommandPalette
         open={paletteOpen}
