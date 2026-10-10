@@ -34,6 +34,10 @@ export interface Prefs {
   wordWrap: boolean;
   /** Max gRPC message size in bytes for invoke (recv+encode). `0` = unlimited. */
   maxMessageBytes: number;
+  /** The History dock is expanded. Collapsed, only its header strip shows. */
+  historyDock: boolean;
+  /** History dock size as a percent of the main column (resizable, persisted). */
+  historyDockPanel: number;
 }
 
 export const PREFS_DEFAULTS: Prefs = {
@@ -49,6 +53,8 @@ export const PREFS_DEFAULTS: Prefs = {
   bodyHints: true,
   wordWrap: false,
   maxMessageBytes: 16 * 1024 * 1024,
+  historyDock: true,
+  historyDockPanel: 28,
 };
 
 export const ZOOM_MIN = 0.5;

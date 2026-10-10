@@ -1,7 +1,8 @@
-import type { CallEndingIpc, CallRecordIpc, CallSummaryIpc, CollectionIpc } from "@/ipc/bindings";
+import type { CallEndingIpc, CallFaultIpc, CallRecordIpc, CallSummaryIpc, CollectionIpc } from "@/ipc/bindings";
 import { newStep, type Step } from "@/features/workflow/model";
 import type { DraftOrigin } from "@/features/workflow/store";
-import { parseFaultKind } from "@/features/workflow/netDiagnostics";
+import { parseFaultKind, type ClientFault } from "@/features/workflow/netDiagnostics";
+import { shortService } from "@/features/workflow/stepView";
 import { findSavedRequest } from "@/features/catalog/treeNav";
 import type { MethodKind } from "@/lib/method-kind";
 import { statusName } from "@/lib/grpc-status";
@@ -30,6 +31,30 @@ export function statusTextOf(ending: CallEndingIpc): string {
     case "cancelled":
       return messages.history.status.cancelled;
   }
+}
+
+/** A recorded fault as the response face renders it. */
+export function faultOf(fault: CallFaultIpc): ClientFault {
+  return { kind: parseFaultKind(fault.kind), message: fault.message };
+}
+
+/** `Echo.Say` for `echo.v1.Echo` / `Say`. */
+export function methodLabelOf(call: { service: string; method: string }): string {
+  return `${shortService(call.service)}.${call.method}`;
+}
+
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+/** Local `HH:MM:SS` for a call started today, else `YYYY-MM-DD HH:MM`. Records survive a
+ *  restart, so a bare time would read yesterday's call as today's. */
+export function formatCallTime(startedAtMs: number, nowMs: number = Date.now()): string {
+  const d = new Date(startedAtMs);
+  const now = new Date(nowMs);
+  const time = `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  const sameDay =
+    d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+  if (sameDay) return `${time}:${pad2(d.getSeconds())}`;
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${time}`;
 }
 
 /** Chip first, then a case-insensitive substring match of `text` against service, method,

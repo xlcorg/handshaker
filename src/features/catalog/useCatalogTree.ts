@@ -19,6 +19,9 @@ import {
 
 export interface UseCatalogTree {
   tree: CollectionIpc[];
+  /** The tree as of the last applied change, before React re-renders. An action deferred
+   *  behind `reload()` reads this, because `tree` in its closure is the stale render. */
+  currentTree: () => CollectionIpc[];
   loading: boolean;
   reload: () => Promise<void>;
   createCollection: (name: string) => Promise<string>;
@@ -96,6 +99,8 @@ export function useCatalogTree(): UseCatalogTree {
     treeRef.current = t;
     setTree(t);
   }, []);
+
+  const currentTree = useCallback(() => treeRef.current, []);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -310,6 +315,7 @@ export function useCatalogTree(): UseCatalogTree {
 
   return {
     tree,
+    currentTree,
     loading,
     reload,
     createCollection,

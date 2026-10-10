@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CallSummaryIpc } from "@/ipc/bindings";
-import { filterRows, planHistoryOpen, recordKind, statusTextOf } from "./model";
+import { faultOf, filterRows, formatCallTime, methodLabelOf, planHistoryOpen, recordKind, statusTextOf } from "./model";
 import { callRecord, collection, savedRequest, summary } from "./testFixtures";
 
 const ok = summary({ id: "ok" });
@@ -42,6 +42,29 @@ describe("statusTextOf", () => {
     expect(statusTextOf({ type: "fault", kind: "timeout" })).toBe("Request timed out");
     expect(statusTextOf({ type: "fault", kind: "from-a-newer-build" })).toBe("Request failed");
     expect(statusTextOf({ type: "cancelled" })).toBe("Cancelled");
+  });
+});
+
+describe("row labels", () => {
+  it("shortens the service in the method label", () => {
+    expect(methodLabelOf({ service: "echo.v1.Echo", method: "Say" })).toBe("Echo.Say");
+    expect(methodLabelOf({ service: "Echo", method: "Say" })).toBe("Echo.Say");
+  });
+
+  it("shows the time for a call from today and the date for an older one", () => {
+    const started = new Date(2026, 9, 10, 9, 5, 7).getTime();
+    expect(formatCallTime(started, new Date(2026, 9, 10, 23, 0).getTime())).toBe("09:05:07");
+    expect(formatCallTime(started, new Date(2026, 9, 11, 0, 1).getTime())).toBe("2026-10-10 09:05");
+  });
+});
+
+describe("faultOf", () => {
+  it("parses the stored kind, and unknown text reads as other", () => {
+    expect(faultOf({ kind: "refused", message: "connection refused" })).toEqual({
+      kind: "refused",
+      message: "connection refused",
+    });
+    expect(faultOf({ kind: "from-a-newer-build", message: "x" })).toEqual({ kind: "other", message: "x" });
   });
 });
 
