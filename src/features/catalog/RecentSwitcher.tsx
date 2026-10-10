@@ -36,7 +36,7 @@ export function RecentSwitcher(props: RecentSwitcherProps) {
     collections: props.collections,
     overviewId: props.overviewId,
     loaded: loadedDraft(workflow),
-    blocked: false,
+    dialogOrMenuFocused: false,
   };
   const here = paneLocation(world);
   const hereKey = here ? locationKey(here) : null;
@@ -98,14 +98,12 @@ export function RecentSwitcher(props: RecentSwitcherProps) {
       }
       worldRef.current = {
         ...worldRef.current,
-        blocked: inTransientLayer(document.activeElement),
+        dialogOrMenuFocused: inTransientLayer(document.activeElement),
       };
       dispatchRef.current(read.event);
     };
 
     const onPointerDown = (e: PointerEvent) => {
-      // pointerdown precedes the mousedown that arms the latch, so the click in
-      // progress still swallows its contextmenu. A later press does not.
       swallowContextMenu.current = false;
       if (stateRef.current.gesture.phase !== "holding") return;
       const root = rootRef.current;

@@ -19,8 +19,7 @@ export interface World {
   collections: CollectionIpc[];
   overviewId: string | null;
   loaded: LoadedDraft;
-  /** A dialog, alert dialog, or menu has focus. An opening Tab stays idle. */
-  blocked: boolean;
+  dialogOrMenuFocused: boolean;
 }
 
 export type SwitchTarget =
@@ -137,7 +136,7 @@ export function reduceSwitcher(
           commit: null,
         };
       }
-      if (world.blocked) return { state: s, commit: null };
+      if (world.dialogOrMenuFocused) return { state: s, commit: null };
       const gesture = begin(s.recent, world, e.back);
       if (gesture.phase === "idle") return { state: s, commit: null };
       return { state: { recent: s.recent, gesture }, commit: null };

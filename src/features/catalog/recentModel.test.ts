@@ -60,7 +60,7 @@ function world(over: Partial<World> = {}): World {
     collections: [C1],
     overviewId: null,
     loaded: { kind: "none" },
-    blocked: false,
+    dialogOrMenuFocused: false,
     ...over,
   };
 }
@@ -184,7 +184,7 @@ describe("reduceSwitcher", () => {
   it("swallows an opening Tab while blocked and stays idle", () => {
     const blocked = world({
       loaded: { kind: "bound", requestId: "b" },
-      blocked: true,
+      dialogOrMenuFocused: true,
     });
     let s = INITIAL_SWITCHER;
     s = visit(s, { kind: "request", itemId: "a" }, blocked);
@@ -206,7 +206,7 @@ describe("reduceSwitcher", () => {
     const moved = reduceSwitcher(
       held.state,
       { type: "tab", back: false },
-      { ...open, blocked: true },
+      { ...open, dialogOrMenuFocused: true },
     );
     expect(moved.commit).toBeNull();
     expect(moved.state.gesture).toMatchObject({ phase: "holding", cursor: 0 });
