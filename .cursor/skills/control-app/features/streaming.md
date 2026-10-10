@@ -4,13 +4,13 @@ A server-streaming call shows a timeline instead of a single response body.
 The end state that proves this works: the Messages tab lists one row per
 pong, and the footer node `data-testid="stream-footer"` reads `OK` with a
 message count (`1 msg` / `N msgs`). While the call is open the same footer
-reads `STREAMING` (or `OPENING` before the first headers).
+reads `STREAMING`, or `OPENING` while the stream is still opening.
 
 ## Sub-features
 
 - `test.Echo/ServerStream` — `▶ Send` once, then the server pushes `Pong` rows (`echoed` like `echo: <id> #1`).
 - `test.Echo/ClientStream` and `test.Echo/Bidi` — the idle button is `▶ Open`. After open, the group `aria-label="Stream controls"` holds `Send message ▸`, `End stream`, and `Cancel`.
-- Messages tab (search, and on two-way calls a direction group `aria-label` from the toolbar: All / Received / Sent).
+- Messages tab (search, and on two-way calls a direction group `aria-label="Filter by direction"` with chips All, Received, and Sent).
 - Headers and Trailers tabs. Contract tab when the method schema is loaded.
 - Save messages / Assemble from the export menu once the call is terminal.
 
@@ -59,5 +59,5 @@ the 250ms busy gate says the call is still live; it is not the end state.
 - Server-streaming keeps the unary-looking `▶ Send` label. `▶ Open` means the method is client-streaming or bidi. The kind badge on the picked method reads `stream`, `client`, or `bidi`.
 - `Send message ▸` and `End stream` stay disabled until the stream is open, and disable again after half-close. `Cancel` stays.
 - The echo server's `--hang` flag never answers a client stream after half-close. Do not use it for a passing check.
-- The timeline is virtualized in the page; assert on the footer count and one visible `echoed` preview, not on a pixel position.
+- The timeline is a flat scrollable list, newest first. Assert on the footer count and one visible `echoed` preview, not on a pixel position.
 - Save messages opens a native save dialog. The proof of the call is the footer and the rows, not that dialog.

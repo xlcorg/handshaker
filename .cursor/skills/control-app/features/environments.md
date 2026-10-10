@@ -9,7 +9,7 @@ this works: the titlebar pill reads the new name (not `No environment`), and
 - The titlebar pill. With nothing active its text is `No environment`.
 - Menu header `Environments`, row `No environment`, and `aria-label="New environment"`.
 - Editor dialog. Create title `New environment`, name field `aria-label="Name"` (placeholder `e.g. prod`), variables table, buttons `Create` and `Cancel`.
-- Per-row edit (`aria-label="Edit <name>"`) and delete.
+- Per-row edit (`aria-label="Edit <name>"`). Delete is a button in the editor, then a confirm dialog, not a control on the menu row.
 - Drag reorder inside the menu. Order is the backend list order.
 
 ## How to get to it (user POV)

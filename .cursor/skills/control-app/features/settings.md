@@ -45,11 +45,12 @@ closes the dialog:
 .cursor/skills/control-app/scripts/hsdrv.py screenshot settings-closed
 ```
 
-After a real close that expression is false. Appearance edits persist in
+After a real close that expression is false. Appearance toggles persist in
 `localStorage` key `handshaker.prefs.v1` inside the web view profile (under
-the run's data dir, `localstorage/tauri_localhost_0.localstorage`), not in
-`ui-state.json`. `ui-state.json` holds the collection sort key and the active
-request.
+the run's data dir, `localstorage/tauri_localhost_0.localstorage`). The
+Collection links row in Appearance is the exception: Strip / Header writes
+`links_placement` in `ui-state.json`. That file also holds the collection
+sort key and the active request.
 
 ## Gotchas
 
