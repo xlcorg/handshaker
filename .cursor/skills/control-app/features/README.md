@@ -13,3 +13,4 @@ collection named `My Collection`.
 | [Environments](environments.md) | Create persists a named environment into `environments.json`, and the titlebar pill shows that name. |
 | [Streaming](streaming.md) | Opening `test.Echo/ServerStream` fills the Messages timeline and the footer (`data-testid="stream-footer"`) ends on `OK`. |
 | [Settings](settings.md) | The Settings dialog shows `Preferences persist locally` and the About pane shows the Cargo version. |
+| [Recent switcher](recent-switcher.md) | Ctrl+Tab shows a list named `Recently opened`. Releasing Ctrl opens the highlighted row. |

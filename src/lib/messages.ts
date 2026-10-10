@@ -278,6 +278,10 @@ export const messages = {
     footerOpen: "open",
     footerClose: "close",
   },
+  switcher: {
+    title: "Recently opened",
+    overview: "Collection overview",
+  },
   contract: {
     pickMethod: "Pick a method — its contract appears here.",
     schemaUnavailable: (side: "input" | "output") =>
@@ -470,6 +474,7 @@ export const messages = {
       toggleSidebar: "Toggle sidebar",
       wordWrap: "Word wrap",
       splitDirection: "Split direction",
+      recentSwitcher: "Recently opened",
     },
     titlebar: {
       toggleSidebar: "Toggle sidebar",
