@@ -1,6 +1,5 @@
 import { ResponsePanel, type ContractInfo } from "@/features/response/ResponsePanel";
 import type { RespState } from "@/features/response/RespMeta";
-import { AddressBar } from "./AddressBar";
 import { DraftAddressBar, type TwoWayControls } from "./DraftAddressBar";
 import { useDraftReflection } from "./useDraftReflection";
 import { useMessageSchema } from "./useMessageSchema";
@@ -31,10 +30,7 @@ import { useActiveWorkflow } from "./store";
 
 interface CallPanelProps {
   step: Step;
-  /** Apply a patch to the edited step (history step in place, or the global draft). */
   onPatch: (patch: Partial<Step>) => void;
-  /** Focus(draft) only: editable host + reflection + MethodPicker header. */
-  editable?: boolean;
   /** One-click save of a method row from MethodPicker to the collection. */
   onQuickAddMethod?: (service: string, method: string) => void;
   /** Variables of the draft's origin collection — feeds {{var}} autocomplete. */
@@ -52,12 +48,11 @@ interface CallPanelProps {
     prev: { service: string; method: string },
     next: { service: string; method: string },
   ) => void;
-  /** Focus(draft) only: origin of the bound draft — lets the call lifecycle credit the saved
-   *  request with one execution. Absent/null for unbound drafts and history panels. */
+  /** Bound draft only. Credits that saved request with one execution. */
   origin?: DraftOrigin | null;
 }
 
-export function CallPanel({ step, onPatch, editable, onQuickAddMethod, originVars, originSkipVerify, originDefaultTls, onMethodSelected, origin }: CallPanelProps) {
+export function CallPanel({ step, onPatch, onQuickAddMethod, originVars, originSkipVerify, originDefaultTls, onMethodSelected, origin }: CallPanelProps) {
   const skipVerify = originSkipVerify ?? false;
   // Concrete TLS for probes/Send display: the step's override, or the collection default
   // when inheriting (null). Send itself forwards the raw override; core inherits identically.
@@ -70,8 +65,8 @@ export function CallPanel({ step, onPatch, editable, onQuickAddMethod, originVar
   const addressResolveKey = `${step.collectionId ?? ""}|${activeWf.envName ?? ""}|${envRevision}`;
   const activeEnvVars = useActiveEnvVars();
   const varCandidates = useMemo(
-    () => (editable ? buildVarCandidates(activeEnvVars, originVars) : undefined),
-    [editable, activeEnvVars, originVars],
+    () => buildVarCandidates(activeEnvVars, originVars),
+    [activeEnvVars, originVars],
   );
   // prefs.split is our own convention ("horizontal" = a horizontal divider = Top/Bottom);
   // react-resizable-panels uses the inverse ("horizontal" = side-by-side), so flip it.
@@ -105,7 +100,7 @@ export function CallPanel({ step, onPatch, editable, onQuickAddMethod, originVar
   const reflection = useDraftReflection(
     step.address,
     effTls,
-    !!editable,
+    true,
     step.collectionId,
     addressResolveKey,
     skipVerify,
@@ -136,16 +131,15 @@ export function CallPanel({ step, onPatch, editable, onQuickAddMethod, originVar
 
   // Controls kind — live call → catalog → last executed → null (`controlsKind`, the one
   // place the rule lives). Feeds the address-bar badge + controls and the path `useCall`
-  // drives, so a reflection refresh cannot flip the controls mid-call and a history
-  // snapshot (panels never reflect ⇒ `catalogKind` null) re-opens with the kind it ran as.
-  // `null` ⇒ no badge, unary controls; the UI never *claims* unary.
+  // drives, so a reflection refresh cannot flip the controls mid-call. `null` ⇒ no badge,
+  // unary controls; the UI never claims unary.
   const kind = controlsKind({
     liveKind: liveEntry?.kind ?? null,
     catalogKind,
     executedKind: executedKind(step, entry),
   });
 
-  const call = useCall({ step, envName: activeWf.envName, kind, onPatch, record: !!editable, origin });
+  const call = useCall({ step, envName: activeWf.envName, kind, onPatch, record: true, origin });
   const { send, cancel } = call;
 
   // A live two-way entry — decided by the call's own kind, not the catalog — turns the
@@ -162,10 +156,9 @@ export function CallPanel({ step, onPatch, editable, onQuickAddMethod, originVar
   // Ctrl/Cmd+Enter and Ctrl/Cmd+R send the active draft (mirrors the primary button):
   // Send / Open when idle or ended; Send message while a two-way stream is open; a
   // no-op while a server stream is live (or after half-close), so a subscription is
-  // never cancelled by the chord. Bound only for the editable Focus draft so history
-  // re-send panels don't all fire at once. A ref holds the freshest send logic so the
-  // window listener binds once. (Monaco swallows these chords while the request editor
-  // has focus, so BodyView re-binds them as editor commands too.)
+  // never cancelled by the chord. A ref holds the freshest send logic so the window
+  // listener binds once. Monaco swallows these chords while the request editor has
+  // focus, so BodyView re-binds them as editor commands too.
   const sendShortcutRef = useRef<() => void>(() => {});
   sendShortcutRef.current = () => {
     if (step.method.trim().length === 0) return;
@@ -176,7 +169,6 @@ export function CallPanel({ step, onPatch, editable, onQuickAddMethod, originVar
     void send();
   };
   useEffect(() => {
-    if (!editable) return;
     const onKey = (e: KeyboardEvent) => {
       if (!isSendHotkey(e)) return;
       // preventDefault also suppresses the WebView's built-in Ctrl+R reload.
@@ -185,18 +177,20 @@ export function CallPanel({ step, onPatch, editable, onQuickAddMethod, originVar
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [editable]);
+  }, []);
 
-  // Schema for the draft's method — input side for request autocomplete + ghost,
-  // output side for the Contract tab.
-  // History panels pass an empty target so no fetch fires.
-  const schemaTarget = editable
-    ? { address: step.address, tls: effTls, service: step.service, method: step.method, collectionId: step.collectionId, skipVerify }
-    : { address: "", tls: false, service: "", method: "", collectionId: null };
+  const schemaTarget = {
+    address: step.address,
+    tls: effTls,
+    service: step.service,
+    method: step.method,
+    collectionId: step.collectionId,
+    skipVerify,
+  };
   const schema = useMessageSchema(schemaTarget, "input", schemaRevision, addressResolveKey);
   const outputSchema = useMessageSchema(schemaTarget, "output", schemaRevision, addressResolveKey);
 
-  const header = editable ? (
+  const header = (
     <DraftAddressBar
       step={step}
       catalog={reflection.catalog}
@@ -229,8 +223,6 @@ export function CallPanel({ step, onPatch, editable, onQuickAddMethod, originVar
       resolveKey={addressResolveKey}
       variables={varCandidates}
     />
-  ) : (
-    <AddressBar step={step} kind={kind} onSend={send} onCancel={cancel} twoWay={twoWay} />
   );
 
   return (
@@ -253,10 +245,10 @@ export function CallPanel({ step, onPatch, editable, onQuickAddMethod, originVar
             onBody={onBody}
             onMetadata={onMetadata}
             onSubmit={() => sendShortcutRef.current()}
-            onResetTemplate={editable ? onResetBody : undefined}
+            onResetTemplate={onResetBody}
             schema={schema}
             varCandidates={varCandidates}
-            metadataResolver={editable ? varsResolverFor(step.collectionId) : undefined}
+            metadataResolver={varsResolverFor(step.collectionId)}
             metadataResolveKey={addressResolveKey}
           />
         </ResizablePanel>
@@ -267,7 +259,7 @@ export function CallPanel({ step, onPatch, editable, onQuickAddMethod, originVar
               step={step}
               entry={entry}
               // The Contract tab prints the *contract* — the catalog kind, never the controls kind.
-              contract={editable ? { input: schema, output: outputSchema, method: step.method, kind: catalogKind } : null}
+              contract={{ input: schema, output: outputSchema, method: step.method, kind: catalogKind }}
             />
           </div>
         </ResizablePanel>
