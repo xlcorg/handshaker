@@ -6,15 +6,9 @@ use gtk::prelude::*;
 use tauri::WebviewWindow;
 use webkit2gtk::WebViewExt;
 
-const MARK_SVG: &str = include_str!("splash-mark.svg");
-const MARK_PX: i32 = 92;
-const WORD: &str = "Handshaker";
-const SPLASH_HTML: &str = include_str!("../../index.html");
+use crate::splash_metrics::{splash_word, SplashWord, MARK_PX, WORD};
 
-struct SplashWord {
-    gap_px: f64,
-    size_px: f64,
-}
+const MARK_SVG: &str = include_str!("splash-mark.svg");
 
 pub fn install(window: &WebviewWindow) {
     let Ok(gtk_window) = window.gtk_window() else {
@@ -45,36 +39,6 @@ fn punch_webview_hole(window: &WebviewWindow) {
             .inner()
             .set_background_color(&gdk::RGBA::new(0.0, 0.0, 0.0, 0.0));
     });
-}
-
-fn splash_word() -> Option<SplashWord> {
-    let start = SPLASH_HTML.find("#splash .splash-word")?;
-    let block = SPLASH_HTML[start..].split('}').next()?;
-    let gap_px = css_px(block, "margin-top:")?;
-    let size_px = css_font_px(block)?;
-    Some(SplashWord { gap_px, size_px })
-}
-
-fn css_px(block: &str, prop: &str) -> Option<f64> {
-    let rest = block.split(prop).nth(1)?;
-    let num: String = rest
-        .trim_start()
-        .chars()
-        .take_while(|c| c.is_ascii_digit() || *c == '.')
-        .collect();
-    let value = num.parse().ok()?;
-    if value > 0.0 {
-        Some(value)
-    } else {
-        None
-    }
-}
-
-fn css_font_px(block: &str) -> Option<f64> {
-    let rest = block.split("font:").nth(1)?;
-    rest.split_whitespace()
-        .filter_map(|token| token.strip_suffix("px"))
-        .find_map(|px| px.parse::<f64>().ok().filter(|n| *n > 0.0))
 }
 
 fn load_mark() -> Option<gtk::gdk_pixbuf::Pixbuf> {
@@ -136,23 +100,4 @@ fn paint_at(
         top + mark_px + word.gap_px - ext.y_bearing(),
     );
     let _ = cr.show_text(WORD);
-}
-
-#[cfg(test)]
-mod tests {
-    use super::splash_word;
-
-    #[test]
-    fn splash_word_reads_the_inline_margin_and_font() {
-        let word = splash_word().expect("splash word");
-        let start = super::SPLASH_HTML
-            .find("#splash .splash-word")
-            .expect("rule");
-        let block = super::SPLASH_HTML[start..]
-            .split('}')
-            .next()
-            .expect("block");
-        assert!(block.contains(&format!("margin-top: {}px", word.gap_px)));
-        assert!(block.contains(&format!("{}px", word.size_px)));
-    }
 }
