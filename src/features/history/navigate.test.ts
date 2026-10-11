@@ -72,13 +72,11 @@ beforeEach(() => {
 
 describe("openHistoryCall open", () => {
   it("opens Focus on the record's request, bound to its origin, and never sends", async () => {
-    workflowStore.update((w) => ({ ...w, view: "list" }));
     const d = deps();
 
     await openHistoryCall("call-1", "open", d);
 
     expect(d.revealFocus).toHaveBeenCalledTimes(1);
-    expect(workflowStore.activeWorkflow().view).toBe("focus");
     expect(draft()).toMatchObject({
       address: "{{host}}:50051", service: "echo.v1.Echo", method: "Say", requestJson: '{"text":"hi"}',
       collectionId: "c1", status: "draft",

@@ -40,7 +40,7 @@ describe("openSavedRequest", () => {
     tls_override: true, last_used_at: null, use_count: 0,
   };
 
-  it("loads a saved request into the draft, binds origin, and switches to Focus", () => {
+  it("loads a saved request into the draft and binds origin", () => {
     openSavedRequest("c1", savedFull);
     const draft = workflowStore.getState().draft;
     // collectionId is stamped from the origin by the store (asserted separately below).
@@ -53,7 +53,6 @@ describe("openSavedRequest", () => {
       collectionId: "c1", requestId: "req-1", requestName: "GetX",
     });
     expect(workflowStore.getState().draftDirty).toBe(false);
-    expect(workflowStore.activeWorkflow().view).toBe("focus");
     expect(workflowStore.activeWorkflow().steps).toHaveLength(0);
   });
 
@@ -78,14 +77,13 @@ describe("openSavedRequest", () => {
 });
 
 describe("newRequestDraft", () => {
-  it("sets an empty draft and switches to Focus", () => {
+  it("sets an empty draft with no origin", () => {
     newRequestDraft();
     const draft = workflowStore.getState().draft;
     expect(draft?.status).toBe("draft");
     expect(draft?.address).toBe("");
     expect(draft?.service).toBe("");
     expect(draft?.method).toBe("");
-    expect(workflowStore.activeWorkflow().view).toBe("focus");
     expect(workflowStore.getState().draftOrigin).toBeNull();
   });
 });

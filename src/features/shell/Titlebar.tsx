@@ -7,7 +7,6 @@ import { useIsFullscreen } from "@/lib/use-fullscreen";
 import { WorkflowSelector } from "@/features/workflow/WorkflowSelector";
 import { WorkflowEnvControl } from "@/features/workflow/WorkflowEnvControl";
 import type { UpdatePhase } from "@/features/updater/useUpdateCheck";
-import { ViewSwitcher } from "@/features/workflow/ViewSwitcher";
 import { compactFocusRing } from "@/lib/focusRing";
 import { messages } from "@/lib/messages";
 import { Kbd } from "@/components/ui/kbd";
@@ -16,17 +15,6 @@ import { nextSplit } from "@/features/shell/splitDirection";
 const btn =
   `h-5 w-6 rounded-sm inline-flex items-center justify-center text-muted-foreground hover:bg-accent hover:text-foreground ${compactFocusRing}`;
 
-/**
- * Единый титлбар: лого + workflow/env слева, view-switcher по центру, утилиты
- * справа. Весь бар — drag-зона (`data-tauri-drag-region`); атрибут не наследуется
- * детьми, поэтому продублирован на неинтерактивных зонах.
- *
- * Платформа:
- * - Windows/Linux — фреймлес окно, кастомные min/max/close справа + wordmark.
- * - macOS — нативный «светофор» (Tauri TitleBarStyle::Overlay) слева: добавляем
- *   левый инсет под него (схлопывается в fullscreen), убираем wordmark и кнопки
- *   окна.
- */
 export function Titlebar({
   onOpenSettings,
   onCheckForUpdates,
@@ -50,9 +38,9 @@ export function Titlebar({
   return (
     <div
       data-tauri-drag-region
-      className="grid h-9 flex-none grid-cols-[1fr_auto_1fr] items-center gap-2 bg-card border-b border-border px-2.5 select-none relative z-40"
+      className="flex h-9 flex-none items-center justify-between gap-2 bg-card border-b border-border px-2.5 select-none relative z-40"
     >
-      <div data-tauri-drag-region className="flex items-center gap-2.5 min-w-0 justify-self-start">
+      <div data-tauri-drag-region className="flex items-center gap-2.5 min-w-0">
         {/* Width covers the native traffic-light cluster anchored at
             trafficLightPosition.x in src-tauri/tauri.macos.conf.json — keep in sync. */}
         {showTrafficInset && <span data-tauri-drag-region aria-hidden data-testid="mac-traffic-inset" className="w-[70px] flex-none" />}
@@ -65,11 +53,7 @@ export function Titlebar({
         <WorkflowEnvControl />
       </div>
 
-      <div className="justify-self-center">
-        <ViewSwitcher />
-      </div>
-
-      <div data-tauri-drag-region className="flex items-center gap-0.5 justify-self-end">
+      <div data-tauri-drag-region className="flex items-center gap-0.5">
         <Tooltip content={messages.shell.titlebar.toggleSidebar} side="bottom">
           <button type="button" onClick={() => setPref("sidebar", !prefs.sidebar)} className={btn} aria-label={messages.shell.titlebar.toggleSidebar}>
             <PanelLeft size={13} />

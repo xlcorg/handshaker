@@ -18,8 +18,6 @@ import { newId } from "@/lib/ids";
 
 export type BumpUsage = (collectionId: string, requestId: string, at: number) => Promise<unknown>;
 
-/** What a Focus draft call leaves behind. `null` on `CallArgs` means an in-place List/Ledger
- *  send: no executed snapshot, no call record and no usage bump. */
 export interface Recording {
   /** The draft's origin at call start. It becomes the record's origin. */
   origin: DraftOrigin | null;

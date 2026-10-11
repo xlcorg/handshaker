@@ -1,10 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { FocusView } from "@/features/workflow/FocusView";
-import { LedgerView } from "@/features/workflow/LedgerView";
-import { ListView } from "@/features/workflow/ListView";
 import { useActiveWorkflow, useDraft, useDraftOrigin, workflowStore } from "@/features/workflow/store";
-import type { ViewMode } from "@/features/workflow/model";
 import type { SavedRequestIpc } from "@/ipc/bindings";
 import { Titlebar } from "@/features/shell/Titlebar";
 import { AppVersionBadge } from "@/features/shell/AppVersionBadge";
@@ -46,21 +43,6 @@ import { dismissSplash } from "@/features/shell/splash";
 import { useStartupRecovery } from "@/features/shell/startupRecovery";
 import { HistoryDock } from "@/features/history/HistoryDock";
 import { openHistoryCall, type HistoryIntent } from "@/features/history/navigate";
-
-function renderView(
-  view: ViewMode,
-  onRequestSave: () => void,
-  onQuickAddMethod: (service: string, method: string) => void,
-) {
-  switch (view) {
-    case "ledger":
-      return <LedgerView />;
-    case "list":
-      return <ListView />;
-    default:
-      return <FocusView onRequestSave={onRequestSave} onQuickAddMethod={onQuickAddMethod} />;
-  }
-}
 
 export function WorkflowApp() {
   const wf = useActiveWorkflow();
@@ -177,7 +159,6 @@ export function WorkflowApp() {
     }
   }, [prefs.sidebar]);
 
-  // Creating a call switches to Focus; close any open collection overview so it is visible.
   useEffect(() => {
     if (wf.activeStepId) setPanelCollectionId(null);
   }, [wf.activeStepId]);
@@ -329,15 +310,14 @@ export function WorkflowApp() {
                     onClose={() => setPanelCollectionId(null)}
                   />
                 ) : (
-                  renderView(
-                    wf.view,
-                    () => {
+                  <FocusView
+                    onRequestSave={() => {
                       // A direct save is not a continuation of a deferred open — drop any pending action.
                       pendingOpenRef.current = null;
                       setSaveOpen(true);
-                    },
-                    (service: string, method: string) => void quickAddMethod(service, method).catch(() => {}),
-                  )
+                    }}
+                    onQuickAddMethod={(service, method) => void quickAddMethod(service, method).catch(() => {})}
+                  />
                 )}
               </div>
             </HistoryDock>

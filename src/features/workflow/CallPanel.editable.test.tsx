@@ -66,29 +66,23 @@ beforeEach(() => {
   workflowStore.reset();
 });
 
-describe("CallPanel editable", () => {
-  it("renders the editable draft header when editable", async () => {
-    await renderPanel(<CallPanel step={draft} onPatch={() => {}} editable />);
-    expect(screen.getByLabelText("draft-address")).toBeTruthy();
-  });
-
-  it("renders the read-only AddressBar when not editable", async () => {
+describe("CallPanel", () => {
+  it("renders the draft address header", async () => {
     await renderPanel(<CallPanel step={draft} onPatch={() => {}} />);
-    expect(screen.queryByLabelText("draft-address")).toBeNull();
-    expect(screen.getByText("GetX")).toBeTruthy(); // AddressBar shows the method name
+    expect(screen.getByLabelText("draft-address")).toBeTruthy();
   });
 
   it("toggles TLS through onPatch from the draft header", async () => {
     const onPatch = vi.fn();
-    await renderPanel(<CallPanel step={draft} onPatch={onPatch} editable />);
+    await renderPanel(<CallPanel step={draft} onPatch={onPatch} />);
     // draft.tls === true (explicit on) → lock shows "TLS on"; clicking cycles to off
     fireEvent.click(screen.getByLabelText("TLS on"));
     expect(onPatch).toHaveBeenCalledWith({ tls: false });
   });
 
-  it("Ctrl+Enter sends the editable draft (sets status: sending)", async () => {
+  it("Ctrl+Enter sends the draft (sets status: sending)", async () => {
     const onPatch = vi.fn();
-    await renderPanel(<CallPanel step={draft} onPatch={onPatch} editable />);
+    await renderPanel(<CallPanel step={draft} onPatch={onPatch} />);
     fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
     // onSend's first effect is to mark the step as sending.
     expect(onPatch).toHaveBeenCalledWith(expect.objectContaining({ status: "sending" }));
@@ -96,9 +90,9 @@ describe("CallPanel editable", () => {
     await act(async () => {});
   });
 
-  it("Ctrl+R also sends the editable draft (physical-key, layout-independent)", async () => {
+  it("Ctrl+R also sends the draft (physical-key, layout-independent)", async () => {
     const onPatch = vi.fn();
-    await renderPanel(<CallPanel step={draft} onPatch={onPatch} editable />);
+    await renderPanel(<CallPanel step={draft} onPatch={onPatch} />);
     fireEvent.keyDown(window, { code: "KeyR", key: "r", ctrlKey: true });
     expect(onPatch).toHaveBeenCalledWith(expect.objectContaining({ status: "sending" }));
     // The send itself is async — let it settle inside act.
@@ -108,31 +102,19 @@ describe("CallPanel editable", () => {
   it("does not start a second send when already sending (button stays Send pre-gate)", async () => {
     const onPatch = vi.fn();
     const sendingStep = { ...draft, status: "sending" as const };
-    await renderPanel(<CallPanel step={sendingStep} onPatch={onPatch} editable />);
+    await renderPanel(<CallPanel step={sendingStep} onPatch={onPatch} />);
     // Pre-gate the action button still reads "Send"; clicking it must be a no-op.
     fireEvent.click(screen.getByRole("button", { name: /send/i }));
-    expect(onPatch).not.toHaveBeenCalled();
-  });
-
-  it("does not bind the send shortcut when not editable", async () => {
-    const onPatch = vi.fn();
-    await renderPanel(<CallPanel step={draft} onPatch={onPatch} />);
-    fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
     expect(onPatch).not.toHaveBeenCalled();
   });
 });
 
 describe("CallPanel contract tab", () => {
-  it("shows the Contract tab on the editable draft", async () => {
-    await renderPanel(<CallPanel step={draft} onPatch={() => {}} editable />);
+  it("shows the Contract tab", async () => {
+    await renderPanel(<CallPanel step={draft} onPatch={() => {}} />);
     fireEvent.click(screen.getByRole("tab", { name: "Contract" }));
     // schema fetch is mocked away → both sides null → placeholder text
     expect(screen.getByText(messages.contract.unavailable)).toBeInTheDocument();
-  });
-
-  it("offers no Contract tab on non-editable (history) panels", async () => {
-    await renderPanel(<CallPanel step={draft} onPatch={() => {}} />);
-    expect(screen.queryByRole("tab", { name: "Contract" })).toBeNull();
   });
 
   it("threads the request and response schemas to the correct contract sides", async () => {
@@ -156,7 +138,7 @@ describe("CallPanel contract tab", () => {
     const sideDraft = newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "GetSides" });
     // The rpc line needs a known kind — the catalog says GetSides is unary.
     vi.mocked(grpcDescribe).mockResolvedValue(catalogWith("GetSides", false, false));
-    await renderPanel(<CallPanel step={sideDraft} onPatch={() => {}} editable />);
+    await renderPanel(<CallPanel step={sideDraft} onPatch={() => {}} />);
     // The panel defaults to Body; open the Contract tab explicitly. Schemas
     // resolve async — the tab then lists both sides at once.
     fireEvent.click(screen.getByRole("tab", { name: "Contract" }));
@@ -181,7 +163,7 @@ describe("CallPanel contract tab", () => {
 describe("CallPanel method kind (derived live from the catalog)", () => {
   it("shows no badge until the catalog arrives, then the streaming badge — without user action", async () => {
     vi.mocked(grpcDescribe).mockResolvedValue(catalogWith("GetX", false, true));
-    await renderPanel(<CallPanel step={draft} onPatch={() => {}} editable />);
+    await renderPanel(<CallPanel step={draft} onPatch={() => {}} />);
     // Reflection is debounced: before the catalog lands the kind is unknown → no badge.
     expect(screen.queryByText(messages.methodKind.badge.server)).toBeNull();
     expect(await screen.findByText(messages.methodKind.badge.server, {}, { timeout: 3000 })).toBeInTheDocument();
@@ -194,7 +176,7 @@ describe("CallPanel method kind (derived live from the catalog)", () => {
     );
     vi.mocked(grpcDescribe).mockResolvedValue(catalogWith("Watch", true, true));
     const watch = newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "Watch" });
-    await renderPanel(<CallPanel step={watch} onPatch={() => {}} editable />);
+    await renderPanel(<CallPanel step={watch} onPatch={() => {}} />);
     fireEvent.click(screen.getByRole("tab", { name: "Contract" }));
     await waitFor(
       () => {
@@ -216,7 +198,7 @@ describe("CallPanel reflection refresh", () => {
     const wireSchema: MessageSchemaIpc = { root: "t.Wire", messages: [], enums: [] };
     vi.mocked(grpcMessageSchema).mockResolvedValue(wireSchema);
     const wireDraft = newStep({ address: "wire-host:443", tls: true, service: "p.v1.S", method: "WireRefresh" });
-    await renderPanel(<CallPanel step={wireDraft} onPatch={() => {}} editable />);
+    await renderPanel(<CallPanel step={wireDraft} onPatch={() => {}} />);
     // Initial input+output schema fetch for this fresh target lands.
     await waitFor(() => expect(grpcMessageSchema).toHaveBeenCalled());
     const before = vi.mocked(grpcMessageSchema).mock.calls.length;
@@ -271,7 +253,7 @@ describe("CallPanel collection-auth inheritance (auth_effective)", () => {
 
     // step auth defaults to none — inheritance is core-side now, not frontend-side.
     const inheritDraft = newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "GetInherit" });
-    await renderPanel(<CallPanel step={inheritDraft} onPatch={() => {}} editable />);
+    await renderPanel(<CallPanel step={inheritDraft} onPatch={() => {}} />);
     // Wait for the async effective-auth fetch to resolve (Auth tab display).
     await waitFor(() => expect(authEffective).toHaveBeenCalled());
     fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
@@ -289,7 +271,7 @@ describe("CallPanel collection-auth inheritance (auth_effective)", () => {
   it("shows the inherited collection config in the Auth tab", async () => {
     vi.mocked(authEffective).mockResolvedValue(collectionOauth);
     const inheritDraft = newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "GetAuthTab" });
-    await renderPanel(<CallPanel step={inheritDraft} onPatch={() => {}} editable />);
+    await renderPanel(<CallPanel step={inheritDraft} onPatch={() => {}} />);
     fireEvent.click(screen.getByRole("tab", { name: "Auth" }));
     await waitFor(() => expect(screen.getByText(/oauth2_client_credentials/)).toBeInTheDocument());
     expect(screen.getByText(/https:\/\/idp\/token/)).toBeInTheDocument();

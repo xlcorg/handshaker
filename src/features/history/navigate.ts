@@ -1,7 +1,6 @@
 import { toast } from "sonner";
 import type { CollectionIpc } from "@/ipc/bindings";
 import { workflowStore } from "@/features/workflow/store";
-import { setView } from "@/features/workflow/reducers";
 import { runCall, type BumpUsage } from "@/features/workflow/callLifecycle";
 import { patchUiState } from "@/features/catalog/uiState";
 import { messages } from "@/lib/messages";
@@ -34,7 +33,6 @@ export async function openHistoryCall(id: string, intent: HistoryIntent, deps: H
     const plan = planHistoryOpen(record, deps.tree());
     const origin = plan.kind === "bound" ? plan.origin : null;
     deps.revealFocus();
-    workflowStore.update((w) => setView(w, "focus"));
     workflowStore.setDraft(plan.draft, origin);
     if (origin) void patchUiState({ active_request: { collection_id: origin.collectionId, item_id: origin.requestId } });
     if (plan.kind === "unbound" && plan.originMissing) toast.info(messages.history.notice.originMissing);

@@ -20,7 +20,6 @@ const switcherFixtures = vi.hoisted(() => {
   return { alpha, beta, tree };
 });
 
-import { messages } from "@/lib/messages";
 import { render as rtlRender, screen, act, waitFor } from "@testing-library/react";
 import type * as React from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -168,7 +167,7 @@ vi.mock("@tauri-apps/plugin-process", () => ({ relaunch: vi.fn() }));
 
 import { WorkflowApp } from "./WorkflowApp";
 import { workflowStore } from "@/features/workflow/store";
-import { addStep, setView } from "@/features/workflow/reducers";
+import { addStep } from "@/features/workflow/reducers";
 import { newStep } from "@/features/workflow/model";
 import { saveNewRequest } from "@/features/catalog/save";
 import { openSavedRequest, newRequestDraft } from "@/features/catalog/actions";
@@ -187,7 +186,7 @@ beforeEach(() => {
 function createCall() {
   act(() => {
     workflowStore.update((w) =>
-      setView(addStep(w, newStep({ address: "h:443", tls: false, service: "p.S", method: "M" })), "focus"),
+      addStep(w, newStep({ address: "h:443", tls: false, service: "p.S", method: "M" })),
     );
   });
 }
@@ -265,23 +264,15 @@ describe("WorkflowApp shell", () => {
   });
 });
 
-describe("WorkflowApp titlebar + view dispatch", () => {
-  it("renders the workflow selector, env control and view switcher", async () => {
+describe("WorkflowApp titlebar", () => {
+  it("renders the workflow selector, env control, and Focus in the main pane", async () => {
     render(<WorkflowApp />);
     expect(screen.getByRole("button", { name: /workflow-1/ })).toBeInTheDocument();
     expect(await screen.findByText(/No environment/i)).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: "Ledger" })).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: "List" })).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: "Focus" })).toBeInTheDocument();
-  });
-
-  it("defaults to Focus and switches to the real List view", async () => {
-    const user = userEvent.setup();
-    render(<WorkflowApp />);
     expect(screen.getByText("FOCUS")).toBeInTheDocument();
-    await user.click(screen.getByRole("radio", { name: "List" }));
-    expect(screen.queryByText("FOCUS")).not.toBeInTheDocument();
-    expect(screen.getByText(messages.workflow.steps.empty)).toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: "Ledger" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: "List" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: "Focus" })).not.toBeInTheDocument();
   });
 });
 

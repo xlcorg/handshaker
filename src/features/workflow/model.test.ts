@@ -33,12 +33,11 @@ describe("newStep — auth and metadata", () => {
 });
 
 describe("newWorkflow", () => {
-  it("creates a workflow with no steps, focus view, no active step", () => {
+  it("creates a workflow with no steps and no active step", () => {
     const wf = newWorkflow("incident");
     expect(wf.name).toBe("incident");
     expect(wf.steps).toEqual([]);
     expect(wf.activeStepId).toBeNull();
-    expect(wf.view).toBe("focus");
     expect(wf.id).toMatch(/.+/);
   });
 

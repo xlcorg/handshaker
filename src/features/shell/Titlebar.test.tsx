@@ -57,13 +57,13 @@ describe("Titlebar (both platforms)", () => {
     mockIsMacOS = false;
   });
 
-  it("renders workflow selector, env control and the English view switcher", async () => {
+  it("renders the workflow selector and env control", async () => {
     await render(<Titlebar onOpenSettings={() => {}} />);
     expect(screen.getByRole("button", { name: /workflow-1/ })).toBeInTheDocument();
     expect(await screen.findByText("No environment")).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: "Ledger" })).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: "List" })).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: "Focus" })).toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: "Ledger" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: "List" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: "Focus" })).not.toBeInTheDocument();
   });
 
   it("makes the bar a Tauri drag region", async () => {

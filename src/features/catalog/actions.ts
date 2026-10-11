@@ -1,6 +1,5 @@
 import type { SavedRequestIpc } from "@/ipc/bindings";
 import { workflowStore } from "@/features/workflow/store";
-import { setView } from "@/features/workflow/reducers";
 import { newStep } from "@/features/workflow/model";
 import { lastExecutedFor, responseSeedPatch } from "@/features/workflow/lastExecuted";
 import { savedRequestToDraft } from "./mapping";
@@ -9,7 +8,6 @@ import { savedRequestToDraft } from "./mapping";
  *  The Response panel is seeded with THIS session's last executed call of the same
  *  service/method/address (from the workflow history). */
 export function openSavedRequest(collectionId: string, saved: SavedRequestIpc): void {
-  workflowStore.update((w) => setView(w, "focus"));
   const draft = savedRequestToDraft(saved);
   const last = lastExecutedFor(workflowStore.activeWorkflow().steps, {
     service: draft.service,
@@ -26,6 +24,5 @@ export function openSavedRequest(collectionId: string, saved: SavedRequestIpc): 
  *  TLS is left inherit (null) so saving into a TLS collection picks up its default_tls
  *  instead of freezing plaintext — the frozen-TLS bug. */
 export function newRequestDraft(): void {
-  workflowStore.update((w) => setView(w, "focus"));
   workflowStore.setDraft(newStep({ address: "", service: "", method: "" }));
 }

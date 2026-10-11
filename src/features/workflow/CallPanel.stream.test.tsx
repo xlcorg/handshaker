@@ -70,7 +70,7 @@ describe("CallPanel picks the call hook by the derived kind", () => {
     api.grpcDescribe.mockResolvedValue(catalogWith("Watch", false, true));
     const step = newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "Watch" });
     const onPatch = vi.fn();
-    await renderPanel(<CallPanel step={step} onPatch={onPatch} editable />);
+    await renderPanel(<CallPanel step={step} onPatch={onPatch} />);
     // Wait for the (debounced) catalog — the kind is derived from it.
     await screen.findByText(messages.methodKind.badge.server, {}, { timeout: 3000 });
 
@@ -87,7 +87,7 @@ describe("CallPanel picks the call hook by the derived kind", () => {
   it("unknown kind (no catalog): Send takes the unary path", async () => {
     const step = newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "GetX" });
     const onPatch = vi.fn();
-    await renderPanel(<CallPanel step={step} onPatch={onPatch} editable />);
+    await renderPanel(<CallPanel step={step} onPatch={onPatch} />);
     fireEvent.click(screen.getByRole("button", { name: /send/i }));
     await act(async () => {});
     expect(api.grpcSend).toHaveBeenCalledTimes(1);
@@ -103,7 +103,7 @@ describe("CallPanel picks the call hook by the derived kind", () => {
     });
     const step = newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "Watch" });
     const onPatch = vi.fn();
-    await renderPanel(<CallPanel step={step} onPatch={onPatch} editable />);
+    await renderPanel(<CallPanel step={step} onPatch={onPatch} />);
 
     fireEvent.click(screen.getByRole("button", { name: /send/i }));
     await act(async () => {});
@@ -123,7 +123,7 @@ describe("CallPanel picks the call hook by the derived kind", () => {
     const rid = api.streamOpen.mock.calls[0][2] as string;
     const live = { ...idle, ...onPatch.mock.calls[0][0] };
     vi.useFakeTimers();
-    await renderPanel(<CallPanel step={live} onPatch={onPatch} editable />);
+    await renderPanel(<CallPanel step={live} onPatch={onPatch} />);
     expect(screen.getByRole("button", { name: /send/i })).toBeInTheDocument();
     act(() => { vi.advanceTimersByTime(250); });
     expect(screen.queryByRole("button", { name: /send/i })).toBeNull();
@@ -144,7 +144,7 @@ describe("CallPanel send hotkeys around a server stream", () => {
     streamStore.open("rid", "server", Date.now());
     const live = { ...streamStep(), status: "sending" as const, requestId: "rid", streamId: "rid" };
     const onPatch = vi.fn();
-    await renderPanel(<CallPanel step={live} onPatch={onPatch} editable />);
+    await renderPanel(<CallPanel step={live} onPatch={onPatch} />);
 
     fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
     fireEvent.keyDown(window, { key: "Enter", metaKey: true });
@@ -164,7 +164,7 @@ describe("CallPanel send hotkeys around a server stream", () => {
     streamStore.push("old", { type: "End", status_code: 0, status_message: "", status_details: [], trailing_metadata: {}, elapsed_ms: 5, message_count: 0, total_bytes: 0 });
     const ended = { ...streamStep(), status: "ok" as const, requestId: null, streamId: "old" };
     const onPatch = vi.fn();
-    await renderPanel(<CallPanel step={ended} onPatch={onPatch} editable />);
+    await renderPanel(<CallPanel step={ended} onPatch={onPatch} />);
     await screen.findByText(messages.methodKind.badge.server, {}, { timeout: 3000 });
 
     fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
@@ -181,7 +181,7 @@ describe("CallPanel send hotkeys around a server stream", () => {
     api.grpcDescribe.mockResolvedValue(catalogWith("Watch", false, true));
     const cancelled = { ...streamStep(), status: "cancelled" as const, requestId: null, streamId: null };
     const onPatch = vi.fn();
-    await renderPanel(<CallPanel step={cancelled} onPatch={onPatch} editable />);
+    await renderPanel(<CallPanel step={cancelled} onPatch={onPatch} />);
     await screen.findByText(messages.methodKind.badge.server, {}, { timeout: 3000 });
 
     fireEvent.keyDown(window, { code: "KeyR", key: "r", ctrlKey: true });
@@ -234,7 +234,7 @@ describe("CallPanel two-way (client / bidi) calls", () => {
   it.each(["client", "bidi"] as const)("%s method: the primary button reads ▶ Open and opens a Stream call with that kind, sending nothing", async (kind) => {
     api.grpcDescribe.mockResolvedValue(catalogWith("Chat", true, kind === "bidi"));
     const onPatch = vi.fn();
-    await renderPanel(<CallPanel step={bidiStep()} onPatch={onPatch} editable />);
+    await renderPanel(<CallPanel step={bidiStep()} onPatch={onPatch} />);
     await screen.findByText(messages.methodKind.badge[kind], {}, { timeout: 3000 });
 
     fireEvent.click(screen.getByRole("button", { name: messages.workflow.addressBar.open }));
@@ -253,7 +253,7 @@ describe("CallPanel two-way (client / bidi) calls", () => {
     api.streamSend.mockResolvedValue(ack);
     const live = { ...bidiStep(), status: "sending" as const, requestId: "rid", streamId: "rid", collectionId: "c1" };
     vi.useFakeTimers();
-    await renderPanel(<CallPanel step={live} onPatch={vi.fn()} editable />);
+    await renderPanel(<CallPanel step={live} onPatch={vi.fn()} />);
     act(() => { vi.advanceTimersByTime(250); });
 
     fireEvent.click(screen.getByRole("button", { name: /send message/i }));
@@ -275,7 +275,7 @@ describe("CallPanel two-way (client / bidi) calls", () => {
     streamStore.open("rid", "client", Date.now());
     const live = { ...bidiStep(), status: "sending" as const, requestId: "rid", streamId: "rid" };
     vi.useFakeTimers();
-    await renderPanel(<CallPanel step={live} onPatch={vi.fn()} editable />);
+    await renderPanel(<CallPanel step={live} onPatch={vi.fn()} />);
     act(() => { vi.advanceTimersByTime(250); });
     expect(screen.getByRole("button", { name: /send message/i })).toBeDisabled();
     expect(screen.getByRole("button", { name: /^end stream$/i })).toBeDisabled();
@@ -289,7 +289,7 @@ describe("CallPanel two-way (client / bidi) calls", () => {
     api.streamSend.mockImplementation(async () => ({ ...ack, index: ++n }));
     const live = { ...bidiStep(), status: "sending" as const, requestId: "rid", streamId: "rid" };
     const onPatch = vi.fn();
-    await renderPanel(<CallPanel step={live} onPatch={onPatch} editable />);
+    await renderPanel(<CallPanel step={live} onPatch={onPatch} />);
 
     fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
     await act(async () => {});
@@ -310,7 +310,7 @@ describe("CallPanel two-way (client / bidi) calls", () => {
     streamStore.push("rid", { ...openedBidi, kind: "client" });
     streamStore.halfClose("rid");
     const live = { ...bidiStep(), status: "sending" as const, requestId: "rid", streamId: "rid" };
-    await renderPanel(<CallPanel step={live} onPatch={vi.fn()} editable />);
+    await renderPanel(<CallPanel step={live} onPatch={vi.fn()} />);
 
     fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
     await act(async () => {});
@@ -322,7 +322,7 @@ describe("CallPanel two-way (client / bidi) calls", () => {
 
   it("Ctrl+Enter on an idle bidi method = Open", async () => {
     api.grpcDescribe.mockResolvedValue(catalogWith("Chat", true, true));
-    await renderPanel(<CallPanel step={bidiStep()} onPatch={vi.fn()} editable />);
+    await renderPanel(<CallPanel step={bidiStep()} onPatch={vi.fn()} />);
     await screen.findByText(messages.methodKind.badge.bidi, {}, { timeout: 3000 });
 
     fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
@@ -339,7 +339,7 @@ describe("CallPanel two-way (client / bidi) calls", () => {
     api.streamSend.mockRejectedValue({ type: "UnresolvedVars", unresolved: ["v"], cycle: null });
     const live = { ...bidiStep(), status: "sending" as const, requestId: "rid", streamId: "rid" };
     const onPatch = vi.fn();
-    await renderPanel(<CallPanel step={live} onPatch={onPatch} editable />);
+    await renderPanel(<CallPanel step={live} onPatch={onPatch} />);
 
     fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
     await act(async () => {});

@@ -124,7 +124,6 @@ export function FocusView({ onRequestSave, onQuickAddMethod }: FocusViewProps = 
           <CallPanel
             step={draft}
             onPatch={(patch: Partial<Step>) => workflowStore.updateDraft(draft.id, patch)}
-            editable
             // Quick-add «+» saves into the open request's collection (origin). An unbound
             // draft has no target collection, so the «+» is hidden rather than silently
             // landing the method in some arbitrary collection.

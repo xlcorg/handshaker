@@ -16,13 +16,6 @@ export const messages = {
       newRequest: "New request",
       savedRequestFallback: "Saved request",
     },
-    steps: {
-      empty: "No steps yet — create a call from the sidebar.",
-      collapseAll: "Collapse all",
-    },
-    list: {
-      pickStep: "Select a step on the left.",
-    },
     selector: {
       newWorkflow: "New workflow",
     },
@@ -84,17 +77,6 @@ export const messages = {
         other: "",
       },
     },
-    /** Collapsed step row / rail status text (`stepView.ts`). */
-    step: {
-      draft: "draft",
-      sending: "…",
-      cancelled: "cancelled",
-      ok: (code: number) => `✓ ${code}`,
-      errorCode: (code: number) => `✕ ${code}`,
-      error: "✕ error",
-      /** Rail dot tooltip: `1. OrderService · GetOrder — ✓ 0`. */
-      railTitle: (number: number, title: string, statusText: string) => `${number}. ${title} — ${statusText}`,
-    },
     addressBar: {
       hostPlaceholder: "host:port",
       send: "▶ Send",
@@ -108,17 +90,6 @@ export const messages = {
       /** ARIA label of the segmented group. */
       streamControlsAria: "Stream controls",
       cancel: "Cancel",
-      /** History header status chip (`statusChip`): a unary outcome or a stream's End /
-       *  Cancel, the same vocabulary as the stream footer. */
-      chip: {
-        ok: (elapsed: string) => `✓ OK · ${elapsed}`,
-        /** OK whose timing is gone (a released stream entry). */
-        okNoElapsed: "✓ OK",
-        /** Non-OK gRPC status: `✕ <code> <NAME>`. */
-        status: (code: number, name: string) => `✕ ${code} ${name}`,
-        cancelled: "○ Cancelled",
-        error: "✕ error",
-      },
     },
     toast: {
       alreadyInCollection: (name: string) => `Already in "${name}"`,
