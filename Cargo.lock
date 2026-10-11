@@ -1773,6 +1773,7 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "chrono",
+ "gtk",
  "handshaker-core",
  "indexmap 2.14.0",
  "prost 0.13.5",
@@ -1795,6 +1796,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "uuid",
+ "webkit2gtk",
 ]
 
 [[package]]

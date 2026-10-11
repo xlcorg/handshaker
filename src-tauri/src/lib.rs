@@ -2,6 +2,8 @@
 
 pub mod commands;
 pub mod ipc;
+#[cfg(target_os = "linux")]
+mod boot_logo;
 mod state;
 
 use commands::auth::{auth_effective, auth_invalidate, auth_oauth2_fetch_token, auth_resolve};
@@ -152,6 +154,11 @@ pub fn run() {
                 if let Some(win) = app.get_webview_window("main") {
                     let _ = win.set_traffic_lights_inset(14.0, 16.0);
                 }
+            }
+
+            #[cfg(target_os = "linux")]
+            if let Some(win) = app.get_webview_window("main") {
+                boot_logo::install(&win);
             }
 
             Ok(())
