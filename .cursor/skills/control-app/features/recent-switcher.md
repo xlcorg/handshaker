@@ -59,4 +59,4 @@ The result is `null`, and the pane is the one that was showing before the chord.
 - The listbox never becomes `document.activeElement`.
 - On macOS, Ctrl+click is a context click. The switcher swallows that context menu, including the menu event that arrives after the click has already closed the list.
 - The list keeps at most ten locations from this session. After a restart, Ctrl+Tab does nothing until the pane has shown two locations.
-- This note does not prove WebKitGTK delivers Ctrl+Tab to the page. If the keydown eval returns `null`, the window ate the chord before the listener ran.
+- A keydown eval dispatched on `window` reaches the listener. A missing listbox means the gesture stayed idle. That is the dialog case above, or fewer than two places in the list.
