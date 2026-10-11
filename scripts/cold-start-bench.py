@@ -1,22 +1,4 @@
 #!/usr/bin/env python3
-"""Cold-start benchmark for a Handshaker binary.
-
-Launches the binary against a fresh XDG dir, records the X11 display, and
-classifies each frame of the window. Times are milliseconds from process
-start (kernel starttime).
-
-Phases:
-  window_created   first grabbed frame that shows the window
-  first_paint      first frame that is not a flat dark field
-  splash_shown     first frame classified as splash (or transition)
-  app_ready        first frame classified as app that stays app
-
-A flat dark field is the failure mode the user described as a black screen.
-The script records the mean RGB of those frames so #000000 (unpainted) and
-#0A0A0A (the configured window background) stay distinct.
-
-This harness does not attach WebDriver and does not change the app.
-"""
 
 from __future__ import annotations
 
@@ -30,12 +12,45 @@ import signal
 import statistics
 import subprocess
 import sys
+import threading
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 IDENTIFIER = "dev.handshaker.app"
 BG = (0x0A, 0x0A, 0x0A)
 LIGHT_MIN = 140
+WINDOW_BG_PLUS_NOISE = 18
+CLIENT_ROW_MIN_DARK_SHARE = 0.75
+CLIENT_MIN_CROP_SHARE = 0.5
+PREROLL_SLACK_MS = 50
+GRABBER_READY = b"Press [q] to stop"
+
+
+@dataclass(frozen=True)
+class LogoVersusSidebar:
+    logo_samples: int
+    sidebar_samples: int
+    fade_center: int
+    sidebar_width: float
+    title_height: float
+    center_x0: float
+    center_x1: float
+    center_y0: float
+    center_y1: float
+
+
+LOGO_VERSUS_SIDEBAR = LogoVersusSidebar(
+    logo_samples=8,
+    sidebar_samples=8,
+    fade_center=100,
+    sidebar_width=0.22,
+    title_height=0.06,
+    center_x0=0.35,
+    center_x1=0.65,
+    center_y0=0.30,
+    center_y1=0.70,
+)
 
 
 def fail(msg: str) -> None:
@@ -60,7 +75,6 @@ def loadavg() -> str:
 
 
 def process_start_wall(pid: int) -> float:
-    """Kernel process start as a unix timestamp (seconds)."""
     stat = Path(f"/proc/{pid}/stat").read_text()
     after = stat.rsplit(")", 1)[1].split()
     # Field 22 is starttime in clock ticks since boot. After the comm
@@ -221,11 +235,6 @@ def parse_xwininfo_line(line: str) -> dict | None:
 
 
 def settled_window(samples: list[dict]) -> dict | None:
-    """The position the window actually rests at.
-
-    The first xwininfo hit is sometimes the pre-reparent geometry (+0+0).
-    The crop has to follow the position that accounts for almost every sample.
-    """
     if not samples:
         return None
     counts: dict[tuple, int] = {}
@@ -253,12 +262,11 @@ def luma(r: int, g: int, b: int) -> int:
     return (r * 54 + g * 183 + b * 19) >> 8
 
 
-def content_box(buf: bytes, w: int, h: int, stride: int = 4) -> tuple[int, int, int, int] | None:
-    """Bounding box of the opaque #0A0A0A window inside an xwininfo crop.
+def pixel_is_client(r: int, g: int, b: int) -> bool:
+    return r <= WINDOW_BG_PLUS_NOISE and g <= WINDOW_BG_PLUS_NOISE and b <= WINDOW_BG_PLUS_NOISE
 
-    The crop includes the desktop panel above the client on this window
-    manager. Rows that are not near-black are that panel, not the app.
-    """
+
+def content_box(buf: bytes, w: int, h: int, stride: int = 4) -> tuple[int, int, int, int] | None:
     dark_rows = []
     for y in range(0, h, stride):
         row = y * w * 3
@@ -267,11 +275,11 @@ def content_box(buf: bytes, w: int, h: int, stride: int = 4) -> tuple[int, int, 
         for x in range(0, w, stride):
             i = row + x * 3
             total += 1
-            if buf[i] <= 18 and buf[i + 1] <= 18 and buf[i + 2] <= 18:
+            if pixel_is_client(buf[i], buf[i + 1], buf[i + 2]):
                 dark += 1
-        if total and dark / total >= 0.75:
+        if total and dark / total >= CLIENT_ROW_MIN_DARK_SHARE:
             dark_rows.append(y)
-    if not dark_rows or (dark_rows[-1] - dark_rows[0]) < h * 0.5:
+    if not dark_rows or (dark_rows[-1] - dark_rows[0]) < h * CLIENT_MIN_CROP_SHARE:
         return None
     y0 = dark_rows[0]
     y1 = min(h, dark_rows[-1] + stride)
@@ -280,7 +288,7 @@ def content_box(buf: bytes, w: int, h: int, stride: int = 4) -> tuple[int, int, 
     xs = []
     for x in range(0, w, stride):
         i = row + x * 3
-        if buf[i] <= 18 and buf[i + 1] <= 18 and buf[i + 2] <= 18:
+        if pixel_is_client(buf[i], buf[i + 1], buf[i + 2]):
             xs.append(x)
     if not xs:
         return None
@@ -292,13 +300,6 @@ def content_box(buf: bytes, w: int, h: int, stride: int = 4) -> tuple[int, int, 
 
 
 def classify_frame(buf: bytes, w: int, h: int, stride: int = 4, src_w: int | None = None, ox: int = 0, oy: int = 0) -> dict:
-    """Classify one RGB24 frame of the window.
-
-    splash: light pixels sit in the center (the logo) and the sidebar is dark.
-    app: the sidebar or the title bar carries light pixels.
-    transition: both, which is the splash fading over the mounted shell.
-    empty: no light pixels. mean_rgb names the flat color.
-    """
     src_w = w if src_w is None else src_w
     if w <= 0 or h <= 0 or len(buf) < (oy + h - 1) * src_w * 3 + (ox + w) * 3:
         return {
@@ -310,10 +311,11 @@ def classify_frame(buf: bytes, w: int, h: int, stride: int = 4, src_w: int | Non
             "mean_rgb": [0, 0, 0],
             "samples": 0,
         }
-    left_x = int(w * 0.22)
-    top_y = max(1, int(h * 0.06))
-    cx0, cx1 = int(w * 0.35), int(w * 0.65)
-    cy0, cy1 = int(h * 0.30), int(h * 0.70)
+    rule = LOGO_VERSUS_SIDEBAR
+    left_x = int(w * rule.sidebar_width)
+    top_y = max(1, int(h * rule.title_height))
+    cx0, cx1 = int(w * rule.center_x0), int(w * rule.center_x1)
+    cy0, cy1 = int(h * rule.center_y0), int(h * rule.center_y1)
     light = light_left = light_center = light_top = 0
     samples = 0
     sum_r = sum_g = sum_b = 0
@@ -339,17 +341,14 @@ def classify_frame(buf: bytes, w: int, h: int, stride: int = 4, src_w: int | Non
             if cx0 <= lx < cx1 and cy0 <= ly < cy1:
                 light_center += 1
     mean = [round(sum_r / samples), round(sum_g / samples), round(sum_b / samples)] if samples else [0, 0, 0]
-    # The splash logo is a dense center blob on a dark sidebar. A faded logo
-    # is a smaller blob, still with an empty sidebar. The resting shell has
-    # title and sidebar text, and its center sentence is much sparser than
-    # the logo, so a dense center plus sidebar text is the fade itself.
-    if light < 8:
+    sidebar_lit = light_left >= rule.sidebar_samples or light_top >= rule.sidebar_samples
+    if light < rule.logo_samples:
         label = "empty"
-    elif light_left < 8 and light_top < 8 and light_center >= 8:
+    elif not sidebar_lit and light_center >= rule.logo_samples:
         label = "splash"
-    elif light_center >= 100 and (light_left >= 8 or light_top >= 8):
+    elif light_center >= rule.fade_center and sidebar_lit:
         label = "transition"
-    elif light_left >= 8 or light_top >= 8:
+    elif sidebar_lit:
         label = "app"
     else:
         label = "other"
@@ -385,7 +384,6 @@ def self_test() -> None:
     assert black["label"] == "empty", black
     assert black["mean_rgb"] == [0, 0, 0], black
 
-    # Center logo. Stride 4, so paint a block the sampler will hit.
     marks = []
     for y in range(80, 120, 4):
         for x in range(140, 180, 4):
@@ -403,7 +401,6 @@ def self_test() -> None:
     both = classify_frame(paint(dark, marks + left), w, h, stride)
     assert both["label"] == "transition", both
 
-    # A bright band above a dark client is the panel, not the app.
     tall, wide = 400, 500
     framed = bytearray()
     for y in range(tall):
@@ -441,6 +438,32 @@ def percentile_summary(values: list[float]) -> dict:
     }
 
 
+def tee_ffmpeg_log(stream, log_path: Path, ready: threading.Event) -> None:
+    with log_path.open("wb") as log:
+        while True:
+            line = stream.readline()
+            if not line:
+                break
+            log.write(line)
+            log.flush()
+            if GRABBER_READY in line:
+                ready.set()
+
+
+def wait_for_grabber(ff: subprocess.Popen, ready: threading.Event) -> None:
+    deadline = time.time() + 5
+    while time.time() < deadline:
+        if ready.is_set():
+            return
+        if ff.poll() is not None:
+            break
+        time.sleep(0.02)
+    ff.kill()
+    if ff.poll() is not None:
+        fail("ffmpeg exited before x11grab was recording")
+    fail("ffmpeg did not report that x11grab is recording")
+
+
 def run_once(binary: Path, run_dir: Path, fps: int, after_window_s: float, screen: tuple[int, int]) -> dict:
     for name in ("xdg", "config", "cache", "logs"):
         (run_dir / name).mkdir(parents=True)
@@ -453,7 +476,7 @@ def run_once(binary: Path, run_dir: Path, fps: int, after_window_s: float, scree
             "ffmpeg",
             "-y",
             "-loglevel",
-            "error",
+            "info",
             "-f",
             "x11grab",
             "-draw_mouse",
@@ -473,16 +496,19 @@ def run_once(binary: Path, run_dir: Path, fps: int, after_window_s: float, scree
             str(video),
         ],
         stdout=subprocess.DEVNULL,
-        stderr=ffmpeg_log.open("w"),
+        stderr=subprocess.PIPE,
     )
-    # First grabbed frame is pts 0. Spawn returns once the process exists,
-    # which is the closest timestamp we have for that frame.
+    assert ff.stderr is not None
+    grabber_ready = threading.Event()
+    log_thread = threading.Thread(
+        target=tee_ffmpeg_log, args=(ff.stderr, ffmpeg_log, grabber_ready), daemon=True
+    )
+    log_thread.start()
     if find_window() is not None:
+        ff.kill()
         fail("a Handshaker window is already mapped; refuse to measure a stale window")
     t_ffmpeg = time.time()
-    # Let the grabber open the display, then map a magenta marker whose
-    # appearance pins pts 0 to a unix time.
-    time.sleep(0.35)
+    wait_for_grabber(ff, grabber_ready)
     marker = ClockMarker(screen)
     t_marker = marker.show()
     env = os.environ.copy()
@@ -551,6 +577,7 @@ def run_once(binary: Path, run_dir: Path, fps: int, after_window_s: float, scree
             ff.wait(timeout=5)
         app_out.close()
         marker.close()
+        log_thread.join(timeout=2)
     if window is None:
         return {"error": "window did not appear", "app_exit": app.poll(), "log": app_log.read_text()[-2000:]}
     frames = analyze(
@@ -580,6 +607,10 @@ def stop_app(app: subprocess.Popen) -> None:
         app.wait(timeout=3)
 
 
+def is_marker_magenta(r: int, g: int, b: int) -> bool:
+    return r > 200 and g < 40 and b > 200
+
+
 def marker_frame_index(video: Path, marker: ClockMarker) -> int | None:
     decode = subprocess.Popen(
         [
@@ -607,9 +638,8 @@ def marker_frame_index(video: Path, marker: ClockMarker) -> int | None:
         buf = decode.stdout.read(nbytes)
         if len(buf) < nbytes:
             break
-        # Any saturated magenta pixel means the marker is on screen.
         for i in range(0, nbytes, 3):
-            if buf[i] > 200 and buf[i + 1] < 40 and buf[i + 2] > 200:
+            if is_marker_magenta(buf[i], buf[i + 1], buf[i + 2]):
                 found = index
                 break
         if found is not None:
@@ -618,6 +648,24 @@ def marker_frame_index(video: Path, marker: ClockMarker) -> int | None:
     decode.kill()
     decode.wait()
     return found
+
+
+def clamp_window_to_screen(window: dict, screen: tuple[int, int]) -> tuple[int, int, int, int] | None:
+    w, h, x, y = window["w"], window["h"], window["x"], window["y"]
+    sw, sh = screen
+    if x < 0:
+        w += x
+        x = 0
+    if y < 0:
+        h += y
+        y = 0
+    if x + w > sw:
+        w = sw - x
+    if y + h > sh:
+        h = sh - y
+    if w < 64 or h < 64:
+        return None
+    return w, h, x, y
 
 
 def analyze(
@@ -653,21 +701,10 @@ def analyze(
             pts.append(None)
         else:
             pts.append(float(line))
-    w, h, x, y = window["w"], window["h"], window["x"], window["y"]
-    # Clamp the crop to the captured frame.
-    sw, sh = screen
-    if x < 0:
-        w += x
-        x = 0
-    if y < 0:
-        h += y
-        y = 0
-    if x + w > sw:
-        w = sw - x
-    if y + h > sh:
-        h = sh - y
-    if w < 64 or h < 64:
+    crop = clamp_window_to_screen(window, screen)
+    if crop is None:
         return {"error": f"window crop is degenerate: {window}"}
+    w, h, x, y = crop
     decode = subprocess.Popen(
         [
             "ffmpeg",
@@ -788,8 +825,7 @@ def first_where(rows: list[dict], pred) -> dict | None:
 
 def summarize(rows: list[dict], start_wall: float, fps: int, probed: int) -> dict:
     timed = [r for r in rows if r["t_ms"] is not None]
-    # Drop frames grabbed before the process existed (the pre-roll).
-    timed = [r for r in timed if r["t_ms"] >= -50]
+    timed = [r for r in timed if r["t_ms"] >= -PREROLL_SLACK_MS]
     labels = {}
     for row in timed:
         labels[row["label"]] = labels.get(row["label"], 0) + 1
@@ -834,9 +870,9 @@ def first_app(rows: list[dict]) -> dict | None:
     for i, row in enumerate(rows):
         if row["label"] != "app":
             continue
-        # Require the next frame to still be app so a one-frame glitch is not ready.
-        nxt = rows[i + 1] if i + 1 < len(rows) else None
-        if nxt is None or nxt["label"] in ("app", "transition"):
+        if i + 1 >= len(rows):
+            return row
+        if rows[i + 1]["label"] in ("app", "transition"):
             return row
     return None
 

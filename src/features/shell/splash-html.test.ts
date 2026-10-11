@@ -28,4 +28,10 @@ describe("index.html startup splash", () => {
       }
     }
   });
+
+  it("gives the splash word a px margin and a px font the native paint reads", () => {
+    const block = html.split("#splash .splash-word")[1]?.split("}")[0] ?? "";
+    expect(block).toMatch(/margin-top:\s*\d+px/);
+    expect(block).toMatch(/font:\s*\d+\s+\d+px/);
+  });
 });
