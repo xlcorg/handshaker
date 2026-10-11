@@ -2,7 +2,6 @@ import { newId } from "@/lib/ids";
 import type { InvokeOutcomeIpc, SavedAuthConfigIpc } from "@/ipc/bindings";
 import type { ClientFault } from "./netDiagnostics";
 
-export type ViewMode = "ledger" | "list" | "focus";
 /** `"cancelled"` is a Stream call terminal state (rows stay); a cancelled unary Send
  *  returns to `"draft"`. */
 export type StepStatus = "draft" | "sending" | "ok" | "error" | "cancelled";
@@ -43,7 +42,6 @@ export interface Workflow {
   name: string;
   steps: Step[];
   activeStepId: string | null;
-  view: ViewMode;
   envName: string | null; // active environment for this workflow; null = "No environment"
 }
 
@@ -78,5 +76,5 @@ export function newStep(init: {
 }
 
 export function newWorkflow(name: string): Workflow {
-  return { id: newId(), name, steps: [], activeStepId: null, view: "focus", envName: null };
+  return { id: newId(), name, steps: [], activeStepId: null, envName: null };
 }

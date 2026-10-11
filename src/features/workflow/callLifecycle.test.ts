@@ -92,7 +92,7 @@ describe("runCall unary", () => {
     expect(mocks.bumpUsage).toHaveBeenCalledWith("c1", "r1", expect.any(Number));
   });
 
-  it("without recording (an in-place List/Ledger send): patches, commits nothing, bumps nothing", async () => {
+  it("without recording: patches, commits nothing, bumps nothing", async () => {
     mocks.api.grpcSend.mockResolvedValue(report);
     const { args, patches } = setup(unaryStep());
     await runCall(args);

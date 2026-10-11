@@ -16,13 +16,6 @@ export const messages = {
       newRequest: "New request",
       savedRequestFallback: "Saved request",
     },
-    steps: {
-      empty: "No steps yet — create a call from the sidebar.",
-      collapseAll: "Collapse all",
-    },
-    list: {
-      pickStep: "Select a step on the left.",
-    },
     selector: {
       newWorkflow: "New workflow",
     },
@@ -92,8 +85,6 @@ export const messages = {
       ok: (code: number) => `✓ ${code}`,
       errorCode: (code: number) => `✕ ${code}`,
       error: "✕ error",
-      /** Rail dot tooltip: `1. OrderService · GetOrder — ✓ 0`. */
-      railTitle: (number: number, title: string, statusText: string) => `${number}. ${title} — ${statusText}`,
     },
     addressBar: {
       hostPlaceholder: "host:port",

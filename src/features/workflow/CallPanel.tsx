@@ -57,7 +57,6 @@ interface CallPanelProps {
   origin?: DraftOrigin | null;
 }
 
-/** The editable, sendable surface for one step — reused by Focus(draft)/List/Ledger. */
 export function CallPanel({ step, onPatch, editable, onQuickAddMethod, originVars, originSkipVerify, originDefaultTls, onMethodSelected, origin }: CallPanelProps) {
   const skipVerify = originSkipVerify ?? false;
   // Concrete TLS for probes/Send display: the step's override, or the collection default

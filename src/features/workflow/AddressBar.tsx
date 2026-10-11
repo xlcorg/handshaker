@@ -5,9 +5,6 @@ import { CallControls, type TwoWayControls } from "./CallControls";
 import type { Step } from "./model";
 import { statusChip, TONE_TEXT } from "./stepView";
 
-/** Read-only history header: method · address / service · status chip · the call
- *  controls. No kind badge here — the row (`StepRow`), the timeline and the footer already
- *  say "stream"; the controls still follow `kind` (`▶ Open` for a client / bidi snapshot). */
 export function AddressBar({
   step,
   kind,

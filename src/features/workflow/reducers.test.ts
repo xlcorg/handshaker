@@ -1,14 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { newWorkflow, newStep, type Workflow } from "./model";
-import {
-  addStep,
-  updateStep,
-  removeStep,
-  setActiveStep,
-  setView,
-  reorderStep,
-  setWorkflowEnv,
-} from "./reducers";
+import { addStep, updateStep, removeStep, setWorkflowEnv } from "./reducers";
 
 function wfWith(...n: number[]): Workflow {
   let wf = newWorkflow("t");
@@ -60,26 +52,6 @@ describe("removeStep", () => {
     const next = removeStep(wf, wf.steps[0].id);
     expect(next.steps).toEqual([]);
     expect(next.activeStepId).toBeNull();
-  });
-});
-
-describe("reorderStep", () => {
-  it("moves a step to a new index", () => {
-    const wf = wfWith(1, 2, 3);
-    const next = reorderStep(wf, 2, 0);
-    expect(next.steps.map((s) => s.method)).toEqual(["M3", "M1", "M2"]);
-  });
-});
-
-describe("setActiveStep / setView", () => {
-  it("sets active id and view", () => {
-    const wf = wfWith(1, 2);
-    expect(setActiveStep(wf, wf.steps[0].id).activeStepId).toBe(wf.steps[0].id);
-    expect(setView(wf, "ledger").view).toBe("ledger");
-  });
-  it("clears active when given null (collapse all)", () => {
-    const wf = wfWith(1, 2);
-    expect(setActiveStep(wf, null).activeStepId).toBeNull();
   });
 });
 

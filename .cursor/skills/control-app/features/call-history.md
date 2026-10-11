@@ -97,7 +97,7 @@ comes back with the same rows, and `history/index.json` is unchanged.
 - Rows are newest first. Assert on the first row, not on a position you computed.
 - Click `history-row-open`, not its `li`. The `li` has no handler.
 - Opening a row over a dirty unsaved draft shows the discard dialog first. Nothing loads until Discard or Save.
-- Only Focus calls are recorded. A Send from List or Ledger leaves no row.
+- A Focus Send records a row.
 - A cancel before the stream opened leaves no row. A cancel after Open reads `Cancelled`.
 - The top few pixels of the header strip belong to the resize handle above it. Click controls by selector, which hits their center.
 - The dock keeps 200 calls. The oldest body file is deleted when a 201st lands.
