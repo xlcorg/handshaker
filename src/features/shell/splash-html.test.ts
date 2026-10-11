@@ -18,4 +18,20 @@ describe("index.html startup splash", () => {
     expect(html).toContain('class="splash-word"');
     expect(html).toContain("system-ui");
   });
+
+  it("uses the same mark the native window paints before the document composites", () => {
+    const mark = readFileSync("src-tauri/src/splash-mark.svg", "utf8");
+    for (const line of mark.split("\n")) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith("<rect") || trimmed.startsWith("<stop")) {
+        expect(html).toContain(trimmed);
+      }
+    }
+  });
+
+  it("gives the splash word a px margin and a px font the native paint reads", () => {
+    const block = html.split("#splash .splash-word")[1]?.split("}")[0] ?? "";
+    expect(block).toMatch(/margin-top:\s*\d+px/);
+    expect(block).toMatch(/font:\s*\d+\s+\d+px/);
+  });
 });

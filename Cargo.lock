@@ -1773,8 +1773,14 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "chrono",
+ "gtk",
  "handshaker-core",
+ "image",
  "indexmap 2.14.0",
+ "objc2",
+ "objc2-app-kit",
+ "objc2-foundation",
+ "objc2-web-kit",
  "prost 0.13.5",
  "prost-reflect",
  "rustls",
@@ -1795,6 +1801,9 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "uuid",
+ "webkit2gtk",
+ "webview2-com",
+ "windows 0.61.3",
 ]
 
 [[package]]

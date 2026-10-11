@@ -2,6 +2,14 @@
 
 pub mod commands;
 pub mod ipc;
+#[cfg(target_os = "linux")]
+mod boot_logo;
+#[cfg(target_os = "macos")]
+mod boot_logo_mac;
+#[cfg(target_os = "windows")]
+mod boot_logo_win;
+mod boot_trace;
+mod splash_metrics;
 mod state;
 
 use commands::auth::{auth_effective, auth_invalidate, auth_oauth2_fetch_token, auth_resolve};
@@ -94,6 +102,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    boot_trace::start();
     // Install rustls' default crypto provider once at process start. tonic 0.14 with
     // `tls-ring` does NOT install it automatically; without this the first TLS handshake
     // panics with "no process-level CryptoProvider available".
@@ -131,7 +140,11 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_decorum::init())
+        .on_page_load(|_webview, payload| {
+            boot_trace::on_page_load(payload.event());
+        })
         .setup(move |app| {
+            boot_trace::mark("setup_enter");
             specta_builder.mount_events(app);
             let data_dir = app
                 .path()
@@ -139,6 +152,7 @@ pub fn run() {
                 .expect("resolve app_data_dir");
             let state = AppState::load(&data_dir)
                 .expect("initialize AppState from data dir");
+            boot_trace::mark("state_loaded");
             app.manage(state);
 
             // macOS: vertically center the native traffic lights in our 36px (h-9)
@@ -152,6 +166,21 @@ pub fn run() {
                 if let Some(win) = app.get_webview_window("main") {
                     let _ = win.set_traffic_lights_inset(14.0, 16.0);
                 }
+            }
+
+            #[cfg(target_os = "linux")]
+            if let Some(win) = app.get_webview_window("main") {
+                boot_logo::install(&win);
+            }
+
+            #[cfg(target_os = "macos")]
+            if let Some(win) = app.get_webview_window("main") {
+                boot_logo_mac::install(&win);
+            }
+
+            #[cfg(target_os = "windows")]
+            if let Some(win) = app.get_webview_window("main") {
+                boot_logo_win::install(&win);
             }
 
             Ok(())
