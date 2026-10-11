@@ -4,8 +4,7 @@ Opening Settings shows the local preferences dialog. The end state that
 proves this works: the dialog heading is `Settings`, the subtitle is
 `Preferences persist locally. Restart not required.`, and the default
 Appearance section shows the row `gRPC icon`. The About section's version
-line equals `package.json` / the Cargo package version (`0.2.35` when this
-map was written).
+line equals the `version` field in `package.json` and in `src-tauri/Cargo.toml`.
 
 ## Sub-features
 

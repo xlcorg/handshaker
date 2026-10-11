@@ -11,7 +11,7 @@ reads `STREAMING`, or `OPENING` while the stream is still opening.
 - `test.Echo/ServerStream` — `▶ Send` once, then the server pushes `Pong` rows (`echoed` like `echo: <id> #1`).
 - `test.Echo/ClientStream` and `test.Echo/Bidi` — the idle button is `▶ Open`. After open, the group `aria-label="Stream controls"` holds `Send message ▸`, `End stream`, and `Cancel`.
 - Messages tab (search, and on two-way calls a direction group `aria-label="Filter by direction"` with chips All, Received, and Sent).
-- Headers and Trailers tabs. Contract tab when the method schema is loaded.
+- Headers and Trailers tabs. The Contract tab is present on an editable draft even when both schemas are still null. A missing schema shows `Contract unavailable`.
 - Save messages / Assemble from the export menu once the call is terminal.
 
 ## How to get to it (user POV)
@@ -61,3 +61,4 @@ the 250ms busy gate says the call is still live; it is not the end state.
 - The echo server's `--hang` flag never answers a client stream after half-close. Do not use it for a passing check.
 - The timeline is a flat scrollable list, newest first. Assert on the footer count and one visible `echoed` preview, not on a pixel position.
 - Save messages opens a native save dialog. The proof of the call is the footer and the rows, not that dialog.
+- New request over a dirty unsaved draft opens `Discard unsaved request?`. Click `Discard` before looking for `Select a method`. The picker is not in the page while that dialog is open.

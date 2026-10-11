@@ -96,8 +96,8 @@ reports whether `#splash` and the collection filter exist, plus
 `document.body.innerText`. It clicks nothing and writes nothing. It passes
 when the title is `Handshaker`, the URL starts with `tauri://`, the splash
 node is gone, the filter is present, the sidebar text contains `COLLECTIONS`,
-and the corner badge contains `v` plus `package.json`'s `version` (the badge
-is `v0.2.35` at the time this was written). The last line is `ok`.
+and the corner badge contains `v` plus `package.json`'s `version`. The last
+line is `ok`.
 
 ## Drive
 
