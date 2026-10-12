@@ -13,7 +13,7 @@ import { messages } from "@/lib/messages";
 import { readPrefs, setPref } from "@/lib/use-prefs";
 import { HistoryDock } from "./HistoryDock";
 import { historyStore } from "./store";
-import { callRecord, summary } from "./testFixtures";
+import { callRecord, httpSummary, summary } from "./testFixtures";
 
 const say = summary({ id: "a" });
 const lookup = summary({ id: "b", method: "Lookup", ending: { type: "status", code: 5 } });
@@ -55,6 +55,20 @@ describe("HistoryDock rows", () => {
     expect(rows[2]).toHaveTextContent("Cancelled");
     expect(rows[0]).toHaveTextContent("12ms");
     expect(screen.getByTestId("history-dock-toggle")).toHaveTextContent(messages.history.dock.titleWithCount(3));
+  });
+
+  it("shows an HTTP row's method, URL template, status and elapsed", async () => {
+    api.historyList.mockResolvedValue({
+      revision: 1,
+      rows: [httpSummary({ id: "h", method: "DELETE", url_template: "{{base}}/users/7", ending: { type: "status", code: 404 } })],
+    });
+    renderDock();
+    const [row] = await rowButtons();
+    expect(row.getAttribute("aria-label")?.split(" from ")[0]).toBe("Open DELETE {{base}}/users/7");
+    expect(row).toHaveTextContent("DELETE");
+    expect(row).toHaveTextContent("{{base}}/users/7");
+    expect(row).toHaveTextContent("404 Not Found");
+    expect(row).toHaveTextContent("12ms");
   });
 
   it("the row button opens the call on click, Enter and Space", async () => {

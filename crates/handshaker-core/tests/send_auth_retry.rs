@@ -2,9 +2,10 @@ mod common;
 
 use handshaker_core::{
     auth::{AuthCredentials, OAuth2ClientCredentialsConfig, SavedAuthConfig, TokenSource},
-    collections::{ids::ItemId, SavedRequest},
+    collections::GrpcTemplate,
     error::CoreError,
     grpc::{invoke::CallOptions, transport::TonicTransport, InMemoryContractCache},
+    http::ReqwestTransport,
     send::Sender,
     vars::builtins::BuiltinGenerator,
 };
@@ -57,13 +58,12 @@ async fn one_send_refreshes_rejected_token_and_replays_same_request_over_tonic()
     let (addr, _stop) = common::spawn_echo_server(config).await;
     let sender = Sender::new(
         Arc::new(TonicTransport::new()),
+        Arc::new(ReqwestTransport::new("test").unwrap()),
         Arc::new(ExpiredTokens::default()),
         Arc::new(InMemoryContractCache::new()),
         Arc::new(Guids::default()),
     );
-    let request = SavedRequest {
-        id: ItemId(uuid::Uuid::new_v4()),
-        name: "retry".into(),
+    let request = GrpcTemplate {
         address_template: addr.to_string(),
         service: "test.Echo".into(),
         method: "Send".into(),
@@ -79,8 +79,6 @@ async fn one_send_refreshes_rejected_token_and_replays_same_request_over_tonic()
             environments: vec![],
         }),
         tls_override: Some(false),
-        last_used_at: None,
-        use_count: 0,
     };
     let report = sender
         .send(

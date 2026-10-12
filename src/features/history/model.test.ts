@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { CallSummaryIpc } from "@/ipc/bindings";
-import { faultOf, filterRows, formatCallTime, methodLabelOf, planHistoryOpen, recordKind, statusTextOf } from "./model";
-import { callRecord, collection, savedRequest, summary } from "./testFixtures";
+import type { CallEndingIpc, CallSummaryIpc, HttpEndingIpc } from "@/ipc/bindings";
+import { narrow } from "@/test/narrow";
+import {
+  faultOf, filterRows, formatCallTime, planHistoryOpen, recordKind, rowLabelOf, statusTextOf, targetOf,
+} from "./model";
+import {
+  callRecord, collection, httpCallRecord, httpRequest, httpSummary, savedHttpRequest, savedRequest, summary,
+} from "./testFixtures";
 
 const ok = summary({ id: "ok" });
 const notFound = summary({ id: "nf", method: "Lookup", ending: { type: "status", code: 5 } });
@@ -35,20 +40,55 @@ describe("filter text", () => {
   });
 });
 
+describe("HTTP rows", () => {
+  const created = httpSummary({ id: "201", method: "POST", ending: { type: "status", code: 201 } });
+  const moved = httpSummary({ id: "302", ending: { type: "status", code: 302 } });
+  const missing = httpSummary({ id: "404", url_template: "{{base}}/users/7", ending: { type: "status", code: 404 } });
+  const broken = httpSummary({ id: "500", ending: { type: "status", code: 500 } });
+  const refusedHttp = httpSummary({ id: "rf", ending: { type: "fault", kind: "refused" } });
+  const httpRows = [created, moved, missing, broken, refusedHttp];
+
+  it("OK keeps 2xx and 3xx, Failed keeps 4xx, 5xx and faults", () => {
+    expect(ids(filterRows(httpRows, { text: "", chip: "ok" }))).toEqual(["201", "302"]);
+    expect(ids(filterRows(httpRows, { text: "", chip: "failed" }))).toEqual(["404", "500", "rf"]);
+  });
+
+  it("matches the method, the URL and the status text", () => {
+    expect(ids(filterRows(httpRows, { text: "post", chip: "all" }))).toEqual(["201"]);
+    expect(ids(filterRows(httpRows, { text: "users/7", chip: "all" }))).toEqual(["404"]);
+    expect(ids(filterRows(httpRows, { text: "not found", chip: "all" }))).toEqual(["404"]);
+  });
+
+  it("names the HTTP status with its reason and titles a fault", () => {
+    const text = (ending: HttpEndingIpc) => statusTextOf(httpSummary({ ending }).line);
+    expect(text({ type: "status", code: 404 })).toBe("404 Not Found");
+    expect(text({ type: "status", code: 299 })).toBe("299");
+    expect(text({ type: "fault", kind: "timeout" })).toBe("Request timed out");
+  });
+});
+
 describe("statusTextOf", () => {
   it("names a status, titles a fault, and says Cancelled", () => {
-    expect(statusTextOf({ type: "status", code: 0 })).toBe("OK");
-    expect(statusTextOf({ type: "status", code: 5 })).toBe("NOT_FOUND");
-    expect(statusTextOf({ type: "fault", kind: "timeout" })).toBe("Request timed out");
-    expect(statusTextOf({ type: "fault", kind: "from-a-newer-build" })).toBe("Request failed");
-    expect(statusTextOf({ type: "cancelled" })).toBe("Cancelled");
+    const text = (ending: CallEndingIpc) => statusTextOf(summary({ ending }).line);
+    expect(text({ type: "status", code: 0 })).toBe("OK");
+    expect(text({ type: "status", code: 5 })).toBe("NOT_FOUND");
+    expect(text({ type: "fault", kind: "timeout" })).toBe("Request timed out");
+    expect(text({ type: "fault", kind: "from-a-newer-build" })).toBe("Request failed");
+    expect(text({ type: "cancelled" })).toBe("Cancelled");
   });
 });
 
 describe("row labels", () => {
-  it("shortens the service in the method label", () => {
-    expect(methodLabelOf({ service: "echo.v1.Echo", method: "Say" })).toBe("Echo.Say");
-    expect(methodLabelOf({ service: "Echo", method: "Say" })).toBe("Echo.Say");
+  it("shortens the service in a gRPC row label and shows the address as the target", () => {
+    expect(rowLabelOf(summary({ service: "echo.v1.Echo", method: "Say" }).line)).toBe("Echo.Say");
+    expect(rowLabelOf(summary({ service: "Echo", method: "Say" }).line)).toBe("Echo.Say");
+    expect(targetOf(summary({ address_template: "{{host}}:50051" }).line)).toBe("{{host}}:50051");
+  });
+
+  it("labels an HTTP row with its method and URL, and shows the URL as the target", () => {
+    const line = httpSummary({ method: "DELETE", url_template: "{{base}}/users/7" }).line;
+    expect(rowLabelOf(line)).toBe("DELETE {{base}}/users/7");
+    expect(targetOf(line)).toBe("{{base}}/users/7");
   });
 
   it("shows the time for a call from today and the date for an older one", () => {
@@ -81,10 +121,15 @@ describe("recordKind", () => {
       recordKind(callRecord({ outcome: { type: "stream_refused", kind: "client", fault: { kind: "dns", message: "x" } } })),
     ).toBe("client");
   });
+
+  it("is null for an HTTP record, which has no method kind", () => {
+    expect(recordKind(httpCallRecord())).toBeNull();
+  });
 });
 
 describe("planHistoryOpen", () => {
   const authoredDraft = {
+    protocol: "grpc",
     address: "{{host}}:50051", tls: null, service: "echo.v1.Echo", method: "Say", requestJson: '{"text":"hi"}',
     metadata: [{ key: "x-trace", value: "1", enabled: true }, { key: "x-off", value: "2", enabled: false }],
     auth: { kind: "none" }, status: "draft", outcome: null, error: null, requestId: null, streamId: null,
@@ -114,7 +159,16 @@ describe("planHistoryOpen", () => {
   it("copies the metadata, so editing the draft never touches the cached record", () => {
     const record = callRecord();
     const plan = planHistoryOpen(record, []);
-    plan.draft.metadata[0].value = "edited";
-    expect(record.request.metadata[0].value).toBe("1");
+    narrow(plan.draft, "grpc").metadata[0].value = "edited";
+    expect(record.call.request.metadata[0].value).toBe("1");
+  });
+
+  it("rebuilds an HTTP record as an HTTP draft carrying the recorded request, bound to its origin", () => {
+    const plan = planHistoryOpen(httpCallRecord(), [collection("c1", [savedHttpRequest("h1", "Create user")])]);
+    expect(plan).toEqual({
+      kind: "bound",
+      draft: { protocol: "http", id: expect.any(String), collectionId: "c1", template: httpRequest, run: { status: "draft" } },
+      origin: { collectionId: "c1", requestId: "h1", requestName: "Create user" },
+    });
   });
 });

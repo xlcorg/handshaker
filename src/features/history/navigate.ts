@@ -1,7 +1,7 @@
 import { toast } from "sonner";
 import type { CollectionIpc } from "@/ipc/bindings";
 import { workflowStore } from "@/features/workflow/store";
-import { runCall, type BumpUsage } from "@/features/workflow/callLifecycle";
+import { runCall, runHttpCall, type BumpUsage } from "@/features/workflow/callLifecycle";
 import { patchUiState } from "@/features/catalog/uiState";
 import { messages } from "@/lib/messages";
 import { planHistoryOpen, recordKind } from "./model";
@@ -37,12 +37,19 @@ export async function openHistoryCall(id: string, intent: HistoryIntent, deps: H
     if (origin) void patchUiState({ active_request: { collection_id: origin.collectionId, item_id: origin.requestId } });
     if (plan.kind === "unbound" && plan.originMissing) toast.info(messages.history.notice.originMissing);
     if (intent !== "rerun") return;
+    const draft = plan.draft;
+    const envName = workflowStore.activeWorkflow().envName;
+    const recording = { origin, bumpUsage: deps.bumpUsage };
+    if (draft.protocol === "http") {
+      void runHttpCall({ draft, envName, onRun: (run) => workflowStore.setHttpRun(draft.id, run), recording });
+      return;
+    }
     void runCall({
-      step: plan.draft,
-      envName: workflowStore.activeWorkflow().envName,
+      step: draft,
+      envName,
       kind: recordKind(record),
-      onPatch: (p) => workflowStore.updateDraft(plan.draft.id, p),
-      recording: { origin, bumpUsage: deps.bumpUsage },
+      onPatch: (p) => workflowStore.updateGrpcDraft(draft.id, p),
+      recording,
     });
   });
 }

@@ -1,4 +1,4 @@
-import { ChevronRight, Download, FilePlus, FolderPlus, Pencil, Trash2 } from "lucide-react";
+import { ChevronRight, Download, FilePlus, FolderPlus, Globe, Pencil, Trash2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import type { CollectionIpc } from "@/ipc/bindings";
 import { SidebarMenuItem, SidebarMenuButton, SidebarMenuSub } from "@/components/ui/sidebar";
@@ -9,6 +9,9 @@ import { FolderNode } from "./FolderNode";
 import { RequestRow } from "./RequestRow";
 import { bleedStyle } from "./bleed";
 import type { TreeCallbacks } from "./treeTypes";
+import { messages } from "@/lib/messages";
+
+const m = messages.catalog.rowMenu;
 
 export interface CollectionNodeProps {
   col: CollectionIpc;
@@ -24,12 +27,13 @@ export function CollectionNode({ col, cb }: CollectionNodeProps) {
   const hint = cb.dropHint?.id === col.id ? cb.dropHint.zone : null;
 
   const items: RowMenuItem[] = [
-    { icon: <FilePlus />, label: "Add request", onClick: () => cb.onAddRequest(col.id, null) },
-    { icon: <FolderPlus />, label: "Add folder", onClick: () => cb.onAddFolder(col.id, null) },
-    { icon: <Pencil />, label: "Rename", onClick: () => cb.onEditingChange(col.id) },
-    { icon: <Download />, label: "Export", onClick: () => cb.onExportCollection(col.id) },
+    { icon: <FilePlus />, label: m.addRequest, onClick: () => cb.onAddRequest(col.id, null) },
+    { icon: <Globe />, label: m.addHttpRequest, onClick: () => cb.onAddHttpRequest(col.id, null) },
+    { icon: <FolderPlus />, label: m.addFolder, onClick: () => cb.onAddFolder(col.id, null) },
+    { icon: <Pencil />, label: m.rename, onClick: () => cb.onEditingChange(col.id) },
+    { icon: <Download />, label: m.export, onClick: () => cb.onExportCollection(col.id) },
     { sep: true },
-    { icon: <Trash2 />, label: "Delete", danger: true, onClick: () => cb.onRequestDeleteCollection(col.id) },
+    { icon: <Trash2 />, label: m.delete, danger: true, onClick: () => cb.onRequestDeleteCollection(col.id) },
   ];
 
   return (

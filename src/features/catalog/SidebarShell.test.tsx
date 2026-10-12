@@ -21,7 +21,7 @@ function makeTreeHook() {
   };
 }
 vi.mock("./CatalogProvider", () => ({ useCatalog: () => tree.current }));
-vi.mock("./actions", () => ({ openSavedRequest: vi.fn(), newRequestDraft: vi.fn() }));
+vi.mock("./actions", () => ({ openSavedRequest: vi.fn(), newRequestDraft: vi.fn(), newHttpRequestDraft: vi.fn() }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ save: vi.fn(), open: vi.fn().mockResolvedValue(null) }));
 vi.mock("./uiState", () => ({
   loadUiState: vi.fn().mockResolvedValue({ sort_key: null, active_request: null }),
@@ -31,7 +31,7 @@ vi.mock("./uiState", () => ({
 
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { SidebarShell } from "./SidebarShell";
-import { newRequestDraft } from "./actions";
+import { newHttpRequestDraft, newRequestDraft } from "./actions";
 import { loadUiState, patchUiState } from "./uiState";
 
 const renderShell = (props = {}) =>
@@ -43,9 +43,12 @@ const renderShell = (props = {}) =>
 
 function req(id: string, name = id): Extract<ItemIpc, { type: "request" }> {
   return {
-    type: "request", id, name, address_template: "h:443", service: "p.v1.S", method: "M",
-    body_template: "{}", metadata: [], auth: { kind: "none" }, tls_override: null,
-    last_used_at: null, use_count: 0,
+    type: "request",
+    id,
+    name,
+    template: { protocol: "grpc", address_template: "h:443", service: "p.v1.S", method: "M", body_template: "{}", metadata: [], auth: { kind: "none" }, tls_override: null },
+    last_used_at: null,
+    use_count: 0,
   };
 }
 function col(id: string, name = id, items: ItemIpc[] = []): CollectionIpc {
@@ -94,6 +97,25 @@ describe("SidebarShell", () => {
     await user.click(await screen.findByText("New request"));
     expect(onAddRequest).toHaveBeenCalledTimes(1);
     expect(newRequestDraft).not.toHaveBeenCalled();
+  });
+
+  it("the + menu's New HTTP request starts an HTTP draft, not a gRPC one", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    renderShell();
+    await user.click(screen.getByLabelText("new-item"));
+    await user.click(await screen.findByText("New HTTP request"));
+    expect(newHttpRequestDraft).toHaveBeenCalledTimes(1);
+    expect(newRequestDraft).not.toHaveBeenCalled();
+  });
+
+  it("the + menu's New HTTP request calls onAddHttpRequest when provided (guarded open)", async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onAddHttpRequest = vi.fn();
+    renderShell({ onAddHttpRequest });
+    await user.click(screen.getByLabelText("new-item"));
+    await user.click(await screen.findByText("New HTTP request"));
+    expect(onAddHttpRequest).toHaveBeenCalledTimes(1);
+    expect(newHttpRequestDraft).not.toHaveBeenCalled();
   });
 
   it("the + menu's New collection creates a default-named collection and enters rename", async () => {

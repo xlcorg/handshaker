@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
-use crate::auth::{AuthCredentials, SavedAuthConfig};
+use crate::auth::SavedAuthConfig;
 use crate::grpc::GrpcTarget;
 
 pub mod file_store;
@@ -19,15 +19,19 @@ pub mod ids;
 pub mod in_memory;
 pub mod resolve;
 pub mod store;
+pub mod template;
 pub mod tree;
 
 pub use file_store::FileCollectionStore;
 pub use ids::{CollectionId, ItemId};
 pub use in_memory::InMemoryCollectionStore;
-pub use resolve::{resolve_body, resolve_request, resolve_request_without_body};
+pub(crate) use resolve::{resolve_body, resolve_request, resolve_request_without_body, CallAuth};
 pub use store::CollectionStore;
+pub use template::{GrpcTemplate, HttpTemplate, RequestTemplate};
 
-/// An ordered metadata header row (templated value, literal key).
+/// An ordered key/value row with an enabled flag: gRPC metadata, HTTP headers, query
+/// params, form fields. The value is a template. The key is literal, except in rows that
+/// become URL-encoded pairs (query params, form fields), where it is a template too.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MetadataRow {
     pub key: String,
@@ -85,39 +89,28 @@ pub struct Folder {
     // no auth: folders are pure organization (spec §7)
 }
 
-/// A saved request: address template + service/method + body/metadata templates.
+/// A saved request node: identity and usage, plus the protocol-specific template. Every
+/// tree operation (move, duplicate, delete, rename, usage bump, bundle export) is
+/// protocol-neutral and never looks inside `template`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SavedRequest {
     pub id: ItemId,
     pub name: String,
-    pub address_template: String,
-    pub service: String,
-    pub method: String,
-    pub body_template: String,
-    pub metadata: Vec<MetadataRow>,
-    pub auth: SavedAuthConfig,
-    pub tls_override: Option<bool>,
     pub last_used_at: Option<f64>, // epoch ms
     pub use_count: u32,
+    #[serde(flatten)]
+    pub template: RequestTemplate,
 }
 
-/// Fully-resolved request, ready to invoke. Output of `resolve::resolve_request`.
+/// Fully-resolved gRPC request, ready to invoke. Output of `resolve::resolve_request`.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EffectiveRequest {
+pub(crate) struct EffectiveRequest {
     pub target: GrpcTarget,
     pub service: String,
     pub method: String,
     pub body_json: String,
     pub metadata: HashMap<String, String>,
-    pub auth: Option<AuthCredentials>,
-    /// The resolved OAuth2 config whose token materialized `auth`, if any. The Send
-    /// command uses it to invalidate the token cache on a 16 UNAUTHENTICATED. `None`
-    /// for None/EnvVar auth.
-    pub invalidate_oauth: Option<crate::auth::OAuth2ClientCredentialsConfig>,
-    /// The auth config that won the pick, in **template** form (as stored in the
-    /// collection/request) — `None` = unauthenticated. This is what the Send report
-    /// carries back to the UI; resolved secrets stay out of it by construction.
-    pub picked_auth: Option<crate::auth::SavedAuthConfig>,
+    pub auth: CallAuth,
 }
 
 impl Item {
@@ -146,29 +139,124 @@ impl Item {
 #[cfg(test)]
 mod model_tests {
     use super::*;
+    use crate::http::{HttpBody, HttpMethod};
     use uuid::Uuid;
 
-    #[test]
-    fn saved_request_holds_ordered_metadata_and_single_auth() {
-        let r = SavedRequest {
-            id: ItemId(Uuid::from_u128(1)),
-            name: "r".into(),
-            address_template: "{{host}}".into(),
-            service: "svc".into(),
-            method: "M".into(),
-            body_template: "{}".into(),
+    fn legacy_grpc_template() -> GrpcTemplate {
+        GrpcTemplate {
+            address_template: "{{host}}:443".into(),
+            tls_override: None,
+            service: "payments.v1.PaymentService".into(),
+            method: "GetPayment".into(),
+            body_template: r#"{"id":"{{pid}}"}"#.into(),
             metadata: vec![
                 MetadataRow { key: "a".into(), value: "1".into(), enabled: true },
                 MetadataRow { key: "a".into(), value: "2".into(), enabled: false },
             ],
             auth: SavedAuthConfig::None,
-            tls_override: None,
+        }
+    }
+
+    /// A v1 item, written before `protocol` existed: flat gRPC fields, an integer
+    /// `last_used_at`. It must load as a gRPC template with nothing lost.
+    #[test]
+    fn v1_request_item_without_protocol_loads_as_grpc() {
+        let legacy = r#"{
+            "type": "request", "id": "00000000-0000-0000-0000-000000000001", "name": "Get payment",
+            "address_template": "{{host}}:443", "service": "payments.v1.PaymentService",
+            "method": "GetPayment", "body_template": "{\"id\":\"{{pid}}\"}",
+            "metadata": [
+                { "key": "a", "value": "1", "enabled": true },
+                { "key": "a", "value": "2", "enabled": false }
+            ],
+            "auth": { "kind": "none" }, "tls_override": null,
+            "last_used_at": 1760000000000, "use_count": 3
+        }"#;
+
+        let item: Item = serde_json::from_str(legacy).unwrap();
+
+        assert_eq!(
+            item,
+            Item::Request(SavedRequest {
+                id: ItemId(Uuid::from_u128(1)),
+                name: "Get payment".into(),
+                last_used_at: Some(1_760_000_000_000.0),
+                use_count: 3,
+                template: RequestTemplate::Grpc(legacy_grpc_template()),
+            })
+        );
+    }
+
+    #[test]
+    fn grpc_request_item_writes_protocol_beside_identity_and_reads_back() {
+        let item = Item::Request(SavedRequest {
+            id: ItemId(Uuid::from_u128(1)),
+            name: "Get payment".into(),
             last_used_at: None,
             use_count: 0,
-        };
-        // duplicate keys preserved in order
-        assert_eq!(r.metadata.len(), 2);
-        assert!(!r.metadata[1].enabled);
+            template: RequestTemplate::Grpc(legacy_grpc_template()),
+        });
+
+        let json = serde_json::to_value(&item).unwrap();
+
+        assert_eq!(json["type"], "request");
+        assert_eq!(json["protocol"], "grpc");
+        assert_eq!(json["service"], "payments.v1.PaymentService");
+        assert_eq!(json["use_count"], 0);
+        assert_eq!(serde_json::from_value::<Item>(json).unwrap(), item);
+    }
+
+    #[test]
+    fn http_request_item_round_trips_with_protocol_set() {
+        let item = Item::Request(SavedRequest {
+            id: ItemId(Uuid::from_u128(2)),
+            name: "Create order".into(),
+            last_used_at: None,
+            use_count: 0,
+            template: RequestTemplate::Http(HttpTemplate {
+                method: HttpMethod::Post,
+                url_template: "{{base}}/orders?src=app".into(),
+                query: vec![MetadataRow { key: "page".into(), value: "{{page}}".into(), enabled: false }],
+                headers: vec![MetadataRow { key: "x-trace".into(), value: "{{$uuid}}".into(), enabled: true }],
+                body: HttpBody::Form {
+                    fields: vec![MetadataRow { key: "sku".into(), value: "A1".into(), enabled: true }],
+                },
+                auth: SavedAuthConfig::None,
+            }),
+        });
+
+        let json = serde_json::to_value(&item).unwrap();
+
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "type": "request",
+                "id": "00000000-0000-0000-0000-000000000002",
+                "name": "Create order",
+                "last_used_at": null,
+                "use_count": 0,
+                "protocol": "http",
+                "method": "POST",
+                "url_template": "{{base}}/orders?src=app",
+                "query": [{ "key": "page", "value": "{{page}}", "enabled": false }],
+                "headers": [{ "key": "x-trace", "value": "{{$uuid}}", "enabled": true }],
+                "body": { "kind": "form", "fields": [{ "key": "sku", "value": "A1", "enabled": true }] },
+                "auth": { "kind": "none" },
+            })
+        );
+        assert_eq!(serde_json::from_value::<Item>(json).unwrap(), item);
+    }
+
+    #[test]
+    fn unknown_protocol_fails_the_parse() {
+        let future = r#"{
+            "type": "request", "id": "00000000-0000-0000-0000-000000000001", "name": "w",
+            "last_used_at": null, "use_count": 0, "protocol": "ws", "url_template": "wss://x"
+        }"#;
+
+        let err = serde_json::from_str::<Item>(future).unwrap_err();
+
+        assert!(err.to_string().contains("unknown variant `ws`"), "{err}");
     }
 
     /// Legacy persisted JSON, written before `expanded` existed, must still

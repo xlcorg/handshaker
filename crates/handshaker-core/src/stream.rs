@@ -739,9 +739,9 @@ async fn run(
             }
             Some(Err(end)) => {
                 // Rule 16 — the same helper as unary `send`; Cancel never reaches here.
-                crate::send::invalidate_on_unauthenticated(
+                crate::send::invalidate_on_rejection(
                     tokens.as_ref(),
-                    end.status_code,
+                    end.status_code == crate::send::GRPC_UNAUTHENTICATED,
                     invalidate_oauth.as_ref(),
                 );
                 emitter.emit(StreamEvent::End {
@@ -835,16 +835,16 @@ mod tests {
     use prost_reflect::{DynamicMessage, Value};
 
     use super::*;
-    use crate::collections::SavedRequest;
+    use crate::collections::GrpcTemplate;
     use crate::grpc::testing::{chunk_bytes, fixture_pool, FakeTransport, StreamScript};
     use crate::grpc::transport::StreamEnd;
     use crate::send::tests::{
-        env_with_sec, oauth_template, seeded_cache, static_tokens, NoBuiltins, RecordingTokens,
+        env_with_sec, no_http, oauth_template, seeded_cache, static_tokens, NoBuiltins, RecordingTokens,
         SeqGuids,
     };
     use crate::send::Sender;
 
-    fn stream_request() -> SavedRequest {
+    fn stream_request() -> GrpcTemplate {
         let mut r = crate::send::tests::fixture_request(false);
         r.method = "ServerStream".into();
         r
@@ -899,7 +899,7 @@ mod tests {
     }
 
     fn sender(transport: Arc<FakeTransport>, tokens: Arc<dyn TokenSource>) -> Sender {
-        Sender::new(transport, tokens, seeded_cache(false), Arc::new(NoBuiltins))
+        Sender::new(transport, no_http(), tokens, seeded_cache(false), Arc::new(NoBuiltins))
     }
 
     /// The outbound bytes the fake transport has drained so far, once at least `n` are
@@ -935,6 +935,7 @@ mod tests {
         });
         let sender = Sender::new(
             transport.clone(),
+            no_http(),
             static_tokens("Bearer tok"),
             seeded_cache(false),
             SeqGuids::new(),
@@ -1311,7 +1312,7 @@ mod tests {
         assert_eq!(transport.stream_calls.load(Ordering::Relaxed), 0);
     }
 
-    fn bidi_request() -> SavedRequest {
+    fn bidi_request() -> GrpcTemplate {
         let mut r = stream_request();
         r.method = "Bidi".into();
         r.body_template = r#"{"id":"{{who}}"}"#.into();
@@ -1389,7 +1390,7 @@ mod tests {
         assert!(call.message_json(5).unwrap().is_none());
     }
 
-    fn client_request() -> SavedRequest {
+    fn client_request() -> GrpcTemplate {
         let mut r = stream_request();
         r.method = "ClientStream".into();
         r.body_template = r#"{"id":"{{who}}"}"#.into();
@@ -1532,7 +1533,7 @@ mod tests {
     async fn send_message_resolves_vars_and_builtins_per_message_but_auth_only_at_open() {
         let transport = scripted(StreamScript { hang: true, ..Default::default() });
         let tokens = RecordingTokens::new();
-        let sender = Sender::new(transport.clone(), tokens.clone(), seeded_cache(false), SeqGuids::new());
+        let sender = Sender::new(transport.clone(), no_http(), tokens.clone(), seeded_cache(false), SeqGuids::new());
         let (events, mut rx) = collector();
         let mut request = bidi_request();
         request.body_template = r#"{"id":"{{who}}-{{$guid}}"}"#.into();
@@ -1619,7 +1620,7 @@ mod tests {
     #[tokio::test]
     async fn body_builtins_are_not_consumed_at_open_of_a_two_way_call() {
         let transport = scripted(StreamScript { hang: true, ..Default::default() });
-        let sender = Sender::new(transport.clone(), static_tokens("t"), seeded_cache(false), SeqGuids::new());
+        let sender = Sender::new(transport.clone(), no_http(), static_tokens("t"), seeded_cache(false), SeqGuids::new());
         let (events, mut rx) = collector();
         let mut request = client_request();
         request.body_template = r#"{"id":"{{$guid}}"}"#.into();
@@ -1849,7 +1850,7 @@ mod tests {
 
     // ---- Save messages + Assemble over the Stream store (ticket 18) ----------------
 
-    fn download_request() -> SavedRequest {
+    fn download_request() -> GrpcTemplate {
         let mut r = stream_request();
         r.method = "Download".into();
         r
@@ -1960,7 +1961,7 @@ mod tests {
 
         // A response type without bytes fields advertises none.
         let transport = scripted(StreamScript { items: vec![Ok(pong_bytes("a")), Err(end(0))], ..Default::default() });
-        let pong_sender = Sender::new(transport, static_tokens("t"), seeded_cache(false), Arc::new(NoBuiltins));
+        let pong_sender = Sender::new(transport, no_http(), static_tokens("t"), seeded_cache(false), Arc::new(NoBuiltins));
         let (events, mut rx) = collector();
         let _call = pong_sender
             .open_stream(&stream_request(), None, None, MethodKind::Server, opts(None), events)

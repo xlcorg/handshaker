@@ -1,11 +1,13 @@
-import type { CallEndingIpc, CallFaultIpc, CallRecordIpc, CallSummaryIpc, CollectionIpc } from "@/ipc/bindings";
-import { newStep, type Step } from "@/features/workflow/model";
+import type { CallFaultIpc, CallRecordIpc, CallSummaryIpc, CollectionIpc, SummaryLineIpc } from "@/ipc/bindings";
+import type { Draft } from "@/features/workflow/model";
 import type { DraftOrigin } from "@/features/workflow/store";
 import { parseFaultKind, type ClientFault } from "@/features/workflow/netDiagnostics";
 import { shortService } from "@/features/workflow/stepView";
 import { findSavedRequest } from "@/features/catalog/treeNav";
+import { draftFromTemplate, recordedTemplateOf } from "@/features/catalog/mapping";
 import type { MethodKind } from "@/lib/method-kind";
 import { statusName } from "@/lib/grpc-status";
+import { httpStatusText, httpVerdict } from "@/lib/http-status";
 import { messages } from "@/lib/messages";
 
 export type Verdict = "ok" | "failed";
@@ -16,14 +18,16 @@ export interface HistoryFilter {
   chip: HistoryChip;
 }
 
-export function verdictOf(ending: CallEndingIpc): Verdict {
-  return ending.type === "status" && ending.code === 0 ? "ok" : "failed";
+export function verdictOf(line: SummaryLineIpc): Verdict {
+  if (line.protocol === "http") return line.ending.type === "status" ? httpVerdict(line.ending.code) : "failed";
+  return line.ending.type === "status" && line.ending.code === 0 ? "ok" : "failed";
 }
 
-export function statusTextOf(ending: CallEndingIpc): string {
+export function statusTextOf(line: SummaryLineIpc): string {
+  const ending = line.ending;
   switch (ending.type) {
     case "status":
-      return statusName(ending.code);
+      return line.protocol === "http" ? httpStatusText(ending.code) : statusName(ending.code);
     case "fault":
       return messages.response.clientError.title[parseFaultKind(ending.kind)];
     case "cancelled":
@@ -35,8 +39,14 @@ export function faultOf(fault: CallFaultIpc): ClientFault {
   return { kind: parseFaultKind(fault.kind), message: fault.message };
 }
 
-export function methodLabelOf(call: { service: string; method: string }): string {
-  return `${shortService(call.service)}.${call.method}`;
+/** gRPC `Service.Method`, HTTP `GET {{base}}/users`. */
+export function rowLabelOf(line: SummaryLineIpc): string {
+  return line.protocol === "http" ? `${line.method} ${line.url_template}` : `${shortService(line.service)}.${line.method}`;
+}
+
+/** The address template of a gRPC call, the URL template of an HTTP call. */
+export function targetOf(line: SummaryLineIpc): string {
+  return line.protocol === "http" ? line.url_template : line.address_template;
 }
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
@@ -51,39 +61,33 @@ export function formatCallTime(startedAtMs: number, nowMs: number = Date.now()):
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${time}`;
 }
 
+function searchFieldsOf(line: SummaryLineIpc): string[] {
+  const id = line.protocol === "http" ? [line.method] : [line.service, line.method];
+  return [...id, targetOf(line), statusTextOf(line)];
+}
+
 export function filterRows(rows: readonly CallSummaryIpc[], filter: HistoryFilter): CallSummaryIpc[] {
   const text = filter.text.trim().toLowerCase();
-  return rows.filter((row) => {
-    if (filter.chip !== "all" && verdictOf(row.ending) !== filter.chip) return false;
+  return rows.filter(({ line }) => {
+    if (filter.chip !== "all" && verdictOf(line) !== filter.chip) return false;
     if (!text) return true;
-    return [row.service, row.method, row.address_template, statusTextOf(row.ending)].some((s) =>
-      s.toLowerCase().includes(text),
-    );
+    return searchFieldsOf(line).some((s) => s.toLowerCase().includes(text));
   });
 }
 
-export function recordKind(record: CallRecordIpc): MethodKind {
-  const o = record.outcome;
+/** null for HTTP, which has no method kind. */
+export function recordKind(record: CallRecordIpc): MethodKind | null {
+  if (record.call.protocol === "http") return null;
+  const o = record.call.outcome;
   return o.type === "stream" || o.type === "stream_refused" ? o.kind : "unary";
 }
 
 export type OpenPlan =
-  | { kind: "bound"; draft: Step; origin: DraftOrigin }
-  | { kind: "unbound"; draft: Step; originMissing: boolean };
+  | { kind: "bound"; draft: Draft; origin: DraftOrigin }
+  | { kind: "unbound"; draft: Draft; originMissing: boolean };
 
 export function planHistoryOpen(record: CallRecordIpc, tree: readonly CollectionIpc[]): OpenPlan {
-  const r = record.request;
-  const draftIn = (collectionId: string | null) =>
-    newStep({
-      address: r.address_template,
-      tls: r.tls_override,
-      service: r.service,
-      method: r.method,
-      requestJson: r.body_template,
-      metadata: r.metadata.map((row) => ({ ...row })),
-      auth: r.auth,
-      collectionId,
-    });
+  const draftIn = (collectionId: string | null) => draftFromTemplate(recordedTemplateOf(record.call), collectionId);
   const o = record.origin;
   if (!o) return { kind: "unbound", draft: draftIn(null), originMissing: false };
   const saved = findSavedRequest(tree, o.collection_id, o.request_id);

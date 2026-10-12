@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ItemIpc } from "@/ipc/bindings";
@@ -6,19 +6,53 @@ import type { TreeCallbacks } from "./treeTypes";
 import { RequestRow } from "./RequestRow";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { setPref } from "@/lib/use-prefs";
+import { HTTP_METHODS } from "@/features/http/model";
 
 function req(name: string): Extract<ItemIpc, { type: "request" }> {
   return {
     type: "request",
     id: "r1",
     name,
-    address_template: "h:443",
-    service: "p.v1.S",
-    method: "GetX",
-    body_template: "{}",
-    metadata: [],
-    auth: { kind: "none" },
-    tls_override: null,
+    template: {
+      protocol: "grpc",
+      address_template: "h:443",
+      service: "p.v1.S",
+      method: "GetX",
+      body_template: "{}",
+      metadata: [],
+      auth: { kind: "none" },
+      tls_override: null,
+    },
+    last_used_at: null,
+    use_count: 0,
+  };
+}
+
+function httpReq(
+  name: string,
+  method:
+    | "GET"
+    | "POST"
+    | "PUT"
+    | "PATCH"
+    | "DELETE"
+    | "HEAD"
+    | "OPTIONS" = "GET",
+  id = "h1",
+): Extract<ItemIpc, { type: "request" }> {
+  return {
+    type: "request",
+    id,
+    name,
+    template: {
+      protocol: "http",
+      method,
+      url_template: "http://127.0.0.1/echo",
+      query: [],
+      headers: [],
+      body: { kind: "none" },
+      auth: { kind: "none" },
+    },
     last_used_at: null,
     use_count: 0,
   };
@@ -42,6 +76,7 @@ function makeCb(over: Partial<TreeCallbacks> = {}): TreeCallbacks {
     onRequestDeleteCollection: vi.fn(),
     onExportCollection: vi.fn(),
     onAddRequest: vi.fn(),
+    onAddHttpRequest: vi.fn(),
     onAddFolder: vi.fn(),
     onSetPinned: vi.fn(),
     dragId: null,
@@ -59,11 +94,17 @@ function renderWithSidebar(ui: React.ReactElement) {
 }
 
 describe("RequestRow", () => {
-  it("renders no gRPC icon by default (grpcIcon 'off')", () => {
+  beforeEach(() => {
+    act(() => setPref("grpcIcon", "letter"));
+  });
+
+  it("renders the letter gRPC icon by default", () => {
     renderWithSidebar(
       <RequestRow collectionId="c1" req={req("My Req")} cb={makeCb()} />,
     );
-    expect(screen.queryByLabelText("grpc")).toBeNull();
+    expect(screen.getByLabelText("grpc").getAttribute("data-variant")).toBe(
+      "letter",
+    );
     expect(screen.getByText("My Req")).toBeTruthy();
   });
 
@@ -75,9 +116,10 @@ describe("RequestRow", () => {
       );
       const icon = screen.getByLabelText("grpc");
       expect(icon.getAttribute("data-variant")).toBe("solid");
+      expect(icon.textContent).toBe("g");
+      expect(icon.className).toContain("size-4");
     } finally {
-      // Broadcasts to the mounted row's usePrefs subscriber ⇒ a React state update.
-      act(() => setPref("grpcIcon", "off")); // reset the module-level singleton for sibling tests
+      act(() => setPref("grpcIcon", "letter"));
     }
   });
 
@@ -225,6 +267,96 @@ describe("RequestRow", () => {
       <RequestRow collectionId="c1" req={req("R")} cb={makeCb()} />,
     );
     expect(document.querySelector("[data-drop-line]")).toBeNull();
+  });
+
+  it("shows a short mark in one 4ch column, with the full method on the abbreviated ones", () => {
+    renderWithSidebar(
+      <>
+        <RequestRow collectionId="c1" req={req("SendError")} cb={makeCb()} />
+        {HTTP_METHODS.map((method) => (
+          <RequestRow
+            key={method}
+            collectionId="c1"
+            req={httpReq("Posts", method, method)}
+            cb={makeCb()}
+          />
+        ))}
+      </>,
+    );
+    const columns = document.querySelectorAll("[data-method-column]");
+    expect(columns).toHaveLength(HTTP_METHODS.length + 1);
+    for (const column of columns) {
+      expect((column as HTMLElement).style.width).toBe("4ch");
+    }
+    const icon = screen.getByLabelText("grpc");
+    expect(icon.getAttribute("data-variant")).toBe("letter");
+    expect(icon.textContent).toBe("gRPC");
+    expect(icon.className).toContain("text-[9px]");
+    expect(icon.className).toContain("font-semibold");
+    expect(icon.className).toContain("text-grpc");
+    expect(icon.className).toContain("translate-y-[0.8px]");
+    const get = screen.getByText("GET");
+    expect(get.className).toContain("text-[9px]");
+    expect(get.className).toContain("font-semibold");
+    expect(get.className).toContain("text-ok");
+    expect(screen.getByText("POST").className).toContain("text-warn");
+    expect(screen.getByText("PUT").className).toContain("text-info");
+    expect(screen.getByText("PAT").className).toContain("text-kind-bidi");
+    expect(screen.getByText("DEL").className).toContain(
+      "text-[hsl(0_72%_68%)]",
+    );
+    expect(screen.getByText("HEAD").className).toContain(
+      "text-muted-foreground",
+    );
+    expect(screen.getByText("OPT").className).toContain(
+      "text-muted-foreground",
+    );
+    expect((columns[0] as HTMLElement).className).toContain("text-[9px]");
+    expect(screen.getByText("DEL")).toHaveAttribute("aria-label", "DELETE");
+    expect(screen.getByText("DEL")).toHaveAttribute("title", "DELETE");
+    expect(screen.getByText("OPT")).toHaveAttribute("aria-label", "OPTIONS");
+    expect(screen.getByText("OPT")).toHaveAttribute("title", "OPTIONS");
+    expect(screen.getByText("PAT")).toHaveAttribute("aria-label", "PATCH");
+    expect(screen.getByText("PAT")).toHaveAttribute("title", "PATCH");
+    for (const label of ["GET", "POST", "PUT", "HEAD"]) {
+      expect(screen.getByText(label).textContent).toBe(label);
+    }
+  });
+
+  it("keeps the short mark while renaming", () => {
+    renderWithSidebar(
+      <RequestRow
+        collectionId="c1"
+        req={httpReq("Posts", "DELETE", "h1")}
+        cb={makeCb({ editingId: "h1" })}
+      />,
+    );
+    const word = screen.getByText("DEL");
+    expect(word).toHaveAttribute("aria-label", "DELETE");
+    expect((word.parentElement as HTMLElement).style.width).toBe("4ch");
+    expect(screen.getByLabelText("rename-input")).toHaveValue("Posts");
+  });
+
+  it("keeps an empty column when the gRPC icon is off", () => {
+    act(() => setPref("grpcIcon", "off"));
+    renderWithSidebar(
+      <>
+        <RequestRow collectionId="c1" req={req("SendError")} cb={makeCb()} />
+        <RequestRow
+          collectionId="c1"
+          req={httpReq("Posts", "GET", "h1")}
+          cb={makeCb()}
+        />
+      </>,
+    );
+    expect(screen.queryByLabelText("grpc")).toBeNull();
+    const columns = document.querySelectorAll("[data-method-column]");
+    expect(columns).toHaveLength(2);
+    for (const column of columns) {
+      expect((column as HTMLElement).style.width).toBe("4ch");
+    }
+    expect(columns[0].textContent).toBe("");
+    expect(screen.getByText("GET").textContent).toBe("GET");
   });
 
   it("renders no drop line when dropHint targets another row", () => {

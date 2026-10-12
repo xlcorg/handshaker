@@ -1,6 +1,8 @@
 import * as ipc from "@/ipc/client";
 import type { SendReportIpc, StreamEventIpc } from "@/ipc/bindings";
-import { callOptionsOf, cancelStep, sendCtxOf, sendDraftOf, sendStep, type SendResult } from "./actions";
+import { callOptionsOf, cancelStep, sendCtxOf, sendHttp, sendStep, type SendResult } from "./actions";
+import { grpcTemplateOf } from "@/features/catalog/mapping";
+import type { HttpRun, HttpStep } from "@/features/http/model";
 import { workflowStore, type DraftOrigin } from "./store";
 import type { Step } from "./model";
 import {
@@ -11,7 +13,7 @@ import {
   type KindMismatchFault,
 } from "./netDiagnostics";
 import { isLivePhase, streamStore, type StreamEntry } from "@/features/stream/streamStore";
-import { buildRecord, streamKindOf } from "@/features/history/record";
+import { buildHttpRecord, buildRecord, streamKindOf } from "@/features/history/record";
 import { historyStore } from "@/features/history/store";
 import { isStreaming, type MethodKind } from "@/lib/method-kind";
 import { newId } from "@/lib/ids";
@@ -71,6 +73,51 @@ export async function runCall(args: CallArgs): Promise<void> {
   } finally {
     gates.delete(id);
   }
+}
+
+export interface HttpCallArgs {
+  /** The draft as it is sent. The executed snapshot and the call record freeze this value. */
+  draft: HttpStep;
+  envName: string | null;
+  /** Set the run of the draft this call belongs to, addressed by its id. */
+  onRun: (run: HttpRun) => void;
+  recording: Recording | null;
+}
+
+export async function runHttpCall({ draft, envName, onRun, recording }: HttpCallArgs): Promise<void> {
+  if (draft.run.status === "sending" || gates.has(draft.id)) return;
+  gates.set(draft.id, { cancelled: false });
+  try {
+    const startedAt = Date.now();
+    const requestId = newId();
+    onRun({ status: "sending", requestId });
+    const res = await sendHttp(draft, envName, requestId);
+    if (res.kind === "cancelled") return onRun({ status: "draft" });
+    const run: HttpRun =
+      res.kind === "ok"
+        ? { status: "done", response: res.report.response, authUsed: res.report.auth_used }
+        : { status: "error", error: res.fault };
+    onRun(run);
+    if (!recording) return;
+    if (res.kind === "ok") {
+      workflowStore.commitExecutedStep({ ...draft, id: newId(), run });
+      void bumpOriginUsage(recording);
+    }
+    void historyStore.record(
+      buildHttpRecord(
+        { id: requestId, draft, startedAt, origin: recording.origin },
+        res.kind === "ok"
+          ? { type: "response", response: res.report.response }
+          : { type: "fault", fault: res.fault, elapsedMs: Date.now() - startedAt },
+      ),
+    );
+  } finally {
+    gates.delete(draft.id);
+  }
+}
+
+export async function cancelHttpCall(draft: HttpStep): Promise<void> {
+  if (draft.run.status === "sending") await cancelStep(draft.run.requestId);
 }
 
 export async function cancelCall({ step }: Pick<CallArgs, "step">): Promise<void> {
@@ -162,7 +209,7 @@ async function openStream(args: CallArgs, kind: MethodKind): Promise<KindMismatc
     }
   };
   try {
-    await ipc.streamOpen(sendDraftOf(step), sendCtxOf(step, envName), id, kind, callOptionsOf(), onEvent);
+    await ipc.streamOpen(grpcTemplateOf(step), sendCtxOf(step, envName), id, kind, callOptionsOf(), onEvent);
     markOpened(id);
   } catch (e) {
     if (!liveCalls.has(id)) return null;

@@ -13,6 +13,7 @@ use handshaker_core::env::EnvironmentStore;
 use handshaker_core::error::CoreError;
 use handshaker_core::grpc::{ContractCache, FileContractCache, InMemoryContractCache, TonicTransport};
 use handshaker_core::history::FileHistoryStore;
+use handshaker_core::http::ReqwestTransport;
 use handshaker_core::send::Sender;
 use handshaker_core::stream::StreamRegistry;
 use handshaker_core::ui_state::FileUiStateStore;
@@ -69,15 +70,16 @@ pub struct AppState {
     pub recovered: Mutex<Vec<String>>,
 }
 
-/// The one production `Sender`: real tonic transport + the session token cache +
-/// the session contract cache + system builtins.
+/// The one production `Sender`: real tonic and reqwest transports + the session token
+/// cache + the session contract cache + system builtins.
 fn build_sender(
     oauth2_provider: &Arc<Oauth2TokenProvider>,
     contract_cache: &Arc<dyn ContractCache>,
-) -> Arc<Sender> {
-    let transport = Arc::new(TonicTransport::new());
+) -> Result<Arc<Sender>, CoreError> {
+    let grpc = Arc::new(TonicTransport::new());
+    let http = Arc::new(ReqwestTransport::new(env!("CARGO_PKG_VERSION"))?);
     let tokens: Arc<dyn TokenSource> = oauth2_provider.clone();
-    Arc::new(Sender::new(transport, tokens, contract_cache.clone(), Arc::new(SystemBuiltins)))
+    Ok(Arc::new(Sender::new(grpc, http, tokens, contract_cache.clone(), Arc::new(SystemBuiltins))))
 }
 
 impl Default for AppState {
@@ -90,7 +92,7 @@ impl Default for AppState {
             std::env::temp_dir().join(format!("handshaker-history-{}", unique_temp_suffix()));
         let contract_cache: Arc<dyn ContractCache> = Arc::new(InMemoryContractCache::new());
         let oauth2_provider = Arc::new(Oauth2TokenProvider::new());
-        let sender = build_sender(&oauth2_provider, &contract_cache);
+        let sender = build_sender(&oauth2_provider, &contract_cache).expect("build sender");
         Self {
             env_store: Arc::new(InMemoryEnvironmentStore::new()),
             active_env: RwLock::new(None),
@@ -152,7 +154,7 @@ impl AppState {
         let contract_cache: Arc<dyn ContractCache> =
             Arc::new(FileContractCache::load(data_dir.join("contracts"))?);
         let oauth2_provider = Arc::new(Oauth2TokenProvider::new());
-        let sender = build_sender(&oauth2_provider, &contract_cache);
+        let sender = build_sender(&oauth2_provider, &contract_cache)?;
         Ok(Self {
             env_store: Arc::new(env_store),
             active_env: RwLock::new(validated),

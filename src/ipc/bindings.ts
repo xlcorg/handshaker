@@ -140,7 +140,7 @@ export const commands = {
     }
   },
   async grpcSend(
-    draft: SendDraftIpc,
+    request: GrpcTemplateIpc,
     ctx: SendCtxIpc,
     requestId: string,
     opts: CallOptionsIpc,
@@ -148,7 +148,12 @@ export const commands = {
     try {
       return {
         status: "ok",
-        data: await TAURI_INVOKE("grpc_send", { draft, ctx, requestId, opts }),
+        data: await TAURI_INVOKE("grpc_send", {
+          request,
+          ctx,
+          requestId,
+          opts,
+        }),
       };
     } catch (e) {
       if (e instanceof Error) throw e;
@@ -164,6 +169,30 @@ export const commands = {
       return {
         status: "ok",
         data: await TAURI_INVOKE("grpc_cancel", { requestId }),
+      };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
+  /**
+   * Send one HTTP request. Cancel it by `request_id` through `grpc_cancel`.
+   */
+  async httpSend(
+    request: HttpTemplateIpc,
+    ctx: SendCtxIpc,
+    requestId: string,
+    opts: CallOptionsIpc,
+  ): Promise<Result<HttpSendReportIpc, IpcError>> {
+    try {
+      return {
+        status: "ok",
+        data: await TAURI_INVOKE("http_send", {
+          request,
+          ctx,
+          requestId,
+          opts,
+        }),
       };
     } catch (e) {
       if (e instanceof Error) throw e;
@@ -192,7 +221,7 @@ export const commands = {
     }
   },
   async streamOpen(
-    draft: SendDraftIpc,
+    request: GrpcTemplateIpc,
     ctx: SendCtxIpc,
     requestId: string,
     kind: MethodKindIpc,
@@ -203,7 +232,7 @@ export const commands = {
       return {
         status: "ok",
         data: await TAURI_INVOKE("stream_open", {
-          draft,
+          request,
           ctx,
           requestId,
           kind,
@@ -937,18 +966,8 @@ export type CallRecordIpc = {
   id: string;
   started_at_ms: number;
   origin: CallOriginIpc | null;
-  request: CallRequestIpc;
   elapsed_ms: number;
-  outcome: CallOutcomeIpc;
-};
-export type CallRequestIpc = {
-  address_template: string;
-  tls_override: boolean | null;
-  service: string;
-  method: string;
-  body_template: string;
-  metadata: MetadataRowIpc[];
-  auth: SavedAuthConfigIpc;
+  call: RecordedCallIpc;
 };
 export type CallStatusIpc = {
   code: number;
@@ -958,12 +977,8 @@ export type CallStatusIpc = {
 export type CallSummaryIpc = {
   id: string;
   started_at_ms: number;
-  kind: MethodKindIpc;
-  service: string;
-  method: string;
-  address_template: string;
   elapsed_ms: number;
-  ending: CallEndingIpc;
+  line: SummaryLineIpc;
 };
 export type CollectionIpc = {
   id: string;
@@ -1034,8 +1049,74 @@ export type GrpcTargetIpc = {
   tls: boolean;
   skip_verify: boolean;
 };
+/**
+ * A gRPC call as authored: the saved content, the Send and Open input, and the history
+ * request.
+ */
+export type GrpcTemplateIpc = {
+  address_template: string;
+  /**
+   * `None` inherits the collection's `default_tls`, resolved in core at Send time.
+   */
+  tls_override: boolean | null;
+  service: string;
+  method: string;
+  body_template: string;
+  metadata: MetadataRowIpc[];
+  auth: SavedAuthConfigIpc;
+};
+export type HeaderRowIpc = { name: string; value: string };
 export type HelpLinkIpc = { description: string; url: string };
 export type HistoryPageIpc = { revision: number; rows: CallSummaryIpc[] };
+export type HttpBodyIpc =
+  | { kind: "none" }
+  | { kind: "json"; text: string }
+  | { kind: "text"; text: string }
+  | { kind: "form"; fields: MetadataRowIpc[] };
+export type HttpEndingIpc =
+  | { type: "status"; code: number }
+  | { type: "fault"; kind: string };
+export type HttpMethodIpc =
+  | "GET"
+  | "POST"
+  | "PUT"
+  | "PATCH"
+  | "DELETE"
+  | "HEAD"
+  | "OPTIONS";
+export type HttpOutcomeIpc =
+  | { type: "response"; response: HttpResponseIpc }
+  | { type: "fault"; fault: CallFaultIpc };
+/**
+ * Sizes and times saturate at `u32::MAX`: specta forbids u64 at the IPC boundary.
+ */
+export type HttpResponseIpc = {
+  status: number;
+  reason: string;
+  headers: HeaderRowIpc[];
+  body: ResponseBodyIpc;
+  size_bytes: number;
+  elapsed_ms: number;
+};
+/**
+ * `auth_used` is the picked config in template form, `{ kind: "none" }` when
+ * unauthenticated, as in `SendReportIpc`.
+ */
+export type HttpSendReportIpc = {
+  response: HttpResponseIpc;
+  auth_used: SavedAuthConfigIpc;
+};
+/**
+ * The HTTP request as authored: `{{var}}` intact, disabled and keyless rows included.
+ */
+export type HttpTemplateIpc = {
+  method: HttpMethodIpc;
+  url_template: string;
+  query: MetadataRowIpc[];
+  headers: MetadataRowIpc[];
+  body: HttpBodyIpc;
+  auth: SavedAuthConfigIpc;
+};
 /**
  * Result of applying an import (merge).
  */
@@ -1117,7 +1198,8 @@ export type IpcError =
   | { type: "Auth"; message: string }
   | { type: "GrpcStatus"; code: number; message: string }
   | { type: "NotImplemented"; message: string }
-  | { type: "Persistence"; message: string };
+  | { type: "Persistence"; message: string }
+  | { type: "InvalidUrl"; problem: UrlProblemIpc };
 export type ItemIpc =
   | ({ type: "folder" } & FolderIpc)
   | ({ type: "request" } & SavedRequestIpc);
@@ -1189,6 +1271,12 @@ export type RecordedBodyIpc =
   | { type: "absent" }
   | { type: "inline"; json: string }
   | { type: "omitted"; size_bytes: number };
+/**
+ * The request paired with an outcome of the same protocol.
+ */
+export type RecordedCallIpc =
+  | { protocol: "grpc"; request: GrpcTemplateIpc; outcome: CallOutcomeIpc }
+  | { protocol: "http"; request: HttpTemplateIpc; outcome: HttpOutcomeIpc };
 export type RecordedMessageIpc = {
   direction: MessageDirectionIpc;
   index: number;
@@ -1197,12 +1285,25 @@ export type RecordedMessageIpc = {
   preview: string;
   json: string | null;
 };
+/**
+ * Over IPC the tag is always present, so no compat repr is needed here.
+ */
+export type RequestTemplateIpc =
+  | ({ protocol: "grpc" } & GrpcTemplateIpc)
+  | ({ protocol: "http" } & HttpTemplateIpc);
 export type ResolutionReportIpc = {
   resolved: string;
   unresolved_vars: string[];
   cycle_chain: string[] | null;
   dynamic_vars: string[];
 };
+export type ResponseBodyIpc =
+  | { type: "empty" }
+  | { type: "json"; text: string }
+  | { type: "text"; text: string }
+  | { type: "binary" }
+  | { type: "too_large"; limit_bytes: number }
+  | { type: "omitted" };
 export type SavedAuthConfigIpc =
   | { kind: "none" }
   | {
@@ -1225,15 +1326,13 @@ export type SavedAuthConfigIpc =
 export type SavedRequestIpc = {
   id: string;
   name: string;
-  address_template: string;
-  service: string;
-  method: string;
-  body_template: string;
-  metadata: MetadataRowIpc[];
-  auth: SavedAuthConfigIpc;
-  tls_override: boolean | null;
   last_used_at: number | null;
   use_count: number;
+  /**
+   * Nested, not flattened: tsc then flags every frontend read of a protocol field
+   * that skipped the narrowing.
+   */
+  template: RequestTemplateIpc;
 };
 /**
  * Send-time context (which collection, which active environment) — the pieces
@@ -1243,24 +1342,6 @@ export type SavedRequestIpc = {
 export type SendCtxIpc = {
   collection_id: string | null;
   env_name: string | null;
-};
-/**
- * Raw, unresolved request draft as it lives in the frontend step — the input to
- * `grpc_send`. Templates (address/body/metadata values) are resolved via
- * `resolve_request` against the collection + active environment carried in `SendCtxIpc`.
- */
-export type SendDraftIpc = {
-  address_template: string;
-  /**
-   * Per-request TLS override. `None` = inherit the collection's `default_tls`
-   * (resolved in core against the ctx collection); `Some(b)` = force on/off.
-   */
-  tls_override: boolean | null;
-  service: string;
-  method: string;
-  body_template: string;
-  metadata: MetadataRowIpc[];
-  auth: SavedAuthConfigIpc;
 };
 /**
  * Send report: the invoke outcome plus the facts the resolve pipeline actually
@@ -1340,6 +1421,21 @@ export type StreamTerminationIpc =
   | { type: "status"; status: CallStatusIpc }
   | { type: "fault"; fault: CallFaultIpc }
   | { type: "cancelled" };
+export type SummaryLineIpc =
+  | {
+      protocol: "grpc";
+      kind: MethodKindIpc;
+      service: string;
+      method: string;
+      address_template: string;
+      ending: CallEndingIpc;
+    }
+  | {
+      protocol: "http";
+      method: HttpMethodIpc;
+      url_template: string;
+      ending: HttpEndingIpc;
+    };
 /**
  * Structured classification of a transport-connect failure. Lets the frontend
  * narrow on a kind instead of regex-parsing the message string.
@@ -1350,6 +1446,13 @@ export type UiStateIpc = {
   active_request: ActiveRequestRefIpc | null;
   links_placement?: LinksPlacementIpc;
 };
+/**
+ * Why a resolved URL cannot be sent. Never carries the URL: it can hold secrets.
+ */
+export type UrlProblemIpc =
+  | { type: "missing_scheme" }
+  | { type: "unsupported_scheme"; scheme: string }
+  | { type: "malformed"; reason: string };
 /**
  * Optional resolve context for `vars_resolve`. All fields optional:
  * - `collection_id` — live paths; the backend reads the collection's vars from the store;

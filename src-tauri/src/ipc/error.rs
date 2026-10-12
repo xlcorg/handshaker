@@ -5,6 +5,7 @@ use handshaker_core::CoreError;
 use serde::Serialize;
 use specta::Type;
 
+use crate::ipc::http::UrlProblemIpc;
 use crate::ipc::MethodKindIpc;
 
 /// Structured classification of a transport-connect failure. Lets the frontend
@@ -71,6 +72,7 @@ pub enum IpcError {
     GrpcStatus { code: i32, message: String },
     NotImplemented { message: String },
     Persistence { message: String },
+    InvalidUrl { problem: UrlProblemIpc },
 }
 
 impl From<CoreError> for IpcError {
@@ -120,6 +122,9 @@ impl From<CoreError> for IpcError {
             CoreError::ResolveFailed { unresolved, cycle } => {
                 IpcError::UnresolvedVars { unresolved, cycle }
             }
+            CoreError::InvalidUrl { problem } => {
+                IpcError::InvalidUrl { problem: UrlProblemIpc::from_core(problem) }
+            }
         }
     }
 }
@@ -128,6 +133,7 @@ impl From<CoreError> for IpcError {
 mod tests {
     use super::{IpcError, TransportKindIpc};
     use crate::ipc::MethodKindIpc;
+    use handshaker_core::http::UrlProblem;
     use handshaker_core::stream::MethodKind;
     use handshaker_core::CoreError;
 
@@ -165,9 +171,10 @@ mod tests {
             },
             CoreError::StreamNotFound { request_id: "r".into() },
             CoreError::StreamFieldNotFound { request_id: "r".into(), field_path: "data".into() },
+            CoreError::InvalidUrl { problem: UrlProblem::MissingScheme },
         ];
 
-        assert_eq!(cases.len(), 23, "Update this test when CoreError variants change");
+        assert_eq!(cases.len(), 24, "Update this test when CoreError variants change");
 
         for c in cases {
             // Smoke test: From impl must succeed for every variant. If a future CoreError variant
@@ -277,6 +284,16 @@ mod tests {
         }
         let j = serde_json::to_string(&e).unwrap();
         assert!(j.contains(r#""type":"StreamFieldNotFound""#) && j.contains(r#""field_path":"chunk.data""#), "{j}");
+    }
+
+    #[test]
+    fn invalid_url_crosses_with_its_problem_tagged_by_type() {
+        let e: IpcError =
+            CoreError::InvalidUrl { problem: UrlProblem::UnsupportedScheme { scheme: "ftp".into() } }.into();
+        assert_eq!(
+            serde_json::to_string(&e).unwrap(),
+            r#"{"type":"InvalidUrl","problem":{"type":"unsupported_scheme","scheme":"ftp"}}"#
+        );
     }
 
     #[test]

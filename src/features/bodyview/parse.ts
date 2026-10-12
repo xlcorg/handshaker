@@ -146,6 +146,7 @@ export function parseWithSpans(text: string): { tree: JsonTree; spans: ValueSpan
 
     const node: JsonNode = {
       id, parentId, key, index, kind, value, depth,
+      literal: kind === "number" ? c.s.slice(start, c.i) : null,
       childIds, childCount: childIds.length,
     };
     nodes[id] = node;

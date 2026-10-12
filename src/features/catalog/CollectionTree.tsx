@@ -32,6 +32,7 @@ export interface CollectionTreeProps {
   onDeleteCollection: (collectionId: string) => void;
   onExportCollection: (collectionId: string) => void;
   onAddRequest: (collectionId: string, parentId: string | null) => void;
+  onAddHttpRequest: (collectionId: string, parentId: string | null) => void;
   onAddFolder: (collectionId: string, parentId: string | null) => void;
   onSetPinned: (collectionId: string, pinned: boolean) => void;
   onMoveItem: (collectionId: string, itemId: string, parentId: string | null, position: number) => void;
@@ -300,6 +301,7 @@ export const CollectionTree = forwardRef<CollectionTreeHandle, CollectionTreePro
     onRequestDeleteCollection: (collectionId) => setDelTarget({ kind: "collection", collectionId }),
     onExportCollection: props.onExportCollection,
     onAddRequest: props.onAddRequest,
+    onAddHttpRequest: props.onAddHttpRequest,
     onAddFolder: props.onAddFolder,
     onSetPinned: props.onSetPinned,
     dragId: drag?.itemId ?? null,

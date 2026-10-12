@@ -26,9 +26,12 @@ beforeEach(() => {
 
 function req(name: string): Extract<ItemIpc, { type: "request" }> {
   return {
-    type: "request", id: "r1", name, address_template: "h:443", service: "p.v1.S",
-    method: "GetX", body_template: "{}", metadata: [], auth: { kind: "none" },
-    tls_override: null, last_used_at: null, use_count: 0,
+    type: "request",
+    id: "r1",
+    name,
+    template: { protocol: "grpc", address_template: "h:443", service: "p.v1.S", method: "GetX", body_template: "{}", metadata: [], auth: { kind: "none" }, tls_override: null },
+    last_used_at: null,
+    use_count: 0,
   };
 }
 
@@ -39,7 +42,7 @@ function makeCb(over: Partial<TreeCallbacks> = {}): TreeCallbacks {
     onOpenCollection: vi.fn(), onRenameItem: vi.fn(), onRenameCollection: vi.fn(),
     onDuplicateItem: vi.fn(), onRequestDeleteItem: vi.fn(), onRequestDeleteCollection: vi.fn(),
     onExportCollection: vi.fn(),
-    onAddRequest: vi.fn(), onAddFolder: vi.fn(), onSetPinned: vi.fn(),
+    onAddRequest: vi.fn(), onAddHttpRequest: vi.fn(), onAddFolder: vi.fn(), onSetPinned: vi.fn(),
     dragId: null, dropHint: null, onDragStartItem: vi.fn(), onDragOverRow: vi.fn(),
     onDropRow: vi.fn(), onDragEndItem: vi.fn(), ...over,
   };

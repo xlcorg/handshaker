@@ -47,6 +47,7 @@ export interface BodyViewProps {
   varCandidates?: VarCandidate[];
   /** Response mode only: save the FULL body to a file (context-menu action). */
   onSaveBody?: () => void;
+  language?: "json-with-vars" | "plaintext";
 }
 
 interface Live {
@@ -81,7 +82,7 @@ interface Live {
   minimapSubs: DisposableLike[];
 }
 
-export function BodyView({ mode, value, onChange, onSubmit, schema, varCandidates, onSaveBody }: BodyViewProps) {
+export function BodyView({ mode, value, onChange, onSubmit, schema, varCandidates, onSaveBody, language = "json-with-vars" }: BodyViewProps) {
   const [prefs] = usePrefs();
   const live = useRef<Live | null>(null);
   // Ref so the Monaco command (bound once in onMount) always calls the freshest handler.
@@ -98,7 +99,7 @@ export function BodyView({ mode, value, onChange, onSubmit, schema, varCandidate
   const renderResponse = (text: string) => {
     const l = live.current;
     if (!l) return;
-    if (exceedsByteCeiling(text)) {
+    if (language !== "json-with-vars" || exceedsByteCeiling(text)) {
       l.tree = null; l.spans = []; l.badges = [];
       l.editor.updateOptions({ folding: false });
       l.editor.getModel()?.setValue(text);
@@ -504,7 +505,7 @@ export function BodyView({ mode, value, onChange, onSubmit, schema, varCandidate
       <MonacoEditor
         key={key}
         height="100%"
-        defaultLanguage="json-with-vars"
+        defaultLanguage={language}
         theme={MONACO_THEME}
         value={value}
         onChange={mode === "request" ? handleChange : undefined}

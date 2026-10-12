@@ -1,13 +1,13 @@
-import type { Step, Workflow } from "./model";
+import type { Draft, Step, Workflow } from "./model";
 
-export function addStep(wf: Workflow, step: Step): Workflow {
+export function addStep(wf: Workflow, step: Draft): Workflow {
   return { ...wf, steps: [...wf.steps, step], activeStepId: step.id };
 }
 
 export function updateStep(wf: Workflow, id: string, patch: Partial<Step>): Workflow {
   let changed = false;
   const steps = wf.steps.map((s) => {
-    if (s.id !== id) return s;
+    if (s.id !== id || s.protocol !== "grpc") return s;
     changed = true;
     return { ...s, ...patch };
   });

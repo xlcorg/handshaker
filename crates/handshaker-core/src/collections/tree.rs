@@ -197,7 +197,7 @@ fn reassign_ids(item: &mut Item) -> ItemId {
 mod tests {
     use super::*;
     use crate::auth::SavedAuthConfig;
-    use crate::collections::{Folder, SavedRequest};
+    use crate::collections::{Folder, GrpcTemplate, RequestTemplate, SavedRequest};
     use uuid::Uuid;
 
     fn iid(n: u128) -> ItemId {
@@ -208,15 +208,17 @@ mod tests {
         Item::Request(SavedRequest {
             id,
             name: name.to_string(),
-            address_template: "{{host}}".into(),
-            service: "svc".into(),
-            method: "M".into(),
-            body_template: "{}".into(),
-            metadata: vec![],
-            auth: SavedAuthConfig::None,
-            tls_override: None,
             last_used_at: None,
             use_count: 0,
+            template: RequestTemplate::Grpc(GrpcTemplate {
+                address_template: "{{host}}".into(),
+                service: "svc".into(),
+                method: "M".into(),
+                body_template: "{}".into(),
+                metadata: vec![],
+                auth: SavedAuthConfig::None,
+                tls_override: None,
+            }),
         })
     }
 

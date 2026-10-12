@@ -17,9 +17,12 @@ vi.mock("@/ipc/client", () => ({
 import { CatalogProvider, useCatalog } from "./CatalogProvider";
 
 const req: ItemIpc = {
-  type: "request", id: "req-1", name: "GetX", address_template: "h:443",
-  service: "p.S", method: "GetX", body_template: "{}", metadata: [],
-  auth: { kind: "none" }, tls_override: null, last_used_at: null, use_count: 0,
+  type: "request",
+  id: "req-1",
+  name: "GetX",
+  template: { protocol: "grpc", address_template: "h:443", service: "p.S", method: "GetX", body_template: "{}", metadata: [], auth: { kind: "none" }, tls_override: null },
+  last_used_at: null,
+  use_count: 0,
 };
 
 let addViaA: ((c: string, p: string | null, i: ItemIpc) => Promise<void>) | null = null;

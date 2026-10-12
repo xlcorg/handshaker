@@ -1,26 +1,189 @@
-//! Turn a `SavedRequest` + collection + active env into a fully-resolved
-//! `EffectiveRequest`. Auth resolves request → collection (folders carry none).
+//! One resolve session, two drivers. [`Resolution`] runs every `{{var}}` of a request
+//! through one accumulator and hands back [`Slot`]s; only a [`Settled`] session reads
+//! them or materializes auth. `resolve_request` drives it for gRPC, and
+//! `http::request::prepare` for HTTP. Auth resolves request → collection (folders carry
+//! none).
 //!
 //! Pure except for the `std::env` read inside `EnvVar` auth and the `TokenSource`
 //! call for OAuth2 → fully testable via `StaticTokenSource`.
 
 use std::collections::HashMap;
 
-use crate::auth::{materialize_env_var, pick_auth_config, OAuth2ClientCredentialsConfig, SavedAuthConfig, TokenSource};
+use crate::auth::{
+    materialize_env_var, pick_auth_config, AuthCredentials, OAuth2ClientCredentialsConfig, SavedAuthConfig,
+    TokenSource,
+};
 use crate::env::Environment;
 use crate::error::CoreError;
 use crate::grpc::GrpcTarget;
 use crate::vars::{resolve_template_with_diagnostics, VariableSet};
 
-use super::{Collection, EffectiveRequest, SavedRequest};
+use super::{Collection, EffectiveRequest, GrpcTemplate, MetadataRow};
+
+/// A resolved text, readable once from the [`Settled`] session that issued it. Not
+/// `Clone`, so no half-resolved string escapes a failed resolve.
+#[derive(Debug)]
+pub(crate) struct Slot(usize);
+
+/// One resolve, protocol-neutral. `settle` is the gate: only a `Settled` can read a slot
+/// or materialize auth, so a request that does not resolve never reads an env var or
+/// fetches a token.
+pub(crate) struct Resolution<'a> {
+    vars: ResolveVars,
+    acc: ResolveAcc,
+    texts: Vec<String>,
+    collection: Option<&'a Collection>,
+    active_env: Option<&'a Environment>,
+}
+
+impl<'a> Resolution<'a> {
+    /// Variables: env over collection. `None` collection = unbound draft.
+    pub(crate) fn begin(collection: Option<&'a Collection>, active_env: Option<&'a Environment>) -> Self {
+        Self {
+            vars: variable_set(collection, active_env),
+            acc: ResolveAcc::default(),
+            texts: Vec::new(),
+            collection,
+            active_env,
+        }
+    }
+
+    pub(crate) fn take(&mut self, template: &str) -> Slot {
+        let resolved = self.acc.take(template, &self.vars.as_set());
+        self.texts.push(resolved);
+        Slot(self.texts.len() - 1)
+    }
+
+    /// Enabled rows with a non-empty key, in authored order. Keys literal, values
+    /// resolved. Disabled and keyless rows are skipped before resolve, so their vars are
+    /// never reported.
+    pub(crate) fn rows(&mut self, rows: &[MetadataRow]) -> Vec<(String, Slot)> {
+        sendable(rows).map(|row| (row.key.clone(), self.take(&row.value))).collect()
+    }
+
+    /// [`Self::rows`] with the key resolved too, for rows that become URL-encoded pairs
+    /// (query params, form fields).
+    pub(crate) fn pairs(&mut self, rows: &[MetadataRow]) -> Vec<(Slot, Slot)> {
+        sendable(rows).map(|row| (self.take(&row.key), self.take(&row.value))).collect()
+    }
+
+    /// Request then collection, env-gated. An OAuth2 pick's token_url, client_id,
+    /// client_secret and scopes resolve into this accumulator, so an unresolved one is
+    /// reported alongside the request's own vars.
+    pub(crate) fn pick_auth(&mut self, request_auth: &SavedAuthConfig) -> AuthPick {
+        let collection_auth = self.collection.map(|c| &c.auth);
+        let picked =
+            pick_auth_config(request_auth, collection_auth, self.active_env.map(|e| e.name.as_str())).cloned();
+        let oauth = match &picked {
+            Some(SavedAuthConfig::OAuth2ClientCredentials(c)) => Some(OAuthSlots {
+                token_url: self.take(&c.token_url),
+                client_id: self.take(&c.client_id),
+                client_secret: self.take(&c.client_secret),
+                scopes: c.scopes.iter().map(|s| self.take(s)).collect(),
+            }),
+            _ => None,
+        };
+        AuthPick { picked, oauth }
+    }
+
+    /// `Err(ResolveFailed { unresolved, cycle })`, or the settled session.
+    pub(crate) fn settle(self) -> Result<Settled<'a>, CoreError> {
+        match self.acc.into_failure() {
+            Some(err) => Err(err),
+            None => Ok(Settled { texts: self.texts, collection: self.collection }),
+        }
+    }
+}
+
+fn sendable(rows: &[MetadataRow]) -> impl Iterator<Item = &MetadataRow> {
+    rows.iter().filter(|row| row.enabled && !row.key.is_empty())
+}
+
+/// The auth pick, before materialization. Only `Settled::materialize` consumes it.
+pub(crate) struct AuthPick {
+    picked: Option<SavedAuthConfig>,
+    oauth: Option<OAuthSlots>,
+}
+
+struct OAuthSlots {
+    token_url: Slot,
+    client_id: Slot,
+    client_secret: Slot,
+    scopes: Vec<Slot>,
+}
+
+pub(crate) struct Settled<'a> {
+    texts: Vec<String>,
+    collection: Option<&'a Collection>,
+}
+
+impl Settled<'_> {
+    pub(crate) fn text(&mut self, slot: Slot) -> String {
+        std::mem::take(&mut self.texts[slot.0])
+    }
+
+    pub(crate) fn default_tls(&self) -> bool {
+        self.collection.is_some_and(|c| c.default_tls)
+    }
+
+    pub(crate) fn skip_verify(&self) -> bool {
+        self.collection.is_some_and(|c| c.skip_tls_verify)
+    }
+
+    /// EnvVar reads the OS env var; OAuth2 asks `tokens` with the resolved config.
+    pub(crate) async fn materialize(&mut self, pick: AuthPick, tokens: &dyn TokenSource) -> Result<CallAuth, CoreError> {
+        let AuthPick { picked, oauth } = pick;
+        let (header, oauth) = match (&picked, oauth) {
+            (Some(SavedAuthConfig::EnvVar(c)), _) => (Some(materialize_env_var(c)?), None),
+            (Some(SavedAuthConfig::OAuth2ClientCredentials(c)), Some(slots)) => {
+                let cfg = OAuth2ClientCredentialsConfig {
+                    token_url: self.text(slots.token_url),
+                    client_id: self.text(slots.client_id),
+                    client_secret: self.text(slots.client_secret),
+                    scopes: slots.scopes.into_iter().map(|s| self.text(s)).collect(),
+                    header_name: c.header_name.clone(),
+                    prefix: c.prefix.clone(),
+                    environments: c.environments.clone(),
+                };
+                (Some(tokens.header_for(&cfg).await?), Some(cfg))
+            }
+            _ => (None, None),
+        };
+        Ok(CallAuth { header, oauth, picked })
+    }
+}
+
+/// The auth a call carries: the header to send, the resolved OAuth2 config whose cached
+/// token the unauthenticated rule may drop, and the pick in **template** form for the
+/// report (resolved secrets never reach it). Built only by `Settled::materialize`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CallAuth {
+    header: Option<AuthCredentials>,
+    oauth: Option<OAuth2ClientCredentialsConfig>,
+    picked: Option<SavedAuthConfig>,
+}
+
+impl CallAuth {
+    pub(crate) fn header(&self) -> Option<&AuthCredentials> {
+        self.header.as_ref()
+    }
+
+    pub(crate) fn oauth(&self) -> Option<&OAuth2ClientCredentialsConfig> {
+        self.oauth.as_ref()
+    }
+
+    pub(crate) fn into_picked(self) -> Option<SavedAuthConfig> {
+        self.picked
+    }
+}
 
 /// Resolve one request. `collection` is `None` for an unbound draft (no collection
 /// vars, no collection auth, TLS defaults `false`/`false`). `active_env` is `None`
 /// for "No environment". `tokens` materializes an OAuth2 header if the picked auth
 /// config is OAuth2 (real `Oauth2TokenProvider` in production, `StaticTokenSource`
 /// in tests).
-pub async fn resolve_request(
-    request: &SavedRequest,
+pub(crate) async fn resolve_request(
+    request: &GrpcTemplate,
     collection: Option<&Collection>,
     active_env: Option<&Environment>,
     tokens: &dyn TokenSource,
@@ -32,8 +195,8 @@ pub async fn resolve_request(
 /// nothing is sent at Open and the body is resolved per **Send message** instead
 /// ([`resolve_body`]). Address, metadata and auth resolve and materialize exactly as in
 /// `resolve_request`; `body_json` comes back empty and is never sent.
-pub async fn resolve_request_without_body(
-    request: &SavedRequest,
+pub(crate) async fn resolve_request_without_body(
+    request: &GrpcTemplate,
     collection: Option<&Collection>,
     active_env: Option<&Environment>,
     tokens: &dyn TokenSource,
@@ -42,70 +205,25 @@ pub async fn resolve_request_without_body(
 }
 
 async fn resolve_request_scoped(
-    request: &SavedRequest,
+    request: &GrpcTemplate,
     collection: Option<&Collection>,
     active_env: Option<&Environment>,
     tokens: &dyn TokenSource,
     with_body: bool,
 ) -> Result<EffectiveRequest, CoreError> {
-    // --- 1. Variables (priority env > collection) ---
-    let vars = variable_set(collection, active_env);
-    let vars = vars.as_set();
+    let mut r = Resolution::begin(collection, active_env);
+    let address = r.take(&request.address_template);
+    let body = with_body.then(|| r.take(&request.body_template));
+    let metadata = r.rows(&request.metadata);
+    let pick = r.pick_auth(&request.auth);
+    let mut s = r.settle()?;
 
-    let mut acc = ResolveAcc::default();
-    let address = acc.take(&request.address_template, &vars);
-    let body_json = if with_body { acc.take(&request.body_template, &vars) } else { String::new() };
-    let mut metadata = HashMap::with_capacity(request.metadata.len());
-    for row in &request.metadata {
-        if !row.enabled {
-            continue; // disabled rows are not sent
-        }
-        // Keys are literal; only values are templated. Last enabled row wins on dup key.
-        metadata.insert(row.key.clone(), acc.take(&row.value, &vars));
-    }
-
-    // --- 2. Auth pick + oauth field resolve (into the SAME accumulator, so an
-    // unresolved oauth var is reported alongside body/metadata vars, before any
-    // network/env side-effect). ---
-    let collection_auth = collection.map(|c| &c.auth);
-    let picked =
-        pick_auth_config(&request.auth, collection_auth, active_env.map(|e| e.name.as_str())).cloned();
-
-    let resolved_oauth = match &picked {
-        Some(SavedAuthConfig::OAuth2ClientCredentials(c)) => Some(OAuth2ClientCredentialsConfig {
-            token_url: acc.take(&c.token_url, &vars),
-            client_id: acc.take(&c.client_id, &vars),
-            client_secret: acc.take(&c.client_secret, &vars),
-            scopes: c.scopes.iter().map(|s| acc.take(s, &vars)).collect(),
-            header_name: c.header_name.clone(),
-            prefix: c.prefix.clone(),
-            environments: c.environments.clone(),
-        }),
-        _ => None,
-    };
-
-    if let Some(err) = acc.into_failure() {
-        return Err(err); // no network/env side-effects on failure
-    }
-
-    // --- 3. TLS ---
-    let default_tls = collection.map_or(false, |c| c.default_tls);
-    let skip_verify = collection.map_or(false, |c| c.skip_tls_verify);
-    let tls = request.tls_override.unwrap_or(default_tls);
-    let target = GrpcTarget::new(address, tls, skip_verify)?;
-
-    // --- 4. Auth materialize (nearest active config already picked above) ---
-    let picked_auth = picked.clone();
-    let (auth, invalidate_oauth) = match picked {
-        None => (None, None),
-        Some(SavedAuthConfig::None) => (None, None), // unreachable via pick
-        Some(SavedAuthConfig::EnvVar(c)) => (Some(materialize_env_var(&c)?), None),
-        Some(SavedAuthConfig::OAuth2ClientCredentials(_)) => {
-            let cfg = resolved_oauth.expect("oauth picked ⇒ resolved config present");
-            let creds = tokens.header_for(&cfg).await?;
-            (Some(creds), Some(cfg))
-        }
-    };
+    let tls = request.tls_override.unwrap_or(s.default_tls());
+    let target = GrpcTarget::new(s.text(address), tls, s.skip_verify())?;
+    let body_json = body.map(|b| s.text(b)).unwrap_or_default();
+    // Last enabled row wins on a duplicate key.
+    let metadata: HashMap<String, String> = metadata.into_iter().map(|(k, v)| (k, s.text(v))).collect();
+    let auth = s.materialize(pick, tokens).await?;
 
     Ok(EffectiveRequest {
         target,
@@ -114,8 +232,6 @@ async fn resolve_request_scoped(
         body_json,
         metadata,
         auth,
-        invalidate_oauth,
-        picked_auth,
     })
 }
 
@@ -124,37 +240,33 @@ async fn resolve_request_scoped(
 /// [`resolve_request`] (every unresolved `{{var}}` reported at once, same
 /// `ResolveFailed` diagnosis). No auth pick and no materialization — those happened at
 /// Open and are not repeated per message.
-pub fn resolve_body(
+pub(crate) fn resolve_body(
     body_template: &str,
     collection: Option<&Collection>,
     active_env: Option<&Environment>,
 ) -> Result<String, CoreError> {
-    let vars = variable_set(collection, active_env);
-    let mut acc = ResolveAcc::default();
-    let body_json = acc.take(body_template, &vars.as_set());
-    match acc.into_failure() {
-        Some(err) => Err(err),
-        None => Ok(body_json),
-    }
+    let mut r = Resolution::begin(collection, active_env);
+    let body = r.take(body_template);
+    Ok(r.settle()?.text(body))
 }
 
 /// The `{{var}}` sources of one resolve — env over collection — as owned maps.
 /// `VariableSet` borrows `&HashMap`s (resolution is order-agnostic) while the stored maps
 /// are `IndexMap`, so this is the one place they are converted; the maps are tiny.
-pub(crate) struct ResolveVars {
+struct ResolveVars {
     env: HashMap<String, String>,
     collection: HashMap<String, String>,
 }
 
 impl ResolveVars {
-    pub(crate) fn as_set(&self) -> VariableSet<'_> {
+    fn as_set(&self) -> VariableSet<'_> {
         VariableSet { env: &self.env, collection: &self.collection }
     }
 }
 
 /// Collect the variables a resolve runs against: `None` collection = an unbound draft
 /// (no collection vars), `None` env = "No environment".
-pub(crate) fn variable_set(collection: Option<&Collection>, active_env: Option<&Environment>) -> ResolveVars {
+fn variable_set(collection: Option<&Collection>, active_env: Option<&Environment>) -> ResolveVars {
     ResolveVars {
         env: active_env
             .map(|e| e.variables.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
@@ -199,7 +311,7 @@ impl ResolveAcc {
 mod tests {
     use super::*;
     use crate::auth::{AuthCredentials, EnvVarAuthConfig, OAuth2ClientCredentialsConfig, SavedAuthConfig, StaticTokenSource, TokenSource};
-    use crate::collections::ids::{CollectionId, ItemId};
+    use crate::collections::ids::CollectionId;
     use crate::collections::MetadataRow;
     use crate::error::CoreError;
     use async_trait::async_trait;
@@ -237,10 +349,8 @@ mod tests {
         }
     }
 
-    fn base_request() -> SavedRequest {
-        SavedRequest {
-            id: ItemId(Uuid::from_u128(2)),
-            name: "r".into(),
+    fn base_request() -> GrpcTemplate {
+        GrpcTemplate {
             address_template: "{{host}}".into(),
             service: "pkg.Svc".into(),
             method: "Do".into(),
@@ -248,8 +358,6 @@ mod tests {
             metadata: vec![],
             auth: SavedAuthConfig::None,
             tls_override: None,
-            last_used_at: None,
-            use_count: 0,
         }
     }
 
@@ -274,10 +382,8 @@ mod tests {
         fn invalidate(&self, _cfg: &OAuth2ClientCredentialsConfig) {}
     }
 
-    fn req_with_auth(auth: SavedAuthConfig) -> SavedRequest {
-        SavedRequest {
-            id: ItemId(Uuid::from_u128(1)),
-            name: "r".into(),
+    fn req_with_auth(auth: SavedAuthConfig) -> GrpcTemplate {
+        GrpcTemplate {
             address_template: "h:50051".into(),
             service: "pkg.Svc".into(),
             method: "Do".into(),
@@ -285,8 +391,6 @@ mod tests {
             metadata: vec![],
             auth,
             tls_override: None,
-            last_used_at: None,
-            use_count: 0,
         }
     }
 
@@ -343,18 +447,18 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn disabled_metadata_row_is_skipped() {
+    async fn disabled_and_keyless_metadata_rows_are_skipped() {
         let coll = base_collection(&[("host", "h:1"), ("uid", "u")]);
         let active = env("prod", &[]);
         let mut req = base_request();
         req.metadata = vec![
             MetadataRow { key: "on".into(), value: "1".into(), enabled: true },
             MetadataRow { key: "off".into(), value: "2".into(), enabled: false },
+            MetadataRow { key: "".into(), value: "{{missing}}".into(), enabled: true },
         ];
         let tokens = static_tokens("Bearer X");
         let eff = resolve_request(&req, Some(&coll), Some(&active), &tokens).await.unwrap();
-        assert_eq!(eff.metadata.get("on"), Some(&"1".to_string()));
-        assert!(eff.metadata.get("off").is_none());
+        assert_eq!(eff.metadata, HashMap::from([("on".to_string(), "1".to_string())]));
     }
 
     #[tokio::test]
@@ -428,7 +532,7 @@ mod tests {
         let active = env("prod", &[]);
         let tokens = static_tokens("Bearer X");
         let eff = resolve_request(&req, Some(&coll), Some(&active), &tokens).await.unwrap();
-        assert_eq!(eff.auth.unwrap().header_value, "Bearer rtoken");
+        assert_eq!(eff.auth.header().unwrap().header_value, "Bearer rtoken");
         std::env::remove_var(var);
     }
 
@@ -442,7 +546,7 @@ mod tests {
         let active = env("prod", &[]);
         let tokens = static_tokens("Bearer X");
         let eff = resolve_request(&req, Some(&coll), Some(&active), &tokens).await.unwrap();
-        assert_eq!(eff.auth.unwrap().header_value, "Bearer ctoken");
+        assert_eq!(eff.auth.header().unwrap().header_value, "Bearer ctoken");
         std::env::remove_var(var);
     }
 
@@ -453,7 +557,7 @@ mod tests {
         let req = base_request();
         let tokens = static_tokens("Bearer X");
         let eff = resolve_request(&req, Some(&coll), Some(&active), &tokens).await.unwrap();
-        assert!(eff.auth.is_none());
+        assert!(eff.auth.header().is_none());
     }
 
     #[tokio::test]
@@ -464,7 +568,7 @@ mod tests {
         let tokens = static_tokens("Bearer X");
         let eff = resolve_request(&req, Some(&coll), None, &tokens).await.unwrap();
         assert_eq!(eff.target.address, "h:1");
-        assert!(eff.auth.is_none());
+        assert!(eff.auth.header().is_none());
     }
 
     #[tokio::test]
@@ -488,10 +592,10 @@ mod tests {
 
         // dev ⇒ gated out ⇒ no auth header.
         let eff_dev = resolve_request(&request, Some(&collection), Some(&dev), &tokens).await.unwrap();
-        assert!(eff_dev.auth.is_none());
+        assert!(eff_dev.auth.header().is_none());
         // prod ⇒ active ⇒ header present.
         let eff_prod = resolve_request(&request, Some(&collection), Some(&prod), &tokens).await.unwrap();
-        assert_eq!(eff_prod.auth.unwrap().header_value, "Bearer secret");
+        assert_eq!(eff_prod.auth.header().unwrap().header_value, "Bearer secret");
 
         std::env::remove_var("HS_TEST_PROD_TOKEN");
     }
@@ -507,7 +611,7 @@ mod tests {
         let eff = resolve_request(&req, None, Some(&active), &tokens).await.unwrap();
         assert_eq!(eff.target.address, "api:443");
         assert!(!eff.target.skip_verify);
-        assert!(eff.auth.is_none());
+        assert!(eff.auth.header().is_none());
     }
 
     #[tokio::test]
@@ -526,8 +630,8 @@ mod tests {
         let req = base_request();
         let tokens = static_tokens("Bearer TOK");
         let eff = resolve_request(&req, Some(&coll), Some(&active), &tokens).await.unwrap();
-        assert_eq!(eff.auth.unwrap().header_value, "Bearer TOK");
-        assert!(eff.invalidate_oauth.is_some());
+        assert_eq!(eff.auth.header().unwrap().header_value, "Bearer TOK");
+        assert!(eff.auth.oauth().is_some());
     }
 
     #[tokio::test]
@@ -547,7 +651,7 @@ mod tests {
         let req = base_request();
         let tokens = static_tokens("Bearer TOK");
         let eff = resolve_request(&req, Some(&coll), Some(&active), &tokens).await.unwrap();
-        assert_eq!(eff.invalidate_oauth.unwrap().client_secret, "S3CRET"); // resolved, not "{{sec}}"
+        assert_eq!(eff.auth.oauth().unwrap().client_secret, "S3CRET"); // resolved, not "{{sec}}"
     }
 
     #[tokio::test]
@@ -606,7 +710,7 @@ mod tests {
         let env = env_with_sec();
         let eff = resolve_request(&req, None, Some(&env), &FakeTokens).await.unwrap();
         // Template form: client_secret stays "{{sec}}", never the resolved value.
-        assert_eq!(eff.picked_auth, Some(oauth_template()));
+        assert_eq!(eff.auth.into_picked(), Some(oauth_template()));
     }
 
     #[tokio::test]
@@ -615,7 +719,7 @@ mod tests {
         let coll = coll_with_auth(oauth_template());
         let env = env_with_sec();
         let eff = resolve_request(&req, Some(&coll), Some(&env), &FakeTokens).await.unwrap();
-        assert_eq!(eff.picked_auth, Some(oauth_template()));
+        assert_eq!(eff.auth.into_picked(), Some(oauth_template()));
     }
 
     #[tokio::test]
@@ -627,14 +731,14 @@ mod tests {
         let req = req_with_auth(auth);
         let env = Environment { name: "dev".into(), variables: IndexMap::new(), color: None };
         let eff = resolve_request(&req, None, Some(&env), &FakeTokens).await.unwrap();
-        assert_eq!(eff.picked_auth, None);
-        assert!(eff.auth.is_none());
+        assert!(eff.auth.header().is_none());
+        assert_eq!(eff.auth.into_picked(), None);
     }
 
     #[tokio::test]
     async fn picked_auth_none_when_unauthenticated() {
         let req = req_with_auth(SavedAuthConfig::None);
         let eff = resolve_request(&req, None, None, &FakeTokens).await.unwrap();
-        assert_eq!(eff.picked_auth, None);
+        assert_eq!(eff.auth.into_picked(), None);
     }
 }

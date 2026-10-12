@@ -60,9 +60,10 @@ function collect(
     if (it.type === "folder") {
       collect(it.items, [...path, it.name], match, collection, out);
     } else if (
-      it.service === match.service &&
-      it.method === match.method &&
-      it.address_template === match.address
+      it.template.protocol === "grpc" &&
+      it.template.service === match.service &&
+      it.template.method === match.method &&
+      it.template.address_template === match.address
     ) {
       out.push({
         collectionId: collection.id,

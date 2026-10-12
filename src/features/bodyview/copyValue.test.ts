@@ -4,7 +4,7 @@ import type { JsonNode } from "./jsonTree";
 
 const node = (over: Partial<JsonNode>): JsonNode => ({
   id: "n0", parentId: null, key: null, index: null, kind: "string",
-  value: "", depth: 0, childIds: [], childCount: 0, ...over,
+  value: "", literal: null, depth: 0, childIds: [], childCount: 0, ...over,
 });
 
 describe("copyTextForNode", () => {

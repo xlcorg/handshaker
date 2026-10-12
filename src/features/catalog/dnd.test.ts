@@ -4,9 +4,12 @@ import { folderCount, isWithin, zoneFromPointer, planDrop, type DragData, type D
 
 function req(id: string, name = id): ItemIpc {
   return {
-    type: "request", id, name, address_template: "h:443", service: "p.v1.S", method: "M",
-    body_template: "{}", metadata: [], auth: { kind: "none" }, tls_override: null,
-    last_used_at: null, use_count: 0,
+    type: "request",
+    id,
+    name,
+    template: { protocol: "grpc", address_template: "h:443", service: "p.v1.S", method: "M", body_template: "{}", metadata: [], auth: { kind: "none" }, tls_override: null },
+    last_used_at: null,
+    use_count: 0,
   } as SavedRequestIpc as ItemIpc;
 }
 function folder(id: string, items: ItemIpc[] = [], name = id): ItemIpc {

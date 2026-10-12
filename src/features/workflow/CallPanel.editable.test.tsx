@@ -263,9 +263,9 @@ describe("CallPanel collection-auth inheritance (auth_effective)", () => {
     expect(draftArg.auth).toEqual({ kind: "none" }); // raw step auth, core does the pick
     // The executed history snapshot records the report's auth_used, so re-send works standalone.
     await waitFor(() => expect(workflowStore.activeWorkflow().steps).toHaveLength(1));
-    expect(workflowStore.activeWorkflow().steps[0].auth).toEqual(
-      expect.objectContaining({ kind: "oauth2_client_credentials" }),
-    );
+    expect(workflowStore.activeWorkflow().steps[0]).toMatchObject({
+      protocol: "grpc", auth: expect.objectContaining({ kind: "oauth2_client_credentials" }),
+    });
   });
 
   it("shows the inherited collection config in the Auth tab", async () => {

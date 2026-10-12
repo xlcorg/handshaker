@@ -6,6 +6,7 @@ pub mod collection;
 pub mod env;
 pub mod error;
 pub mod history;
+pub mod http;
 pub mod invoke;
 pub mod schema;
 pub mod stream;
@@ -17,7 +18,7 @@ pub use auth::AuthCredentialsIpc;
 pub use catalog::ServiceCatalogIpc;
 pub use error::IpcError;
 pub use invoke::{
-    CallOptionsIpc, InvokeOutcomeIpc, SendCtxIpc, SendDraftIpc, SendReportIpc,
+    CallOptionsIpc, InvokeOutcomeIpc, SendCtxIpc, SendReportIpc,
 };
 pub use schema::{MessageSchemaIpc, MessageSideIpc};
 pub use stream::{AssembleResultIpc, MethodKindIpc, OutboundMessageIpc, StreamEventIpc};

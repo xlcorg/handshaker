@@ -2,6 +2,7 @@
 
 use thiserror::Error;
 
+use crate::http::UrlProblem;
 use crate::stream::MethodKind;
 
 #[derive(Debug, Error)]
@@ -80,11 +81,33 @@ pub enum CoreError {
     NotImplemented(String),
     #[error("persistence error: {0}")]
     Persistence(String),
+    /// The resolved HTTP URL cannot be sent. Never echoes the URL (see `UrlProblem`).
+    #[error("invalid URL: {problem}")]
+    InvalidUrl { problem: UrlProblem },
+}
+
+/// Render an error together with its `source()` chain, so the real cause behind an
+/// opaque wrapper is visible. tonic's `transport::Error` Displays as just "transport
+/// error"; the actual reason (e.g. `tcp connect error: Connection refused (os error …)`)
+/// lives one or more links down the chain. Joined with `: `, de-duplicating links
+/// whose message a parent already ends with.
+pub(crate) fn error_chain(e: &(dyn std::error::Error + 'static)) -> String {
+    let mut out = e.to_string();
+    let mut src = e.source();
+    while let Some(s) = src {
+        let msg = s.to_string();
+        if !msg.is_empty() && !out.ends_with(&msg) {
+            out.push_str(": ");
+            out.push_str(&msg);
+        }
+        src = s.source();
+    }
+    out
 }
 
 #[cfg(test)]
 mod tests {
-    use super::CoreError;
+    use super::{error_chain, CoreError};
 
     #[test]
     fn invalid_target_renders_with_payload() {
@@ -118,5 +141,54 @@ mod tests {
             message: "UNAUTHENTICATED".into(),
         };
         assert_eq!(e.to_string(), "gRPC status 16: UNAUTHENTICATED");
+    }
+
+    #[test]
+    fn error_chain_joins_sources_without_duplicating_tail() {
+        use std::fmt;
+
+        #[derive(Debug)]
+        struct Inner;
+        impl fmt::Display for Inner {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                write!(f, "Connection refused (os error 10061)")
+            }
+        }
+        impl std::error::Error for Inner {}
+
+        #[derive(Debug)]
+        struct Outer(Inner);
+        impl fmt::Display for Outer {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                write!(f, "transport error")
+            }
+        }
+        impl std::error::Error for Outer {
+            fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+                Some(&self.0)
+            }
+        }
+
+        assert_eq!(
+            error_chain(&Outer(Inner)),
+            "transport error: Connection refused (os error 10061)"
+        );
+        // A parent that already ends with its source's message is not duplicated.
+        #[derive(Debug)]
+        struct Repeat(Inner);
+        impl fmt::Display for Repeat {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                write!(f, "tcp connect error: Connection refused (os error 10061)")
+            }
+        }
+        impl std::error::Error for Repeat {
+            fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+                Some(&self.0)
+            }
+        }
+        assert_eq!(
+            error_chain(&Repeat(Inner)),
+            "tcp connect error: Connection refused (os error 10061)"
+        );
     }
 }

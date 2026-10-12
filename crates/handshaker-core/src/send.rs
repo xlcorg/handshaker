@@ -12,34 +12,41 @@
 //! `send` through [`Sender::prepare`] and then hands the call to the **Stream call**
 //! actor (`crate::stream`, ADR-0002). Only the stream path honors
 //! `CallOptions::phase_timeout` — unary deadlines stay the calling layer's race.
+//!
+//! [`Sender::send_http`] runs the same order for a plain HTTP request
+//! (`crate::http::request::prepare`), and shares the unauthenticated rule with `send`
+//! through [`Sender::retry_unauthenticated`].
 
 use std::collections::HashMap;
+use std::future::Future;
 use std::sync::Arc;
 
-use crate::auth::{OAuth2ClientCredentialsConfig, SavedAuthConfig, TokenSource};
-use crate::collections::{Collection, SavedRequest};
+use crate::auth::{AuthCredentials, OAuth2ClientCredentialsConfig, SavedAuthConfig, TokenSource};
+use crate::collections::{CallAuth, Collection, GrpcTemplate, HttpTemplate};
 use crate::env::Environment;
 use crate::error::CoreError;
 use crate::grpc::invoke::{CallOptions, UnaryOutcome};
 use crate::grpc::{ContractCache, GrpcConnection, GrpcTransport};
+use crate::http::{HttpCallOptions, HttpResponse, HttpTransport};
 use crate::stream::{MethodKind, StreamCall, StreamEvents};
 use crate::vars::builtins::BuiltinGenerator;
 
-/// gRPC status 16 — the only status that triggers token-cache invalidation.
+/// gRPC status 16: the server rejected the call's credential.
 pub(crate) const GRPC_UNAUTHENTICATED: i32 = 16;
+/// HTTP 401: the server rejected the request's credential. 403 is authorization, not
+/// authentication, and is not a rejection here.
+pub(crate) const HTTP_UNAUTHORIZED: u16 = 401;
 
-/// **Rule 16**, in one place for both spines: on `UNAUTHENTICATED` drop the cached token
-/// of the OAuth2 config that materialized this call's header (the *resolved* config, so
-/// the next token lookup fetches fresh). Any other status, or a non-OAuth2 pick, is a no-op.
-pub(crate) fn invalidate_on_unauthenticated(
+/// Drop the cached token behind this call's header when the server rejected it (the
+/// *resolved* config, so the next token lookup fetches fresh). The stream path calls this
+/// on gRPC status 16; [`Sender::retry_unauthenticated`] calls it for both unary paths. A
+/// non-OAuth2 pick is a no-op.
+pub(crate) fn invalidate_on_rejection(
     tokens: &dyn TokenSource,
-    status_code: i32,
+    rejected: bool,
     resolved_oauth: Option<&OAuth2ClientCredentialsConfig>,
 ) {
-    if status_code != GRPC_UNAUTHENTICATED {
-        return;
-    }
-    if let Some(cfg) = resolved_oauth {
+    if let (true, Some(cfg)) = (rejected, resolved_oauth) {
         tokens.invalidate(cfg);
     }
 }
@@ -56,11 +63,20 @@ pub struct SendReport {
     pub tls_used: bool,
 }
 
-/// The Send spine behind one seam. Owns its four adapters — transport, token source,
-/// contract cache, builtin generator — so every composition invariant is testable
-/// with in-process fakes.
+/// One HTTP Send's response plus the auth config that won the pick, in **template** form
+/// (secrets never materialized into the report). `None` = unauthenticated.
+#[derive(Debug, Clone)]
+pub struct HttpSendReport {
+    pub response: HttpResponse,
+    pub auth_used: Option<SavedAuthConfig>,
+}
+
+/// The Send spine behind one seam. Owns its adapters (gRPC transport, HTTP transport,
+/// token source, contract cache, builtin generator) so every composition invariant is
+/// testable with in-process fakes.
 pub struct Sender {
-    transport: Arc<dyn GrpcTransport>,
+    grpc: Arc<dyn GrpcTransport>,
+    http: Arc<dyn HttpTransport>,
     tokens: Arc<dyn TokenSource>,
     cache: Arc<dyn ContractCache>,
     builtins: Arc<dyn BuiltinGenerator + Send + Sync>,
@@ -68,12 +84,13 @@ pub struct Sender {
 
 impl Sender {
     pub fn new(
-        transport: Arc<dyn GrpcTransport>,
+        grpc: Arc<dyn GrpcTransport>,
+        http: Arc<dyn HttpTransport>,
         tokens: Arc<dyn TokenSource>,
         cache: Arc<dyn ContractCache>,
         builtins: Arc<dyn BuiltinGenerator + Send + Sync>,
     ) -> Self {
-        Self { transport, tokens, cache, builtins }
+        Self { grpc, http, tokens, cache, builtins }
     }
 
     /// Run the full spine for one request. A resolve failure returns the whole
@@ -81,54 +98,83 @@ impl Sender {
     /// status is a value in the report (`outcome.status_code != 0`), not an error.
     pub async fn send(
         &self,
-        request: &SavedRequest,
+        request: &GrpcTemplate,
         collection: Option<&Collection>,
         active_env: Option<&Environment>,
         opts: CallOptions,
     ) -> Result<SendReport, CoreError> {
         // Unary keeps its deadline in the calling layer's race — no phase timer here.
-        let p = self.prepare(request, collection, active_env, None, MethodKind::Unary).await?;
+        let Prepared { conn, service, method, body_json, metadata, auth, tls_used } =
+            self.prepare(request, collection, active_env, None, MethodKind::Unary).await?;
+        let invoke = |metadata| crate::grpc::invoke_unary(&conn, &service, &method, &body_json, metadata, opts);
 
-        let mut outcome = crate::grpc::invoke_unary(
-            &p.conn,
-            &p.service,
-            &p.method,
-            &p.body_json,
-            p.metadata.clone(),
-            opts,
+        let first = invoke(metadata.clone()).await?;
+        let outcome = self
+            .retry_unauthenticated(&auth, first, |o| o.status_code == GRPC_UNAUTHENTICATED, |fresh| {
+                let mut metadata = metadata;
+                metadata.insert(fresh.header_name, fresh.header_value);
+                invoke(metadata)
+            })
+            .await?;
+
+        Ok(SendReport { outcome, auth_used: auth.into_picked(), tls_used })
+    }
+
+    /// The HTTP spine: `http::request::prepare` → transport → unauthenticated rule. A
+    /// resolve or URL failure returns before any network use. Any HTTP status is a value
+    /// in the report. Cancel and timeout belong to the caller's race.
+    pub async fn send_http(
+        &self,
+        request: &HttpTemplate,
+        collection: Option<&Collection>,
+        active_env: Option<&Environment>,
+        opts: HttpCallOptions,
+    ) -> Result<HttpSendReport, CoreError> {
+        let crate::http::request::Prepared { request, auth } = crate::http::request::prepare(
+            request,
+            collection,
+            active_env,
+            self.tokens.as_ref(),
+            self.builtins.as_ref(),
         )
         .await?;
 
-        invalidate_on_unauthenticated(
-            self.tokens.as_ref(),
-            outcome.status_code,
-            p.invalidate_oauth.as_ref(),
-        );
+        let first = self.http.send(request.clone(), opts).await?;
+        let response = self
+            .retry_unauthenticated(&auth, first, |r| r.status == HTTP_UNAUTHORIZED, |fresh| {
+                self.http.send(request.with_auth(Some(&fresh)), opts)
+            })
+            .await?;
 
-        if outcome.status_code == GRPC_UNAUTHENTICATED {
-            if let Some(cfg) = p.invalidate_oauth.as_ref() {
-                let refreshed = self.tokens.header_for(cfg).await?;
-                let mut metadata = p.metadata;
-                metadata.remove(&cfg.header_name);
-                metadata.insert(refreshed.header_name, refreshed.header_value);
-                outcome = crate::grpc::invoke_unary(
-                    &p.conn,
-                    &p.service,
-                    &p.method,
-                    &p.body_json,
-                    metadata,
-                    opts,
-                )
-                .await?;
-                invalidate_on_unauthenticated(self.tokens.as_ref(), outcome.status_code, Some(cfg));
-            }
-        }
+        Ok(HttpSendReport { response, auth_used: auth.into_picked() })
+    }
 
-        Ok(SendReport {
-            outcome,
-            auth_used: p.auth_used,
-            tls_used: p.tls_used,
-        })
+    /// **Rule unauthenticated**, the one home for both unary paths. When `rejected(&first)`
+    /// and the header came from an OAuth2 pick: drop the cached token, fetch a fresh
+    /// header, and run `attempt` once more with it. A second rejection drops that token
+    /// too and is returned as-is. Env-var and no-auth picks return `first` untouched,
+    /// since re-reading an env var cannot change the answer. The request body is already
+    /// buffered and the server refused the credential before acting, so replaying any
+    /// method is safe.
+    async fn retry_unauthenticated<T, Fut>(
+        &self,
+        auth: &CallAuth,
+        first: T,
+        rejected: fn(&T) -> bool,
+        attempt: impl FnOnce(AuthCredentials) -> Fut,
+    ) -> Result<T, CoreError>
+    where
+        Fut: Future<Output = Result<T, CoreError>>,
+    {
+        let tokens = self.tokens.as_ref();
+        let Some(cfg) = auth.oauth().filter(|_| rejected(&first)) else {
+            return Ok(first);
+        };
+        invalidate_on_rejection(tokens, true, Some(cfg));
+        let fresh = tokens.header_for(cfg).await?;
+        let second = attempt(fresh).await?;
+        invalidate_on_rejection(tokens, rejected(&second), Some(cfg));
+        Ok(second)
     }
 
     /// **Open** a stream call: the shared prefix (phase-1 deadline around activate),
@@ -149,7 +195,7 @@ impl Sender {
     /// mismatch too (the stream path has no unary shape; `send` is the path).
     pub async fn open_stream(
         &self,
-        request: &SavedRequest,
+        request: &GrpcTemplate,
         collection: Option<&Collection>,
         active_env: Option<&Environment>,
         kind: MethodKind,
@@ -187,8 +233,9 @@ impl Sender {
             }
         };
 
+        let invalidate_oauth = p.auth.oauth().cloned();
         let spec = crate::stream::StreamCallSpec {
-            transport: self.transport.clone(),
+            transport: self.grpc.clone(),
             channel: p.conn.channel.clone(),
             method_path: format!("/{}/{}", p.service, p.method),
             input_desc,
@@ -199,11 +246,11 @@ impl Sender {
             opts,
             kind,
             tokens: self.tokens.clone(),
-            invalidate_oauth: p.invalidate_oauth,
+            invalidate_oauth,
             builtins: self.builtins.clone(),
             events,
         };
-        Ok(crate::stream::spawn_stream_call(spec, p.auth_used, p.tls_used))
+        Ok(crate::stream::spawn_stream_call(spec, p.auth.into_picked(), p.tls_used))
     }
 
     /// The shared prefix of both spines: resolve pipeline → builtin expansion → auth
@@ -214,7 +261,7 @@ impl Sender {
     /// unresolved body var joins the address/metadata diagnosis before any network use.
     async fn prepare(
         &self,
-        request: &SavedRequest,
+        request: &GrpcTemplate,
         collection: Option<&Collection>,
         active_env: Option<&Environment>,
         phase_timeout: Option<std::time::Duration>,
@@ -228,7 +275,6 @@ impl Sender {
             crate::collections::resolve_request(request, collection, active_env, tokens).await?
         };
 
-        let auth_used = eff.picked_auth;
         let tls_used = eff.target.tls;
 
         // Builtin expansion covers user-authored template fields only: the body and
@@ -248,13 +294,13 @@ impl Sender {
 
         // Inject the materialized auth header AFTER expansion: the header is a fact
         // as issued by the IdP/OS env — `{{$...}}`-looking text in it stays literal.
-        if let Some(creds) = &eff.auth {
+        if let Some(creds) = eff.auth.header() {
             metadata.insert(creds.header_name.clone(), creds.header_value.clone());
         }
 
         let conn = crate::stream::with_phase_timeout(
             phase_timeout,
-            crate::grpc::activate(eff.target, self.transport.clone(), self.cache.as_ref()),
+            crate::grpc::activate(eff.target, self.grpc.clone(), self.cache.as_ref()),
         )
         .await?;
 
@@ -264,9 +310,8 @@ impl Sender {
             method: eff.method,
             body_json,
             metadata,
-            auth_used,
+            auth: eff.auth,
             tls_used,
-            invalidate_oauth: eff.invalidate_oauth,
         })
     }
 }
@@ -309,9 +354,8 @@ struct Prepared {
     method: String,
     body_json: String,
     metadata: HashMap<String, String>,
-    auth_used: Option<SavedAuthConfig>,
+    auth: CallAuth,
     tls_used: bool,
-    invalidate_oauth: Option<OAuth2ClientCredentialsConfig>,
 }
 
 #[cfg(test)]
@@ -320,21 +364,23 @@ pub(crate) mod tests {
     use std::sync::Arc;
 
     use indexmap::IndexMap;
-    use uuid::Uuid;
 
     use super::*;
     use crate::auth::{
         AuthCredentials, OAuth2ClientCredentialsConfig, SavedAuthConfig, StaticTokenSource,
     };
-    use crate::collections::ids::ItemId;
     use crate::grpc::testing::{fixture_cached_contract, FakeTransport};
     use crate::grpc::{ContractKey, InMemoryContractCache};
+    use crate::http::testing::FakeHttpTransport;
+
+    /// An HTTP transport for gRPC-only tests: it has no scripted reply.
+    pub(crate) fn no_http() -> Arc<FakeHttpTransport> {
+        FakeHttpTransport::replying([])
+    }
 
     /// Fixture request against the `test.Echo / Send` schema of `fixture_pool()`.
-    pub(crate) fn fixture_request(tls: bool) -> SavedRequest {
-        SavedRequest {
-            id: ItemId(Uuid::from_u128(1)),
-            name: "r".into(),
+    pub(crate) fn fixture_request(tls: bool) -> GrpcTemplate {
+        GrpcTemplate {
             address_template: "127.0.0.1:1".into(),
             service: "test.Echo".into(),
             method: "Send".into(),
@@ -342,8 +388,6 @@ pub(crate) mod tests {
             metadata: vec![],
             auth: SavedAuthConfig::None,
             tls_override: Some(tls),
-            last_used_at: None,
-            use_count: 0,
         }
     }
 
@@ -474,6 +518,7 @@ pub(crate) mod tests {
         });
         let sender = Sender::new(
             transport.clone(),
+            no_http(),
             tokens.clone(),
             seeded_cache(false),
             Arc::new(NoBuiltins),
@@ -520,6 +565,7 @@ pub(crate) mod tests {
         });
         let sender = Sender::new(
             transport.clone(),
+            no_http(),
             tokens.clone(),
             seeded_cache(false),
             Arc::new(NoBuiltins),
@@ -558,6 +604,7 @@ pub(crate) mod tests {
         });
         let sender = Sender::new(
             transport.clone(),
+            no_http(),
             tokens.clone(),
             seeded_cache(false),
             Arc::new(NoBuiltins),
@@ -645,6 +692,7 @@ pub(crate) mod tests {
         let cache = seeded_cache(true);
         let sender = Sender::new(
             transport.clone(),
+            no_http(),
             static_tokens("Bearer tok"),
             cache,
             Arc::new(NoBuiltins),
@@ -674,6 +722,7 @@ pub(crate) mod tests {
             let transport = FakeTransport::with_outcome(Ok(ok_outcome()));
             let sender = Sender::new(
                 transport.clone(),
+                no_http(),
                 static_tokens("t"),
                 seeded_cache(false),
                 Arc::new(NoBuiltins),
@@ -699,6 +748,7 @@ pub(crate) mod tests {
         let transport = FakeTransport::with_outcome(Ok(ok_outcome()));
         let sender = Sender::new(
             transport.clone(),
+            no_http(),
             static_tokens("Bearer tok"),
             seeded_cache(false),
             Arc::new(NoBuiltins),
@@ -733,6 +783,7 @@ pub(crate) mod tests {
         let transport = FakeTransport::with_outcome(Ok(ok_outcome()));
         let sender = Sender::new(
             transport.clone(),
+            no_http(),
             static_tokens("Bearer tok"),
             seeded_cache(false),
             SeqGuids::new(),
@@ -782,6 +833,7 @@ pub(crate) mod tests {
         // A real token that happens to contain `{{$...}}`-looking text — a fact, not a template.
         let sender = Sender::new(
             transport.clone(),
+            no_http(),
             static_tokens("Bearer {{$guid}}"),
             seeded_cache(false),
             SeqGuids::new(),
@@ -805,6 +857,7 @@ pub(crate) mod tests {
         let tokens = RecordingTokens::with_retry_outcome(transport.clone(), unauthenticated_outcome());
         let sender = Sender::new(
             transport.clone(),
+            no_http(),
             tokens.clone(),
             seeded_cache(false),
             Arc::new(NoBuiltins),
@@ -836,6 +889,7 @@ pub(crate) mod tests {
         let tokens = RecordingTokens::new();
         let sender = Sender::new(
             transport,
+            no_http(),
             tokens.clone(),
             seeded_cache(false),
             Arc::new(NoBuiltins),
@@ -861,6 +915,7 @@ pub(crate) mod tests {
         let tokens = RecordingTokens::new();
         let sender = Sender::new(
             transport,
+            no_http(),
             tokens.clone(),
             seeded_cache(false),
             Arc::new(NoBuiltins),
@@ -871,5 +926,237 @@ pub(crate) mod tests {
 
         assert_eq!(report.outcome.status_code, 16);
         assert!(tokens.invalidated.lock().unwrap().is_empty());
+    }
+
+    mod send_http {
+        use std::sync::atomic::{AtomicU32, Ordering};
+
+        use super::*;
+        use crate::collections::MetadataRow;
+        use crate::http::testing::{status_response, FakeHttpTransport};
+        use crate::http::{HttpBody, HttpMethod};
+
+        /// Hands out `Bearer stale` until the first invalidation, `Bearer fresh` after.
+        #[derive(Default)]
+        struct RotatingTokens {
+            invalidations: AtomicU32,
+            header_calls: AtomicU32,
+        }
+
+        #[async_trait::async_trait]
+        impl TokenSource for RotatingTokens {
+            async fn header_for(&self, _cfg: &OAuth2ClientCredentialsConfig) -> Result<AuthCredentials, CoreError> {
+                self.header_calls.fetch_add(1, Ordering::SeqCst);
+                let token = if self.invalidations.load(Ordering::SeqCst) == 0 { "stale" } else { "fresh" };
+                Ok(AuthCredentials { header_name: "authorization".into(), header_value: format!("Bearer {token}") })
+            }
+
+            fn invalidate(&self, _cfg: &OAuth2ClientCredentialsConfig) {
+                self.invalidations.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        fn row(key: &str, value: &str) -> MetadataRow {
+            MetadataRow { key: key.into(), value: value.into(), enabled: true }
+        }
+
+        fn order(auth: SavedAuthConfig) -> HttpTemplate {
+            HttpTemplate {
+                method: HttpMethod::Post,
+                url_template: "https://api.test/orders".into(),
+                query: vec![],
+                headers: vec![],
+                body: HttpBody::Json { text: r#"{"sku":"a"}"#.into() },
+                auth,
+            }
+        }
+
+        fn sender(http: Arc<FakeHttpTransport>, tokens: Arc<dyn TokenSource>) -> Sender {
+            Sender::new(
+                FakeTransport::with_outcome(Ok(ok_outcome())),
+                http,
+                tokens,
+                seeded_cache(false),
+                Arc::new(NoBuiltins),
+            )
+        }
+
+        fn unlimited() -> HttpCallOptions {
+            HttpCallOptions { max_body_bytes: usize::MAX }
+        }
+
+        /// Tauri polls commands on a multi-threaded runtime, so the future must be `Send`.
+        #[tokio::test]
+        async fn runs_on_a_spawned_task() {
+            let http = FakeHttpTransport::replying([Ok(status_response(204))]);
+            let sender = sender(http, Arc::new(RotatingTokens::default()));
+            let t = order(SavedAuthConfig::None);
+
+            let report = tokio::spawn(async move { sender.send_http(&t, None, None, unlimited()).await })
+                .await
+                .unwrap()
+                .unwrap();
+
+            assert_eq!(report.response.status, 204);
+        }
+
+        #[tokio::test]
+        async fn unresolved_vars_fail_with_one_diagnosis_before_any_exchange_or_token_fetch() {
+            let http = FakeHttpTransport::replying([Ok(status_response(200))]);
+            let tokens = Arc::new(RotatingTokens::default());
+            let mut t = order(oauth_template());
+            t.url_template = "{{base}}/orders".into();
+            t.query = vec![row("dry", "{{dry}}")];
+            t.headers = vec![row("x-trace", "{{trace}}")];
+            t.body = HttpBody::Form { fields: vec![row("sku", "{{sku}}")] };
+
+            let err = sender(http.clone(), tokens.clone())
+                .send_http(&t, None, None, unlimited())
+                .await
+                .unwrap_err();
+
+            match err {
+                CoreError::ResolveFailed { unresolved, cycle } => {
+                    assert_eq!(unresolved, vec!["base", "dry", "trace", "sku", "sec"]);
+                    assert_eq!(cycle, None);
+                }
+                other => panic!("expected ResolveFailed, got {other:?}"),
+            }
+            assert_eq!(http.sent().len(), 0);
+            assert_eq!(tokens.header_calls.load(Ordering::SeqCst), 0);
+        }
+
+        #[tokio::test]
+        async fn an_invalid_url_fails_before_any_exchange_or_token_fetch() {
+            let http = FakeHttpTransport::replying([Ok(status_response(200))]);
+            let tokens = Arc::new(RotatingTokens::default());
+            let mut t = order(oauth_template());
+            t.url_template = "api.test/orders?key={{sec}}".into();
+
+            let err = sender(http.clone(), tokens.clone())
+                .send_http(&t, None, Some(&env_with_sec()), unlimited())
+                .await
+                .unwrap_err();
+
+            assert_eq!(err.to_string(), "invalid URL: missing scheme");
+            assert_eq!(http.sent().len(), 0);
+            assert_eq!(tokens.header_calls.load(Ordering::SeqCst), 0);
+        }
+
+        #[tokio::test]
+        async fn a_401_with_oauth_resends_once_with_the_fresh_header_and_the_same_body() {
+            let http = FakeHttpTransport::replying([Ok(status_response(401)), Ok(status_response(201))]);
+            let tokens = Arc::new(RotatingTokens::default());
+
+            let report = sender(http.clone(), tokens.clone())
+                .send_http(&order(oauth_template()), None, Some(&env_with_sec()), unlimited())
+                .await
+                .unwrap();
+
+            assert_eq!(report.response.status, 201);
+            assert_eq!(report.auth_used, Some(oauth_template()));
+            let sent = http.sent();
+            assert_eq!(sent.len(), 2);
+            assert_eq!(sent[0].header("authorization"), Some("Bearer stale"));
+            assert_eq!(sent[1].header("authorization"), Some("Bearer fresh"));
+            assert_eq!(sent[1].method, HttpMethod::Post);
+            assert_eq!(sent[1].url, "https://api.test/orders");
+            assert_eq!(sent[1].body, Some(bytes::Bytes::from(r#"{"sku":"a"}"#)));
+            assert_eq!(tokens.invalidations.load(Ordering::SeqCst), 1);
+        }
+
+        #[tokio::test]
+        async fn a_second_401_is_returned_without_a_third_send() {
+            let http = FakeHttpTransport::replying([
+                Ok(status_response(401)),
+                Ok(status_response(401)),
+                Ok(status_response(200)),
+            ]);
+            let tokens = Arc::new(RotatingTokens::default());
+
+            let report = sender(http.clone(), tokens.clone())
+                .send_http(&order(oauth_template()), None, Some(&env_with_sec()), unlimited())
+                .await
+                .unwrap();
+
+            assert_eq!(report.response.status, 401);
+            assert_eq!(http.sent().len(), 2);
+            assert_eq!(tokens.invalidations.load(Ordering::SeqCst), 2);
+        }
+
+        #[tokio::test]
+        async fn a_401_with_env_var_auth_is_returned_without_a_retry() {
+            let var = "HANDSHAKER_TEST_SEND_HTTP_ENVVAR_AUTH";
+            std::env::set_var(var, "s3cr3t");
+            let http = FakeHttpTransport::replying([Ok(status_response(401)), Ok(status_response(200))]);
+            let tokens = Arc::new(RotatingTokens::default());
+            let auth = SavedAuthConfig::EnvVar(crate::auth::EnvVarAuthConfig {
+                env_var: var.into(),
+                header_name: "x-api-key".into(),
+                prefix: String::new(),
+                environments: vec![],
+            });
+
+            let report =
+                sender(http.clone(), tokens.clone()).send_http(&order(auth), None, None, unlimited()).await.unwrap();
+            std::env::remove_var(var);
+
+            assert_eq!(report.response.status, 401);
+            let sent = http.sent();
+            assert_eq!(sent.len(), 1);
+            assert_eq!(sent[0].header("x-api-key"), Some("s3cr3t"));
+            assert_eq!(tokens.invalidations.load(Ordering::SeqCst), 0);
+        }
+
+        #[tokio::test]
+        async fn a_403_with_oauth_is_returned_without_a_retry_or_invalidation() {
+            let http = FakeHttpTransport::replying([Ok(status_response(403)), Ok(status_response(200))]);
+            let tokens = Arc::new(RotatingTokens::default());
+
+            let report = sender(http.clone(), tokens.clone())
+                .send_http(&order(oauth_template()), None, Some(&env_with_sec()), unlimited())
+                .await
+                .unwrap();
+
+            assert_eq!(report.response.status, 403);
+            assert_eq!(http.sent().len(), 1);
+            assert_eq!(tokens.invalidations.load(Ordering::SeqCst), 0);
+        }
+
+        #[tokio::test]
+        async fn a_500_is_a_response_value_and_skip_verify_comes_from_the_collection() {
+            let http = FakeHttpTransport::replying([Ok(status_response(500))]);
+            let coll = crate::collections::Collection {
+                id: crate::collections::CollectionId(uuid::Uuid::from_u128(1)),
+                name: "c".into(),
+                items: vec![],
+                variables: IndexMap::from([
+                    ("base".to_string(), "https://api.test".to_string()),
+                    ("dry".to_string(), "yes".to_string()),
+                ]),
+                auth: SavedAuthConfig::None,
+                default_tls: false,
+                skip_tls_verify: true,
+                pinned: false,
+                description: None,
+                created_at: 0.0,
+                expanded: false,
+                links: vec![],
+            };
+            let mut t = order(SavedAuthConfig::None);
+            t.url_template = "{{base}}/orders?page=1".into();
+            t.query = vec![row("dry", "{{dry}}")];
+
+            let report = sender(http.clone(), static_tokens("t"))
+                .send_http(&t, Some(&coll), None, unlimited())
+                .await
+                .unwrap();
+
+            assert_eq!(report.response.status, 500);
+            assert_eq!(report.auth_used, None);
+            let sent = http.sent();
+            assert_eq!(sent[0].url, "https://api.test/orders?page=1&dry=yes");
+            assert!(sent[0].skip_verify);
+        }
     }
 }

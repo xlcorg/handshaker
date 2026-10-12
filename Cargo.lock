@@ -1833,6 +1833,7 @@ dependencies = [
  "tonic-reflection",
  "tonic-types",
  "tower",
+ "url",
  "uuid",
  "wiremock",
 ]

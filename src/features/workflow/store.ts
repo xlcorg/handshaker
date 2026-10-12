@@ -1,5 +1,7 @@
 import { useSyncExternalStore } from "react";
-import { newWorkflow, type Step, type Workflow } from "./model";
+import type { HttpTemplateIpc } from "@/ipc/bindings";
+import type { HttpRun } from "@/features/http/model";
+import { newWorkflow, type Draft, type Step, type Workflow } from "./model";
 import { addStep, setWorkflowEnv as setWorkflowEnvReducer } from "./reducers";
 import { envActiveSet } from "@/ipc/client";
 
@@ -21,7 +23,7 @@ export function isContentPatch(patch: Partial<Step>): boolean {
 export interface WorkflowState {
   workflows: Workflow[];
   activeWorkflowId: string;
-  draft: Step | null;
+  draft: Draft | null;
   draftOrigin: DraftOrigin | null;
   draftDirty: boolean;
 }
@@ -63,12 +65,12 @@ export const workflowStore = {
     };
     emit();
   },
-  setDraft(step: Step | null, origin: DraftOrigin | null = null) {
-    let draft = step;
-    if (step) {
-      const collectionId = origin?.collectionId ?? step.collectionId ?? null;
+  setDraft(next: Draft | null, origin: DraftOrigin | null = null) {
+    let draft = next;
+    if (next) {
+      const collectionId = origin?.collectionId ?? next.collectionId ?? null;
       // Preserve object identity when the stamp is a no-op (callers rely on `toBe`).
-      draft = step.collectionId === collectionId ? step : { ...step, collectionId };
+      draft = next.collectionId === collectionId ? next : { ...next, collectionId };
     }
     state = { ...state, draft, draftOrigin: origin, draftDirty: false };
     emit();
@@ -80,11 +82,26 @@ export const workflowStore = {
     state = { ...state, draft, draftOrigin: origin, draftDirty: false };
     emit();
   },
-  updateDraft(id: string, patch: Partial<Step>) {
-    if (state.draft?.id !== id) return;
+  updateGrpcDraft(id: string, patch: Partial<Step>) {
+    const draft = state.draft;
+    if (draft?.id !== id || draft.protocol !== "grpc") return;
     const dirty =
       state.draftDirty || (state.draftOrigin === null && isContentPatch(patch));
-    state = { ...state, draft: { ...state.draft, ...patch }, draftDirty: dirty };
+    state = { ...state, draft: { ...draft, ...patch }, draftDirty: dirty };
+    emit();
+  },
+  /** Every template edit is content, so an unbound draft turns dirty. */
+  editHttpTemplate(id: string, patch: Partial<HttpTemplateIpc>) {
+    const draft = state.draft;
+    if (draft?.id !== id || draft.protocol !== "http") return;
+    const dirty = state.draftDirty || state.draftOrigin === null;
+    state = { ...state, draft: { ...draft, template: { ...draft.template, ...patch } }, draftDirty: dirty };
+    emit();
+  },
+  setHttpRun(id: string, run: HttpRun) {
+    const draft = state.draft;
+    if (draft?.id !== id || draft.protocol !== "http") return;
+    state = { ...state, draft: { ...draft, run } };
     emit();
   },
   clearDraft() {
@@ -92,7 +109,7 @@ export const workflowStore = {
     emit();
   },
   /** Append a frozen executed snapshot to the active workflow's history. */
-  commitExecutedStep(step: Step) {
+  commitExecutedStep(step: Draft) {
     workflowStore.update((w) => addStep(w, step));
   },
   createWorkflow(name: string): Workflow {
@@ -129,7 +146,7 @@ export function useActiveWorkflow(): Workflow {
   return workflowStore.activeWorkflow();
 }
 
-export function useDraft(): Step | null {
+export function useDraft(): Draft | null {
   useWorkflowState(); // subscribe
   return workflowStore.getState().draft;
 }

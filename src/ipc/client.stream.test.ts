@@ -6,7 +6,7 @@ import type {
   StreamEventIpc,
   OutboundMessageIpc,
   SendCtxIpc,
-  SendDraftIpc,
+  GrpcTemplateIpc,
   CallOptionsIpc,
 } from "./bindings";
 
@@ -50,7 +50,7 @@ import {
   ipc,
 } from "./client";
 
-const draft: SendDraftIpc = {
+const draft: GrpcTemplateIpc = {
   address_template: "{{host}}",
   tls_override: null,
   service: "pkg.Svc",

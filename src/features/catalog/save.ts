@@ -1,29 +1,34 @@
-import type { ItemIpc, SavedRequestIpc } from "@/ipc/bindings";
-import type { Step } from "@/features/workflow/model";
+import type { ItemIpc, RequestTemplateIpc } from "@/ipc/bindings";
+import type { Draft } from "@/features/workflow/model";
 import type { DraftOrigin } from "@/features/workflow/store";
 import { newId } from "@/lib/ids";
-import { stepToSavedRequest } from "./mapping";
+import { templateOf } from "./mapping";
 
 /** Persist an unbound draft as a NEW saved request. Returns the new request id so the
  *  caller can bind the draft origin. `addItem` is `useCatalogTree.addItem`. */
 export async function saveNewRequest(
   addItem: (collectionId: string, parentId: string | null, item: ItemIpc) => Promise<void>,
-  draft: Step,
+  draft: Draft,
   dest: { collectionId: string; parentId: string | null; name: string },
 ): Promise<string> {
   const id = newId();
-  const saved = stepToSavedRequest(draft, { id, name: dest.name });
-  await addItem(dest.collectionId, dest.parentId, { type: "request", ...saved });
+  await addItem(dest.collectionId, dest.parentId, {
+    type: "request",
+    id,
+    name: dest.name,
+    last_used_at: null,
+    use_count: 0,
+    template: templateOf(draft),
+  });
   return id;
 }
 
-/** Persist edits to an origin-bound draft. `updateItemContent` preserves id/name/usage, so
- *  the `name` passed here is irrelevant (placeholder). `updateItemContent` is the hook method. */
+/** Persist edits to an origin-bound draft. Writes only the template, so id, name and
+ *  usage stay as stored. `updateItemContent` is the hook method. */
 export async function autosaveDraft(
-  updateItemContent: (collectionId: string, itemId: string, content: SavedRequestIpc) => Promise<void>,
+  updateItemContent: (collectionId: string, itemId: string, content: RequestTemplateIpc) => Promise<void>,
   origin: DraftOrigin,
-  draft: Step,
+  draft: Draft,
 ): Promise<void> {
-  const content = stepToSavedRequest(draft, { id: origin.requestId, name: "" });
-  await updateItemContent(origin.collectionId, origin.requestId, content);
+  await updateItemContent(origin.collectionId, origin.requestId, templateOf(draft));
 }

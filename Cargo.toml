@@ -48,6 +48,8 @@ tempfile = "3"
 
 # OAuth2 token fetch — rustls TLS, no OpenSSL dependency.
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+# Form-urlencoded HTTP request bodies (same crate reqwest's `Url` comes from).
+url = "2"
 wiremock = "0.6"
 
 # Base64 value decoder (response viewer)

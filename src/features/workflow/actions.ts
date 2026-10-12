@@ -1,10 +1,12 @@
 import * as ipc from "@/ipc/client";
-import type { SavedAuthConfigIpc, ResolutionReportIpc, MessageSchemaIpc, MessageSideIpc, VarsResolveCtxIpc, SendDraftIpc, SendCtxIpc, CallOptionsIpc, SendReportIpc } from "@/ipc/bindings";
-import { newStep, type MetadataRow, type Step } from "./model";
+import type { SavedAuthConfigIpc, ResolutionReportIpc, MessageSchemaIpc, MessageSideIpc, VarsResolveCtxIpc, SendCtxIpc, CallOptionsIpc, SendReportIpc, HttpSendReportIpc } from "@/ipc/bindings";
+import type { HttpStep } from "@/features/http/model";
+import { newStep, type Draft, type MetadataRow, type Step } from "./model";
 import { lastExecutedFor, responseSeedPatch } from "./lastExecuted";
 import { newId } from "@/lib/ids";
 import { readPrefs } from "@/lib/use-prefs";
 import { faultFromUnknown, isCancelError, type ClientFault } from "./netDiagnostics";
+import { grpcTemplateOf } from "@/features/catalog/mapping";
 
 /** A template resolver bound to a particular `{{var}}` source (collection/env ctx). */
 export type Resolver = (template: string) => Promise<ResolutionReportIpc>;
@@ -122,11 +124,12 @@ export async function applyMethodSelection(
   target: CallTargetInit,
   current: { requestJson: string; service: string; method: string },
   m: { service: string; method: string },
-  history: Step[] = [],
+  history: readonly Draft[] = [],
 ): Promise<void> {
   const oldSkeleton = await buildRequestSkeletonSafe(target, current.service, current.method);
   const pristine = isPristineBody(current.requestJson, oldSkeleton);
   const last = lastExecutedFor(history, {
+    protocol: "grpc",
     service: m.service,
     method: m.method,
     address: target.address,
@@ -230,23 +233,6 @@ export interface SendableStep {
   collectionId?: string | null;
 }
 
-/** Wire draft of a step: raw `{{var}}` templates (core resolves), the raw tri-state TLS
- *  override (null ⇒ core inherits the ctx collection's `default_tls`), and only the
- *  enabled, keyed metadata rows. Shared by the unary Send and the stream Open. */
-export function sendDraftOf(step: SendableStep): SendDraftIpc {
-  return {
-    address_template: step.address,
-    tls_override: step.tls,
-    service: step.service,
-    method: step.method,
-    body_template: step.requestJson,
-    metadata: step.metadata
-      .filter((m) => m.enabled && m.key)
-      .map((m) => ({ key: m.key, value: m.value, enabled: true })),
-    auth: step.auth,
-  };
-}
-
 /** Resolve context of a step: its owning collection (null when unbound) + the active env. */
 export function sendCtxOf(step: Pick<SendableStep, "collectionId">, envName: string | null): SendCtxIpc {
   return { collection_id: step.collectionId ?? null, env_name: envName };
@@ -268,11 +254,27 @@ export async function sendStep(
 ): Promise<SendResult> {
   const requestId = opts?.requestId ?? newId();
   try {
-    const report = await ipc.grpcSend(sendDraftOf(step), sendCtxOf(step, ctx.envName), requestId, callOptionsOf(opts));
+    const report = await ipc.grpcSend(grpcTemplateOf(step), sendCtxOf(step, ctx.envName), requestId, callOptionsOf(opts));
     return { kind: "ok", report };
   } catch (e) {
     if (isCancelError(e)) return { kind: "cancelled" };
     // Every other rejection (incl. `UnresolvedVars`) is one client fault — the shared mapping.
+    return { kind: "error", fault: faultFromUnknown(e) };
+  }
+}
+
+export type HttpSendResult =
+  | { kind: "ok"; report: HttpSendReportIpc }
+  | { kind: "error"; fault: ClientFault }
+  | { kind: "cancelled" };
+
+/** The template goes as authored. Core resolves, filters rows and encodes the body. */
+export async function sendHttp(draft: HttpStep, envName: string | null, requestId: string): Promise<HttpSendResult> {
+  try {
+    const report = await ipc.httpSend(draft.template, sendCtxOf(draft, envName), requestId, callOptionsOf());
+    return { kind: "ok", report };
+  } catch (e) {
+    if (isCancelError(e)) return { kind: "cancelled" };
     return { kind: "error", fault: faultFromUnknown(e) };
   }
 }

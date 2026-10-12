@@ -15,3 +15,4 @@ collection named `My Collection`.
 | [Settings](settings.md) | The Settings dialog shows `Preferences persist locally` and the About pane shows the Cargo version. |
 | [Recent switcher](recent-switcher.md) | Ctrl+Tab shows a list named `Recently opened`. Releasing Ctrl opens the highlighted row. |
 | [Call history](call-history.md) | After a unary Send, the first `history-row-open` button reads `Echo.Send` and `OK`, and the run's `history/` dir holds that call's `<uuid>.json`. |
+| [HTTP request](http.md) | Send GET and POST to a local echo. The meta reads `200` with elapsed time and size, a 404 stays a response, a refused port shows `Service unavailable`, and the saved row plus a `history-row-open` button reopen the POST without a new echo line. |

@@ -1,22 +1,21 @@
 import { describe, it, expect } from "vitest";
 import { aggregateUsage, sortCollections, filterCollections } from "./sort";
-import type { CollectionIpc, ItemIpc, SavedRequestIpc } from "@/ipc/bindings";
+import type { CollectionIpc, GrpcTemplateIpc, ItemIpc, SavedRequestIpc } from "@/ipc/bindings";
 
-function req(over: Partial<SavedRequestIpc> = {}): ItemIpc {
+function req({
+  id = "r",
+  name = "n",
+  last_used_at = null,
+  use_count = 0,
+  ...template
+}: Partial<Omit<SavedRequestIpc, "template"> & GrpcTemplateIpc> = {}): ItemIpc {
   return {
     type: "request",
-    id: "r",
-    name: "n",
-    address_template: "a:1",
-    service: "s",
-    method: "m",
-    body_template: "{}",
-    metadata: [],
-    auth: { kind: "none" },
-    tls_override: null,
-    last_used_at: null,
-    use_count: 0,
-    ...over,
+    id,
+    name,
+    last_used_at,
+    use_count,
+    template: { protocol: "grpc", address_template: "a:1", service: "s", method: "m", body_template: "{}", metadata: [], auth: { kind: "none" }, tls_override: null, ...template },
   };
 }
 

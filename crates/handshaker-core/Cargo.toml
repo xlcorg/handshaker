@@ -41,8 +41,9 @@ indexmap = { workspace = true }
 # Plan #6 — Collections
 uuid = { workspace = true }
 
-# OAuth2 client-credentials token fetch
+# OAuth2 client-credentials token fetch and plain HTTP requests
 reqwest.workspace = true
+url.workspace = true
 
 # Base64 decoder
 base64.workspace = true

@@ -4,6 +4,7 @@ import { ChevronDown, ChevronUp, RotateCw, Search } from "lucide-react";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import type { CallSummaryIpc } from "@/ipc/bindings";
 import { KindBadge } from "@/features/shell/KindBadge";
+import { HttpMethodBadge } from "@/features/http/HttpMethodBadge";
 import { formatElapsed } from "@/features/stream/format";
 import { cn } from "@/lib/cn";
 import { messages } from "@/lib/messages";
@@ -12,8 +13,9 @@ import { HistoryDetail } from "./HistoryDetail";
 import {
   filterRows,
   formatCallTime,
-  methodLabelOf,
+  rowLabelOf,
   statusTextOf,
+  targetOf,
   verdictOf,
   type HistoryChip,
   type HistoryFilter,
@@ -240,9 +242,10 @@ function Row({
   onSelect: () => void;
   onOpen: HistoryDockProps["onOpen"];
 }) {
-  const label = methodLabelOf(row);
+  const { line } = row;
+  const label = rowLabelOf(line);
   const time = formatCallTime(row.started_at_ms);
-  const ok = verdictOf(row.ending) === "ok";
+  const ok = verdictOf(line) === "ok";
   return (
     <li className={cn("flex items-stretch border-b border-border/60", selected && "bg-accent/40")}>
       <button
@@ -262,15 +265,21 @@ function Row({
       >
         <span className="truncate tabular-nums text-muted-foreground">{time}</span>
         <span className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate text-foreground">{label}</span>
-          <KindBadge kind={row.kind} />
+          {line.protocol === "http" ? (
+            <HttpMethodBadge method={line.method} className="text-[11px]" />
+          ) : (
+            <>
+              <span className="truncate text-foreground">{label}</span>
+              <KindBadge kind={line.kind} />
+            </>
+          )}
         </span>
         <span className="flex min-w-0 items-center gap-1.5">
           <span className={cn("h-1.5 w-1.5 flex-none rounded-full", ok ? "bg-ok" : "bg-destructive")} aria-hidden />
-          <span className="truncate text-foreground/85">{statusTextOf(row.ending)}</span>
+          <span className="truncate text-foreground/85">{statusTextOf(line)}</span>
         </span>
         <span className="tabular-nums text-muted-foreground">{formatElapsed(row.elapsed_ms)}</span>
-        <span className="truncate text-muted-foreground">{row.address_template}</span>
+        <span className="truncate text-muted-foreground">{targetOf(line)}</span>
       </button>
       <button
         type="button"

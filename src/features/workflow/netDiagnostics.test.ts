@@ -48,6 +48,21 @@ describe("faultFromIpcError", () => {
     expect(f.message).not.toContain("MethodKindMismatch");
   });
 
+  it("maps each InvalidUrl problem to a user-facing message, never the raw discriminator", () => {
+    expect(faultFromIpcError({ type: "InvalidUrl", problem: { type: "missing_scheme" } })).toEqual({
+      kind: "other",
+      message: "Invalid URL: start it with http:// or https://",
+    });
+    expect(faultFromIpcError({ type: "InvalidUrl", problem: { type: "unsupported_scheme", scheme: "ftp" } })).toEqual({
+      kind: "other",
+      message: "Invalid URL: ftp:// is not supported, use http:// or https://",
+    });
+    expect(faultFromIpcError({ type: "InvalidUrl", problem: { type: "malformed", reason: "invalid port number" } })).toEqual({
+      kind: "other",
+      message: "Invalid URL: invalid port number",
+    });
+  });
+
   it("falls back to the type tag / message for the remaining variants", () => {
     expect(faultFromIpcError({ type: "NotConnected" })).toEqual({ kind: "other", message: "NotConnected" });
     expect(faultFromIpcError({ type: "MethodNotFound", service: "s", method: "m" }).kind).toBe("other");

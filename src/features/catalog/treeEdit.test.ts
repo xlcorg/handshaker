@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type { CollectionIpc, ItemIpc, SavedRequestIpc } from "@/ipc/bindings";
+import type { CollectionIpc, ItemIpc, RequestTemplateIpc } from "@/ipc/bindings";
 import {
   renameItemInTree, removeItemFromTree, insertItemInTree,
   renameCollectionInTree, setCollectionPinned, removeCollectionFromTree,
@@ -9,9 +9,12 @@ import {
 
 function req(id: string, name = id): Extract<ItemIpc, { type: "request" }> {
   return {
-    type: "request", id, name, address_template: "h:443", service: "p.v1.S", method: "M",
-    body_template: "{}", metadata: [], auth: { kind: "none" }, tls_override: null,
-    last_used_at: null, use_count: 0,
+    type: "request",
+    id,
+    name,
+    template: { protocol: "grpc", address_template: "h:443", service: "p.v1.S", method: "M", body_template: "{}", metadata: [], auth: { kind: "none" }, tls_override: null },
+    last_used_at: null,
+    use_count: 0,
   };
 }
 const reqItem = req; // alias: move-helper tests use reqItem (same shape as req)
@@ -102,35 +105,42 @@ describe("collection transforms", () => {
 });
 
 describe("replaceItemInTree", () => {
-  it("swaps content fields but preserves id, name, and usage", () => {
+  it("swaps the template but preserves id, name, and usage", () => {
     const tree = [col("c1", [folder("f1", [req("r2", "Original")])])];
     // give the original some usage to prove it is preserved
     const f1 = tree[0].items[0] as Extract<ItemIpc, { type: "folder" }>;
     (f1.items[0] as Extract<ItemIpc, { type: "request" }>).use_count = 7;
     (f1.items[0] as Extract<ItemIpc, { type: "request" }>).last_used_at = 123;
 
-    const content: SavedRequestIpc = {
-      id: "ignored", name: "ignored", address_template: "new:443", service: "p.v2.S",
-      method: "NewM", body_template: '{"b":2}',
+    const content: RequestTemplateIpc = {
+      protocol: "grpc",
+      address_template: "new:443",
+      tls_override: true,
+      service: "p.v2.S",
+      method: "NewM",
+      body_template: '{"b":2}',
       metadata: [{ key: "k", value: "v", enabled: false }],
       auth: { kind: "env_var", env_var: "T", header_name: "authorization", prefix: "Bearer " },
-      tls_override: true, last_used_at: null, use_count: 0,
     };
     const after = replaceItemInTree(tree, "c1", "r2", content);
-    const target = (after[0].items[0] as Extract<ItemIpc, { type: "folder" }>).items[0] as Extract<
-      ItemIpc, { type: "request" }
-    >;
-    expect(target.id).toBe("r2"); // preserved
-    expect(target.name).toBe("Original"); // preserved
-    expect(target.use_count).toBe(7); // preserved
-    expect(target.last_used_at).toBe(123); // preserved
-    expect(target.address_template).toBe("new:443"); // swapped
-    expect(target.service).toBe("p.v2.S");
-    expect(target.method).toBe("NewM");
-    expect(target.body_template).toBe('{"b":2}');
-    expect(target.metadata).toEqual([{ key: "k", value: "v", enabled: false }]);
-    expect(target.tls_override).toBe(true);
-    expect(target.type).toBe("request");
+    const target = (after[0].items[0] as Extract<ItemIpc, { type: "folder" }>).items[0];
+    expect(target).toEqual({
+      type: "request",
+      id: "r2",
+      name: "Original",
+      use_count: 7,
+      last_used_at: 123,
+      template: {
+        protocol: "grpc",
+        address_template: "new:443",
+        tls_override: true,
+        service: "p.v2.S",
+        method: "NewM",
+        body_template: '{"b":2}',
+        metadata: [{ key: "k", value: "v", enabled: false }],
+        auth: { kind: "env_var", env_var: "T", header_name: "authorization", prefix: "Bearer " },
+      },
+    });
   });
 });
 

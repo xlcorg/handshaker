@@ -6,9 +6,10 @@ use std::sync::RwLock;
 use uuid::Uuid;
 
 use super::{
-    CallId, CallOutcome, CallRecord, CallSummary, RecordedBody, HISTORY_CAP, INLINE_JSON_BUDGET,
-    MAX_MESSAGE_ROWS, MAX_RECORD_BYTES,
+    CallId, CallOutcome, CallRecord, CallSummary, HttpOutcome, RecordedBody, RecordedCall,
+    HISTORY_CAP, INLINE_JSON_BUDGET, MAX_MESSAGE_ROWS, MAX_RECORD_BYTES,
 };
+use crate::http::ResponseBody;
 use crate::persist::{
     atomic_write_bytes, atomic_write_json, quarantine_corrupt, read_json, read_json_or_default,
     to_json_bytes, Envelope,
@@ -132,7 +133,26 @@ fn retain_newest(mut rows: Vec<CallSummary>) -> (Vec<CallSummary>, Vec<CallId>) 
 }
 
 fn fit_budget(mut record: CallRecord) -> CallRecord {
-    match &mut record.outcome {
+    match &mut record.call {
+        RecordedCall::Grpc { outcome, .. } => fit_grpc(outcome),
+        RecordedCall::Http { outcome, .. } => fit_http(outcome),
+    }
+    record
+}
+
+fn fit_http(outcome: &mut HttpOutcome) {
+    let HttpOutcome::Response { response } = outcome else {
+        return;
+    };
+    if let ResponseBody::Json { text } | ResponseBody::Text { text } = &response.body {
+        if text.len() > INLINE_JSON_BUDGET {
+            response.body = ResponseBody::Omitted;
+        }
+    }
+}
+
+fn fit_grpc(outcome: &mut CallOutcome) {
+    match outcome {
         CallOutcome::Unary { response, .. } => {
             if let RecordedBody::Inline { json } = response {
                 let size = json.len();
@@ -168,7 +188,6 @@ fn fit_budget(mut record: CallRecord) -> CallRecord {
         }
         CallOutcome::UnaryFault { .. } | CallOutcome::StreamRefused { .. } => {}
     }
-    record
 }
 
 fn scan_bodies(dir: &Path) -> Result<HashSet<CallId>, CoreError> {
@@ -223,6 +242,26 @@ mod tests {
 
     fn ids(page: &HistoryPage) -> Vec<u128> {
         page.rows.iter().map(|r| r.id.0.as_u128()).collect()
+    }
+
+    fn grpc_outcome(record: CallRecord) -> CallOutcome {
+        let RecordedCall::Grpc { outcome, .. } = record.call else {
+            panic!("expected a gRPC call");
+        };
+        outcome
+    }
+
+    fn with_request(record: CallRecord, body: &str) -> CallRecord {
+        let RecordedCall::Grpc { outcome, .. } = record.call else {
+            panic!("expected a gRPC call");
+        };
+        CallRecord {
+            call: RecordedCall::Grpc {
+                request: request(body),
+                outcome,
+            },
+            ..record
+        }
     }
 
     fn write_body(dir: &Path, record: &CallRecord) {
@@ -383,6 +422,26 @@ mod tests {
     }
 
     #[test]
+    fn v1_index_without_protocol_is_rebuilt_from_the_bodies() {
+        let dir = tempdir().unwrap();
+        write_body(dir.path(), &ok(1, 1.0));
+        let v1_index = br#"{ "schema_version": 1, "data": [{
+            "id": "00000000-0000-0000-0000-000000000001", "started_at_ms": 1.0,
+            "kind": "unary", "service": "echo.v1.Echo", "method": "Say",
+            "address_template": "{{host}}:50051", "elapsed_ms": 12,
+            "ending": { "type": "status", "code": 0 }
+        }] }"#;
+        fs::write(dir.path().join(INDEX), v1_index).unwrap();
+
+        let store = FileHistoryStore::load(dir.path()).unwrap();
+
+        assert_eq!(store.list().rows, vec![ok(1, 1.0).summary()]);
+        assert!(store.recovered_files().is_empty());
+        let index: Vec<CallSummary> = read_json(&dir.path().join(INDEX)).unwrap();
+        assert_eq!(index, vec![ok(1, 1.0).summary()]);
+    }
+
+    #[test]
     fn corrupt_body_is_quarantined_and_reported() {
         let dir = tempdir().unwrap();
         FileHistoryStore::load(dir.path())
@@ -480,7 +539,7 @@ mod tests {
             ))
             .unwrap();
 
-        let response = |n| match store.get(id(n)).unwrap().unwrap().outcome {
+        let response = |n| match grpc_outcome(store.get(id(n)).unwrap().unwrap()) {
             CallOutcome::Unary { response, .. } => response,
             other => panic!("expected unary, got {other:?}"),
         };
@@ -502,7 +561,7 @@ mod tests {
             .collect();
         store.append(stream(1, 1.0, messages)).unwrap();
 
-        match store.get(id(1)).unwrap().unwrap().outcome {
+        match grpc_outcome(store.get(id(1)).unwrap().unwrap()) {
             CallOutcome::Stream {
                 messages,
                 omitted_messages,
@@ -518,6 +577,39 @@ mod tests {
     }
 
     #[test]
+    fn over_budget_http_body_is_omitted_and_the_rest_of_the_response_kept() {
+        let dir = tempdir().unwrap();
+        let store = FileHistoryStore::load(dir.path()).unwrap();
+        let kept = "k".repeat(INLINE_JSON_BUDGET);
+        let response = |body| HttpOutcome::Response {
+            response: http_response(200, "OK", body),
+        };
+        store
+            .append(http(
+                1,
+                1.0,
+                response(ResponseBody::Text { text: kept.clone() }),
+            ))
+            .unwrap();
+        store
+            .append(http(
+                2,
+                2.0,
+                response(ResponseBody::Json {
+                    text: "o".repeat(INLINE_JSON_BUDGET + 1),
+                }),
+            ))
+            .unwrap();
+
+        let outcome = |n| match store.get(id(n)).unwrap().unwrap().call {
+            RecordedCall::Http { outcome, .. } => outcome,
+            other => panic!("expected an HTTP call, got {other:?}"),
+        };
+        assert_eq!(outcome(1), response(ResponseBody::Text { text: kept }));
+        assert_eq!(outcome(2), response(ResponseBody::Omitted));
+    }
+
+    #[test]
     fn inline_message_json_is_dropped_oldest_first_until_the_budget_holds() {
         let dir = tempdir().unwrap();
         let store = FileHistoryStore::load(dir.path()).unwrap();
@@ -525,7 +617,7 @@ mod tests {
         let messages = (1..=3).map(|i| message(i, Some(half.clone()))).collect();
         store.append(stream(1, 1.0, messages)).unwrap();
 
-        match store.get(id(1)).unwrap().unwrap().outcome {
+        match grpc_outcome(store.get(id(1)).unwrap().unwrap()) {
             CallOutcome::Stream {
                 messages,
                 omitted_messages,
@@ -545,22 +637,28 @@ mod tests {
         let dir = tempdir().unwrap();
         let store = FileHistoryStore::load(dir.path()).unwrap();
         let body = "b".repeat(300 * 1024);
-        let record = CallRecord {
-            request: request(&body),
-            ..unary(
+        let record = with_request(
+            unary(
                 1,
                 1.0,
                 RecordedBody::Inline {
                     json: "c".repeat(300 * 1024),
                 },
-            )
-        };
+            ),
+            &body,
+        );
         store.append(record).unwrap();
 
-        let back = store.get(id(1)).unwrap().unwrap();
-        assert_eq!(back.request, request(&body));
+        let RecordedCall::Grpc {
+            request: back,
+            outcome,
+        } = store.get(id(1)).unwrap().unwrap().call
+        else {
+            panic!("expected a gRPC call");
+        };
+        assert_eq!(back, request(&body));
         assert!(matches!(
-            back.outcome,
+            outcome,
             CallOutcome::Unary {
                 response: RecordedBody::Omitted { .. },
                 ..
@@ -572,10 +670,7 @@ mod tests {
     fn record_over_the_size_limit_after_trimming_is_refused() {
         let dir = tempdir().unwrap();
         let store = FileHistoryStore::load(dir.path()).unwrap();
-        let record = CallRecord {
-            request: request(&"b".repeat(MAX_RECORD_BYTES)),
-            ..ok(1, 1.0)
-        };
+        let record = with_request(ok(1, 1.0), &"b".repeat(MAX_RECORD_BYTES));
 
         let err = store.append(record).unwrap_err();
 

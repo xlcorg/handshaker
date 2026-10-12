@@ -12,9 +12,12 @@ function renderWithSidebar(ui: React.ReactElement) {
 
 function req(id: string): Extract<ItemIpc, { type: "request" }> {
   return {
-    type: "request", id, name: id, address_template: "h", service: "s", method: "m",
-    body_template: "{}", metadata: [], auth: { kind: "none" }, tls_override: null,
-    last_used_at: null, use_count: 0,
+    type: "request",
+    id,
+    name: id,
+    template: { protocol: "grpc", address_template: "h", service: "s", method: "m", body_template: "{}", metadata: [], auth: { kind: "none" }, tls_override: null },
+    last_used_at: null,
+    use_count: 0,
   };
 }
 const folder: Extract<ItemIpc, { type: "folder" }> = {
@@ -28,7 +31,7 @@ function makeCb(over: Partial<TreeCallbacks> = {}): TreeCallbacks {
     onOpenCollection: vi.fn(), onRenameItem: vi.fn(), onRenameCollection: vi.fn(),
     onDuplicateItem: vi.fn(), onRequestDeleteItem: vi.fn(), onRequestDeleteCollection: vi.fn(),
     onExportCollection: vi.fn(),
-    onAddRequest: vi.fn(), onAddFolder: vi.fn(), onSetPinned: vi.fn(),
+    onAddRequest: vi.fn(), onAddHttpRequest: vi.fn(), onAddFolder: vi.fn(), onSetPinned: vi.fn(),
     dragId: null, dropHint: null, onDragStartItem: vi.fn(), onDragOverRow: vi.fn(),
     onDropRow: vi.fn(), onDragEndItem: vi.fn(), ...over,
   };
@@ -105,21 +108,26 @@ describe("FolderNode", () => {
     expect(onEditingChange).toHaveBeenCalledWith("f1");
   });
 
-  it("menu offers Add request / Add folder / Rename / Delete", async () => {
+  it("menu offers Add request / Add HTTP request / Add folder / Rename / Delete", async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     const onAddRequest = vi.fn();
+    const onAddHttpRequest = vi.fn();
     const onAddFolder = vi.fn();
     const onRequestDeleteItem = vi.fn();
     renderWithSidebar(
       <FolderNode
         collectionId="c1"
         folder={folder}
-        cb={makeCb({ onAddRequest, onAddFolder, onRequestDeleteItem })}
+        cb={makeCb({ onAddRequest, onAddHttpRequest, onAddFolder, onRequestDeleteItem })}
       />,
     );
     await user.click(screen.getByLabelText("More options"));
     await user.click(screen.getByText("Add request"));
     expect(onAddRequest).toHaveBeenCalledWith("c1", "f1");
+    await user.click(screen.getByLabelText("More options"));
+    await user.click(screen.getByText("Add HTTP request"));
+    expect(onAddHttpRequest).toHaveBeenCalledWith("c1", "f1");
+    expect(onAddRequest).toHaveBeenCalledTimes(1);
     await user.click(screen.getByLabelText("More options"));
     await user.click(screen.getByText("Add folder"));
     expect(onAddFolder).toHaveBeenCalledWith("c1", "f1");

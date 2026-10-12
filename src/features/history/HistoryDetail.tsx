@@ -1,13 +1,25 @@
 import type { ReactNode } from "react";
 import { RotateCw } from "lucide-react";
-import type { CallOutcomeIpc, CallRecordIpc, CallStatusIpc, CallSummaryIpc, RecordedMessageIpc } from "@/ipc/bindings";
+import type {
+  CallOutcomeIpc,
+  CallRecordIpc,
+  CallStatusIpc,
+  CallSummaryIpc,
+  GrpcTemplateIpc,
+  HttpBodyIpc,
+  HttpOutcomeIpc,
+  HttpTemplateIpc,
+  MetadataRowIpc,
+  RecordedMessageIpc,
+} from "@/ipc/bindings";
+import { bodyNoteOf } from "@/features/http/model";
 import { ClientErrorView } from "@/features/response/ClientErrorView";
 import { KVTable, kvRows } from "@/features/response/KVTable";
 import { formatClock, formatElapsed } from "@/features/stream/format";
 import { cn } from "@/lib/cn";
 import { formatByteCount } from "@/lib/grpc-status";
 import { messages } from "@/lib/messages";
-import { faultOf, formatCallTime, methodLabelOf, statusTextOf, verdictOf } from "./model";
+import { faultOf, formatCallTime, rowLabelOf, statusTextOf, targetOf, verdictOf } from "./model";
 import { useCallRecord } from "./store";
 
 const m = messages.history.detail;
@@ -19,7 +31,7 @@ export interface HistoryDetailProps {
 
 export function HistoryDetail({ row, onRerun }: HistoryDetailProps) {
   const view = useCallRecord(row.id);
-  const label = methodLabelOf(row);
+  const label = rowLabelOf(row.line);
   return (
     <aside
       data-testid="history-detail"
@@ -41,7 +53,7 @@ export function HistoryDetail({ row, onRerun }: HistoryDetailProps) {
         </button>
       </header>
       <div className="flex-none truncate px-3 py-1 font-mono text-[11px] text-muted-foreground">
-        {row.address_template} · {formatCallTime(row.started_at_ms)}
+        {targetOf(row.line)} · {formatCallTime(row.started_at_ms)}
       </div>
       {view?.phase === "ready" ? (
         <RecordSections record={view.record} />
@@ -53,29 +65,86 @@ export function HistoryDetail({ row, onRerun }: HistoryDetailProps) {
 }
 
 function VerdictText({ row }: { row: CallSummaryIpc }) {
-  const ok = verdictOf(row.ending) === "ok";
+  const ok = verdictOf(row.line) === "ok";
   return (
     <span className="flex flex-none items-center gap-1.5">
       <span className={cn("h-1.5 w-1.5 rounded-full", ok ? "bg-ok" : "bg-destructive")} aria-hidden />
-      <span className="text-foreground">{statusTextOf(row.ending)}</span>
+      <span className="text-foreground">{statusTextOf(row.line)}</span>
     </span>
   );
 }
 
 function RecordSections({ record }: { record: CallRecordIpc }) {
-  const o = record.outcome;
-  const metadata = record.request.metadata.filter((row) => row.enabled);
+  const call = record.call;
+  return call.protocol === "http" ? (
+    <HttpSections request={call.request} outcome={call.outcome} />
+  ) : (
+    <GrpcSections request={call.request} outcome={call.outcome} />
+  );
+}
+
+function HttpSections({ request, outcome }: { request: HttpTemplateIpc; outcome: HttpOutcomeIpc }) {
+  const h = messages.http.history;
+  return (
+    <>
+      <Section title={h.params}>
+        <EnabledRows rows={request.query} empty={h.noParams} />
+      </Section>
+      <Section title={h.headers}>
+        <EnabledRows rows={request.headers} empty={h.noHeaders} />
+      </Section>
+      <Section title={h.body}>
+        <HttpRequestBody body={request.body} />
+      </Section>
+      <Section title={m.response}>
+        {outcome.type === "fault" ? (
+          <ClientErrorView fault={faultOf(outcome.fault)} />
+        ) : outcome.response.body.type === "json" || outcome.response.body.type === "text" ? (
+          <Pre>{outcome.response.body.text}</Pre>
+        ) : (
+          <Muted>{bodyNoteOf(outcome.response.body)}</Muted>
+        )}
+      </Section>
+      <Section title={m.headers}>
+        {outcome.type === "response" ? (
+          <KVTable rows={outcome.response.headers.map((hd) => ({ k: hd.name, v: hd.value }))} />
+        ) : (
+          <Muted>{m.notRecorded}</Muted>
+        )}
+      </Section>
+    </>
+  );
+}
+
+function HttpRequestBody({ body }: { body: HttpBodyIpc }) {
+  switch (body.kind) {
+    case "none":
+      return <Muted>{messages.http.body.none}</Muted>;
+    case "json":
+    case "text":
+      return <Pre>{body.text}</Pre>;
+    case "form":
+      return <EnabledRows rows={body.fields} empty={messages.http.body.none} />;
+  }
+}
+
+function EnabledRows({ rows, empty }: { rows: MetadataRowIpc[]; empty: string }) {
+  const enabled = rows.filter((row) => row.enabled);
+  return enabled.length > 0 ? (
+    <KVTable rows={enabled.map((row) => ({ k: row.key, v: row.value }))} />
+  ) : (
+    <Muted>{empty}</Muted>
+  );
+}
+
+function GrpcSections({ request, outcome: o }: { request: GrpcTemplateIpc; outcome: CallOutcomeIpc }) {
   return (
     <>
       <Section title={m.request}>
-        <Pre>{record.request.body_template}</Pre>
+        <Pre>{request.body_template}</Pre>
       </Section>
       <Section title={m.metadata}>
-        {metadata.length > 0 ? (
-          <KVTable rows={metadata.map((row) => ({ k: row.key, v: row.value }))} />
-        ) : (
-          <Muted>{m.noMetadata}</Muted>
-        )}
+        <EnabledRows rows={request.metadata} empty={m.noMetadata} />
       </Section>
       <Section title={o.type === "stream" ? m.messages : m.response}>
         <Response outcome={o} />

@@ -1,11 +1,12 @@
-import type { CollectionIpc, ItemIpc, SavedRequestIpc } from "@/ipc/bindings";
+import type { CollectionIpc, ItemIpc, RequestTemplateIpc, SavedRequestIpc } from "@/ipc/bindings";
 import { shortService } from "@/features/shell/SelectedMethod";
 import { fuzzyMatch } from "./fuzzy";
 
-/** Displayed gRPC identity of a saved request: `Service/Method` using the short service
- *  name (last dotted segment) — same trimming as the method-picker dropdown. */
-export function methodLabel(request: SavedRequestIpc): string {
-  return `${shortService(request.service)}/${request.method}`;
+/** Displayed identity of a saved request. gRPC is `Service/Method` using the short service
+ *  name (last dotted segment), the same trimming as the method-picker dropdown. HTTP is
+ *  `GET {{base}}/users`. */
+export function requestLabelOf(t: RequestTemplateIpc): string {
+  return t.protocol === "http" ? `${t.method} ${t.url_template}` : `${shortService(t.service)}/${t.method}`;
 }
 
 export interface RequestHit {
@@ -33,10 +34,12 @@ export function flattenRequests(collections: CollectionIpc[]): RequestHit[] {
   return out;
 }
 
-/** Searchable haystack for a hit: name + `service.method` + address. */
+/** Searchable haystack for a hit: name + `service.method` + address, or name + method + URL. */
 function haystack(h: RequestHit): string {
-  const r = h.request;
-  return `${r.name} ${r.service}.${r.method} ${r.address_template}`;
+  const { name, template: t } = h.request;
+  return t.protocol === "http"
+    ? `${name} ${t.method} ${t.url_template}`
+    : `${name} ${t.service}.${t.method} ${t.address_template}`;
 }
 
 interface Ranked {

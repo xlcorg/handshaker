@@ -1,5 +1,6 @@
 import { newId } from "@/lib/ids";
 import type { InvokeOutcomeIpc, SavedAuthConfigIpc } from "@/ipc/bindings";
+import type { HttpStep } from "@/features/http/model";
 import type { ClientFault } from "./netDiagnostics";
 
 /** `"cancelled"` is a Stream call terminal state (rows stay); a cancelled unary Send
@@ -13,6 +14,7 @@ export interface MetadataRow {
 }
 
 export interface Step {
+  protocol: "grpc";
   id: string;
   address: string; // resolved or {{var}} template
   /** Per-request TLS override. `null` = inherit the origin collection's `default_tls`
@@ -37,10 +39,14 @@ export interface Step {
   streamId: string | null;
 }
 
+/** The single Focus draft slot holds either protocol. */
+export type Draft = Step | HttpStep;
+
 export interface Workflow {
   id: string;
   name: string;
-  steps: Step[];
+  /** Executed snapshots of either protocol. */
+  steps: Draft[];
   activeStepId: string | null;
   envName: string | null; // active environment for this workflow; null = "No environment"
 }
@@ -58,6 +64,7 @@ export function newStep(init: {
   collectionId?: string | null;
 }): Step {
   return {
+    protocol: "grpc",
     id: newId(),
     address: init.address,
     tls: init.tls ?? null,

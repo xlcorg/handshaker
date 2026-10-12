@@ -5,17 +5,11 @@ const switcherFixtures = vi.hoisted(() => {
     type: "request" as const,
     id: "a",
     name: "Alpha",
-    address_template: "h:443",
-    service: "pkg.Svc",
-    method: "GetAlpha",
-    body_template: "{}",
-    metadata: [] as { key: string; value: string; enabled: boolean }[],
-    auth: { kind: "none" as const },
-    tls_override: null as boolean | null,
+    template: { protocol: "grpc", address_template: "h:443", service: "pkg.Svc", method: "GetAlpha", body_template: "{}", metadata: [] as { key: string; value: string; enabled: boolean }[], auth: { kind: "none" as const }, tls_override: null as boolean | null },
     last_used_at: null as number | null,
     use_count: 0,
   };
-  const beta = { ...alpha, id: "b", name: "Beta", method: "GetBeta" };
+  const beta = { ...alpha, id: "b", name: "Beta", template: { ...alpha.template, method: "GetBeta" } };
   const tree = [{ id: "c1", name: "C1", items: [alpha, beta], variables: {}, auth: { kind: "none" } }];
   return { alpha, beta, tree };
 });
@@ -34,10 +28,12 @@ vi.mock("@/features/catalog/SidebarShell", () => ({
     onOpenCollection,
     onOpenRequest,
     onAddRequest,
+    onAddHttpRequest,
   }: {
     onOpenCollection: (id: string) => void;
     onOpenRequest?: (collectionId: string, req: { id: string }) => void;
     onAddRequest?: () => void;
+    onAddHttpRequest?: () => void;
   }) => (
     <div>
       <button type="button" onClick={() => onOpenCollection("c1")}>open-col</button>
@@ -45,6 +41,7 @@ vi.mock("@/features/catalog/SidebarShell", () => ({
       <button type="button" onClick={() => onOpenRequest?.("c1", switcherFixtures.alpha)}>open-alpha</button>
       <button type="button" onClick={() => onOpenRequest?.("c1", switcherFixtures.beta)}>open-beta</button>
       <button type="button" onClick={() => onAddRequest?.()}>add-req</button>
+      <button type="button" onClick={() => onAddHttpRequest?.()}>add-http-req</button>
     </div>
   ),
 }));
@@ -79,6 +76,7 @@ vi.mock("@/features/settings/SettingsDialog", () => ({
 vi.mock("@/features/catalog/actions", () => ({
   openSavedRequest: vi.fn(),
   newRequestDraft: vi.fn(),
+  newHttpRequestDraft: vi.fn(),
 }));
 vi.mock("@/features/catalog/save", () => ({
   saveNewRequest: vi.fn().mockResolvedValue("req-new"),
@@ -170,7 +168,8 @@ import { workflowStore } from "@/features/workflow/store";
 import { addStep } from "@/features/workflow/reducers";
 import { newStep } from "@/features/workflow/model";
 import { saveNewRequest } from "@/features/catalog/save";
-import { openSavedRequest, newRequestDraft } from "@/features/catalog/actions";
+import { openSavedRequest, newHttpRequestDraft, newRequestDraft } from "@/features/catalog/actions";
+import { newHttpStep } from "@/features/http/model";
 import { envActiveGet, ipc } from "@/ipc/client";
 import { historyStore } from "@/features/history/store";
 import { callRecord, summary } from "@/features/history/testFixtures";
@@ -181,6 +180,7 @@ beforeEach(() => {
   historyStore.reset();
   vi.mocked(openSavedRequest).mockReset();
   vi.mocked(newRequestDraft).mockReset();
+  vi.mocked(newHttpRequestDraft).mockReset();
 });
 
 function createCall() {
@@ -206,7 +206,7 @@ function setBoundDraft() {
 function setDirtyUnboundDraft() {
   act(() => {
     workflowStore.setDraft(newStep({ address: "h:443", tls: false, service: "p.S", method: "GetX" }));
-    workflowStore.updateDraft(workflowStore.getState().draft!.id, { requestJson: '{"a":1}' });
+    workflowStore.updateGrpcDraft(workflowStore.getState().draft!.id, { requestJson: '{"a":1}' });
   });
 }
 
@@ -312,6 +312,45 @@ describe("WorkflowApp Save flow", () => {
     render(<WorkflowApp />);
     await user.keyboard("{Control>}n{/Control}");
     expect(newRequestDraft).toHaveBeenCalledTimes(1);
+    expect(newHttpRequestDraft).not.toHaveBeenCalled();
+  });
+
+  it("saves an unbound HTTP draft under its suggested name", async () => {
+    const user = userEvent.setup();
+    render(<WorkflowApp />);
+    const http = newHttpStep({
+      template: { method: "POST", url_template: "{{base}}/users?x=1", query: [], headers: [], body: { kind: "none" }, auth: { kind: "none" } },
+    });
+    act(() => workflowStore.setDraft(http));
+    await user.click(screen.getByText("focus-save"));
+    await user.click(await screen.findByText("do-save"));
+    await waitFor(() => expect(saveNewRequest).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(saveNewRequest).mock.calls[0].slice(1)).toEqual([
+      http, { collectionId: "c1", parentId: null, name: "POST users" },
+    ]);
+  });
+});
+
+describe("WorkflowApp New HTTP request", () => {
+  it("starts an HTTP draft and reveals Focus", async () => {
+    const user = userEvent.setup();
+    render(<WorkflowApp />);
+    await user.click(screen.getByText("open-col"));
+    await user.click(screen.getByText("add-http-req"));
+    expect(newHttpRequestDraft).toHaveBeenCalledTimes(1);
+    expect(newRequestDraft).not.toHaveBeenCalled();
+    expect(screen.queryByText("OVERVIEW:c1")).not.toBeInTheDocument();
+    expect(screen.getByText("FOCUS")).toBeInTheDocument();
+  });
+
+  it("asks before replacing a dirty unbound draft, then starts the HTTP draft", async () => {
+    const user = userEvent.setup();
+    render(<WorkflowApp />);
+    setDirtyUnboundDraft();
+    await user.click(screen.getByText("add-http-req"));
+    expect(newHttpRequestDraft).not.toHaveBeenCalled();
+    await user.click(screen.getByText("discard-confirm"));
+    expect(newHttpRequestDraft).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -392,7 +431,7 @@ describe("WorkflowApp history dock", () => {
     await user.click(await screen.findByTestId("history-row-open"));
     await waitFor(() => expect(screen.getByText("FOCUS")).toBeInTheDocument());
     expect(screen.queryByText("OVERVIEW:c1")).not.toBeInTheDocument();
-    expect(workflowStore.getState().draft?.method).toBe("Say");
+    expect(workflowStore.getState().draft).toMatchObject({ protocol: "grpc", method: "Say" });
   });
 });
 
@@ -426,7 +465,7 @@ describe("WorkflowApp recent switcher", () => {
     render(<WorkflowApp />);
     await user.click(screen.getByText("open-alpha"));
     await user.click(screen.getByText("open-beta"));
-    expect(workflowStore.getState().draft?.method).toBe("GetBeta");
+    expect(workflowStore.getState().draft).toMatchObject({ protocol: "grpc", method: "GetBeta" });
 
     act(() => {
       window.dispatchEvent(
@@ -442,7 +481,7 @@ describe("WorkflowApp recent switcher", () => {
 
     expect(screen.getByText("FOCUS")).toBeInTheDocument();
     expect(screen.queryByText("OVERVIEW:c1")).not.toBeInTheDocument();
-    expect(workflowStore.getState().draft?.method).toBe("GetAlpha");
+    expect(workflowStore.getState().draft).toMatchObject({ protocol: "grpc", method: "GetAlpha" });
     expect(workflowStore.getState().draftOrigin).toEqual({
       collectionId: "c1",
       requestId: "a",
@@ -456,7 +495,7 @@ describe("WorkflowApp recent switcher", () => {
     render(<WorkflowApp />);
     await user.click(screen.getByText("open-alpha"));
     const draft = workflowStore.getState().draft;
-    expect(draft?.method).toBe("GetAlpha");
+    expect(draft).toMatchObject({ protocol: "grpc", method: "GetAlpha" });
 
     await user.click(screen.getByText("open-col"));
     expect(screen.getByText("OVERVIEW:c1")).toBeInTheDocument();

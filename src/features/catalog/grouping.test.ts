@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { suggestSaveTarget, findSavedLocations, isAutoName } from "./grouping";
-import type { CollectionIpc, ItemIpc, SavedRequestIpc } from "@/ipc/bindings";
+import type { CollectionIpc, GrpcTemplateIpc, ItemIpc, SavedRequestIpc } from "@/ipc/bindings";
 
 describe("suggestSaveTarget", () => {
   it("drops a trailing 'Service' suffix from the short service name", () => {
@@ -30,21 +30,20 @@ describe("suggestSaveTarget", () => {
   });
 });
 
-function req(over: Partial<SavedRequestIpc> = {}): ItemIpc {
+function req({
+  id = "r",
+  name = "GetX",
+  last_used_at = null,
+  use_count = 0,
+  ...template
+}: Partial<Omit<SavedRequestIpc, "template"> & GrpcTemplateIpc> = {}): ItemIpc {
   return {
     type: "request",
-    id: "r",
-    name: "GetX",
-    address_template: "localhost:5002",
-    service: "pkg.v1.Svc",
-    method: "GetX",
-    body_template: "{}",
-    metadata: [],
-    auth: { kind: "none" },
-    tls_override: null,
-    last_used_at: null,
-    use_count: 0,
-    ...over,
+    id,
+    name,
+    last_used_at,
+    use_count,
+    template: { protocol: "grpc", address_template: "localhost:5002", service: "pkg.v1.Svc", method: "GetX", body_template: "{}", metadata: [], auth: { kind: "none" }, tls_override: null, ...template },
   };
 }
 
