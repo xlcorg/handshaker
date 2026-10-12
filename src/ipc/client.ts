@@ -463,6 +463,12 @@ export async function historyRecord(record: CallRecordIpc): Promise<HistoryPageI
   return r.data;
 }
 
+export async function historyClear(): Promise<HistoryPageIpc> {
+  const r = await commands.historyClear();
+  if (r.status === "error") throw r.error;
+  return r.data;
+}
+
 /** Hand `url` to the OS default browser. The single seam for leaving the app —
  *  callers pass a FULLY RESOLVED url; `{{var}}` templates never cross it. */
 export async function openExternal(url: string): Promise<void> {
@@ -524,5 +530,6 @@ export const ipc = {
   historyList,
   historyGet,
   historyRecord,
+  historyClear,
   openExternal,
 };

@@ -6,6 +6,7 @@ import type { CallRecordIpc, HistoryPageIpc } from "@/ipc/bindings";
 const api = vi.hoisted(() => ({
   historyList: vi.fn<() => Promise<HistoryPageIpc>>(),
   historyGet: vi.fn<(id: string) => Promise<CallRecordIpc | null>>(),
+  historyClear: vi.fn<() => Promise<HistoryPageIpc>>(),
 }));
 vi.mock("@/ipc/client", () => ({ ...api, ipc: api }));
 
@@ -199,5 +200,40 @@ describe("HistoryDock states", () => {
     await user.click(toggle);
     expect(readPrefs().historyDock).toBe(true);
     expect(await rowButtons()).toHaveLength(3);
+  });
+});
+
+describe("HistoryDock clear", () => {
+  it("cancel leaves the rows", async () => {
+    const user = userEvent.setup();
+    renderDock();
+    await rowButtons();
+
+    await user.click(screen.getByRole("button", { name: messages.history.clear.button }));
+
+    expect(screen.getByText(messages.history.clear.title)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(api.historyClear).not.toHaveBeenCalled();
+    expect(await rowButtons()).toHaveLength(3);
+  });
+
+  it("confirming clear empties the dock and keeps the failed chip", async () => {
+    const user = userEvent.setup();
+    api.historyClear.mockResolvedValue({ revision: 2, rows: [] });
+    renderDock();
+    await user.click((await rowButtons())[1]);
+    expect(detailLabel()).toBe("Echo.Lookup");
+    await user.click(screen.getByTestId("history-chip-failed"));
+    expect(screen.getByTestId("history-chip-failed")).toHaveAttribute("aria-pressed", "true");
+
+    await user.click(screen.getByTestId("history-clear"));
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+
+    expect(api.historyClear).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText(messages.history.dock.empty)).toBeInTheDocument();
+    expect(screen.getByTestId("history-dock-toggle")).toHaveTextContent(messages.history.dock.titleWithCount(0));
+    expect(screen.queryByTestId("history-detail")).toBeNull();
+    expect(screen.getByTestId("history-chip-failed")).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("history-clear")).toBeDisabled();
   });
 });

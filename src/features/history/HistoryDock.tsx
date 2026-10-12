@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { PanelImperativeHandle } from "react-resizable-panels";
-import { ChevronDown, ChevronUp, RotateCw, Search } from "lucide-react";
+import { ChevronDown, ChevronUp, RotateCw, Search, Trash2 } from "lucide-react";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import type { CallSummaryIpc } from "@/ipc/bindings";
+import { ConfirmDeleteDialog } from "@/features/catalog/ConfirmDeleteDialog";
 import { KindBadge } from "@/features/shell/KindBadge";
 import { HttpMethodBadge } from "@/features/http/HttpMethodBadge";
 import { formatElapsed } from "@/features/stream/format";
@@ -21,7 +22,7 @@ import {
   type HistoryFilter,
 } from "./model";
 import type { HistoryIntent } from "./navigate";
-import { useHistory } from "./store";
+import { historyStore, useHistory } from "./store";
 
 const m = messages.history;
 const HEADER_PX = 32;
@@ -96,6 +97,7 @@ function DockBody({
   const state = useHistory();
   const [filter, setFilter] = useState<HistoryFilter>({ text: "", chip: "all" });
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [clearOpen, setClearOpen] = useState(false);
   const rows = state.phase === "ready" ? state.rows : [];
   const visible = filterRows(rows, filter);
   const selected = visible.find((row) => row.id === selectedId) ?? null;
@@ -130,7 +132,15 @@ function DockBody({
     );
 
   return (
-    <section aria-label={m.dock.title} data-testid="history-dock" className="flex h-full min-h-0 flex-col bg-background">
+    <section
+      aria-label={m.dock.title}
+      data-testid="history-dock"
+      className={cn(
+        "flex h-full min-h-0 flex-col bg-background",
+        // The version badge is fixed over this corner. Keep the rerun column above it.
+        expanded && "pb-5",
+      )}
+    >
       <div className="flex h-8 flex-none items-center gap-1.5 border-b border-border/60 px-2">
         <button
           type="button"
@@ -178,6 +188,16 @@ function DockBody({
                 </button>
               ))}
             </div>
+            <button
+              type="button"
+              data-testid="history-clear"
+              disabled={rows.length === 0}
+              onClick={() => setClearOpen(true)}
+              className="ml-auto flex h-6 flex-none items-center gap-1 rounded-md px-1.5 text-xs text-muted-foreground hover:bg-accent/40 hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+            >
+              <Trash2 className="size-3" aria-hidden />
+              {m.clear.button}
+            </button>
           </>
         )}
       </div>
@@ -187,6 +207,13 @@ function DockBody({
           {selected && <HistoryDetail row={selected} onRerun={() => onOpen(selected.id, "rerun")} />}
         </div>
       )}
+      <ConfirmDeleteDialog
+        open={clearOpen}
+        title={m.clear.title}
+        description={m.clear.description}
+        onConfirm={() => void historyStore.clear()}
+        onOpenChange={setClearOpen}
+      />
     </section>
   );
 }

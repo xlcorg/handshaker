@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   historyList: vi.fn<() => Promise<HistoryPageIpc>>(),
   historyRecord: vi.fn<(r: CallRecordIpc) => Promise<HistoryPageIpc>>(),
   historyGet: vi.fn<(id: string) => Promise<CallRecordIpc | null>>(),
+  historyClear: vi.fn<() => Promise<HistoryPageIpc>>(),
 }));
 vi.mock("@/ipc/client", () => ({ ...mocks, ipc: mocks }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), info: vi.fn() } }));
@@ -86,5 +87,59 @@ describe("historyStore", () => {
 
     mocks.historyGet.mockRejectedValueOnce({ type: "InvalidTarget", message: "bad call id" });
     expect(await historyStore.load("nope")).toBeNull();
+  });
+
+  it("clear applies an empty page, and a later load of the old id is null", async () => {
+    mocks.historyList.mockResolvedValue({ revision: 1, rows: [older] });
+    await hydrated();
+    mocks.historyClear.mockResolvedValue({ revision: 2, rows: [] });
+
+    await historyStore.clear();
+
+    expect(historyStore.getState()).toEqual({ phase: "ready", revision: 2, rows: [] });
+    mocks.historyGet.mockResolvedValue(callRecord({ id: "older" }));
+    expect(await historyStore.load("older")).toBeNull();
+  });
+
+  it("an in-flight record with an older revision after clear does not bring rows back", async () => {
+    mocks.historyList.mockResolvedValue({ revision: 1, rows: [older] });
+    await hydrated();
+    let resolveRecord!: (page: HistoryPageIpc) => void;
+    mocks.historyRecord.mockReturnValue(new Promise((resolve) => (resolveRecord = resolve)));
+    const pending = historyStore.record(callRecord({ id: "newer" }));
+    mocks.historyClear.mockResolvedValue({ revision: 3, rows: [] });
+
+    await historyStore.clear();
+    resolveRecord({ revision: 2, rows: [newer, older] });
+    await pending;
+
+    expect(historyStore.getState()).toEqual({ phase: "ready", revision: 3, rows: [] });
+  });
+
+  it("a rejected clear toasts, resolves, and keeps the rows", async () => {
+    mocks.historyList.mockResolvedValue({ revision: 1, rows: [older] });
+    await hydrated();
+    mocks.historyClear.mockRejectedValue({ type: "Persistence", message: "clear history" });
+
+    await expect(historyStore.clear()).resolves.toBeUndefined();
+
+    expect(toast.error).toHaveBeenCalledWith(messages.history.toast.clearFailed);
+    expect(historyStore.getState()).toEqual({ phase: "ready", revision: 1, rows: [older] });
+  });
+
+  it("a get that resolves after clear does not cache the record", async () => {
+    mocks.historyList.mockResolvedValue({ revision: 1, rows: [older] });
+    await hydrated();
+    let resolveGet!: (record: CallRecordIpc | null) => void;
+    mocks.historyGet.mockReturnValue(new Promise((resolve) => (resolveGet = resolve)));
+    const pending = historyStore.load("older");
+    mocks.historyClear.mockResolvedValue({ revision: 2, rows: [] });
+
+    await historyStore.clear();
+    resolveGet(callRecord({ id: "older" }));
+
+    expect(await pending).toBeNull();
+    expect(await historyStore.load("older")).toBeNull();
+    expect(mocks.historyGet).toHaveBeenCalledTimes(2);
   });
 });

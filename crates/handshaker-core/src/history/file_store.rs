@@ -20,8 +20,9 @@ const INDEX: &str = "index.json";
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct HistoryPage {
-    /// 1 after `load`, bumped on every committed append. The frontend applies a page only
-    /// when its revision is newer than the one it holds, so replies can land in any order.
+    /// 1 after `load`, bumped on every committed append and on a clear that removes rows.
+    /// The frontend applies a page only when its revision is newer than the one it holds,
+    /// so replies can land in any order.
     pub revision: u32,
     /// Newest first.
     pub rows: Vec<CallSummary>,
@@ -30,6 +31,7 @@ pub struct HistoryPage {
 #[derive(Debug)]
 pub struct FileHistoryStore {
     dir: PathBuf,
+    clearing: PathBuf,
     log: RwLock<HistoryPage>,
     recovered: Vec<PathBuf>,
 }
@@ -38,6 +40,8 @@ impl FileHistoryStore {
     /// Open the log under `dir`. A missing dir is an empty log; nothing is created until
     /// the first append.
     pub fn load(dir: &Path) -> Result<Self, CoreError> {
+        let clearing = clearing_path(dir)?;
+        let _ = fs::remove_dir_all(&clearing);
         let index_path = dir.join(INDEX);
         let index: Vec<CallSummary> = read_json(&index_path).unwrap_or_default();
         let bodies = scan_bodies(dir)?;
@@ -62,6 +66,7 @@ impl FileHistoryStore {
         }
         Ok(Self {
             dir: dir.to_path_buf(),
+            clearing,
             log: RwLock::new(HistoryPage { revision: 1, rows }),
             recovered,
         })
@@ -114,6 +119,41 @@ impl FileHistoryStore {
         remove_bodies(&self.dir, &evicted);
         Ok(log.clone())
     }
+
+    pub fn clear(&self) -> Result<HistoryPage, CoreError> {
+        let mut log = self.log.write().expect("history poisoned");
+        let _ = fs::remove_dir_all(&self.clearing);
+        if detach_log(&self.dir, &self.clearing)? {
+            let _ = fs::remove_dir_all(&self.clearing);
+        }
+        if !log.rows.is_empty() {
+            *log = HistoryPage {
+                revision: log.revision + 1,
+                rows: Vec::new(),
+            };
+        }
+        Ok(log.clone())
+    }
+}
+
+fn detach_log(dir: &Path, clearing: &Path) -> Result<bool, CoreError> {
+    match fs::rename(dir, clearing) {
+        Ok(()) => Ok(true),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(e) => Err(CoreError::Persistence(format!(
+            "clear history {}: {e}",
+            dir.display()
+        ))),
+    }
+}
+
+fn clearing_path(dir: &Path) -> Result<PathBuf, CoreError> {
+    let name = dir.file_name().ok_or_else(|| {
+        CoreError::Persistence(format!("history dir {} has no name", dir.display()))
+    })?;
+    let mut sibling = name.to_os_string();
+    sibling.push(".clearing");
+    Ok(dir.with_file_name(sibling))
 }
 
 fn retain_newest(mut rows: Vec<CallSummary>) -> (Vec<CallSummary>, Vec<CallId>) {
@@ -683,5 +723,227 @@ mod tests {
             }
         );
         assert!(!body_path(dir.path(), id(1)).exists());
+    }
+
+    #[test]
+    fn clear_empties_the_log_and_it_stays_empty_after_reload() {
+        let parent = tempdir().unwrap();
+        let history = parent.path().join("history");
+        let store = FileHistoryStore::load(&history).unwrap();
+        store.append(ok(1, 1.0)).unwrap();
+        store.append(ok(2, 2.0)).unwrap();
+
+        let page = store.clear().unwrap();
+
+        assert_eq!(
+            page,
+            HistoryPage {
+                revision: 4,
+                rows: vec![]
+            }
+        );
+        assert_eq!(store.get(id(1)).unwrap(), None);
+        assert!(!history.exists());
+        assert!(!parent.path().join("history.clearing").exists());
+        assert_eq!(
+            FileHistoryStore::load(&history).unwrap().list(),
+            HistoryPage {
+                revision: 1,
+                rows: vec![]
+            }
+        );
+    }
+
+    #[test]
+    fn clear_deletes_quarantined_bodies() {
+        let parent = tempdir().unwrap();
+        let history = parent.path().join("history");
+        FileHistoryStore::load(&history)
+            .unwrap()
+            .append(ok(1, 1.0))
+            .unwrap();
+        fs::write(body_path(&history, id(2)), b"{ torn").unwrap();
+
+        let store = FileHistoryStore::load(&history).unwrap();
+        let quarantine = store.recovered_files()[0].clone();
+        assert!(quarantine.exists());
+
+        store.clear().unwrap();
+
+        assert!(!quarantine.exists());
+        assert!(!history.exists());
+    }
+
+    #[test]
+    fn second_clear_is_a_success_that_changes_nothing() {
+        let parent = tempdir().unwrap();
+        let history = parent.path().join("history");
+        let store = FileHistoryStore::load(&history).unwrap();
+        store.append(ok(1, 1.0)).unwrap();
+
+        let first = store.clear().unwrap();
+        let second = store.clear().unwrap();
+
+        assert_eq!(
+            first,
+            HistoryPage {
+                revision: 3,
+                rows: vec![]
+            }
+        );
+        assert_eq!(second, first);
+        assert!(!history.exists());
+        assert!(!parent.path().join("history.clearing").exists());
+    }
+
+    #[test]
+    fn clear_of_a_never_written_log_creates_nothing() {
+        let parent = tempdir().unwrap();
+        let history = parent.path().join("history");
+        let store = FileHistoryStore::load(&history).unwrap();
+
+        assert_eq!(
+            store.clear().unwrap(),
+            HistoryPage {
+                revision: 1,
+                rows: vec![]
+            }
+        );
+        assert!(!history.exists());
+        assert!(!parent.path().join("history.clearing").exists());
+    }
+
+    #[test]
+    fn append_after_clear_is_the_only_record_after_reload() {
+        let parent = tempdir().unwrap();
+        let history = parent.path().join("history");
+        let store = FileHistoryStore::load(&history).unwrap();
+        store.append(ok(1, 1.0)).unwrap();
+        store.append(ok(2, 2.0)).unwrap();
+        store.clear().unwrap();
+
+        let page = store.append(ok(3, 3.0)).unwrap();
+
+        assert_eq!(page.revision, 5);
+        assert_eq!(ids(&page), vec![3]);
+        assert_eq!(
+            ids(&FileHistoryStore::load(&history).unwrap().list()),
+            vec![3]
+        );
+    }
+
+    #[test]
+    fn clear_interrupted_after_its_rename_loads_empty_and_finishes_the_delete() {
+        let parent = tempdir().unwrap();
+        let history = parent.path().join("history");
+        let store = FileHistoryStore::load(&history).unwrap();
+        store.append(ok(1, 1.0)).unwrap();
+        store.append(ok(2, 2.0)).unwrap();
+        drop(store);
+        let clearing = parent.path().join("history.clearing");
+        fs::rename(&history, &clearing).unwrap();
+
+        let store = FileHistoryStore::load(&history).unwrap();
+
+        assert!(store.list().rows.is_empty());
+        assert!(!clearing.exists());
+    }
+
+    #[test]
+    fn clearing_leftover_beside_a_live_log_is_deleted_and_the_log_kept() {
+        let parent = tempdir().unwrap();
+        let history = parent.path().join("history");
+        FileHistoryStore::load(&history)
+            .unwrap()
+            .append(ok(1, 1.0))
+            .unwrap();
+        let clearing = parent.path().join("history.clearing");
+        write_body(&clearing, &ok(2, 2.0));
+
+        let store = FileHistoryStore::load(&history).unwrap();
+
+        assert_eq!(ids(&store.list()), vec![1]);
+        assert!(!clearing.exists());
+    }
+
+    #[test]
+    fn clear_that_cannot_move_the_log_changes_nothing() {
+        let parent = tempdir().unwrap();
+        let history = parent.path().join("history");
+        let store = FileHistoryStore::load(&history).unwrap();
+        store.append(ok(1, 1.0)).unwrap();
+        fs::write(parent.path().join("history.clearing"), b"not a directory").unwrap();
+
+        let err = store.clear().unwrap_err();
+
+        assert!(matches!(err, CoreError::Persistence(m) if m.contains("clear history")));
+        assert_eq!(store.list().revision, 2);
+        assert!(body_path(&history, id(1)).exists());
+        assert_eq!(
+            ids(&FileHistoryStore::load(&history).unwrap().list()),
+            vec![1]
+        );
+    }
+
+    #[test]
+    fn clear_removes_secret_bytes_from_the_parent() {
+        let parent = tempdir().unwrap();
+        let history = parent.path().join("history");
+        let secret = b"HS_CLEAR_SECRET_7f3a9c";
+        fs::create_dir_all(&history).unwrap();
+        fs::write(body_path(&history, id(7)), secret).unwrap();
+        let store = FileHistoryStore::load(&history).unwrap();
+        assert!(!store.recovered_files().is_empty());
+
+        store.clear().unwrap();
+
+        assert!(!parent.path().join("history.clearing").exists());
+        let mut stack = vec![parent.path().to_path_buf()];
+        while let Some(dir) = stack.pop() {
+            for entry in fs::read_dir(&dir).unwrap().flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    stack.push(path);
+                } else {
+                    let bytes = fs::read(&path).unwrap();
+                    assert!(
+                        !bytes.windows(secret.len()).any(|window| window == secret),
+                        "{}",
+                        path.display()
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn clear_does_not_touch_sibling_app_data() {
+        let parent = tempdir().unwrap();
+        let history = parent.path().join("history");
+        let planted: &[(&str, &[u8])] = &[
+            ("collections/keep.json", b"collections-keep"),
+            ("environments.json", b"environments-keep"),
+            ("contracts/keep.json", b"contracts-keep"),
+            ("ui-state.json", b"ui-state-keep"),
+            ("active_env.json", b"active-env-keep"),
+            ("history.bak", b"history-bak-keep"),
+            ("history.clearing.bak", b"clearing-bak-keep"),
+        ];
+        for (rel, bytes) in planted {
+            let path = parent.path().join(rel);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(&path, bytes).unwrap();
+        }
+        let store = FileHistoryStore::load(&history).unwrap();
+        store.append(ok(1, 1.0)).unwrap();
+
+        store.clear().unwrap();
+        let _ = FileHistoryStore::load(&history).unwrap();
+
+        for (rel, bytes) in planted {
+            assert_eq!(fs::read(parent.path().join(rel)).unwrap(), *bytes);
+        }
+        assert!(!history.exists());
+        assert!(!parent.path().join("history.clearing").exists());
     }
 }
