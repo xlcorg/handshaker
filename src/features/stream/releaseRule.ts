@@ -6,8 +6,9 @@ import { streamStore } from "./streamStore";
 /** Every stream id any step still references: workflow history (all workflows) + the draft. */
 export function referencedStreamIds(state: WorkflowState): Set<string> {
   const ids = new Set<string>();
-  for (const wf of state.workflows) for (const s of wf.steps) if (s.streamId) ids.add(s.streamId);
-  if (state.draft?.streamId) ids.add(state.draft.streamId);
+  for (const wf of state.workflows) for (const s of wf.steps) if (s.protocol === "grpc" && s.streamId) ids.add(s.streamId);
+  const draft = state.draft;
+  if (draft?.protocol === "grpc" && draft.streamId) ids.add(draft.streamId);
   return ids;
 }
 

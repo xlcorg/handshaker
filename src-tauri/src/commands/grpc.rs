@@ -8,9 +8,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock, Weak};
 use std::time::Duration;
 
-use tokio::sync::Notify;
-
-use handshaker_core::collections::{ItemId, SavedRequest};
 use handshaker_core::grpc::{
     activate, build_message_schema_from_pools, build_request_skeleton_from_pools, CallOptions,
     ContractKey, GrpcTarget, TonicTransport,
@@ -18,26 +15,17 @@ use handshaker_core::grpc::{
 use handshaker_core::stream::{AssembleResult, StreamCall, StreamEvents, StreamRegistry};
 use tauri::{AppHandle, State};
 use tauri_specta::Event;
-use uuid::Uuid;
 
+use crate::commands::call::{ctx_refs, race_cancel_handoff, race_cancel_timeout, resolve_max_message_size};
 use crate::commands::dialog::{local_stamp, save_bytes_via_dialog, save_via_dialog_with, SaveError};
 use crate::commands::events::ContractUpdated;
+use crate::ipc::collection::GrpcTemplateIpc;
 use crate::ipc::{
     AssembleResultIpc, CallOptionsIpc, GrpcTargetIpc, InvokeOutcomeIpc, IpcError, MessageSchemaIpc, MessageSideIpc,
-    MethodKindIpc, OutboundMessageIpc, SendCtxIpc, SendDraftIpc, SendReportIpc, ServiceCatalogIpc,
+    MethodKindIpc, OutboundMessageIpc, SendCtxIpc, SendReportIpc, ServiceCatalogIpc,
     StreamEventIpc,
 };
-use crate::state::{AppState, InFlight};
-
-/// Map the IPC byte limit to tonic's `usize`. The sentinel `0` means "no limit"
-/// (the slider's Unlimited stop) → `usize::MAX`; any finite value passes through.
-pub(crate) fn resolve_max_message_size(raw: u32) -> usize {
-    if raw == 0 {
-        usize::MAX
-    } else {
-        raw as usize
-    }
-}
+use crate::state::AppState;
 
 /// Stable string key for the `ContractUpdated` event. Mirrors `ContractKey`'s
 /// key-space (address + tls only; `skip_verify` is intentionally excluded —
@@ -174,156 +162,6 @@ pub async fn grpc_message_schema(
     race_cancel_timeout(&state.in_flight, request_id, timeout_ms, work).await
 }
 
-/// Removes the in-flight registry entry on scope exit (success / timeout / cancel / panic).
-struct DeregisterGuard<'a> {
-    map: &'a InFlight,
-    id: String,
-    notify: Arc<Notify>,
-}
-impl Drop for DeregisterGuard<'_> {
-    fn drop(&mut self) {
-        if let Ok(mut g) = self.map.lock() {
-            // Remove only OUR entry: if a later request reused this id and overwrote the
-            // slot, its `Notify` differs by identity — leave it so it stays cancelable.
-            if g.get(&self.id).is_some_and(|n| Arc::ptr_eq(n, &self.notify)) {
-                g.remove(&self.id);
-            }
-        }
-    }
-}
-
-/// Race a unit of `work` against (a) a per-request cancel `Notify` and (b) a timeout.
-/// Testable seam: the command builds `work` from the real activate+invoke; tests pass a
-/// synthetic future. Generic over `T` so tests need no `InvokeOutcomeIpc` and no network.
-pub(crate) async fn race_cancel_timeout<T, F>(
-    in_flight: &InFlight,
-    request_id: String,
-    timeout_ms: u32,
-    work: F,
-) -> Result<T, IpcError>
-where
-    F: std::future::Future<Output = Result<T, IpcError>>,
-{
-    let bounded = async move {
-        match tokio::time::timeout(Duration::from_millis(timeout_ms as u64), work).await {
-            Ok(inner) => inner,
-            Err(_) => Err(IpcError::DeadlineExceeded { timeout_ms }),
-        }
-    };
-    race_cancel(in_flight, request_id, bounded).await
-}
-
-/// Race `work` against the per-request cancel `Notify` only — no timeout.
-pub(crate) async fn race_cancel<T, F>(
-    in_flight: &InFlight,
-    request_id: String,
-    work: F,
-) -> Result<T, IpcError>
-where
-    F: std::future::Future<Output = Result<T, IpcError>>,
-{
-    race_cancel_handoff(in_flight, request_id, work, |v| v).await.map(|(v, _)| v)
-}
-
-/// `race_cancel` with a **hand-off**: a successful result is passed to `register` while
-/// the in-flight entry still exists — under the registry lock, so a concurrent
-/// `grpc_cancel` (which holds the same lock for lookup + notify) sees the id in exactly
-/// one registry at any instant. The stream Open path uses it: its deadlines are core's
-/// phase timers (the race must not cut an Open short on its own), and its call moves
-/// from `in_flight` to the stream registry here.
-///
-/// The returned flag is `true` when a cancel landed after `work` completed but before
-/// the hand-off (tokio keeps such a `notify_one` as a permit): the caller applies it to
-/// the registered value, so no cancel is lost in the window.
-pub(crate) async fn race_cancel_handoff<T, F, R>(
-    in_flight: &InFlight,
-    request_id: String,
-    work: F,
-    register: impl FnOnce(T) -> R,
-) -> Result<(R, bool), IpcError>
-where
-    F: std::future::Future<Output = Result<T, IpcError>>,
-{
-    let notify = Arc::new(Notify::new());
-    in_flight
-        .lock()
-        .expect("in_flight registry poisoned")
-        .insert(request_id.clone(), notify.clone());
-    let _guard = DeregisterGuard { map: in_flight, id: request_id.clone(), notify: notify.clone() };
-
-    let value = tokio::select! {
-        biased;
-        _ = notify.notified() => Err(IpcError::Cancelled),
-        r = work => r,
-    }?;
-
-    let registered = {
-        let mut g = in_flight.lock().expect("in_flight registry poisoned");
-        let registered = register(value);
-        if g.get(&request_id).is_some_and(|n| Arc::ptr_eq(n, &notify)) {
-            g.remove(&request_id);
-        }
-        registered
-    };
-    Ok((registered, has_permit(&notify)))
-}
-
-/// `true` when a `notify_one` is stored on `notify` (consumes it). A `Notified` future
-/// polled once with a no-op waker completes only on a stored permit; otherwise it is
-/// dropped again without waiting.
-fn has_permit(notify: &Notify) -> bool {
-    let mut fut = std::pin::pin!(notify.notified());
-    let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
-    std::future::Future::poll(fut.as_mut(), &mut cx).is_ready()
-}
-
-/// Read the ctx-referenced collection / env from the stores — the ctx carries
-/// references, not data. Shared by Send, Open and Send message.
-fn ctx_refs(
-    state: &AppState,
-    ctx: &SendCtxIpc,
-) -> (
-    Option<handshaker_core::collections::Collection>,
-    Option<handshaker_core::env::Environment>,
-) {
-    let collection = ctx
-        .collection_id
-        .as_deref()
-        .and_then(|id| crate::ipc::collection::parse_collection_id(id).ok())
-        .and_then(|cid| state.collection_store.get(cid));
-    let active_env = ctx.env_name.as_deref().and_then(|n| state.env_store.get(n));
-    (collection, active_env)
-}
-
-/// Build the core `SavedRequest` view over an IPC draft (the UI toggle is the tls
-/// override) and read the ctx-referenced collection / env from the stores.
-fn draft_to_request(
-    state: &AppState,
-    draft: SendDraftIpc,
-    ctx: &SendCtxIpc,
-) -> (
-    SavedRequest,
-    Option<handshaker_core::collections::Collection>,
-    Option<handshaker_core::env::Environment>,
-) {
-    let (collection, active_env) = ctx_refs(state, ctx);
-
-    let saved = SavedRequest {
-        id: ItemId(Uuid::nil()),
-        name: String::new(),
-        address_template: draft.address_template,
-        service: draft.service.clone(),
-        method: draft.method.clone(),
-        body_template: draft.body_template,
-        metadata: draft.metadata.into_iter().map(|r| r.into_core()).collect(),
-        auth: draft.auth.into_core(),
-        tls_override: draft.tls_override,
-        last_used_at: None,
-        use_count: 0,
-    };
-    (saved, collection, active_env)
-}
-
 /// Live Send — an ADAPTER over the core `Sender` (the whole spine lives in core):
 /// parse ctx references → read collection/env from the stores → run the shared
 /// `Sender` under the cancel/timeout race → map the core report and errors to
@@ -334,12 +172,13 @@ fn draft_to_request(
 /// failures (transport / encode / decode).
 pub(crate) async fn grpc_send_impl(
     state: &AppState,
-    draft: SendDraftIpc,
+    request: GrpcTemplateIpc,
     ctx: SendCtxIpc,
     request_id: String,
     opts: CallOptionsIpc,
 ) -> Result<SendReportIpc, IpcError> {
-    let (saved, collection, active_env) = draft_to_request(state, draft, &ctx);
+    let template = request.into_core();
+    let (collection, active_env) = ctx_refs(state, &ctx);
 
     let timeout_ms = opts.timeout_ms;
     // Unary keeps its deadline in this race — no core phase timer.
@@ -350,7 +189,7 @@ pub(crate) async fn grpc_send_impl(
     let sender = state.sender.clone();
     let work = async move {
         let report = sender
-            .send(&saved, collection.as_ref(), active_env.as_ref(), call_opts)
+            .send(&template, collection.as_ref(), active_env.as_ref(), call_opts)
             .await?;
         let outcome: InvokeOutcomeIpc = report.outcome.into();
         Ok(SendReportIpc::from_parts(outcome, report.auth_used, report.tls_used))
@@ -362,12 +201,12 @@ pub(crate) async fn grpc_send_impl(
 #[specta::specta]
 pub async fn grpc_send(
     state: State<'_, AppState>,
-    draft: SendDraftIpc,
+    request: GrpcTemplateIpc,
     ctx: SendCtxIpc,
     request_id: String,
     opts: CallOptionsIpc,
 ) -> Result<SendReportIpc, IpcError> {
-    grpc_send_impl(&state, draft, ctx, request_id, opts).await
+    grpc_send_impl(&state, request, ctx, request_id, opts).await
 }
 
 /// **Open** a stream call — an ADAPTER over core `Sender::open_stream` (ADR-0002):
@@ -380,14 +219,15 @@ pub async fn grpc_send(
 /// `phase_timeout`, and an open stream has no deadline.
 pub(crate) async fn stream_open_impl(
     state: &AppState,
-    draft: SendDraftIpc,
+    request: GrpcTemplateIpc,
     ctx: SendCtxIpc,
     request_id: String,
     kind: MethodKindIpc,
     opts: CallOptionsIpc,
     on_event: tauri::ipc::Channel<StreamEventIpc>,
 ) -> Result<(), IpcError> {
-    let (saved, collection, active_env) = draft_to_request(state, draft, &ctx);
+    let template = request.into_core();
+    let (collection, active_env) = ctx_refs(state, &ctx);
 
     let call_opts = CallOptions {
         max_message_bytes: resolve_max_message_size(opts.max_message_bytes),
@@ -418,7 +258,7 @@ pub(crate) async fn stream_open_impl(
     let work = async move {
         sender
             .open_stream(
-                &saved,
+                &template,
                 collection.as_ref(),
                 active_env.as_ref(),
                 kind.into_core(),
@@ -450,14 +290,14 @@ pub(crate) async fn stream_open_impl(
 #[specta::specta]
 pub async fn stream_open(
     state: State<'_, AppState>,
-    draft: SendDraftIpc,
+    request: GrpcTemplateIpc,
     ctx: SendCtxIpc,
     request_id: String,
     kind: MethodKindIpc,
     opts: CallOptionsIpc,
     on_event: tauri::ipc::Channel<StreamEventIpc>,
 ) -> Result<(), IpcError> {
-    stream_open_impl(&state, draft, ctx, request_id, kind, opts, on_event).await
+    stream_open_impl(&state, request, ctx, request_id, kind, opts, on_event).await
 }
 
 /// **Send message** on the open call under `request_id` — an ADAPTER over
@@ -699,16 +539,16 @@ mod tests {
     }
 
     use crate::ipc::collection::SavedAuthConfigIpc;
-    use crate::ipc::invoke::SendDraftIpc;
     use crate::ipc::{IpcError, SendCtxIpc};
     use crate::state::InFlight;
     use std::collections::HashMap;
     use std::time::Duration;
+    use tokio::sync::Notify;
 
     /// Draft whose address is the `{{host}}` template — resolvable only when the
     /// ctx-referenced store provides `host`.
-    fn host_template_draft() -> SendDraftIpc {
-        SendDraftIpc {
+    fn host_template_draft() -> GrpcTemplateIpc {
+        GrpcTemplateIpc {
             address_template: "{{host}}".into(), tls_override: None,
             service: "pkg.Svc".into(), method: "Do".into(),
             body_template: "{}".into(), metadata: vec![],
@@ -895,6 +735,7 @@ mod tests {
     use handshaker_core::grpc::testing::{chunk_bytes, fixture_cached_contract, FakeTransport, StreamScript};
     use handshaker_core::grpc::transport::StreamEnd;
     use handshaker_core::grpc::{ContractCache as _, ContractKey, InMemoryContractCache};
+    use handshaker_core::http::testing::FakeHttpTransport;
     use handshaker_core::send::Sender;
     use std::sync::Arc;
     use tauri::ipc::{Channel, InvokeResponseBody};
@@ -916,6 +757,7 @@ mod tests {
             });
         let sender = Arc::new(Sender::new(
             transport,
+            FakeHttpTransport::replying([]),
             tokens,
             cache.clone(),
             Arc::new(handshaker_core::vars::builtins::SystemBuiltins),
@@ -929,8 +771,8 @@ mod tests {
         t
     }
 
-    fn stream_draft() -> SendDraftIpc {
-        SendDraftIpc {
+    fn stream_draft() -> GrpcTemplateIpc {
+        GrpcTemplateIpc {
             address_template: "127.0.0.1:1".into(),
             tls_override: Some(false),
             service: "test.Echo".into(),
@@ -1051,7 +893,7 @@ mod tests {
 
         // A `server` kind resolves the body at Open (the gate follows the shared prefix),
         // so keep it var-free: the mismatch must be the only fault.
-        let draft = SendDraftIpc { body_template: r#"{"id":"hi"}"#.into(), ..bidi_draft() };
+        let draft = GrpcTemplateIpc { body_template: r#"{"id":"hi"}"#.into(), ..bidi_draft() };
         let err = stream_open_impl(&state, draft, no_ctx(), "rid".into(), MethodKindIpc::Server, quick_opts(), ch)
             .await
             .unwrap_err();
@@ -1260,8 +1102,8 @@ mod tests {
 
     // ---- stream_send_impl / stream_half_close_impl ------------------------------------
 
-    fn bidi_draft() -> SendDraftIpc {
-        SendDraftIpc { method: "Bidi".into(), body_template: r#"{"id":"{{who}}"}"#.into(), ..stream_draft() }
+    fn bidi_draft() -> GrpcTemplateIpc {
+        GrpcTemplateIpc { method: "Bidi".into(), body_template: r#"{"id":"{{who}}"}"#.into(), ..stream_draft() }
     }
 
     /// `dev` env with `who = <value>` in the state's env store.
@@ -1444,8 +1286,8 @@ mod tests {
 
     // ---- Save messages + Assemble over the Stream store (ticket 18) ----------------
 
-    fn download_draft() -> SendDraftIpc {
-        SendDraftIpc { method: "Download".into(), ..stream_draft() }
+    fn download_draft() -> GrpcTemplateIpc {
+        GrpcTemplateIpc { method: "Download".into(), ..stream_draft() }
     }
 
     #[tokio::test]

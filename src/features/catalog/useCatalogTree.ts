@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ipc } from "@/ipc/client";
-import type { CollectionIpc, ItemIpc, SavedRequestIpc } from "@/ipc/bindings";
+import type { CollectionIpc, ItemIpc, RequestTemplateIpc } from "@/ipc/bindings";
 import { newId } from "@/lib/ids";
 import { toast } from "sonner";
 import {
@@ -31,7 +31,7 @@ export interface UseCatalogTree {
   setExpanded: (collectionId: string, itemId: string | null, expanded: boolean) => Promise<void>;
   addItem: (collectionId: string, parentId: string | null, item: ItemIpc) => Promise<void>;
   renameItem: (collectionId: string, itemId: string, name: string) => Promise<void>;
-  updateItemContent: (collectionId: string, itemId: string, content: SavedRequestIpc) => Promise<void>;
+  updateItemContent: (collectionId: string, itemId: string, content: RequestTemplateIpc) => Promise<void>;
   /** Record one execution of a saved request (use_count++ / last_used_at). Best-effort. */
   bumpUsage: (collectionId: string, itemId: string, usedAt: number) => Promise<void>;
   deleteItem: (collectionId: string, itemId: string) => Promise<void>;
@@ -228,7 +228,7 @@ export function useCatalogTree(): UseCatalogTree {
   );
 
   const updateItemContent = useCallback(
-    (collectionId: string, itemId: string, content: SavedRequestIpc) =>
+    (collectionId: string, itemId: string, content: RequestTemplateIpc) =>
       optimistic(
         (prev) => replaceItemInTree(prev, collectionId, itemId, content),
         () => ipc.collectionUpsert(treeRef.current.find((c) => c.id === collectionId)!),

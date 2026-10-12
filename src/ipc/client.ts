@@ -24,8 +24,10 @@ import type {
   ImportSummaryIpc,
   ImportResultIpc,
   SendCtxIpc,
-  SendDraftIpc,
+  GrpcTemplateIpc,
   SendReportIpc,
+  HttpTemplateIpc,
+  HttpSendReportIpc,
   MethodKindIpc,
   StreamEventIpc,
   AssembleResultIpc,
@@ -103,15 +105,15 @@ export async function grpcMessageSchema(
   return r.data;
 }
 
-/** Live Send: forwards the raw draft (templates + step's own auth) + resolve ctx to
+/** Live Send: forwards the template as authored (step's own auth included) + resolve ctx to
  *  `grpc_send`, which resolves vars/auth/TLS through the core pipeline before invoking. */
 export async function grpcSend(
-  draft: SendDraftIpc,
+  request: GrpcTemplateIpc,
   ctx: SendCtxIpc,
   requestId: string,
   opts: CallOptionsIpc,
 ): Promise<SendReportIpc> {
-  const r = await commands.grpcSend(draft, ctx, requestId, opts);
+  const r = await commands.grpcSend(request, ctx, requestId, opts);
   if (r.status === "error") throw r.error;
   return r.data;
 }
@@ -123,16 +125,29 @@ export async function grpcCancel(requestId: string): Promise<void> {
   if (r.status === "error") throw r.error;
 }
 
+/** HTTP Send: forwards the template as authored + resolve ctx to `http_send`, which
+ *  resolves, sends and reports any status as a value. Cancel via `grpcCancel(requestId)`. */
+export async function httpSend(
+  request: HttpTemplateIpc,
+  ctx: SendCtxIpc,
+  requestId: string,
+  opts: CallOptionsIpc,
+): Promise<HttpSendReportIpc> {
+  const r = await commands.httpSend(request, ctx, requestId, opts);
+  if (r.status === "error") throw r.error;
+  return r.data;
+}
+
 /** Sink for one stream call's events (`Opened → Headers → Message* → End | Fault`). */
 export type StreamEventHandler = (event: StreamEventIpc) => void;
 
-/** Open a stream call: forwards the raw draft + resolve ctx + the kind the UI derived to
+/** Open a stream call: forwards the template as authored + resolve ctx + the kind the UI derived to
  *  `stream_open`, wrapping `onEvent` in a per-call `Channel`. Resolves when the call is
  *  open (`Opened` emitted); rejects only for a pre-Open fault — every later outcome
  *  (`End`, `Fault`) arrives on `onEvent`. Cancel via `grpcCancel(requestId)`; free the
  *  store via `streamRelease(requestId)`. */
 export async function streamOpen(
-  draft: SendDraftIpc,
+  request: GrpcTemplateIpc,
   ctx: SendCtxIpc,
   requestId: string,
   kind: MethodKindIpc,
@@ -140,7 +155,7 @@ export async function streamOpen(
   onEvent: StreamEventHandler,
 ): Promise<void> {
   const channel = new Channel<StreamEventIpc>(onEvent);
-  const r = await commands.streamOpen(draft, ctx, requestId, kind, opts, channel);
+  const r = await commands.streamOpen(request, ctx, requestId, kind, opts, channel);
   if (r.status === "error") throw r.error;
 }
 
@@ -461,6 +476,7 @@ export const ipc = {
   grpcRefreshContract,
   grpcSend,
   grpcCancel,
+  httpSend,
   streamOpen,
   streamSend,
   streamHalfClose,

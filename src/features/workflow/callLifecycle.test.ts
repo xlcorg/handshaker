@@ -1,9 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { CallRecordIpc, HistoryPageIpc, MethodKindIpc, SendReportIpc, StreamEventIpc } from "@/ipc/bindings";
+import type {
+  CallRecordIpc, HistoryPageIpc, HttpResponseIpc, HttpSendReportIpc, HttpTemplateIpc, MethodKindIpc,
+  SavedAuthConfigIpc, SendReportIpc, StreamEventIpc,
+} from "@/ipc/bindings";
 
 const mocks = vi.hoisted(() => {
   const api = {
     grpcSend: vi.fn<(...a: unknown[]) => Promise<SendReportIpc>>(),
+    httpSend: vi.fn<(...a: unknown[]) => Promise<HttpSendReportIpc>>(),
     grpcCancel: vi.fn<(id: string) => Promise<void>>().mockResolvedValue(undefined),
     streamOpen: vi.fn<(...a: unknown[]) => Promise<void>>(),
     streamSend: vi.fn<(...a: unknown[]) => Promise<unknown>>(),
@@ -16,9 +20,13 @@ const mocks = vi.hoisted(() => {
 });
 vi.mock("@/ipc/client", () => ({ ...mocks.api, ipc: mocks.api }));
 
-import { abandonStream, cancelCall, halfCloseStream, runCall, sendStreamMessage, type CallArgs } from "./callLifecycle";
+import {
+  abandonStream, cancelCall, cancelHttpCall, halfCloseStream, runCall, runHttpCall, sendStreamMessage, type CallArgs,
+  type HttpCallArgs,
+} from "./callLifecycle";
 import { streamStore } from "@/features/stream/streamStore";
 import { historyStore } from "@/features/history/store";
+import { newHttpStep, type HttpRun, type HttpStep } from "@/features/http/model";
 import { workflowStore } from "./store";
 import { newStep, type Step } from "./model";
 
@@ -179,7 +187,7 @@ describe("runCall stream", () => {
     const [d, ctx, rid, kind, opts] = mocks.api.streamOpen.mock.calls[0];
     expect(d).toEqual({
       address_template: "{{host}}", tls_override: null, service: "pkg.Svc", method: "Watch", body_template: '{"a":1}',
-      metadata: [{ key: "x", value: "1", enabled: true }], auth: { kind: "none" },
+      metadata: [{ key: "x", value: "1", enabled: true }, { key: "off", value: "2", enabled: false }], auth: { kind: "none" },
     });
     expect(ctx).toEqual({ collection_id: "c1", env_name: "dev" });
     expect(rid).toBe(id);
@@ -328,14 +336,18 @@ describe("call records", () => {
 
     expect(recorded()).toEqual([
       {
-        id: mocks.api.grpcSend.mock.calls[0][2], started_at_ms: T0, origin: { collection_id: "c1", request_id: "r1" },
-        request: authoredRequest, elapsed_ms: 5,
-        outcome: { type: "unary", status: status(0), response: { type: "inline", json: "{}" } },
+        id: mocks.api.grpcSend.mock.calls[0][2],
+        started_at_ms: T0,
+        origin: { collection_id: "c1", request_id: "r1" },
+        call: { protocol: "grpc", request: authoredRequest, outcome: { type: "unary", status: status(0), response: { type: "inline", json: "{}" } } },
+        elapsed_ms: 5,
       },
       {
-        id: mocks.api.grpcSend.mock.calls[1][2], started_at_ms: T0, origin: { collection_id: "c1", request_id: "r1" },
-        request: authoredRequest, elapsed_ms: 5,
-        outcome: { type: "unary", status: status(5, "gone"), response: { type: "absent" } },
+        id: mocks.api.grpcSend.mock.calls[1][2],
+        started_at_ms: T0,
+        origin: { collection_id: "c1", request_id: "r1" },
+        call: { protocol: "grpc", request: authoredRequest, outcome: { type: "unary", status: status(5, "gone"), response: { type: "absent" } } },
+        elapsed_ms: 5,
       },
     ]);
   });
@@ -349,8 +361,11 @@ describe("call records", () => {
     await runCall(setup(streamStep(), { recording: { origin: null, bumpUsage: mocks.bumpUsage } }).args);
     expect(recorded()).toEqual([
       {
-        id: mocks.api.grpcSend.mock.calls[0][2], started_at_ms: T0, origin: null, request: authoredRequest, elapsed_ms: 40,
-        outcome: { type: "unary_fault", fault: { kind: "timeout", message: "Request timed out after 30000ms" } },
+        id: mocks.api.grpcSend.mock.calls[0][2],
+        started_at_ms: T0,
+        origin: null,
+        call: { protocol: "grpc", request: authoredRequest, outcome: { type: "unary_fault", fault: { kind: "timeout", message: "Request timed out after 30000ms" } } },
+        elapsed_ms: 40,
       },
     ]);
   });
@@ -371,7 +386,7 @@ describe("call records", () => {
     await runCall(setup(streamStep(), { kind: "unary", recording: recording() }).args);
     events()(end(0));
     expect(recorded()).toHaveLength(1);
-    expect(recorded()[0]).toMatchObject({ id: mocks.api.streamOpen.mock.calls[0][2], outcome: { type: "stream", kind: "server" } });
+    expect(recorded()[0]).toMatchObject({ id: mocks.api.streamOpen.mock.calls[0][2], call: { protocol: "grpc", outcome: { type: "stream", kind: "server" } } });
   });
 
   it("a stream End records headers, messages and status, started at the entry's openedAt", async () => {
@@ -387,12 +402,15 @@ describe("call records", () => {
     expect(streamStore.get(id)!.openedAt).toBe(T0);
     expect(recorded()).toEqual([
       {
-        id, started_at_ms: T0, origin: { collection_id: "c1", request_id: "r1" }, request: authoredRequest, elapsed_ms: 0,
-        outcome: {
+        id,
+        started_at_ms: T0,
+        origin: { collection_id: "c1", request_id: "r1" },
+        call: { protocol: "grpc", request: authoredRequest, outcome: {
           type: "stream", kind: "server", headers: { "content-type": "application/grpc" },
           messages: [{ direction: "in", index: 1, at_ms: T0 + 10, size_bytes: 7, preview: '{"n":1}', json: '{"n":1}' }],
           omitted_messages: 0, end: { type: "status", status: status(0) },
-        },
+        } },
+        elapsed_ms: 0,
       },
     ]);
   });
@@ -406,7 +424,7 @@ describe("call records", () => {
     await runCall(second.args);
     await cancelCall({ step: second.current() });
 
-    expect(recorded().map((r) => r.outcome)).toEqual([
+    expect(recorded().map((r) => r.call.outcome)).toEqual([
       expect.objectContaining({ headers: null, end: { type: "fault", fault: { kind: "timeout", message: "Request timed out after 30000ms" } } }),
       expect.objectContaining({ headers: null, end: { type: "cancelled" } }),
     ]);
@@ -437,9 +455,11 @@ describe("call records", () => {
     await runCall(args);
     expect(recorded()).toEqual([
       {
-        id: patches[0].streamId, started_at_ms: T0, origin: { collection_id: "c1", request_id: "r1" },
-        request: authoredRequest, elapsed_ms: 12,
-        outcome: { type: "stream_refused", kind: "bidi", fault: { kind: "refused", message: "connection refused" } },
+        id: patches[0].streamId,
+        started_at_ms: T0,
+        origin: { collection_id: "c1", request_id: "r1" },
+        call: { protocol: "grpc", request: authoredRequest, outcome: { type: "stream_refused", kind: "bidi", fault: { kind: "refused", message: "connection refused" } } },
+        elapsed_ms: 12,
       },
     ]);
   });
@@ -451,7 +471,7 @@ describe("call records", () => {
     abandonStream(patches[0].streamId!);
     events()(end(0));
     expect(recorded()).toHaveLength(1);
-    expect(recorded()[0].outcome).toMatchObject({ type: "stream", end: { type: "cancelled" } });
+    expect(recorded()[0].call.outcome).toMatchObject({ type: "stream", end: { type: "cancelled" } });
   });
 
   it("an in-place stream is never recorded", async () => {
@@ -468,6 +488,114 @@ describe("call records", () => {
     await expect(runCall(args)).resolves.toBeUndefined();
     expect(patches[1]).toMatchObject({ status: "ok" });
     expect(workflowStore.activeWorkflow().steps).toHaveLength(1);
+  });
+});
+
+describe("runHttpCall", () => {
+  const T0 = 1_700_000_000_000;
+  let now = T0;
+  beforeEach(() => {
+    now = T0;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+  });
+  afterEach(() => vi.mocked(Date.now).mockRestore());
+
+  const template: HttpTemplateIpc = {
+    method: "POST",
+    url_template: "{{base}}/users",
+    query: [],
+    headers: [{ key: "accept", value: "application/json", enabled: true }],
+    body: { kind: "json", text: '{"name":"{{name}}"}' },
+    auth: { kind: "env_var", env_var: "TOK", header_name: "authorization", prefix: "Bearer " },
+  };
+  const response: HttpResponseIpc = {
+    status: 503, reason: "Service Unavailable", headers: [], body: { type: "text", text: "down" }, size_bytes: 4, elapsed_ms: 21,
+  };
+  const authUsed: SavedAuthConfigIpc = {
+    kind: "env_var", env_var: "TOK", header_name: "authorization", prefix: "Bearer ", environments: [],
+  };
+  const recorded = () => mocks.api.historyRecord.mock.calls.map(([r]) => r);
+
+  function httpSetup(draft: HttpStep = newHttpStep({ template, collectionId: "c1" }), over: Partial<HttpCallArgs> = {}) {
+    const runs: HttpRun[] = [];
+    const args: HttpCallArgs = { draft, envName: "dev", onRun: (r) => runs.push(r), recording: null, ...over };
+    return { args, runs };
+  }
+
+  it("a response, even a 5xx, is a done run, one snapshot, a usage bump and one record of the template as authored", async () => {
+    mocks.api.httpSend.mockResolvedValue({ response, auth_used: authUsed });
+    const { args, runs } = httpSetup(undefined, { recording: { origin, bumpUsage: mocks.bumpUsage } });
+
+    await runHttpCall(args);
+
+    const [sent, ctx, rid, opts] = mocks.api.httpSend.mock.calls[0];
+    expect(sent).toEqual(template);
+    expect(ctx).toEqual({ collection_id: "c1", env_name: "dev" });
+    expect(opts).toMatchObject({ timeout_ms: expect.any(Number), max_message_bytes: expect.any(Number) });
+    expect(runs).toEqual([{ status: "sending", requestId: rid }, { status: "done", response, authUsed }]);
+    const [snap] = workflowStore.activeWorkflow().steps;
+    expect(snap).toEqual({ ...args.draft, id: expect.any(String), run: { status: "done", response, authUsed } });
+    expect(snap.id).not.toBe(args.draft.id);
+    expect(mocks.bumpUsage).toHaveBeenCalledWith("c1", "r1", expect.any(Number));
+    expect(recorded()).toEqual([
+      {
+        id: rid,
+        started_at_ms: T0,
+        origin: { collection_id: "c1", request_id: "r1" },
+        elapsed_ms: 21,
+        call: { protocol: "http", request: template, outcome: { type: "response", response } },
+      },
+    ]);
+  });
+
+  it("an invalid URL is an error run and a fault record timed from the start, with no snapshot", async () => {
+    mocks.api.httpSend.mockImplementationOnce(async () => {
+      now += 30;
+      throw { type: "InvalidUrl", problem: { type: "missing_scheme" } };
+    });
+    const { args, runs } = httpSetup(undefined, { recording: { origin: null, bumpUsage: mocks.bumpUsage } });
+
+    await runHttpCall(args);
+
+    const error = { kind: "other", message: "Invalid URL: start it with http:// or https://" };
+    expect(runs[1]).toEqual({ status: "error", error });
+    expect(workflowStore.activeWorkflow().steps).toHaveLength(0);
+    expect(mocks.bumpUsage).not.toHaveBeenCalled();
+    expect(recorded()).toEqual([
+      {
+        id: mocks.api.httpSend.mock.calls[0][2],
+        started_at_ms: T0,
+        origin: null,
+        elapsed_ms: 30,
+        call: { protocol: "http", request: template, outcome: { type: "fault", fault: error } },
+      },
+    ]);
+  });
+
+  it("a cancel returns the draft to idle and is never recorded", async () => {
+    mocks.api.httpSend.mockRejectedValue({ type: "Cancelled" });
+    const { args, runs } = httpSetup(undefined, { recording: { origin, bumpUsage: mocks.bumpUsage } });
+    await runHttpCall(args);
+    expect(runs[1]).toEqual({ status: "draft" });
+    expect(recorded()).toEqual([]);
+    expect(workflowStore.activeWorkflow().steps).toHaveLength(0);
+  });
+
+  it("an in-place send (no recording) sets the run and records nothing", async () => {
+    mocks.api.httpSend.mockResolvedValue({ response, auth_used: authUsed });
+    const { args, runs } = httpSetup();
+    await runHttpCall(args);
+    expect(runs[1]).toEqual({ status: "done", response, authUsed });
+    expect(recorded()).toEqual([]);
+    expect(workflowStore.activeWorkflow().steps).toHaveLength(0);
+  });
+
+  it("a draft already sending does not send again, and cancelHttpCall forwards its request id", async () => {
+    const sending = { ...newHttpStep({ template }), run: { status: "sending", requestId: "rid-h" } } as const;
+    await runHttpCall(httpSetup(sending).args);
+    expect(mocks.api.httpSend).not.toHaveBeenCalled();
+    await cancelHttpCall(sending);
+    expect(mocks.api.grpcCancel).toHaveBeenCalledWith("rid-h");
   });
 });
 

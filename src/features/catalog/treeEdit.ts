@@ -1,4 +1,4 @@
-import type { CollectionIpc, ItemIpc, SavedRequestIpc } from "@/ipc/bindings";
+import type { CollectionIpc, ItemIpc, RequestTemplateIpc } from "@/ipc/bindings";
 
 function mapCollection(
   tree: CollectionIpc[],
@@ -101,28 +101,16 @@ export function setNodeExpanded(
   }));
 }
 
-/** Swap a saved request's content fields in place, preserving id/name/usage/type. */
+/** Swap a saved request's template in place, preserving id/name/usage/type. */
 export function replaceItemInTree(
   tree: CollectionIpc[],
   collectionId: string,
   itemId: string,
-  content: SavedRequestIpc,
+  content: RequestTemplateIpc,
 ): CollectionIpc[] {
   return mapCollection(tree, collectionId, (c) => ({
     ...c,
-    items: mapItemsDeep(c.items, itemId, (it) => {
-      if (it.type !== "request") return it;
-      return {
-        ...it,
-        address_template: content.address_template,
-        service: content.service,
-        method: content.method,
-        body_template: content.body_template,
-        metadata: content.metadata,
-        auth: content.auth,
-        tls_override: content.tls_override,
-      };
-    }),
+    items: mapItemsDeep(c.items, itemId, (it) => (it.type === "request" ? { ...it, template: content } : it)),
   }));
 }
 

@@ -4,9 +4,13 @@ import { derivePaletteResults, bestCollectionMatch, completionFor } from "./pale
 
 function req(id: string, name: string, over: Partial<SavedRequestIpc> = {}): ItemIpc {
   return {
-    type: "request", id, name, address_template: "h:443", service: "edo.attorney.v1.Letters",
-    method: name, body_template: "{}", metadata: [], auth: { kind: "none" },
-    tls_override: null, last_used_at: null, use_count: 0, ...over,
+    type: "request",
+    id,
+    name,
+    template: { protocol: "grpc", address_template: "h:443", service: "edo.attorney.v1.Letters", method: name, body_template: "{}", metadata: [], auth: { kind: "none" }, tls_override: null },
+    last_used_at: null,
+    use_count: 0,
+    ...over,
   };
 }
 function col(id: string, name: string, items: ItemIpc[]): CollectionIpc {

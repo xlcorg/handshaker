@@ -27,22 +27,6 @@ pub struct SendCtxIpc {
     pub env_name: Option<String>,
 }
 
-/// Raw, unresolved request draft as it lives in the frontend step — the input to
-/// `grpc_send`. Templates (address/body/metadata values) are resolved via
-/// `resolve_request` against the collection + active environment carried in `SendCtxIpc`.
-#[derive(Debug, Deserialize, Type)]
-pub struct SendDraftIpc {
-    pub address_template: String,
-    /// Per-request TLS override. `None` = inherit the collection's `default_tls`
-    /// (resolved in core against the ctx collection); `Some(b)` = force on/off.
-    pub tls_override: Option<bool>,
-    pub service: String,
-    pub method: String,
-    pub body_template: String,
-    pub metadata: Vec<crate::ipc::collection::MetadataRowIpc>,
-    pub auth: crate::ipc::collection::SavedAuthConfigIpc,
-}
-
 #[derive(Debug, Serialize, Type)]
 pub struct FieldViolationIpc {
     pub field: String,

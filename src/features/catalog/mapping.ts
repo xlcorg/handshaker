@@ -1,38 +1,52 @@
-import type { SavedRequestIpc } from "@/ipc/bindings";
-import { newStep, type Step } from "@/features/workflow/model";
+import type { GrpcTemplateIpc, RecordedCallIpc, RequestTemplateIpc } from "@/ipc/bindings";
+import { newHttpStep } from "@/features/http/model";
+import { newStep, type Draft, type Step } from "@/features/workflow/model";
 
-/**
- * Build a `SavedRequestIpc` from an editor/executed `Step`.
- */
-export function stepToSavedRequest(step: Step, opts: { id: string; name: string }): SavedRequestIpc {
+type GrpcContent = Pick<Step, "address" | "tls" | "service" | "method" | "requestJson" | "metadata" | "auth">;
+
+/** Rows stay as authored. Core skips disabled and keyless rows at Send. */
+export function grpcTemplateOf(step: GrpcContent): GrpcTemplateIpc {
   return {
-    id: opts.id,
-    name: opts.name,
     address_template: step.address,
+    tls_override: step.tls,
     service: step.service,
     method: step.method,
     body_template: step.requestJson,
     metadata: step.metadata.map((r) => ({ key: r.key, value: r.value, enabled: r.enabled })),
     auth: step.auth,
-    tls_override: step.tls,
-    last_used_at: null,
-    use_count: 0,
   };
 }
 
-/**
- * Populate a fresh draft `Step` (status "draft") from a saved request.
- */
-export function savedRequestToDraft(saved: SavedRequestIpc): Step {
+/** The authored content of a draft, as saved into a collection. */
+export function templateOf(draft: Draft): RequestTemplateIpc {
+  return draft.protocol === "http"
+    ? { protocol: "http", ...draft.template }
+    : { protocol: "grpc", ...grpcTemplateOf(draft) };
+}
+
+/** A fresh draft from saved or recorded content. */
+export function draftFromTemplate(t: RequestTemplateIpc, collectionId: string | null): Draft {
+  if (t.protocol === "http") {
+    const { protocol: _, ...template } = t;
+    return newHttpStep({ template, collectionId });
+  }
   return newStep({
-    address: saved.address_template,
+    address: t.address_template,
     // Preserve tri-state: null override ⇒ inherit the collection default_tls at Send.
     // Collapsing null→false here is what silently connected saved requests in plaintext.
-    tls: saved.tls_override,
-    service: saved.service,
-    method: saved.method,
-    requestJson: saved.body_template,
-    metadata: saved.metadata.map((r) => ({ key: r.key, value: r.value, enabled: r.enabled })),
-    auth: saved.auth,
+    tls: t.tls_override,
+    service: t.service,
+    method: t.method,
+    requestJson: t.body_template,
+    metadata: t.metadata.map((r) => ({ key: r.key, value: r.value, enabled: r.enabled })),
+    auth: t.auth,
+    collectionId,
   });
+}
+
+/** A record's request re-tagged as a template. */
+export function recordedTemplateOf(call: RecordedCallIpc): RequestTemplateIpc {
+  return call.protocol === "http"
+    ? { protocol: "http", ...call.request }
+    : { protocol: "grpc", ...call.request };
 }

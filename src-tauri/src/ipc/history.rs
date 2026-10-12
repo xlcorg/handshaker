@@ -2,18 +2,17 @@ use std::collections::BTreeMap;
 
 use handshaker_core::error::CoreError;
 use handshaker_core::history::{
-    CallEnding, CallFault, CallId, CallKind, CallOrigin, CallOutcome, CallRecord, CallRequest,
-    CallStatus, CallSummary, HistoryPage, MessageDirection, RecordedBody, RecordedMessage,
-    StreamKind, StreamTermination,
+    CallEnding, CallFault, CallId, CallKind, CallOrigin, CallOutcome, CallRecord, CallStatus,
+    CallSummary, HistoryPage, HttpEnding, HttpOutcome, MessageDirection, RecordedBody,
+    RecordedCall, RecordedMessage, StreamKind, StreamTermination, SummaryLine,
 };
 use handshaker_core::stream::MethodKind;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use uuid::Uuid;
 
-use crate::ipc::collection::{
-    parse_collection_id, parse_item_id, MetadataRowIpc, SavedAuthConfigIpc,
-};
+use crate::ipc::collection::{parse_collection_id, parse_item_id, GrpcTemplateIpc};
+use crate::ipc::http::{HttpMethodIpc, HttpResponseIpc, HttpTemplateIpc};
 use crate::ipc::stream::MethodKindIpc;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -21,26 +20,35 @@ pub struct CallRecordIpc {
     pub id: String,
     pub started_at_ms: f64,
     pub origin: Option<CallOriginIpc>,
-    pub request: CallRequestIpc,
     pub elapsed_ms: u32,
-    pub outcome: CallOutcomeIpc,
+    pub call: RecordedCallIpc,
+}
+
+/// The request paired with an outcome of the same protocol.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(tag = "protocol", rename_all = "lowercase")]
+pub enum RecordedCallIpc {
+    Grpc {
+        request: GrpcTemplateIpc,
+        outcome: CallOutcomeIpc,
+    },
+    Http {
+        request: HttpTemplateIpc,
+        outcome: HttpOutcomeIpc,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum HttpOutcomeIpc {
+    Response { response: HttpResponseIpc },
+    Fault { fault: CallFaultIpc },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct CallOriginIpc {
     pub collection_id: String,
     pub request_id: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct CallRequestIpc {
-    pub address_template: String,
-    pub tls_override: Option<bool>,
-    pub service: String,
-    pub method: String,
-    pub body_template: String,
-    pub metadata: Vec<MetadataRowIpc>,
-    pub auth: SavedAuthConfigIpc,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -124,12 +132,32 @@ pub enum StreamKindIpc {
 pub struct CallSummaryIpc {
     pub id: String,
     pub started_at_ms: f64,
-    pub kind: MethodKindIpc,
-    pub service: String,
-    pub method: String,
-    pub address_template: String,
     pub elapsed_ms: u32,
-    pub ending: CallEndingIpc,
+    pub line: SummaryLineIpc,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(tag = "protocol", rename_all = "lowercase")]
+pub enum SummaryLineIpc {
+    Grpc {
+        kind: MethodKindIpc,
+        service: String,
+        method: String,
+        address_template: String,
+        ending: CallEndingIpc,
+    },
+    Http {
+        method: HttpMethodIpc,
+        url_template: String,
+        ending: HttpEndingIpc,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum HttpEndingIpc {
+    Status { code: u16 },
+    Fault { kind: String },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -175,9 +203,8 @@ impl CallRecordIpc {
                 collection_id: o.collection_id.0.to_string(),
                 request_id: o.request_id.0.to_string(),
             }),
-            request: CallRequestIpc::from_core(r.request),
             elapsed_ms: saturate(r.elapsed_ms),
-            outcome: CallOutcomeIpc::from_core(r.outcome),
+            call: RecordedCallIpc::from_core(r.call),
         }
     }
 
@@ -194,43 +221,60 @@ impl CallRecordIpc {
                     })
                 })
                 .transpose()?,
-            request: self.request.into_core(),
             elapsed_ms: u64::from(self.elapsed_ms),
-            outcome: self.outcome.into_core()?,
+            call: self.call.into_core()?,
         })
     }
 }
 
-impl CallRequestIpc {
-    fn from_core(r: CallRequest) -> Self {
-        Self {
-            address_template: r.address_template,
-            tls_override: r.tls_override,
-            service: r.service,
-            method: r.method,
-            body_template: r.body_template,
-            metadata: r
-                .metadata
-                .into_iter()
-                .map(MetadataRowIpc::from_core)
-                .collect(),
-            auth: SavedAuthConfigIpc::from_core(r.auth),
+impl RecordedCallIpc {
+    fn from_core(c: RecordedCall) -> Self {
+        match c {
+            RecordedCall::Grpc { request, outcome } => Self::Grpc {
+                request: GrpcTemplateIpc::from_core(request),
+                outcome: CallOutcomeIpc::from_core(outcome),
+            },
+            RecordedCall::Http { request, outcome } => Self::Http {
+                request: HttpTemplateIpc::from_core(request),
+                outcome: HttpOutcomeIpc::from_core(outcome),
+            },
         }
     }
 
-    fn into_core(self) -> CallRequest {
-        CallRequest {
-            address_template: self.address_template,
-            tls_override: self.tls_override,
-            service: self.service,
-            method: self.method,
-            body_template: self.body_template,
-            metadata: self
-                .metadata
-                .into_iter()
-                .map(MetadataRowIpc::into_core)
-                .collect(),
-            auth: self.auth.into_core(),
+    fn into_core(self) -> Result<RecordedCall, CoreError> {
+        Ok(match self {
+            Self::Grpc { request, outcome } => RecordedCall::Grpc {
+                request: request.into_core(),
+                outcome: outcome.into_core()?,
+            },
+            Self::Http { request, outcome } => RecordedCall::Http {
+                request: request.into_core(),
+                outcome: outcome.into_core(),
+            },
+        })
+    }
+}
+
+impl HttpOutcomeIpc {
+    fn from_core(o: HttpOutcome) -> Self {
+        match o {
+            HttpOutcome::Response { response } => Self::Response {
+                response: HttpResponseIpc::from_core(response),
+            },
+            HttpOutcome::Fault { fault } => Self::Fault {
+                fault: CallFaultIpc::from_core(fault),
+            },
+        }
+    }
+
+    fn into_core(self) -> HttpOutcome {
+        match self {
+            Self::Response { response } => HttpOutcome::Response {
+                response: response.into_core(),
+            },
+            Self::Fault { fault } => HttpOutcome::Fault {
+                fault: fault.into_core(),
+            },
         }
     }
 }
@@ -443,24 +487,54 @@ impl StreamKindIpc {
 
 impl CallSummaryIpc {
     pub fn from_core(s: CallSummary) -> Self {
-        let kind = match s.kind {
-            CallKind::Unary => MethodKind::Unary,
-            CallKind::Server => MethodKind::Server,
-            CallKind::Client => MethodKind::Client,
-            CallKind::Bidi => MethodKind::Bidi,
-        };
         Self {
             id: s.id.0.to_string(),
             started_at_ms: s.started_at_ms,
-            kind: MethodKindIpc::from_core(kind),
-            service: s.service,
-            method: s.method,
-            address_template: s.address_template,
             elapsed_ms: saturate(s.elapsed_ms),
-            ending: match s.ending {
-                CallEnding::Status { code } => CallEndingIpc::Status { code },
-                CallEnding::Fault { kind } => CallEndingIpc::Fault { kind },
-                CallEnding::Cancelled => CallEndingIpc::Cancelled,
+            line: SummaryLineIpc::from_core(s.line),
+        }
+    }
+}
+
+impl SummaryLineIpc {
+    fn from_core(l: SummaryLine) -> Self {
+        match l {
+            SummaryLine::Grpc {
+                kind,
+                service,
+                method,
+                address_template,
+                ending,
+            } => {
+                let kind = match kind {
+                    CallKind::Unary => MethodKind::Unary,
+                    CallKind::Server => MethodKind::Server,
+                    CallKind::Client => MethodKind::Client,
+                    CallKind::Bidi => MethodKind::Bidi,
+                };
+                Self::Grpc {
+                    kind: MethodKindIpc::from_core(kind),
+                    service,
+                    method,
+                    address_template,
+                    ending: match ending {
+                        CallEnding::Status { code } => CallEndingIpc::Status { code },
+                        CallEnding::Fault { kind } => CallEndingIpc::Fault { kind },
+                        CallEnding::Cancelled => CallEndingIpc::Cancelled,
+                    },
+                }
+            }
+            SummaryLine::Http {
+                method,
+                url_template,
+                ending,
+            } => Self::Http {
+                method: HttpMethodIpc::from_core(method),
+                url_template,
+                ending: match ending {
+                    HttpEnding::Status { code } => HttpEndingIpc::Status { code },
+                    HttpEnding::Fault { kind } => HttpEndingIpc::Fault { kind },
+                },
             },
         }
     }
@@ -480,7 +554,8 @@ pub(crate) mod tests {
     use super::*;
     use handshaker_core::auth::SavedAuthConfig;
     use handshaker_core::collections::ids::{CollectionId, ItemId};
-    use handshaker_core::collections::MetadataRow;
+    use handshaker_core::collections::{GrpcTemplate, HttpTemplate, MetadataRow};
+    use handshaker_core::http::{HeaderRow, HttpBody, HttpMethod, HttpResponse, ResponseBody};
 
     pub(crate) fn record() -> CallRecord {
         CallRecord {
@@ -490,39 +565,41 @@ pub(crate) mod tests {
                 collection_id: CollectionId(Uuid::from_u128(2)),
                 request_id: ItemId(Uuid::from_u128(3)),
             }),
-            request: CallRequest {
-                address_template: "{{host}}:50051".into(),
-                tls_override: Some(false),
-                service: "echo.v1.Echo".into(),
-                method: "Watch".into(),
-                body_template: "{}".into(),
-                metadata: vec![MetadataRow {
-                    key: "x-debug".into(),
-                    value: "1".into(),
-                    enabled: false,
-                }],
-                auth: SavedAuthConfig::None,
-            },
             elapsed_ms: 40,
-            outcome: CallOutcome::Stream {
-                kind: StreamKind::Server,
-                headers: Some(BTreeMap::from([(
-                    "content-type".into(),
-                    "application/grpc".into(),
-                )])),
-                messages: vec![RecordedMessage {
-                    direction: MessageDirection::In,
-                    index: 1,
-                    at_ms: 1_791_640_800_140.0,
-                    size_bytes: 18,
-                    preview: "{\"tick\":0}".into(),
-                    json: Some("{\n  \"tick\": 0\n}".into()),
-                }],
-                omitted_messages: 3,
-                end: StreamTermination::Fault {
-                    fault: CallFault {
-                        kind: "timeout".into(),
-                        message: "late".into(),
+            call: RecordedCall::Grpc {
+                request: GrpcTemplate {
+                    address_template: "{{host}}:50051".into(),
+                    tls_override: Some(false),
+                    service: "echo.v1.Echo".into(),
+                    method: "Watch".into(),
+                    body_template: "{}".into(),
+                    metadata: vec![MetadataRow {
+                        key: "x-debug".into(),
+                        value: "1".into(),
+                        enabled: false,
+                    }],
+                    auth: SavedAuthConfig::None,
+                },
+                outcome: CallOutcome::Stream {
+                    kind: StreamKind::Server,
+                    headers: Some(BTreeMap::from([(
+                        "content-type".into(),
+                        "application/grpc".into(),
+                    )])),
+                    messages: vec![RecordedMessage {
+                        direction: MessageDirection::In,
+                        index: 1,
+                        at_ms: 1_791_640_800_140.0,
+                        size_bytes: 18,
+                        preview: "{\"tick\":0}".into(),
+                        json: Some("{\n  \"tick\": 0\n}".into()),
+                    }],
+                    omitted_messages: 3,
+                    end: StreamTermination::Fault {
+                        fault: CallFault {
+                            kind: "timeout".into(),
+                            message: "late".into(),
+                        },
                     },
                 },
             },
@@ -548,11 +625,13 @@ pub(crate) mod tests {
             json["origin"]["request_id"],
             "00000000-0000-0000-0000-000000000003"
         );
-        assert_eq!(json["outcome"]["type"], "stream");
-        assert_eq!(json["outcome"]["kind"], "server");
-        assert_eq!(json["outcome"]["messages"][0]["direction"], "in");
+        assert_eq!(json["call"]["protocol"], "grpc");
+        assert_eq!(json["call"]["request"]["method"], "Watch");
+        assert_eq!(json["call"]["outcome"]["type"], "stream");
+        assert_eq!(json["call"]["outcome"]["kind"], "server");
+        assert_eq!(json["call"]["outcome"]["messages"][0]["direction"], "in");
         assert_eq!(
-            json["outcome"]["end"],
+            json["call"]["outcome"]["end"],
             serde_json::json!({ "type": "fault", "fault": { "kind": "timeout", "message": "late" } })
         );
     }
@@ -594,7 +673,11 @@ pub(crate) mod tests {
     #[test]
     fn non_finite_message_time_is_rejected() {
         let mut ipc = CallRecordIpc::from_core(record());
-        if let CallOutcomeIpc::Stream { messages, .. } = &mut ipc.outcome {
+        if let RecordedCallIpc::Grpc {
+            outcome: CallOutcomeIpc::Stream { messages, .. },
+            ..
+        } = &mut ipc.call
+        {
             messages[0].at_ms = f64::INFINITY;
         }
         assert!(matches!(ipc.into_core(), Err(CoreError::InvalidTarget(m)) if m.contains("at_ms")));
@@ -609,11 +692,114 @@ pub(crate) mod tests {
         assert_eq!(ipc.elapsed_ms, u32::MAX);
     }
 
+    fn http_record() -> CallRecord {
+        CallRecord {
+            id: CallId(Uuid::from_u128(4)),
+            started_at_ms: 5.0,
+            origin: None,
+            elapsed_ms: 84,
+            call: RecordedCall::Http {
+                request: HttpTemplate {
+                    method: HttpMethod::Post,
+                    url_template: "{{base}}/orders".into(),
+                    query: vec![MetadataRow {
+                        key: "dry".into(),
+                        value: "1".into(),
+                        enabled: false,
+                    }],
+                    headers: vec![],
+                    body: HttpBody::Json {
+                        text: "{\"n\":1}".into(),
+                    },
+                    auth: SavedAuthConfig::None,
+                },
+                outcome: HttpOutcome::Response {
+                    response: HttpResponse {
+                        status: 201,
+                        reason: "Created".into(),
+                        headers: vec![HeaderRow {
+                            name: "location".into(),
+                            value: "/orders/7".into(),
+                        }],
+                        body: ResponseBody::TooLarge { limit_bytes: 4 },
+                        size_bytes: 4,
+                        elapsed_ms: 80,
+                    },
+                },
+            },
+        }
+    }
+
+    #[test]
+    fn http_record_round_trips_core_ipc_core() {
+        let original = http_record();
+        assert_eq!(
+            CallRecordIpc::from_core(original.clone())
+                .into_core()
+                .unwrap(),
+            original
+        );
+    }
+
+    #[test]
+    fn http_record_and_summary_have_the_tagged_shapes_the_frontend_reads() {
+        let record = serde_json::to_value(CallRecordIpc::from_core(http_record())).unwrap();
+        let summary =
+            serde_json::to_value(CallSummaryIpc::from_core(http_record().summary())).unwrap();
+        assert_eq!(
+            record["call"],
+            serde_json::json!({
+                "protocol": "http",
+                "request": {
+                    "method": "POST",
+                    "url_template": "{{base}}/orders",
+                    "query": [{ "key": "dry", "value": "1", "enabled": false }],
+                    "headers": [],
+                    "body": { "kind": "json", "text": "{\"n\":1}" },
+                    "auth": { "kind": "none" },
+                },
+                "outcome": {
+                    "type": "response",
+                    "response": {
+                        "status": 201,
+                        "reason": "Created",
+                        "headers": [{ "name": "location", "value": "/orders/7" }],
+                        "body": { "type": "too_large", "limit_bytes": 4 },
+                        "size_bytes": 4,
+                        "elapsed_ms": 80,
+                    },
+                },
+            })
+        );
+        assert_eq!(
+            summary["line"],
+            serde_json::json!({
+                "protocol": "http",
+                "method": "POST",
+                "url_template": "{{base}}/orders",
+                "ending": { "type": "status", "code": 201 },
+            })
+        );
+    }
+
     #[test]
     fn summary_projects_kind_and_ending() {
-        let summary = CallSummaryIpc::from_core(record().summary());
-        assert!(matches!(summary.kind, MethodKindIpc::Server));
-        assert!(matches!(summary.ending, CallEndingIpc::Fault { ref kind } if kind == "timeout"));
-        assert_eq!(summary.elapsed_ms, 40);
+        let json = serde_json::to_value(CallSummaryIpc::from_core(record().summary())).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "id": "00000000-0000-0000-0000-000000000001",
+                "started_at_ms": 1_791_640_800_123.0,
+                "elapsed_ms": 40,
+                "line": {
+                    "protocol": "grpc",
+                    "kind": "server",
+                    "service": "echo.v1.Echo",
+                    "method": "Watch",
+                    "address_template": "{{host}}:50051",
+                    "ending": { "type": "fault", "kind": "timeout" },
+                },
+            })
+        );
     }
 }

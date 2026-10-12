@@ -38,7 +38,7 @@ export function RenameInput({ initial, onCommit, onCancel }: RenameInputProps) {
           onCancel();
         }
       }}
-      className="h-6 min-w-0 flex-1 px-1 text-xs"
+      className="h-4 min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 py-0 text-xs leading-4 shadow-none focus-visible:ring-0 md:text-xs"
     />
   );
 }

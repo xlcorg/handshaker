@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render, screen } from "@testing-library/react";
 import type { CollectionIpc, ItemIpc, SavedRequestIpc } from "@/ipc/bindings";
 import { workflowStore } from "@/features/workflow/store";
-import { savedRequestToDraft } from "./mapping";
+import { draftFromTemplate } from "./mapping";
 import { RecentSwitcher, type RecentSwitcherProps } from "./RecentSwitcher";
 
 function req(
@@ -13,13 +13,16 @@ function req(
   const saved: SavedRequestIpc = {
     id,
     name,
-    address_template: "h:443",
-    service: "edo.attorney.v1.Letters",
-    method,
-    body_template: "{}",
-    metadata: [],
-    auth: { kind: "none" },
-    tls_override: null,
+    template: {
+      protocol: "grpc",
+      address_template: "h:443",
+      service: "edo.attorney.v1.Letters",
+      method,
+      body_template: "{}",
+      metadata: [],
+      auth: { kind: "none" },
+      tls_override: null,
+    },
     last_used_at: null,
     use_count: 0,
   };
@@ -60,7 +63,7 @@ function key(type: "keydown" | "keyup", init: KeyboardEventInit) {
 
 function show(item: Extract<ItemIpc, { type: "request" }>) {
   act(() => {
-    workflowStore.setDraft(savedRequestToDraft(item), {
+    workflowStore.setDraft(draftFromTemplate(item.template, "c1"), {
       collectionId: "c1",
       requestId: item.id,
       requestName: item.name,

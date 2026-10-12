@@ -117,6 +117,8 @@ export function faultFromIpcError(e: IpcError): ClientFault {
       return { kind: "decode", message: e.message };
     case "Auth":
       return { kind: "auth", message: e.message };
+    case "InvalidUrl":
+      return { kind: "other", message: messages.http.urlProblem(e.problem) };
     case "StreamMessageNotFound":
       // The store was released (or the row is stale) — the raw discriminator is no face.
       return { kind: "other", message: messages.workflow.fault.streamMessageNotFound };

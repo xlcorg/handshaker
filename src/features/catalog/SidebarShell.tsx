@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronsDownUp, ChevronsUpDown, Download, FilePlus, FolderPlus, MoreHorizontal, Plus, Upload } from "lucide-react";
+import { ChevronsDownUp, ChevronsUpDown, Download, FilePlus, FolderPlus, Globe, MoreHorizontal, Plus, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -12,7 +12,8 @@ import { Sidebar, SidebarHeader, SidebarContent, SidebarGroupLabel } from "@/com
 import { newId } from "@/lib/ids";
 import type { ItemIpc, SavedRequestIpc } from "@/ipc/bindings";
 import { useCatalog } from "./CatalogProvider";
-import { newRequestDraft, openSavedRequest } from "./actions";
+import { newHttpRequestDraft, newRequestDraft, openSavedRequest } from "./actions";
+import { messages } from "@/lib/messages";
 import { filterCollections, sortCollections, type SortKey } from "./sort";
 import { SortControl } from "./SortControl";
 import { CollectionTree, type CollectionTreeHandle } from "./CollectionTree";
@@ -21,6 +22,8 @@ import { useImportFlow } from "./useImportFlow";
 import { ImportSummaryDialog } from "./ImportSummaryDialog";
 import { loadUiState, patchUiState } from "./uiState";
 
+const m = messages.catalog.sidebar;
+
 export interface SidebarShellProps {
   /** Open a collection's overview (CollectionOverview lands in plan-07). */
   onOpenCollection?: (collectionId: string) => void;
@@ -28,6 +31,8 @@ export interface SidebarShellProps {
   onOpenRequest?: (collectionId: string, req: SavedRequestIpc) => void;
   /** Start a new request draft (default: direct `newRequestDraft`). Lets a parent guard it. */
   onAddRequest?: () => void;
+  /** Start a new HTTP draft (default: direct `newHttpRequestDraft`). Lets a parent guard it. */
+  onAddHttpRequest?: () => void;
   /** Id of the currently-open saved request, highlighted in the tree. */
   activeItemId?: string | null;
   /** Id of the collection whose overview is the active main panel ("in focus"), or null. */
@@ -38,11 +43,13 @@ export function SidebarShell({
   onOpenCollection,
   onOpenRequest,
   onAddRequest,
+  onAddHttpRequest,
   activeItemId = null,
   activeCollectionId = null,
 }: SidebarShellProps) {
   const openRequest = onOpenRequest ?? openSavedRequest;
   const addRequest = onAddRequest ?? newRequestDraft;
+  const addHttpRequest = onAddHttpRequest ?? newHttpRequestDraft;
   const cat = useCatalog();
   const importFlow = useImportFlow();
   const [filter, setFilter] = useState("");
@@ -66,13 +73,13 @@ export function SidebarShell({
   const visible = sortCollections(filterCollections(cat.tree, filter), sortKey);
 
   const onAddFolder = (collectionId: string, parentId: string | null) => {
-    const item: ItemIpc = { type: "folder", id: newId(), name: "New folder", items: [], expanded: false };
+    const item: ItemIpc = { type: "folder", id: newId(), name: m.defaultFolderName, items: [], expanded: false };
     void cat.addItem(collectionId, parentId, item);
     setEditingId(item.id);
   };
 
   const onNewCollection = async () => {
-    const id = await cat.createCollection("New collection");
+    const id = await cat.createCollection(m.defaultCollectionName);
     setEditingId(id);
   };
 
@@ -83,7 +90,7 @@ export function SidebarShell({
           <Input
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            placeholder="Filter collections…"
+            placeholder={m.filterPlaceholder}
             className="h-7 text-xs"
             aria-label="collection-filter"
           />
@@ -96,25 +103,29 @@ export function SidebarShell({
             <DropdownMenuContent align="end">
               <DropdownMenuItem aria-label="new-request" onClick={() => addRequest()}>
                 <FilePlus />
-                New request
+                {m.newRequest}
+              </DropdownMenuItem>
+              <DropdownMenuItem aria-label="new-http-request" onClick={() => addHttpRequest()}>
+                <Globe />
+                {m.newHttpRequest}
               </DropdownMenuItem>
               <DropdownMenuItem aria-label="new-collection" onClick={() => void onNewCollection()}>
                 <FolderPlus />
-                New collection
+                {m.newCollection}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
 
         <div className="flex items-center justify-between border-b border-border px-2 py-1">
-          <SidebarGroupLabel className="h-auto text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Collections</SidebarGroupLabel>
+          <SidebarGroupLabel className="h-auto text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{m.collections}</SidebarGroupLabel>
           <div className="flex items-center gap-1">
             <Button
               size="icon-sm"
               variant="ghost"
               className="size-5 text-muted-foreground"
               aria-label="collapse all"
-              title="Collapse all"
+              title={m.collapseAll}
               disabled={filterActive || visible.length === 0}
               onClick={() => treeRef.current?.collapseAll()}
             >
@@ -125,7 +136,7 @@ export function SidebarShell({
               variant="ghost"
               className="size-5 text-muted-foreground"
               aria-label="expand all"
-              title="Expand all"
+              title={m.expandAll}
               disabled={filterActive || visible.length === 0}
               onClick={() => treeRef.current?.expandAll()}
             >
@@ -141,11 +152,11 @@ export function SidebarShell({
               <DropdownMenuContent align="end">
                 <DropdownMenuItem aria-label="export" onClick={() => void exportBundle(null, "handshaker-export.json")}>
                   <Download />
-                  Export
+                  {m.export}
                 </DropdownMenuItem>
                 <DropdownMenuItem aria-label="import" onClick={() => void importFlow.start()}>
                   <Upload />
-                  Import
+                  {m.import}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -174,6 +185,7 @@ export function SidebarShell({
             void exportBundle(id, `${c?.name ?? "collection"}.json`);
           }}
           onAddRequest={() => addRequest()}
+          onAddHttpRequest={() => addHttpRequest()}
           onAddFolder={onAddFolder}
           onSetPinned={cat.setPinned}
           onMoveItem={cat.moveItem}

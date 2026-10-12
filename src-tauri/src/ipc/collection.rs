@@ -12,12 +12,15 @@ use handshaker_core::auth::{
 use handshaker_core::collections::ids::{CollectionId, ItemId};
 use handshaker_core::collections::tree::ItemSnapshot;
 use handshaker_core::collections::{
-    Collection, CollectionLink, Folder, Item, MetadataRow, SavedRequest,
+    Collection, CollectionLink, Folder, GrpcTemplate, Item, MetadataRow, RequestTemplate,
+    SavedRequest,
 };
 use handshaker_core::error::CoreError;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use uuid::Uuid;
+
+use crate::ipc::http::HttpTemplateIpc;
 
 // --- default helpers for auth serde -----------------------------------------
 
@@ -141,19 +144,79 @@ pub struct FolderIpc {
     pub expanded: bool,
 }
 
+/// A gRPC call as authored: the saved content, the Send and Open input, and the history
+/// request.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
-pub struct SavedRequestIpc {
-    pub id: String,
-    pub name: String,
+pub struct GrpcTemplateIpc {
     pub address_template: String,
+    /// `None` inherits the collection's `default_tls`, resolved in core at Send time.
+    pub tls_override: Option<bool>,
     pub service: String,
     pub method: String,
     pub body_template: String,
     pub metadata: Vec<MetadataRowIpc>,
     pub auth: SavedAuthConfigIpc,
-    pub tls_override: Option<bool>,
+}
+
+impl GrpcTemplateIpc {
+    pub fn from_core(g: GrpcTemplate) -> Self {
+        Self {
+            address_template: g.address_template,
+            tls_override: g.tls_override,
+            service: g.service,
+            method: g.method,
+            body_template: g.body_template,
+            metadata: g.metadata.into_iter().map(MetadataRowIpc::from_core).collect(),
+            auth: SavedAuthConfigIpc::from_core(g.auth),
+        }
+    }
+
+    pub fn into_core(self) -> GrpcTemplate {
+        GrpcTemplate {
+            address_template: self.address_template,
+            tls_override: self.tls_override,
+            service: self.service,
+            method: self.method,
+            body_template: self.body_template,
+            metadata: self.metadata.into_iter().map(MetadataRowIpc::into_core).collect(),
+            auth: self.auth.into_core(),
+        }
+    }
+}
+
+/// Over IPC the tag is always present, so no compat repr is needed here.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(tag = "protocol", rename_all = "lowercase")]
+pub enum RequestTemplateIpc {
+    Grpc(GrpcTemplateIpc),
+    Http(HttpTemplateIpc),
+}
+
+impl RequestTemplateIpc {
+    pub fn from_core(t: RequestTemplate) -> Self {
+        match t {
+            RequestTemplate::Grpc(g) => Self::Grpc(GrpcTemplateIpc::from_core(g)),
+            RequestTemplate::Http(h) => Self::Http(HttpTemplateIpc::from_core(h)),
+        }
+    }
+
+    pub fn into_core(self) -> RequestTemplate {
+        match self {
+            Self::Grpc(g) => RequestTemplate::Grpc(g.into_core()),
+            Self::Http(h) => RequestTemplate::Http(h.into_core()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+pub struct SavedRequestIpc {
+    pub id: String,
+    pub name: String,
     pub last_used_at: Option<f64>,
     pub use_count: u32,
+    /// Nested, not flattened: tsc then flags every frontend read of a protocol field
+    /// that skipped the narrowing.
+    pub template: RequestTemplateIpc,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
@@ -175,15 +238,9 @@ impl ItemIpc {
             Item::Request(r) => Self::Request(SavedRequestIpc {
                 id: r.id.0.to_string(),
                 name: r.name,
-                address_template: r.address_template,
-                service: r.service,
-                method: r.method,
-                body_template: r.body_template,
-                metadata: r.metadata.into_iter().map(MetadataRowIpc::from_core).collect(),
-                auth: SavedAuthConfigIpc::from_core(r.auth),
-                tls_override: r.tls_override,
                 last_used_at: r.last_used_at,
                 use_count: r.use_count,
+                template: RequestTemplateIpc::from_core(r.template),
             }),
         }
     }
@@ -202,15 +259,9 @@ impl ItemIpc {
             Self::Request(r) => Ok(Item::Request(SavedRequest {
                 id: parse_item_id(&r.id)?,
                 name: r.name,
-                address_template: r.address_template,
-                service: r.service,
-                method: r.method,
-                body_template: r.body_template,
-                metadata: r.metadata.into_iter().map(MetadataRowIpc::into_core).collect(),
-                auth: r.auth.into_core(),
-                tls_override: r.tls_override,
                 last_used_at: r.last_used_at,
                 use_count: r.use_count,
+                template: r.template.into_core(),
             })),
         }
     }
@@ -332,18 +383,20 @@ mod tests {
                 items: vec![Item::Request(SavedRequest {
                     id: ItemId(Uuid::from_u128(2)),
                     name: "r".into(),
-                    address_template: "{{host}}".into(),
-                    service: "svc".into(),
-                    method: "M".into(),
-                    body_template: "{}".into(),
-                    metadata: vec![
-                        MetadataRow { key: "a".into(), value: "1".into(), enabled: true },
-                        MetadataRow { key: "a".into(), value: "2".into(), enabled: false },
-                    ],
-                    auth: SavedAuthConfig::None,
-                    tls_override: Some(true),
                     last_used_at: Some(123.0),
                     use_count: 4,
+                    template: RequestTemplate::Grpc(GrpcTemplate {
+                        address_template: "{{host}}".into(),
+                        service: "svc".into(),
+                        method: "M".into(),
+                        body_template: "{}".into(),
+                        metadata: vec![
+                            MetadataRow { key: "a".into(), value: "1".into(), enabled: true },
+                            MetadataRow { key: "a".into(), value: "2".into(), enabled: false },
+                        ],
+                        auth: SavedAuthConfig::None,
+                        tls_override: Some(true),
+                    }),
                 })],
                 expanded: true,
             })],
@@ -371,7 +424,10 @@ mod tests {
 
         // metadata order (incl. duplicate keys + enabled flags) preserved through round-trip
         let Item::Folder(folder) = &back.items[0] else { panic!("expected folder") };
-        let Item::Request(req) = &folder.items[0] else { panic!("expected request") };
+        let Item::Request(SavedRequest { template: RequestTemplate::Grpc(req), .. }) = &folder.items[0]
+        else {
+            panic!("expected request")
+        };
         assert_eq!(req.metadata[0].key, "a");
         assert!(req.metadata[0].enabled);
         assert!(!req.metadata[1].enabled);
@@ -381,6 +437,36 @@ mod tests {
         assert_eq!(back.links[0].name, "Grafana");
         assert_eq!(back.links[0].url, "https://{{host}}/d/abc");
         assert_eq!(back.links[1].name, "Logs");
+    }
+
+    #[test]
+    fn http_request_item_from_the_frontend_reaches_core_and_comes_back_unchanged() {
+        let wire = serde_json::json!({
+            "type": "request",
+            "id": "00000000-0000-0000-0000-000000000005",
+            "name": "List users",
+            "last_used_at": null,
+            "use_count": 2,
+            "template": {
+                "protocol": "http",
+                "method": "GET",
+                "url_template": "{{base}}/users",
+                "query": [{ "key": "page", "value": "{{page}}", "enabled": true }],
+                "headers": [{ "key": "", "value": "x", "enabled": true }],
+                "body": { "kind": "text", "text": "hi" },
+                "auth": { "kind": "none" },
+            },
+        });
+
+        let core = serde_json::from_value::<ItemIpc>(wire.clone()).unwrap().into_core().unwrap();
+
+        let Item::Request(SavedRequest { template: RequestTemplate::Http(t), use_count: 2, .. }) = &core
+        else {
+            panic!("expected an HTTP request, got {core:?}")
+        };
+        assert_eq!(t.url_template, "{{base}}/users");
+        assert_eq!(t.headers, vec![MetadataRow { key: "".into(), value: "x".into(), enabled: true }]);
+        assert_eq!(serde_json::to_value(ItemIpc::from_core(core)).unwrap(), wire);
     }
 
     /// A payload sent by a frontend that predates links (or a stored DTO without the

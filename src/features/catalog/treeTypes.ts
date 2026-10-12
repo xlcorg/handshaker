@@ -23,6 +23,7 @@ export interface TreeCallbacks {
   /** Export a single collection to a file (opens a save dialog). */
   onExportCollection: (collectionId: string) => void;
   onAddRequest: (collectionId: string, parentId: string | null) => void;
+  onAddHttpRequest: (collectionId: string, parentId: string | null) => void;
   onAddFolder: (collectionId: string, parentId: string | null) => void;
   onSetPinned: (collectionId: string, pinned: boolean) => void;
   /** id of the row currently being dragged (for styling), or null. */

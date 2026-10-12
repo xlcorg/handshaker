@@ -10,22 +10,19 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use handshaker_core::auth::{AuthCredentials, StaticTokenSource};
-use handshaker_core::collections::ids::ItemId;
-use handshaker_core::collections::SavedRequest;
+use handshaker_core::collections::GrpcTemplate;
 use handshaker_core::env::Environment;
 use handshaker_core::grpc::invoke::CallOptions;
 use handshaker_core::grpc::transport::TonicTransport;
 use handshaker_core::grpc::InMemoryContractCache;
+use handshaker_core::http::ReqwestTransport;
 use handshaker_core::send::Sender;
 use handshaker_core::stream::{MethodKind, StreamEvent, StreamEvents};
 use handshaker_core::vars::builtins::SystemBuiltins;
 use handshaker_core::CoreError;
-use uuid::Uuid;
 
-fn request(addr: &str, method: &str) -> SavedRequest {
-    SavedRequest {
-        id: ItemId(Uuid::from_u128(1)),
-        name: "r".into(),
+fn request(addr: &str, method: &str) -> GrpcTemplate {
+    GrpcTemplate {
         address_template: addr.into(),
         service: "test.Echo".into(),
         method: method.into(),
@@ -33,8 +30,6 @@ fn request(addr: &str, method: &str) -> SavedRequest {
         metadata: vec![],
         auth: handshaker_core::auth::SavedAuthConfig::None,
         tls_override: Some(false),
-        last_used_at: None,
-        use_count: 0,
     }
 }
 
@@ -47,6 +42,7 @@ fn env(who: &str) -> Environment {
 fn sender() -> Sender {
     Sender::new(
         Arc::new(TonicTransport::new()),
+        Arc::new(ReqwestTransport::new("test").unwrap()),
         Arc::new(StaticTokenSource {
             header: AuthCredentials { header_name: "authorization".into(), header_value: "x".into() },
         }),

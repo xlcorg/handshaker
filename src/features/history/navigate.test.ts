@@ -1,11 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { CallRecordIpc, CollectionIpc, HistoryPageIpc, SendReportIpc } from "@/ipc/bindings";
+import type {
+  CallRecordIpc, CollectionIpc, HistoryPageIpc, HttpResponseIpc, HttpSendReportIpc, SendReportIpc,
+} from "@/ipc/bindings";
 
 const mocks = vi.hoisted(() => {
   const api = {
     historyGet: vi.fn<(id: string) => Promise<CallRecordIpc | null>>(),
     historyRecord: vi.fn<(r: CallRecordIpc) => Promise<HistoryPageIpc>>(),
     grpcSend: vi.fn<(...a: unknown[]) => Promise<SendReportIpc>>(),
+    httpSend: vi.fn<(...a: unknown[]) => Promise<HttpSendReportIpc>>(),
     grpcCancel: vi.fn().mockResolvedValue(undefined),
     streamOpen: vi.fn<(...a: unknown[]) => Promise<void>>(),
     appSettingsSet: vi.fn().mockResolvedValue(undefined),
@@ -19,7 +22,7 @@ vi.mock("sonner", () => ({ toast: { error: vi.fn(), info: vi.fn() } }));
 import { toast } from "sonner";
 import { openHistoryCall } from "./navigate";
 import { historyStore } from "./store";
-import { callRecord, collection, savedRequest } from "./testFixtures";
+import { callRecord, collection, httpCallRecord, httpRequest, savedHttpRequest, savedRequest } from "./testFixtures";
 import { workflowStore } from "@/features/workflow/store";
 import { newStep } from "@/features/workflow/model";
 import { needsDiscardConfirm } from "@/features/catalog/discardGuard";
@@ -54,7 +57,7 @@ function deps(guard: (action: () => void) => void = (a) => a()) {
 function dirtyUnboundDraft() {
   const step = newStep({ address: "mine:1", service: "s", method: "m" });
   workflowStore.setDraft(step);
-  workflowStore.updateDraft(step.id, { requestJson: '{"unsaved":true}' });
+  workflowStore.updateGrpcDraft(step.id, { requestJson: '{"unsaved":true}' });
   return workflowStore.getState().draft!;
 }
 
@@ -145,7 +148,7 @@ describe("openHistoryCall rerun", () => {
   it("sends the opened draft exactly once, and the result lands on it", async () => {
     mocks.api.grpcSend.mockResolvedValue(report);
     await openHistoryCall("call-1", "rerun", deps());
-    await vi.waitFor(() => expect(draft().status).toBe("ok"));
+    await vi.waitFor(() => expect(draft()).toMatchObject({ protocol: "grpc", status: "ok" }));
     expect(mocks.api.grpcSend).toHaveBeenCalledTimes(1);
     expect(mocks.api.grpcSend.mock.calls[0][0]).toMatchObject({ address_template: "{{host}}:50051", body_template: '{"text":"hi"}' });
     expect(mocks.api.historyRecord).toHaveBeenCalledTimes(1);
@@ -163,5 +166,44 @@ describe("openHistoryCall rerun", () => {
     await vi.waitFor(() => expect(mocks.api.streamOpen).toHaveBeenCalledTimes(1));
     expect(mocks.api.streamOpen.mock.calls[0][3]).toBe("server");
     expect(mocks.api.grpcSend).not.toHaveBeenCalled();
+  });
+});
+
+describe("openHistoryCall of an HTTP record", () => {
+  const response: HttpResponseIpc = {
+    status: 200, reason: "OK", headers: [], body: { type: "text", text: "pong" }, size_bytes: 4, elapsed_ms: 9,
+  };
+
+  beforeEach(() => {
+    tree = [collection("c1", [savedHttpRequest("h1", "Create user")])];
+    mocks.api.historyGet.mockResolvedValue(httpCallRecord());
+  });
+
+  it("open rebuilds the HTTP draft, not a gRPC step, bound to its origin, and never sends", async () => {
+    await openHistoryCall("call-h", "open", deps());
+
+    const { id: _id, ...opened } = draft();
+    expect(opened).toEqual({ protocol: "http", collectionId: "c1", template: httpRequest, run: { status: "draft" } });
+    expect(workflowStore.getState().draftOrigin).toEqual({ collectionId: "c1", requestId: "h1", requestName: "Create user" });
+    expect(workflowStore.getState().draftDirty).toBe(false);
+    expect(mocks.api.httpSend).not.toHaveBeenCalled();
+    expect(mocks.api.grpcSend).not.toHaveBeenCalled();
+  });
+
+  it("rerun sends the recorded template once through http_send, and the response lands on the draft", async () => {
+    mocks.api.httpSend.mockResolvedValue({ response, auth_used: { kind: "none" } });
+    await openHistoryCall("call-h", "rerun", deps());
+
+    await vi.waitFor(() =>
+      expect(draft()).toMatchObject({ protocol: "http", run: { status: "done", response, authUsed: { kind: "none" } } }),
+    );
+    expect(mocks.api.httpSend).toHaveBeenCalledTimes(1);
+    expect(mocks.api.httpSend.mock.calls[0].slice(0, 2)).toEqual([httpRequest, { collection_id: "c1", env_name: null }]);
+    expect(mocks.api.grpcSend).not.toHaveBeenCalled();
+    expect(mocks.api.historyRecord).toHaveBeenCalledTimes(1);
+    expect(mocks.api.historyRecord.mock.calls[0][0].call).toEqual({
+      protocol: "http", request: httpRequest, outcome: { type: "response", response },
+    });
+    expect(mocks.bumpUsage).toHaveBeenCalledWith("c1", "h1", expect.any(Number));
   });
 });

@@ -1,17 +1,22 @@
 import type {
   CallFaultIpc,
+  CallOriginIpc,
   CallOutcomeIpc,
   CallRecordIpc,
+  HttpOutcomeIpc,
+  HttpResponseIpc,
   InvokeOutcomeIpc,
   RecordedMessageIpc,
   StreamKindIpc,
   StreamTerminationIpc,
 } from "@/ipc/bindings";
+import type { HttpStep } from "@/features/http/model";
 import type { Step } from "@/features/workflow/model";
 import type { DraftOrigin } from "@/features/workflow/store";
 import type { ClientFault } from "@/features/workflow/netDiagnostics";
 import type { MessageMeta, StreamEntry } from "@/features/stream/streamStore";
 import type { MethodKind } from "@/lib/method-kind";
+import { grpcTemplateOf } from "@/features/catalog/mapping";
 
 export interface CallStart {
   id: string;
@@ -37,23 +42,43 @@ function u32(n: number): number {
  *  unary body pass through whole, because core's `append` owns the size bound. Integers
  *  are clamped to u32 so `into_core` never rejects a record the app built. */
 export function buildRecord(start: CallStart, finish: CallFinish): CallRecordIpc {
-  const { step, origin } = start;
   return {
     id: start.id,
     started_at_ms: start.startedAt,
-    origin: origin ? { collection_id: origin.collectionId, request_id: origin.requestId } : null,
-    request: {
-      address_template: step.address,
-      tls_override: step.tls,
-      service: step.service,
-      method: step.method,
-      body_template: step.requestJson,
-      metadata: step.metadata.map((row) => ({ ...row })),
-      auth: step.auth,
-    },
+    origin: originIpc(start.origin),
     elapsed_ms: u32(finish.type === "unary" ? finish.outcome.elapsed_ms : finish.elapsedMs),
-    outcome: outcomeOf(finish),
+    call: { protocol: "grpc", request: grpcTemplateOf(start.step), outcome: outcomeOf(finish) },
   };
+}
+
+export interface HttpCallStart {
+  id: string;
+  draft: HttpStep;
+  startedAt: number;
+  origin: DraftOrigin | null;
+}
+
+export type HttpCallFinish =
+  | { type: "response"; response: HttpResponseIpc }
+  | { type: "fault"; fault: ClientFault; elapsedMs: number };
+
+/** Pure. The request is the draft's template as authored. */
+export function buildHttpRecord(start: HttpCallStart, finish: HttpCallFinish): CallRecordIpc {
+  const outcome: HttpOutcomeIpc =
+    finish.type === "response"
+      ? { type: "response", response: finish.response }
+      : { type: "fault", fault: faultIpc(finish.fault) };
+  return {
+    id: start.id,
+    started_at_ms: start.startedAt,
+    origin: originIpc(start.origin),
+    elapsed_ms: u32(finish.type === "response" ? finish.response.elapsed_ms : finish.elapsedMs),
+    call: { protocol: "http", request: start.draft.template, outcome },
+  };
+}
+
+function originIpc(origin: DraftOrigin | null): CallOriginIpc | null {
+  return origin ? { collection_id: origin.collectionId, request_id: origin.requestId } : null;
 }
 
 export function streamKindOf(kind: MethodKind): StreamKindIpc {

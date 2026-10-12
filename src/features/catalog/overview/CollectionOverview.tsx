@@ -9,6 +9,7 @@ import type {
   CollectionIpc,
   CollectionLinkIpc,
   ItemIpc,
+  RequestTemplateIpc,
   SavedAuthConfigIpc,
   SavedRequestIpc,
 } from "@/ipc/bindings";
@@ -32,6 +33,10 @@ import { buildVarCandidates } from "@/features/vars/candidates";
 import { messages } from "@/lib/messages";
 
 const mo = messages.catalog.overview;
+
+function requestTargetOf(t: RequestTemplateIpc): string {
+  return t.protocol === "http" ? `${t.method} ${t.url_template}` : `${t.service}.${t.method}`;
+}
 
 function countFolders(items: ItemIpc[]): number {
   return items.reduce((n, it) => (it.type === "folder" ? n + 1 + countFolders(it.items) : n), 0);
@@ -254,7 +259,7 @@ export function CollectionOverview({ collection, onChanged, onSelectRequest, onC
                           {h.request.name}
                         </span>
                         <span className="hidden truncate font-mono text-[10px] text-muted-foreground/55 md:inline">
-                          {h.request.service}.{h.request.method}
+                          {requestTargetOf(h.request.template)}
                         </span>
                         <span
                           className={cn(

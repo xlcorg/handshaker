@@ -117,7 +117,7 @@ describe("FocusView Save affordance", () => {
 
   it("shows a dirty dot once the unbound draft is edited", () => {
     workflowStore.setDraft(newStep({ address: "h:443", tls: false, service: "p.S", method: "GetX" }));
-    workflowStore.updateDraft(workflowStore.getState().draft!.id, { requestJson: '{"a":1}' });
+    workflowStore.updateGrpcDraft(workflowStore.getState().draft!.id, { requestJson: '{"a":1}' });
     renderFV(<FocusView onRequestSave={vi.fn()} />);
     expect(screen.getByTestId("draft-dirty-dot")).toBeInTheDocument();
   });
@@ -147,9 +147,12 @@ describe("FocusView Save affordance", () => {
             type: "folder", id: "f1", name: "Staging", expanded: false,
             items: [
               {
-                type: "request", id: "r1", name: "Create", address_template: "h:443",
-                service: "p.v1.S", method: "M", body_template: "{}", metadata: [],
-                auth: { kind: "none" }, tls_override: null, last_used_at: null, use_count: 0,
+                type: "request",
+                id: "r1",
+                name: "Create",
+                template: { protocol: "grpc", address_template: "h:443", service: "p.v1.S", method: "M", body_template: "{}", metadata: [], auth: { kind: "none" }, tls_override: null },
+                last_used_at: null,
+                use_count: 0,
               },
             ],
           },
@@ -181,9 +184,12 @@ describe("FocusView Save affordance", () => {
 
   it("duplicates the bound request and opens the copy", async () => {
     const copied: ItemIpc = {
-      type: "request", id: "r1-copy", name: "Get copy", address_template: "h:1",
-      service: "p.S", method: "Get", body_template: "{}", metadata: [],
-      auth: { kind: "none" }, tls_override: false, last_used_at: null, use_count: 0,
+      type: "request",
+      id: "r1-copy",
+      name: "Get copy",
+      template: { protocol: "grpc", address_template: "h:1", service: "p.S", method: "Get", body_template: "{}", metadata: [], auth: { kind: "none" }, tls_override: false },
+      last_used_at: null,
+      use_count: 0,
     };
     cat.duplicateItem.mockResolvedValue(copied);
     mockPatchUiState.mockResolvedValue(undefined);
@@ -198,7 +204,7 @@ describe("FocusView Save affordance", () => {
     await waitFor(() => {
       const st = workflowStore.getState();
       expect(st.draftOrigin?.requestId).toBe("r1-copy");
-      expect(st.draft?.method).toBe("Get");
+      expect(st.draft).toMatchObject({ protocol: "grpc", method: "Get" });
     });
     expect(mockPatchUiState).toHaveBeenCalledWith(
       expect.objectContaining({ active_request: { collection_id: "c1", item_id: "r1-copy" } }),
@@ -236,9 +242,12 @@ describe("FocusView auto-rename on method change", () => {
         expanded: false,
         items: [
           {
-            type: "request", id: "r1", name, address_template: "h:443",
-            service: "p.S", method: "GetX", body_template: "{}", metadata: [],
-            auth: { kind: "none" }, tls_override: null, last_used_at: null, use_count: 0,
+            type: "request",
+            id: "r1",
+            name,
+            template: { protocol: "grpc", address_template: "h:443", service: "p.S", method: "GetX", body_template: "{}", metadata: [], auth: { kind: "none" }, tls_override: null },
+            last_used_at: null,
+            use_count: 0,
           },
         ],
       },

@@ -1,22 +1,24 @@
 import { describe, it, expect } from "vitest";
-import type { CollectionIpc, ItemIpc, SavedRequestIpc } from "@/ipc/bindings";
-import { flattenRequests, rankRequests, rankCollections, methodLabel } from "./palette";
+import type { CollectionIpc, GrpcTemplateIpc, HttpTemplateIpc, ItemIpc } from "@/ipc/bindings";
+import { flattenRequests, rankRequests, rankCollections, requestLabelOf } from "./palette";
 
-function req(id: string, name: string, over: Partial<SavedRequestIpc> = {}): ItemIpc {
+const httpTemplate: HttpTemplateIpc = {
+  method: "DELETE",
+  url_template: "{{base}}/users/{{id}}",
+  query: [],
+  headers: [],
+  body: { kind: "none" },
+  auth: { kind: "none" },
+};
+
+function req(id: string, name: string, template: Partial<GrpcTemplateIpc> = {}): ItemIpc {
   return {
     type: "request",
     id,
     name,
-    address_template: "h:443",
-    service: "p.v1.S",
-    method: "GetX",
-    body_template: "{}",
-    metadata: [],
-    auth: { kind: "none" },
-    tls_override: null,
+    template: { protocol: "grpc", address_template: "h:443", service: "p.v1.S", method: "GetX", body_template: "{}", metadata: [], auth: { kind: "none" }, tls_override: null, ...template },
     last_used_at: null,
     use_count: 0,
-    ...over,
   };
 }
 function folder(id: string, name: string, items: ItemIpc[]): ItemIpc {
@@ -100,11 +102,32 @@ describe("rankCollections", () => {
   });
 });
 
-describe("methodLabel", () => {
+describe("requestLabelOf", () => {
   it("joins the short service name and method with a slash (method-picker trimming)", () => {
     const hits = flattenRequests([
       col("c1", "Orders", [req("r1", "GetOrder", { service: "ord.v1.OrderService", method: "GetOrder" })]),
     ]);
-    expect(methodLabel(hits[0].request)).toBe("OrderService/GetOrder");
+    expect(requestLabelOf(hits[0].request.template)).toBe("OrderService/GetOrder");
+  });
+
+  it("labels an HTTP request with its method and URL template", () => {
+    expect(requestLabelOf({ protocol: "http", ...httpTemplate })).toBe("DELETE {{base}}/users/{{id}}");
+  });
+});
+
+describe("HTTP requests in the palette", () => {
+  const hits = flattenRequests([
+    col("c1", "Users", [
+      { type: "request", id: "h1", name: "Remove", template: { protocol: "http", ...httpTemplate }, last_used_at: null, use_count: 0 },
+      req("r1", "GetOrder", { service: "ord.v1.OrderService", method: "GetOrder" }),
+    ]),
+  ]);
+
+  it("matches an HTTP request on its URL", () => {
+    expect(rankRequests("users/{{id}}", hits).map((h) => h.request.id)).toEqual(["h1"]);
+  });
+
+  it("matches an HTTP request on its method", () => {
+    expect(rankRequests("DELETE", hits).map((h) => h.request.id)).toEqual(["h1"]);
   });
 });

@@ -7,6 +7,7 @@ export interface JsonNode {
   index: number | null;  // array index; null for root and object members
   kind: JsonKind;
   value: unknown;        // raw parsed value (kept for copy)
+  literal: string | null; // number token as written: rendering it keeps integers above 2^53 exact
   depth: number;         // 0 = root
   childIds: string[];    // direct children, in source order
   childCount: number;    // 0 for scalars

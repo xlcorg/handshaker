@@ -10,7 +10,8 @@ import { envActiveGet } from "@/ipc/client";
 import { SidebarShell } from "@/features/catalog/SidebarShell";
 import { CollectionOverview } from "@/features/catalog/overview/CollectionOverview";
 import { useCatalog } from "@/features/catalog/CatalogProvider";
-import { openSavedRequest, newRequestDraft } from "@/features/catalog/actions";
+import { openSavedRequest, newHttpRequestDraft, newRequestDraft } from "@/features/catalog/actions";
+import { httpNameFromPathTail } from "@/features/http/model";
 import { findSavedRequest } from "@/features/catalog/treeNav";
 import { loadUiState, patchUiState } from "@/features/catalog/uiState";
 import { SaveRequestDialog } from "@/features/catalog/SaveRequestDialog";
@@ -194,7 +195,9 @@ export function WorkflowApp() {
     pending?.();
   }
 
-  const draftMethod = draft?.method ?? "";
+  const grpcDraft = draft?.protocol === "grpc" ? draft : null;
+  const draftMethod = grpcDraft?.method ?? "";
+  const defaultName = draft?.protocol === "http" ? httpNameFromPathTail(draft.template) : draftMethod;
 
   const createFolder = async (collectionId: string, parentId: string | null, name: string) => {
     const id = newId();
@@ -214,7 +217,8 @@ export function WorkflowApp() {
 
   // Quick «+» on a MethodPicker row: save by recommendation and open the result.
   async function quickAddMethod(service: string, method: string) {
-    const current = workflowStore.getState().draft;
+    const draft = workflowStore.getState().draft;
+    const current = draft?.protocol === "grpc" ? draft : null;
     const address = current?.address ?? "";
     // Save into the collection of the request the user is editing (origin); a brand-new
     // unbound draft has no origin → planQuickAdd falls back to the first collection.
@@ -233,15 +237,18 @@ export function WorkflowApp() {
     const saved: SavedRequestIpc = {
       id: newId(),
       name: plan.requestName,
-      address_template: address,
-      service,
-      method,
-      body_template: EMPTY_BODY_TEMPLATE,
-      metadata: [],
-      auth: { kind: "none" },
-      tls_override: current?.tls ?? null,
       last_used_at: null,
       use_count: 0,
+      template: {
+        protocol: "grpc",
+        address_template: address,
+        tls_override: current?.tls ?? null,
+        service,
+        method,
+        body_template: EMPTY_BODY_TEMPLATE,
+        metadata: [],
+        auth: { kind: "none" },
+      },
     };
     await cat.addItem(collectionId, folderId, { type: "request", ...saved });
     toast.success(messages.workflow.toast.savedTo(plan.collectionName, plan.folderName));
@@ -252,6 +259,12 @@ export function WorkflowApp() {
     guardedRun(() => {
       setPanelCollectionId(null);
       newRequestDraft();
+    });
+
+  const addHttpRequest = () =>
+    guardedRun(() => {
+      setPanelCollectionId(null);
+      newHttpRequestDraft();
     });
 
   const openCall = (id: string, intent: HistoryIntent) =>
@@ -294,6 +307,7 @@ export function WorkflowApp() {
               onOpenCollection={(id) => setPanelCollectionId(id)}
               onOpenRequest={openRequest}
               onAddRequest={addRequest}
+              onAddHttpRequest={addHttpRequest}
               activeItemId={activeItemId}
               activeCollectionId={panelCollectionId}
             />
@@ -332,18 +346,18 @@ export function WorkflowApp() {
           if (!o) pendingOpenRef.current = null;
         }}
         collections={cat.tree}
-        defaultName={draftMethod}
-        draftService={draft?.service ?? ""}
+        defaultName={defaultName}
+        draftService={grpcDraft?.service ?? ""}
         draftMethod={draftMethod}
         onSave={handleSave}
         onCreateCollection={cat.createCollection}
         onCreateFolder={createFolder}
         existingLocations={
-          draft
+          grpcDraft
             ? findSavedLocations(cat.tree, {
-                service: draft.service,
-                method: draft.method,
-                address: draft.address,
+                service: grpcDraft.service,
+                method: grpcDraft.method,
+                address: grpcDraft.address,
               })
             : []
         }

@@ -1,6 +1,7 @@
 import { CopyPlus, Save } from "lucide-react";
 import { toast } from "sonner";
 import { CallPanel } from "./CallPanel";
+import { HttpPanel } from "@/features/http/HttpPanel";
 import { useDraft, useDraftDirty, useDraftOrigin, workflowStore } from "./store";
 import { draftBreadcrumb } from "./draftHeader";
 import { useCatalog } from "@/features/catalog/CatalogProvider";
@@ -120,10 +121,12 @@ export function FocusView({ onRequestSave, onQuickAddMethod }: FocusViewProps = 
         </div>
       )}
       <div className="min-h-0 flex-1">
-        {draft ? (
+        {draft?.protocol === "http" ? (
+          <HttpPanel draft={draft} origin={origin} originVars={originVars} />
+        ) : draft ? (
           <CallPanel
             step={draft}
-            onPatch={(patch: Partial<Step>) => workflowStore.updateDraft(draft.id, patch)}
+            onPatch={(patch: Partial<Step>) => workflowStore.updateGrpcDraft(draft.id, patch)}
             // Quick-add «+» saves into the open request's collection (origin). An unbound
             // draft has no target collection, so the «+» is hidden rather than silently
             // landing the method in some arbitrary collection.

@@ -1,12 +1,14 @@
 pub mod auth;
 pub mod base64;
 pub mod bundle;
+pub mod call;
 pub mod collection;
 pub mod dialog;
 pub mod env;
 pub mod events;
 pub mod grpc;
 pub mod history;
+pub mod http;
 pub mod meta;
 pub mod ui_state;
 pub mod vars;

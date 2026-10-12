@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
-import type { ItemIpc } from "@/ipc/bindings";
+import type { ItemIpc, RequestTemplateIpc } from "@/ipc/bindings";
 
 vi.mock("@/ipc/client", () => ({
   ipc: {
@@ -78,9 +78,12 @@ describe("optimistic mutations + rollback", () => {
     vi.mocked(ipc.collectionGet).mockResolvedValue({
       ...col("c1"),
       items: [{
-        type: "request", id: "r1", name: "r1", address_template: "h", service: "s",
-        method: "m", body_template: "{}", metadata: [], auth: { kind: "none" },
-        tls_override: null, last_used_at: null, use_count: 0,
+        type: "request",
+        id: "r1",
+        name: "r1",
+        template: { protocol: "grpc", address_template: "h", service: "s", method: "m", body_template: "{}", metadata: [], auth: { kind: "none" }, tls_override: null },
+        last_used_at: null,
+        use_count: 0,
       }],
     });
     const hook = renderHook(() => useCatalogTree());
@@ -121,9 +124,12 @@ describe("optimistic mutations + rollback", () => {
       name: "c1-reloaded",
       items: [
         {
-          type: "request", id: "r1-copy", name: "r1 copy", address_template: "h", service: "s",
-          method: "m", body_template: "{}", metadata: [], auth: { kind: "none" },
-          tls_override: null, last_used_at: null, use_count: 0,
+          type: "request",
+          id: "r1-copy",
+          name: "r1 copy",
+          template: { protocol: "grpc", address_template: "h", service: "s", method: "m", body_template: "{}", metadata: [], auth: { kind: "none" }, tls_override: null },
+          last_used_at: null,
+          use_count: 0,
         },
       ],
     });
@@ -148,14 +154,19 @@ describe("optimistic mutations + rollback", () => {
   it("updateItemContent replaces content optimistically and upserts the collection", async () => {
     const { result } = await loaded();
     vi.mocked(ipc.collectionUpsert).mockResolvedValue(undefined);
-    const content = {
-      id: "r1", name: "ignored", address_template: "new:443", service: "p.v2.S", method: "NewM",
-      body_template: '{"b":2}', metadata: [], auth: { kind: "none" as const },
-      tls_override: null, last_used_at: null, use_count: 0,
+    const content: RequestTemplateIpc = {
+      protocol: "grpc",
+      address_template: "new:443",
+      tls_override: null,
+      service: "p.v2.S",
+      method: "NewM",
+      body_template: '{"b":2}',
+      metadata: [],
+      auth: { kind: "none" },
     };
     await act(async () => { await result.current.updateItemContent("c1", "r1", content); });
-    const item = result.current.tree[0].items[0] as Extract<typeof content & { type: "request" }, { type: "request" }>;
-    expect(item.method).toBe("NewM");
+    const item = result.current.tree[0].items[0] as Extract<ItemIpc, { type: "request" }>;
+    expect(item.template.method).toBe("NewM");
     expect(item.name).toBe("r1"); // preserved from the original
     expect(ipc.collectionUpsert).toHaveBeenCalledWith(
       expect.objectContaining({ id: "c1" }),
@@ -165,16 +176,21 @@ describe("optimistic mutations + rollback", () => {
   it("updateItemContent rolls back when the upsert rejects", async () => {
     const { result } = await loaded();
     vi.mocked(ipc.collectionUpsert).mockRejectedValue({ message: "disk full" });
-    const content = {
-      id: "r1", name: "x", address_template: "new", service: "S", method: "NewM",
-      body_template: "{}", metadata: [], auth: { kind: "none" as const },
-      tls_override: null, last_used_at: null, use_count: 0,
+    const content: RequestTemplateIpc = {
+      protocol: "grpc",
+      address_template: "new",
+      tls_override: null,
+      service: "S",
+      method: "NewM",
+      body_template: "{}",
+      metadata: [],
+      auth: { kind: "none" },
     };
     await act(async () => {
       await expect(result.current.updateItemContent("c1", "r1", content)).rejects.toBeTruthy();
     });
-    const item = result.current.tree[0].items[0] as Extract<{ type: "request"; method: string }, { type: "request" }>;
-    expect(item.method).toBe("m"); // reverted to the seeded value
+    const item = result.current.tree[0].items[0] as Extract<ItemIpc, { type: "request" }>;
+    expect(item.template.method).toBe("m"); // reverted to the seeded value
   });
 
   it("bumpUsage increments use_count + sets last_used_at and persists via collectionBumpUsage", async () => {
@@ -272,9 +288,12 @@ describe("optimistic mutations + rollback", () => {
     vi.mocked(ipc.collectionAddItem).mockResolvedValue(undefined);
     await act(async () => {
       await result.current.addItem("c1", null, {
-        type: "request", id: "r9", name: "R", address_template: "h", service: "s",
-        method: "m", body_template: "{}", metadata: [], auth: { kind: "none" },
-        tls_override: null, last_used_at: null, use_count: 0,
+        type: "request",
+        id: "r9",
+        name: "R",
+        template: { protocol: "grpc", address_template: "h", service: "s", method: "m", body_template: "{}", metadata: [], auth: { kind: "none" }, tls_override: null },
+        last_used_at: null,
+        use_count: 0,
       });
       await result.current.addItem("c1", null, { type: "folder", id: "f9", name: "F", items: [], expanded: false });
     });
@@ -333,9 +352,12 @@ describe("useCatalogTree setExpanded", () => {
 describe("useCatalogTree move", () => {
   function reqItem(id: string) {
     return {
-      type: "request", id, name: id, address_template: "h", service: "s", method: "m",
-      body_template: "{}", metadata: [], auth: { kind: "none" }, tls_override: null,
-      last_used_at: null, use_count: 0,
+      type: "request",
+      id,
+      name: id,
+      template: { protocol: "grpc", address_template: "h", service: "s", method: "m", body_template: "{}", metadata: [], auth: { kind: "none" }, tls_override: null },
+      last_used_at: null,
+      use_count: 0,
     } as const;
   }
   async function loadedTwo() {

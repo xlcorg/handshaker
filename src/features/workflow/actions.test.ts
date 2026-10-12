@@ -11,7 +11,7 @@ vi.mock("@/ipc/client", () => ({
 }));
 
 import * as ipc from "@/ipc/client";
-import { createStepFromMethod, sendStep, cancelStep, sendDraftOf, sendCtxOf, callOptionsOf } from "./actions";
+import { createStepFromMethod, sendStep, cancelStep, sendCtxOf, callOptionsOf } from "./actions";
 import { buildRequestSkeletonSafe, applyMethodSelection, isPristineBody, resetBodyToTemplate, fetchMessageSchemaSafe } from "./actions";
 import { varsCtxFor, varsResolverFor } from "./actions";
 import type { Step } from "./model";
@@ -131,7 +131,7 @@ describe("sendStep", () => {
     );
   });
 
-  it("omits disabled and empty-key metadata rows from the draft", async () => {
+  it("forwards metadata rows as authored; core skips disabled and keyless rows", async () => {
     vi.mocked(ipc.grpcSend).mockResolvedValue({
       outcome: {
         status_code: 0, status_message: "OK", response_json: "{}",
@@ -152,7 +152,13 @@ describe("sendStep", () => {
       { envName: null },
     );
     expect(ipc.grpcSend).toHaveBeenCalledWith(
-      expect.objectContaining({ metadata: [{ key: "keep", value: "1", enabled: true }] }),
+      expect.objectContaining({
+        metadata: [
+          { key: "keep", value: "1", enabled: true },
+          { key: "off", value: "2", enabled: false },
+          { key: "", value: "3", enabled: true },
+        ],
+      }),
       expect.anything(),
       expect.any(String),
       expect.anything(),
@@ -535,18 +541,6 @@ describe("send helpers shared by the unary and streaming paths", () => {
     auth: { kind: "none" as const },
     collectionId: "c1",
   };
-
-  it("sendDraftOf keeps templates raw and drops disabled / keyless metadata rows", () => {
-    expect(sendDraftOf(step)).toEqual({
-      address_template: "{{host}}:443",
-      tls_override: null,
-      service: "S",
-      method: "M",
-      body_template: '{"a":1}',
-      metadata: [{ key: "x", value: "1", enabled: true }],
-      auth: { kind: "none" },
-    });
-  });
 
   it("sendCtxOf carries the collection and env; an unbound step has no collection", () => {
     expect(sendCtxOf(step, "prod")).toEqual({ collection_id: "c1", env_name: "prod" });

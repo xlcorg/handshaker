@@ -7,7 +7,9 @@ use indexmap::IndexMap;
 use handshaker_core::auth::SavedAuthConfig;
 use handshaker_core::collections::ids::{CollectionId, ItemId};
 use handshaker_core::collections::store::CollectionStore;
-use handshaker_core::collections::{tree, Collection, Folder, Item, SavedRequest};
+use handshaker_core::collections::{
+    tree, Collection, Folder, GrpcTemplate, Item, RequestTemplate, SavedRequest,
+};
 use handshaker_core::collections::FileCollectionStore;
 use uuid::Uuid;
 
@@ -15,15 +17,17 @@ fn request(id: u128, name: &str) -> Item {
     Item::Request(SavedRequest {
         id: ItemId(Uuid::from_u128(id)),
         name: name.into(),
-        address_template: "{{host}}".into(),
-        service: "pkg.Svc".into(),
-        method: "Do".into(),
-        body_template: "{}".into(),
-        metadata: vec![],
-        auth: SavedAuthConfig::None,
-        tls_override: None,
         last_used_at: None,
         use_count: 0,
+        template: RequestTemplate::Grpc(GrpcTemplate {
+            address_template: "{{host}}".into(),
+            service: "pkg.Svc".into(),
+            method: "Do".into(),
+            body_template: "{}".into(),
+            metadata: vec![],
+            auth: SavedAuthConfig::None,
+            tls_override: None,
+        }),
     })
 }
 

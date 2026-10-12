@@ -11,8 +11,63 @@ import { DropLine } from "./DropLine";
 import { zoneFromPointer } from "./dnd";
 import type { TreeCallbacks } from "./treeTypes";
 import { GrpcIcon } from "./GrpcIcon";
+import { HttpMethodBadge } from "@/features/http/HttpMethodBadge";
+import {
+  GRPC_METHOD_MARK,
+  HTTP_METHOD_COLUMN_CH,
+  HTTP_METHOD_MARK,
+} from "@/features/http/model";
 import { bleedStyle } from "./bleed";
-import { usePrefs } from "@/lib/use-prefs";
+import { usePrefs, type GrpcIconPref } from "@/lib/use-prefs";
+import { messages } from "@/lib/messages";
+
+const m = messages.catalog.rowMenu;
+
+const methodMarkClass =
+  "inline-flex h-4 shrink-0 items-center justify-start whitespace-nowrap font-mono text-[9px] font-semibold leading-none";
+
+const methodLabelClass =
+  "text-[9px] font-semibold leading-none translate-y-[0.8px]";
+
+const treeMarkInsetClass = "pl-4!";
+
+const methodColumnStyle = { width: `${HTTP_METHOD_COLUMN_CH}ch` };
+
+function RequestMark({
+  req,
+  grpcIcon,
+}: {
+  req: SavedRequestIpc;
+  grpcIcon: GrpcIconPref;
+}) {
+  const mark =
+    req.template.protocol === "http" ? (
+      <HttpMethodBadge
+        method={req.template.method}
+        label={HTTP_METHOD_MARK[req.template.method]}
+        className={methodLabelClass}
+      />
+    ) : grpcIcon === "off" ? null : grpcIcon === "letter" ? (
+      <span
+        aria-label="grpc"
+        data-variant="letter"
+        className={cn(methodLabelClass, "text-grpc")}
+      >
+        {GRPC_METHOD_MARK}
+      </span>
+    ) : (
+      <GrpcIcon variant={grpcIcon} className="flex-none" />
+    );
+  return (
+    <span
+      data-method-column=""
+      className={methodMarkClass}
+      style={methodColumnStyle}
+    >
+      {mark}
+    </span>
+  );
+}
 
 export interface RequestRowProps {
   collectionId: string;
@@ -37,18 +92,18 @@ export function RequestRow({
   const items: RowMenuItem[] = [
     {
       icon: <Pencil />,
-      label: "Rename",
+      label: m.rename,
       onClick: () => cb.onEditingChange(req.id),
     },
     {
       icon: <Copy />,
-      label: "Duplicate",
+      label: m.duplicate,
       onClick: () => cb.onDuplicateItem(collectionId, req.id),
     },
     { sep: true },
     {
       icon: <Trash2 />,
-      label: "Delete",
+      label: m.delete,
       danger: true,
       onClick: () => cb.onRequestDeleteItem(collectionId, req.id),
     },
@@ -85,9 +140,14 @@ export function RequestRow({
         {editing ? (
           <div
             data-node-id={req.id}
-            className="group relative flex items-center gap-0.5 py-1 pr-8 text-xs"
+            // `-translate-x-px` matches SidebarMenuSubButton: it cancels the
+            // parent sub-menu's `translate-x-px`, so the rename field shares the row's x.
+            className={cn(
+              "group relative flex h-6 -translate-x-px items-center gap-0.5 pr-8 text-xs",
+              treeMarkInsetClass,
+            )}
           >
-            {grpcIcon !== "off" && <GrpcIcon variant={grpcIcon} className="flex-none" />}
+            <RequestMark req={req} grpcIcon={grpcIcon} />
             <RenameInput
               initial={req.name}
               onCommit={(name) => {
@@ -114,6 +174,7 @@ export function RequestRow({
               style={bleedStyle(depth)}
               className={cn(
                 "group relative isolate flex h-6! w-full items-center gap-0.5! overflow-visible! bg-transparent! pr-8",
+                treeMarkInsetClass,
                 "before:pointer-events-none before:absolute before:inset-y-0 before:left-[var(--bl)] before:right-[var(--br)] before:-z-10 before:rounded-md before:content-['']",
                 "hover:before:bg-sidebar-accent/50",
                 // Active (open) request: full-bleed accent + a left marker pinned to the
@@ -126,9 +187,9 @@ export function RequestRow({
             >
               {hint === "before" && <DropLine zone="before" />}
               {hint === "after" && <DropLine zone="after" />}
-              {grpcIcon !== "off" && <GrpcIcon variant={grpcIcon} className="flex-none" />}
+              <RequestMark req={req} grpcIcon={grpcIcon} />
               <span className="min-w-0 flex-1 truncate text-left">
-                {req.name || req.method}
+                {req.name || req.template.method}
               </span>
             </div>
           </SidebarMenuSubButton>

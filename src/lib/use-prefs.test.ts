@@ -45,8 +45,8 @@ describe("prefs sidebarPanel", () => {
 describe("grpcIcon pref", () => {
   beforeEach(() => localStorage.clear());
 
-  it("defaults grpcIcon to 'off'", () => {
-    expect(PREFS_DEFAULTS.grpcIcon).toBe("off");
+  it("defaults grpcIcon to 'letter'", () => {
+    expect(PREFS_DEFAULTS.grpcIcon).toBe("letter");
   });
 
   it("merges a persisted grpcIcon over defaults", () => {

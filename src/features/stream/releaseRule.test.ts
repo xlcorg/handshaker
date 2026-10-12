@@ -14,6 +14,7 @@ import { workflowStore } from "@/features/workflow/store";
 import { newStep } from "@/features/workflow/model";
 import { removeStep } from "@/features/workflow/reducers";
 import { runCall } from "@/features/workflow/callLifecycle";
+import { narrow } from "@/test/narrow";
 import { streamStore } from "./streamStore";
 import { installStreamReleaseRule } from "./releaseRule";
 
@@ -38,7 +39,7 @@ describe("stream release rule", () => {
     expect(release).not.toHaveBeenCalled();
 
     streamStore.open("s2", "server", Date.now());
-    workflowStore.updateDraft(workflowStore.getState().draft!.id, { streamId: "s2" });
+    workflowStore.updateGrpcDraft(workflowStore.getState().draft!.id, { streamId: "s2" });
     await flush();
 
     expect(release).toHaveBeenCalledTimes(1);
@@ -52,7 +53,7 @@ describe("stream release rule", () => {
     const step = { ...newStep({ address: "h", service: "S", method: "M" }), streamId: "s1" };
     workflowStore.setDraft(step);
     workflowStore.commitExecutedStep({ ...step, id: "snap" });
-    workflowStore.updateDraft(workflowStore.getState().draft!.id, { streamId: "s2" });
+    workflowStore.updateGrpcDraft(workflowStore.getState().draft!.id, { streamId: "s2" });
     await flush();
     expect(release).not.toHaveBeenCalled();
 
@@ -78,24 +79,24 @@ describe("stream release rule", () => {
     const step = newStep({ address: "h", service: "S", method: "M" });
     workflowStore.setDraft(step);
     await runCall({
-      step, envName: null, kind: "server", onPatch: (p) => workflowStore.updateDraft(step.id, p),
+      step, envName: null, kind: "server", onPatch: (p) => workflowStore.updateGrpcDraft(step.id, p),
       recording: { origin: null, bumpUsage: () => Promise.resolve() },
     });
-    const id = workflowStore.getState().draft!.streamId!;
+    const id = narrow(workflowStore.getState().draft, "grpc").streamId!;
 
     workflowStore.setDraft(newStep({ address: "h", service: "S", method: "M" }));
     onEvent({ type: "End", status_code: 0, status_message: "", status_details: [], trailing_metadata: {}, elapsed_ms: 1, message_count: 0, total_bytes: 0 });
     await flush();
 
     expect(api.historyRecord).toHaveBeenCalledTimes(1);
-    expect(api.historyRecord.mock.calls[0][0]).toMatchObject({ id, outcome: { type: "stream", end: { type: "cancelled" } } });
+    expect(api.historyRecord.mock.calls[0][0]).toMatchObject({ id, call: { protocol: "grpc", outcome: { type: "stream", end: { type: "cancelled" } } } });
     expect(streamStore.get(id)).toBeNull();
     expect(release).toHaveBeenCalledWith(id);
   });
 
   it("unrelated transitions release nothing", async () => {
     workflowStore.setDraft({ ...newStep({ address: "h", service: "S", method: "M" }), streamId: "s1" });
-    workflowStore.updateDraft(workflowStore.getState().draft!.id, { requestJson: "{}" });
+    workflowStore.updateGrpcDraft(workflowStore.getState().draft!.id, { requestJson: "{}" });
     workflowStore.setWorkflowEnv("dev");
     await flush();
     expect(release).not.toHaveBeenCalled();

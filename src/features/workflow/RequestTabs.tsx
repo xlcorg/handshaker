@@ -103,7 +103,7 @@ export function RequestTabs({ step, serviceAuth, onBody, onMetadata, onSubmit, o
   );
 }
 
-function AuthReadOnly({ auth }: { auth: SavedAuthConfigIpc }) {
+export function AuthReadOnly({ auth }: { auth: SavedAuthConfigIpc }) {
   return (
     <div className="space-y-2 p-3.5 text-xs">
       <div className="text-muted-foreground">

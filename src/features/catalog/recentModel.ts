@@ -1,7 +1,7 @@
 import type { CollectionIpc, SavedRequestIpc } from "@/ipc/bindings";
 import type { WorkflowState } from "@/features/workflow/store";
 import { messages } from "@/lib/messages";
-import { flattenRequests, methodLabel, type RequestHit } from "./palette";
+import { flattenRequests, requestLabelOf, type RequestHit } from "./palette";
 
 const MAX_RECENT = 10;
 
@@ -232,7 +232,7 @@ function resolveRows(
               request: hit.request,
             },
         title: hit.request.name,
-        detail: methodLabel(hit.request),
+        detail: requestLabelOf(hit.request.template),
         aside: hit.collectionName,
       });
     } else if (loc.kind === "overview") {

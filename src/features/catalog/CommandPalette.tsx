@@ -24,7 +24,7 @@ import {
   completionFor,
   type PaletteRow,
 } from "./paletteModel";
-import { methodLabel } from "./palette";
+import { requestLabelOf } from "./palette";
 
 export interface CommandPaletteProps {
   open: boolean;
@@ -88,7 +88,7 @@ function RowView({
           <Highlighted text={row.request.name} indices={row.indices} />
         </span>
         <span className="truncate font-mono text-[11px] text-muted-foreground">
-          {methodLabel(row.request)}
+          {requestLabelOf(row.request.template)}
         </span>
       </span>
       {showCollection && (

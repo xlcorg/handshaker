@@ -58,9 +58,9 @@ function nameMatches(name: string, q: string): boolean {
 }
 
 function requestMatches(it: Extract<ItemIpc, { type: "request" }>, q: string): boolean {
-  return [it.name, it.service, it.method, it.address_template].some((s) =>
-    s.toLowerCase().includes(q),
-  );
+  const t = it.template;
+  const fields = t.protocol === "http" ? [t.method, t.url_template] : [t.service, t.method, t.address_template];
+  return [it.name, ...fields].some((s) => s.toLowerCase().includes(q));
 }
 
 function filterItems(items: ItemIpc[], q: string): ItemIpc[] {

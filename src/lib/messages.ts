@@ -1,3 +1,5 @@
+import type { UrlProblemIpc } from "@/ipc/bindings";
+
 /**
  * Centralized, English-first UI copy. Direct-import (no t() / runtime i18n yet) — a
  * small vertical slice to validate the approach before wider migration. Typed
@@ -97,6 +99,28 @@ export const messages = {
     },
   },
   catalog: {
+    sidebar: {
+      filterPlaceholder: "Filter collections…",
+      newRequest: "New request",
+      newHttpRequest: "New HTTP request",
+      newCollection: "New collection",
+      collections: "Collections",
+      collapseAll: "Collapse all",
+      expandAll: "Expand all",
+      export: "Export",
+      import: "Import",
+      defaultFolderName: "New folder",
+      defaultCollectionName: "New collection",
+    },
+    rowMenu: {
+      addRequest: "Add request",
+      addHttpRequest: "Add HTTP request",
+      addFolder: "Add folder",
+      rename: "Rename",
+      duplicate: "Duplicate",
+      export: "Export",
+      delete: "Delete",
+    },
     saveDialog: {
       /** Dialog heading — the two modes rename vs. save-as-new. */
       title: (originBound: boolean): string => (originBound ? "Update request" : "Save request"),
@@ -549,6 +573,49 @@ export const messages = {
     toast: {
       unavailable: "This call's details are no longer available.",
       recordFailed: "Couldn't save this call to history.",
+    },
+  },
+  http: {
+    draft: { newRequest: "New HTTP request" },
+    addressBar: {
+      method: "HTTP method",
+      url: "Request URL",
+      urlPlaceholder: "{{baseUrl}}/users or https://api.example.com/users",
+    },
+    tabs: { params: "Params", headers: "Headers", body: "Body", auth: "Auth" },
+    body: {
+      modeLabel: "Body type",
+      mode: { none: "None", json: "JSON", text: "Text", form: "Form" },
+      none: "This request has no body.",
+    },
+    response: {
+      tabs: { body: "Body", headers: "Headers" },
+      idleTitle: "Awaiting first request",
+      idleDesc: "Hit Send. Status, headers and body will appear here.",
+      body: {
+        empty: "Empty body",
+        binary: "Binary body, not shown",
+        tooLarge: (limit: string) => `Body is over the ${limit} limit, not shown`,
+        omitted: "Body not kept in history",
+      },
+    },
+    history: {
+      params: "Params",
+      headers: "Request headers",
+      body: "Request body",
+      noParams: "No params",
+      noHeaders: "No headers",
+    },
+    /** Never echoes the URL: once resolved it can carry secrets. */
+    urlProblem: (p: UrlProblemIpc): string => {
+      switch (p.type) {
+        case "missing_scheme":
+          return "Invalid URL: start it with http:// or https://";
+        case "unsupported_scheme":
+          return `Invalid URL: ${p.scheme}:// is not supported, use http:// or https://`;
+        case "malformed":
+          return `Invalid URL: ${p.reason}`;
+      }
     },
   },
 } as const;

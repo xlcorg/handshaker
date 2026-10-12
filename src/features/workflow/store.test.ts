@@ -9,6 +9,9 @@ import { isContentPatch } from "./store";
 import { envActiveSet } from "@/ipc/client";
 import { newStep } from "./model";
 import { addStep, updateStep } from "./reducers";
+import { newHttpStep } from "@/features/http/model";
+import { narrow } from "@/test/narrow";
+import type { HttpResponseIpc } from "@/ipc/bindings";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -82,19 +85,14 @@ describe("parallel send independence", () => {
     workflowStore.update((wf) => updateStep(wf, stepB.id, { status: "sending", requestId: "req-b" }));
 
     const steps = workflowStore.activeWorkflow().steps;
-    const sa = steps.find((s) => s.id === stepA.id)!;
-    const sb = steps.find((s) => s.id === stepB.id)!;
-    expect(sa.status).toBe("sending");
-    expect(sb.status).toBe("sending");
-    expect(sa.requestId).toBe("req-a");
-    expect(sb.requestId).toBe("req-b");
+    expect(steps.find((s) => s.id === stepA.id)).toMatchObject({ status: "sending", requestId: "req-a" });
+    expect(steps.find((s) => s.id === stepB.id)).toMatchObject({ status: "sending", requestId: "req-b" });
 
     // Completing A leaves B untouched.
     workflowStore.update((wf) => updateStep(wf, stepA.id, { status: "ok", requestId: null }));
     const stepsAfter = workflowStore.activeWorkflow().steps;
-    expect(stepsAfter.find((s) => s.id === stepA.id)!.status).toBe("ok");
-    expect(stepsAfter.find((s) => s.id === stepB.id)!.status).toBe("sending");
-    expect(stepsAfter.find((s) => s.id === stepB.id)!.requestId).toBe("req-b");
+    expect(stepsAfter.find((s) => s.id === stepA.id)).toMatchObject({ status: "ok", requestId: null });
+    expect(stepsAfter.find((s) => s.id === stepB.id)).toMatchObject({ status: "sending", requestId: "req-b" });
   });
 });
 
@@ -117,27 +115,26 @@ describe("global pending-draft", () => {
     unsub();
   });
 
-  it("updateDraft merges a patch onto the current draft", () => {
+  it("updateGrpcDraft merges a patch onto the current draft", () => {
     workflowStore.setDraft(newStep({ address: "h", tls: false, service: "S", method: "M" }));
-    workflowStore.updateDraft(workflowStore.getState().draft!.id, { status: "sending", requestId: "req-1" });
-    expect(workflowStore.getState().draft?.status).toBe("sending");
-    expect(workflowStore.getState().draft?.requestId).toBe("req-1");
+    workflowStore.updateGrpcDraft(workflowStore.getState().draft!.id, { status: "sending", requestId: "req-1" });
+    expect(workflowStore.getState().draft).toMatchObject({ status: "sending", requestId: "req-1" });
   });
 
-  it("updateDraft is a no-op when there is no draft", () => {
-    workflowStore.updateDraft("gone", { status: "ok" });
+  it("updateGrpcDraft is a no-op when there is no draft", () => {
+    workflowStore.updateGrpcDraft("gone", { status: "ok" });
     expect(workflowStore.getState().draft).toBeNull();
   });
 
-  it("updateDraft drops a patch addressed to a replaced draft", () => {
+  it("updateGrpcDraft drops a patch addressed to a replaced draft", () => {
     const old = newStep({ address: "h", tls: false, service: "S", method: "M" });
     workflowStore.setDraft(old);
     const next = newStep({ address: "h2", tls: false, service: "S", method: "N" });
     workflowStore.setDraft(next);
-    workflowStore.updateDraft(old.id, { status: "ok", requestJson: '{"late":1}' });
+    workflowStore.updateGrpcDraft(old.id, { status: "ok", requestJson: '{"late":1}' });
     expect(workflowStore.getState().draft).toBe(next);
     expect(workflowStore.getState().draftDirty).toBe(false);
-    workflowStore.updateDraft(next.id, { status: "sending" });
+    workflowStore.updateGrpcDraft(next.id, { status: "sending" });
     expect(workflowStore.getState().draft).toEqual({ ...next, status: "sending" });
   });
 
@@ -186,13 +183,13 @@ describe("draft origin + dirty", () => {
 
   it("content edits on an UNBOUND draft set dirty", () => {
     workflowStore.setDraft(newStep({ address: "h", tls: false, service: "S", method: "M" }));
-    workflowStore.updateDraft(workflowStore.getState().draft!.id, { requestJson: '{"a":1}' });
+    workflowStore.updateGrpcDraft(workflowStore.getState().draft!.id, { requestJson: '{"a":1}' });
     expect(workflowStore.getState().draftDirty).toBe(true);
   });
 
   it("transient (non-content) edits never set dirty", () => {
     workflowStore.setDraft(newStep({ address: "h", tls: false, service: "S", method: "M" }));
-    workflowStore.updateDraft(workflowStore.getState().draft!.id, { status: "sending", requestId: "req-1" });
+    workflowStore.updateGrpcDraft(workflowStore.getState().draft!.id, { status: "sending", requestId: "req-1" });
     expect(workflowStore.getState().draftDirty).toBe(false);
   });
 
@@ -200,13 +197,13 @@ describe("draft origin + dirty", () => {
     workflowStore.setDraft(newStep({ address: "h", tls: false, service: "S", method: "M" }), {
       collectionId: "c1", requestId: "r1",
     });
-    workflowStore.updateDraft(workflowStore.getState().draft!.id, { requestJson: '{"a":1}' });
+    workflowStore.updateGrpcDraft(workflowStore.getState().draft!.id, { requestJson: '{"a":1}' });
     expect(workflowStore.getState().draftDirty).toBe(false);
   });
 
   it("setDraftOrigin binds and clears dirty (used after Save)", () => {
     workflowStore.setDraft(newStep({ address: "h", tls: false, service: "S", method: "M" }));
-    workflowStore.updateDraft(workflowStore.getState().draft!.id, { requestJson: '{"a":1}' }); // dirty now
+    workflowStore.updateGrpcDraft(workflowStore.getState().draft!.id, { requestJson: '{"a":1}' }); // dirty now
     workflowStore.setDraftOrigin({ collectionId: "c1", requestId: "r1" });
     expect(workflowStore.getState().draftOrigin).toEqual({ collectionId: "c1", requestId: "r1" });
     expect(workflowStore.getState().draftDirty).toBe(false);
@@ -251,6 +248,65 @@ describe("draft origin + dirty", () => {
     expect(isContentPatch({ address: "h" })).toBe(true);
     expect(isContentPatch({ status: "ok" })).toBe(false);
     expect(isContentPatch({ requestId: "r" })).toBe(false);
+  });
+});
+
+describe("HTTP draft", () => {
+  beforeEach(() => workflowStore.reset());
+
+  const response: HttpResponseIpc = {
+    status: 200, reason: "OK", headers: [], body: { type: "empty" }, size_bytes: 0, elapsed_ms: 1,
+  };
+
+  it("editHttpTemplate merges a template patch and dirties an unbound draft", () => {
+    const d = newHttpStep();
+    workflowStore.setDraft(d);
+    workflowStore.editHttpTemplate(d.id, { method: "POST", url_template: "{{base}}/users" });
+    expect(workflowStore.getState().draft).toEqual({
+      ...d, template: { ...d.template, method: "POST", url_template: "{{base}}/users" },
+    });
+    expect(workflowStore.getState().draftDirty).toBe(true);
+  });
+
+  it("editHttpTemplate on a bound draft does not dirty it (autosave path)", () => {
+    const d = newHttpStep();
+    workflowStore.setDraft(d, { collectionId: "c1", requestId: "h1" });
+    workflowStore.editHttpTemplate(d.id, { url_template: "x" });
+    expect(workflowStore.getState().draftDirty).toBe(false);
+  });
+
+  it("drops an edit or a run addressed to a replaced draft", () => {
+    const old = newHttpStep();
+    const next = newHttpStep();
+    workflowStore.setDraft(old);
+    workflowStore.setDraft(next);
+    workflowStore.editHttpTemplate(old.id, { url_template: "late" });
+    workflowStore.setHttpRun(old.id, { status: "sending", requestId: "r" });
+    expect(workflowStore.getState().draft).toBe(next);
+    expect(workflowStore.getState().draftDirty).toBe(false);
+  });
+
+  it("setHttpRun keeps the template object and never dirties", () => {
+    const d = newHttpStep();
+    workflowStore.setDraft(d);
+    workflowStore.setHttpRun(d.id, { status: "done", response, authUsed: { kind: "none" } });
+    const after = workflowStore.getState().draft;
+    expect(after).toEqual({ ...d, run: { status: "done", response, authUsed: { kind: "none" } } });
+    expect(narrow(after, "http").template).toBe(d.template);
+    expect(workflowStore.getState().draftDirty).toBe(false);
+  });
+
+  it("gRPC updates and HTTP edits ignore a draft of the other protocol", () => {
+    const http = newHttpStep();
+    workflowStore.setDraft(http);
+    workflowStore.updateGrpcDraft(http.id, { requestJson: "{}" });
+    expect(workflowStore.getState().draft).toBe(http);
+    const grpc = newStep({ address: "h", tls: false, service: "S", method: "M" });
+    workflowStore.setDraft(grpc);
+    workflowStore.editHttpTemplate(grpc.id, { url_template: "x" });
+    workflowStore.setHttpRun(grpc.id, { status: "draft" });
+    expect(workflowStore.getState().draft).toBe(grpc);
+    expect(workflowStore.getState().draftDirty).toBe(false);
   });
 });
 

@@ -12,6 +12,11 @@ describe("renderJsonTree", () => {
     expect(r.text).toBe(`{\n  "a": 1,\n  "b": [\n    2,\n    3\n  ]\n}`);
   });
 
+  it("prints numbers as written, so integers above 2^53 stay exact", () => {
+    const r = renderJsonTree(treeOf(`{"id":9007199254740993,"ratio":1.50,"big":1e400}`));
+    expect(r.text).toBe(`{\n  "id": 9007199254740993,\n  "ratio": 1.50,\n  "big": 1e400\n}`);
+  });
+
   it("records spans into the rendered text that resolve back to nodes", () => {
     const tree = treeOf(`{"a":1}`);
     const r = renderJsonTree(tree);

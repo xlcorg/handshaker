@@ -16,14 +16,13 @@ import { isLivePhase, useStreamEntry, type StreamEntry } from "@/features/stream
 import { effectiveTls } from "./tls";
 import { workflowStore } from "./store";
 import type { DraftOrigin } from "./store";
-import { isSendHotkey } from "./sendHotkey";
+import { useSendHotkey } from "./useSendHotkey";
+import { FocusSplit } from "./FocusSplit";
 import { useEnvRevision } from "@/features/envs/envRevision";
 import { useActiveEnvVars } from "@/features/envs/useActiveEnvVars";
 import { buildVarCandidates } from "@/features/vars/candidates";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import type { MetadataRow, Step } from "./model";
-import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
-import { usePrefs } from "@/lib/use-prefs";
 import { isTwoWay, kindOf } from "@/lib/method-kind";
 import { controlsKind, executedKind } from "./controlsKind";
 import { useActiveWorkflow } from "./store";
@@ -57,7 +56,6 @@ export function CallPanel({ step, onPatch, onQuickAddMethod, originVars, originS
   // Concrete TLS for probes/Send display: the step's override, or the collection default
   // when inheriting (null). Send itself forwards the raw override; core inherits identically.
   const effTls = effectiveTls(step.tls, originDefaultTls ?? false);
-  const [prefs, setPref] = usePrefs();
   const activeWf = useActiveWorkflow();
   // Re-resolve the address preview when the active env's identity or contents change
   // (the preview resolves against the active env via the backend — see envRevision).
@@ -68,9 +66,6 @@ export function CallPanel({ step, onPatch, onQuickAddMethod, originVars, originS
     () => buildVarCandidates(activeEnvVars, originVars),
     [activeEnvVars, originVars],
   );
-  // prefs.split is our own convention ("horizontal" = a horizontal divider = Top/Bottom);
-  // react-resizable-panels uses the inverse ("horizontal" = side-by-side), so flip it.
-  const orientation = prefs.split === "horizontal" ? "vertical" : "horizontal";
 
   const onBody = (value: string) => onPatch({ requestJson: value });
   const onMetadata = (rows: MetadataRow[]) => onPatch({ metadata: rows });
@@ -156,28 +151,15 @@ export function CallPanel({ step, onPatch, onQuickAddMethod, originVars, originS
   // Ctrl/Cmd+Enter and Ctrl/Cmd+R send the active draft (mirrors the primary button):
   // Send / Open when idle or ended; Send message while a two-way stream is open; a
   // no-op while a server stream is live (or after half-close), so a subscription is
-  // never cancelled by the chord. A ref holds the freshest send logic so the window
-  // listener binds once. Monaco swallows these chords while the request editor has
-  // focus, so BodyView re-binds them as editor commands too.
-  const sendShortcutRef = useRef<() => void>(() => {});
-  sendShortcutRef.current = () => {
+  // never cancelled by the chord.
+  const submit = useSendHotkey(() => {
     if (step.method.trim().length === 0) return;
     if (step.status === "sending") {
       if (twoWay?.canSend) twoWay.onSendMessage();
       return;
     }
     void send();
-  };
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (!isSendHotkey(e)) return;
-      // preventDefault also suppresses the WebView's built-in Ctrl+R reload.
-      e.preventDefault();
-      sendShortcutRef.current();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  });
 
   const schemaTarget = {
     address: step.address,
@@ -228,32 +210,22 @@ export function CallPanel({ step, onPatch, onQuickAddMethod, originVars, originS
   return (
     <div className="flex h-full flex-col">
       {header}
-      <ResizablePanelGroup
-        key={orientation}
-        orientation={orientation}
-        className="min-h-0 flex-1"
-        defaultLayout={{ request: prefs.bodyPanel, response: 100 - prefs.bodyPanel }}
-        onLayoutChanged={(layout: Record<string, number>) => {
-          const pct = layout["request"];
-          if (typeof pct === "number" && pct > 0) setPref("bodyPanel", pct);
-        }}
-      >
-        <ResizablePanel id="request" minSize="20%">
+      <FocusSplit
+        request={
           <RequestTabs
             step={step}
             serviceAuth={effectiveAuth}
             onBody={onBody}
             onMetadata={onMetadata}
-            onSubmit={() => sendShortcutRef.current()}
+            onSubmit={submit}
             onResetTemplate={onResetBody}
             schema={schema}
             varCandidates={varCandidates}
             metadataResolver={varsResolverFor(step.collectionId)}
             metadataResolveKey={addressResolveKey}
           />
-        </ResizablePanel>
-        <ResizableHandle withHandle />
-        <ResizablePanel id="response" minSize="20%">
+        }
+        response={
           <div className="flex h-full min-h-0 flex-col">
             <ResponseSlot
               step={step}
@@ -262,8 +234,8 @@ export function CallPanel({ step, onPatch, onQuickAddMethod, originVars, originS
               contract={{ input: schema, output: outputSchema, method: step.method, kind: catalogKind }}
             />
           </div>
-        </ResizablePanel>
-      </ResizablePanelGroup>
+        }
+      />
     </div>
   );
 }

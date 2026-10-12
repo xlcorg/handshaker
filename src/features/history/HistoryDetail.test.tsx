@@ -12,12 +12,12 @@ import { messages } from "@/lib/messages";
 import { streamStore } from "@/features/stream/streamStore";
 import { HistoryDetail } from "./HistoryDetail";
 import { historyStore } from "./store";
-import { callRecord, summary } from "./testFixtures";
+import { callRecord, httpCallRecord, httpSummary, summary, type CallRecordOver } from "./testFixtures";
 
 const d = messages.history.detail;
 const onRerun = vi.fn();
 
-function show(outcome?: CallOutcomeIpc, over: Partial<CallRecordIpc> = {}) {
+function show(outcome?: CallOutcomeIpc, over: CallRecordOver = {}) {
   api.historyGet.mockResolvedValue(callRecord({ ...(outcome ? { outcome } : {}), ...over }));
   render(<HistoryDetail row={summary()} onRerun={onRerun} />);
 }
@@ -27,6 +27,40 @@ const section = (name: string) => within(screen.getByRole("region", { name }));
 beforeEach(() => {
   vi.clearAllMocks();
   historyStore.reset();
+});
+
+describe("HistoryDetail of an HTTP call", () => {
+  const h = messages.http.history;
+
+  it("shows enabled params and request headers, the request body, and the response body and headers", async () => {
+    api.historyGet.mockResolvedValue(
+      httpCallRecord({
+        request: { query: [{ key: "page", value: "2", enabled: true }, { key: "off", value: "1", enabled: false }] },
+      }),
+    );
+    render(<HistoryDetail row={httpSummary({ method: "POST", ending: { type: "status", code: 201 } })} onRerun={onRerun} />);
+
+    expect(await screen.findByText('{"id":7}')).toBeInTheDocument();
+    expect(screen.getByTestId("history-detail")).toHaveAccessibleName("POST {{base}}/users");
+    expect(screen.getByText("201 Created")).toBeInTheDocument();
+    expect(section(h.params).getByText("page")).toBeInTheDocument();
+    expect(section(h.params).queryByText("off")).toBeNull();
+    expect(section(h.headers).getByText("accept")).toBeInTheDocument();
+    expect(section(h.body).getByText('{"name":"a"}')).toBeInTheDocument();
+    expect(section(d.response).getByText('{"id":7}')).toBeInTheDocument();
+    expect(section(d.headers).getByText("content-type")).toBeInTheDocument();
+  });
+
+  it("shows a fault in place of the response, with no headers recorded", async () => {
+    api.historyGet.mockResolvedValue(
+      httpCallRecord({ request: { query: [] }, outcome: { type: "fault", fault: { kind: "refused", message: "connection refused" } } }),
+    );
+    render(<HistoryDetail row={httpSummary({ ending: { type: "fault", kind: "refused" } })} onRerun={onRerun} />);
+
+    expect(await screen.findByText("connection refused")).toBeInTheDocument();
+    expect(section(d.headers).getByText(d.notRecorded)).toBeInTheDocument();
+    expect(section(h.params).getByText(h.noParams)).toBeInTheDocument();
+  });
 });
 
 describe("HistoryDetail", () => {
@@ -47,7 +81,7 @@ describe("HistoryDetail", () => {
         status: { code: 5, message: "no such user", trailers: {} },
         response: { type: "omitted", size_bytes: 300 * 1024 },
       },
-      { request: { ...callRecord().request, metadata: [{ key: "x-off", value: "2", enabled: false }] } },
+      { request: { metadata: [{ key: "x-off", value: "2", enabled: false }] } },
     );
     expect(await screen.findByText(d.noMetadata)).toBeInTheDocument();
     expect(section(d.response).getByText("no such user")).toBeInTheDocument();

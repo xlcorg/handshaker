@@ -60,7 +60,7 @@ export function renderJsonTree(tree: JsonTree, expanded: ReadonlySet<string> = n
         }
         break;
       }
-      case "number":
+      case "number": out += node.literal ?? String(node.value); break;
       case "boolean": out += String(node.value); break;
       case "null": out += "null"; break;
     }

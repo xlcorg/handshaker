@@ -12,9 +12,12 @@ function renderWithSidebar(ui: React.ReactElement) {
 
 function req(id: string): Extract<ItemIpc, { type: "request" }> {
   return {
-    type: "request", id, name: id, address_template: "h", service: "s", method: "m",
-    body_template: "{}", metadata: [], auth: { kind: "none" }, tls_override: null,
-    last_used_at: null, use_count: 0,
+    type: "request",
+    id,
+    name: id,
+    template: { protocol: "grpc", address_template: "h", service: "s", method: "m", body_template: "{}", metadata: [], auth: { kind: "none" }, tls_override: null },
+    last_used_at: null,
+    use_count: 0,
   };
 }
 function col(id: string, items: ItemIpc[]): CollectionIpc {
@@ -41,6 +44,7 @@ function makeProps(over: Partial<CollectionTreeProps> = {}): CollectionTreeProps
     onDeleteCollection: vi.fn(),
     onExportCollection: vi.fn(),
     onAddRequest: vi.fn(),
+    onAddHttpRequest: vi.fn(),
     onAddFolder: vi.fn(),
     onSetPinned: vi.fn(),
     onMoveItem: vi.fn(),
@@ -101,6 +105,7 @@ describe("CollectionTree arrow navigation", () => {
       onDeleteCollection: vi.fn(),
       onExportCollection: vi.fn(),
       onAddRequest: vi.fn(),
+      onAddHttpRequest: vi.fn(),
       onAddFolder: vi.fn(),
       onSetPinned: vi.fn(),
       onMoveItem: vi.fn(),

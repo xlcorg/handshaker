@@ -169,7 +169,7 @@ impl AppState {
             Some(s) => {
                 let iid = parse_item_id(&s)?;
                 match tree::find_item_mut(&mut c.items, iid) {
-                    Some(Item::Request(r)) => r.auth = core,
+                    Some(Item::Request(r)) => r.template.set_auth(core),
                     Some(Item::Folder(_)) => {
                         return Err(CoreError::InvalidTarget("folders carry no auth".into()))
                     }
@@ -334,7 +334,7 @@ pub async fn collection_set_expanded(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ipc::collection::{FolderIpc, SavedRequestIpc};
+    use crate::ipc::collection::{FolderIpc, GrpcTemplateIpc, RequestTemplateIpc, SavedRequestIpc};
     use handshaker_core::collections::CollectionStore;
     use uuid::Uuid;
 
@@ -359,15 +359,17 @@ mod tests {
         ItemIpc::Request(SavedRequestIpc {
             id: Uuid::from_u128(id).to_string(),
             name: name.into(),
-            address_template: "{{host}}".into(),
-            service: "svc".into(),
-            method: "M".into(),
-            body_template: "{}".into(),
-            metadata: vec![],
-            auth: SavedAuthConfigIpc::None,
-            tls_override: None,
             last_used_at: None,
             use_count: 0,
+            template: RequestTemplateIpc::Grpc(GrpcTemplateIpc {
+                address_template: "{{host}}".into(),
+                tls_override: None,
+                service: "svc".into(),
+                method: "M".into(),
+                body_template: "{}".into(),
+                metadata: vec![],
+                auth: SavedAuthConfigIpc::None,
+            }),
         })
     }
 
@@ -520,11 +522,11 @@ mod tests {
         state.collection_set_node_auth_impl(&cid(1), Some(cid(20)), cfg).unwrap();
         let got = state.collection_get_impl(&cid(1)).unwrap();
         assert!(matches!(got.auth, SavedAuthConfigIpc::EnvVar { .. }));
-        let req = match &got.items[0] {
-            ItemIpc::Request(r) => r,
+        let auth = match &got.items[0] {
+            ItemIpc::Request(SavedRequestIpc { template: RequestTemplateIpc::Grpc(g), .. }) => &g.auth,
             _ => panic!(),
         };
-        assert!(matches!(req.auth, SavedAuthConfigIpc::EnvVar { .. }));
+        assert!(matches!(auth, SavedAuthConfigIpc::EnvVar { .. }));
     }
 
     #[test]

@@ -1,23 +1,21 @@
 import type { SavedRequestIpc } from "@/ipc/bindings";
 import { workflowStore } from "@/features/workflow/store";
 import { newStep } from "@/features/workflow/model";
-import { lastExecutedFor, responseSeedPatch } from "@/features/workflow/lastExecuted";
-import { savedRequestToDraft } from "./mapping";
+import { newHttpStep } from "@/features/http/model";
+import { callKeyOf, lastExecutedFor, seedFrom } from "@/features/workflow/lastExecuted";
+import { draftFromTemplate } from "./mapping";
 
 /** Open a saved request in Focus as the global pending-draft, bound to its origin.
  *  The Response panel is seeded with THIS session's last executed call of the same
- *  service/method/address (from the workflow history). */
+ *  call key (from the workflow history). */
 export function openSavedRequest(collectionId: string, saved: SavedRequestIpc): void {
-  const draft = savedRequestToDraft(saved);
-  const last = lastExecutedFor(workflowStore.activeWorkflow().steps, {
-    service: draft.service,
-    method: draft.method,
-    address: draft.address,
+  const draft = draftFromTemplate(saved.template, collectionId);
+  const last = lastExecutedFor(workflowStore.activeWorkflow().steps, callKeyOf(draft));
+  workflowStore.setDraft(seedFrom(draft, last), {
+    collectionId,
+    requestId: saved.id,
+    requestName: saved.name,
   });
-  workflowStore.setDraft(
-    { ...draft, ...responseSeedPatch(last) },
-    { collectionId, requestId: saved.id, requestName: saved.name },
-  );
 }
 
 /** Start a fresh, empty pending-draft in Focus (header `+` / menu "Add request").
@@ -25,4 +23,9 @@ export function openSavedRequest(collectionId: string, saved: SavedRequestIpc): 
  *  instead of freezing plaintext — the frozen-TLS bug. */
 export function newRequestDraft(): void {
   workflowStore.setDraft(newStep({ address: "", service: "", method: "" }));
+}
+
+/** Start a fresh HTTP draft in Focus: `GET` and an empty URL. */
+export function newHttpRequestDraft(): void {
+  workflowStore.setDraft(newHttpStep());
 }
