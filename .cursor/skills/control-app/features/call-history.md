@@ -11,7 +11,7 @@ plus `index.json`.
 
 - Header strip. `[data-testid="history-dock-toggle"]` reads `History · N` and carries `aria-expanded`. The dock starts expanded. Collapsed, only this strip stays.
 - Filter `[data-testid="history-filter"]` (placeholder `Filter by service, method, address or status`) matches service, method, address and status text.
-- Chips `history-chip-all`, `history-chip-ok`, `history-chip-failed` in the group `aria-label="Show calls"`, each with `aria-pressed`. OK is status 0 only. Failed is a non-zero status, a fault, or a cancel.
+- Chips `history-chip-all`, `history-chip-ok`, `history-chip-failed` in the group `aria-label="Show calls"`, each with `aria-pressed`. A gRPC OK row is status 0 only. An HTTP OK row is a status below 400 (`httpVerdict` in `src/lib/http-status.ts`); `404` is Failed. Failed is also a non-zero gRPC status, a fault, a cancel, or an HTTP client error (`Request failed`, `Service unavailable`).
 - Rows. Columns are Time, Method, Status, Elapsed, Address. `history-row-open` is the row's native button. `history-row-rerun` is the icon button at its right edge.
 - Detail `[data-testid="history-detail"]` follows the focused row. It shows Request, Metadata (enabled rows only), Response or Messages, Headers, Trailers, and `history-detail-rerun`.
 

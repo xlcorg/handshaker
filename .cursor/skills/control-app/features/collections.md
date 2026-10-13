@@ -9,7 +9,7 @@ placeholder `Empty collection` is visible under the field.
 ## Sub-features
 
 - Filter the tree (`aria-label="collection-filter"`, placeholder `Filter collections…`).
-- New collection and new request from the `+` menu (`aria-label="new-item"`, then `new-collection` or `new-request`).
+- New collection, new gRPC request, and new HTTP request from the `+` menu (`aria-label="new-item"`, then `new-collection`, `new-request`, or `new-http-request`).
 - Open a collection overview (`aria-label="open-collection"`) with tabs Overview, Authorization, Variables, and `aria-label="close-overview"`.
 - Collapse / expand all, sort (`aria-label="sort-collections"`), pin (`aria-label="pin-collection"`).
 - Export / import from `aria-label="collection actions"`.
@@ -18,9 +18,9 @@ placeholder `Empty collection` is visible under the field.
 
 The sidebar is the left column under the titlebar, headed `COLLECTIONS`. On a
 fresh profile the only row is `My Collection` and the main pane says there is
-no active request. The `+` button at the top of the sidebar opens `New request`
-and `New collection`. Choosing `New collection` inserts a row already in
-rename, named `New collection`.
+no active request. The `+` button at the top of the sidebar opens `New request`,
+`New HTTP request`, and `New collection`. Choosing `New collection` inserts a
+row already in rename, named `New collection`.
 
 ## Driving it with Tauri WebDriver
 
