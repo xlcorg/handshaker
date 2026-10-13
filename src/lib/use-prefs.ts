@@ -38,6 +38,8 @@ export interface Prefs {
   historyDock: boolean;
   /** History dock size as a percent of the main column (resizable, persisted). */
   historyDockPanel: number;
+  /** Clear history asks before it deletes. Off clears on the first click. */
+  confirmClearHistory: boolean;
 }
 
 export const PREFS_DEFAULTS: Prefs = {
@@ -55,6 +57,7 @@ export const PREFS_DEFAULTS: Prefs = {
   maxMessageBytes: 16 * 1024 * 1024,
   historyDock: true,
   historyDockPanel: 28,
+  confirmClearHistory: true,
 };
 
 export const ZOOM_MIN = 0.5;

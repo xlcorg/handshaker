@@ -95,6 +95,7 @@ function DockBody({
   onOpen: HistoryDockProps["onOpen"];
 }) {
   const state = useHistory();
+  const [prefs] = usePrefs();
   const [filter, setFilter] = useState<HistoryFilter>({ text: "", chip: "all" });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [clearOpen, setClearOpen] = useState(false);
@@ -192,7 +193,10 @@ function DockBody({
               type="button"
               data-testid="history-clear"
               disabled={rows.length === 0}
-              onClick={() => setClearOpen(true)}
+              onClick={() => {
+                if (prefs.confirmClearHistory) setClearOpen(true);
+                else void historyStore.clear();
+              }}
               className="ml-auto flex h-6 flex-none items-center gap-1 rounded-md px-1.5 text-xs text-muted-foreground hover:bg-accent/40 hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
             >
               <Trash2 className="size-3" aria-hidden />

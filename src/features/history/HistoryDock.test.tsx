@@ -39,6 +39,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   historyStore.reset();
   setPref("historyDock", true);
+  setPref("confirmClearHistory", true);
   api.historyList.mockResolvedValue({ revision: 1, rows: [say, lookup, watch] });
   api.historyGet.mockImplementation((id) => Promise.resolve(callRecord({ id })));
 });
@@ -234,6 +235,22 @@ describe("HistoryDock clear", () => {
     expect(screen.getByTestId("history-dock-toggle")).toHaveTextContent(messages.history.dock.titleWithCount(0));
     expect(screen.queryByTestId("history-detail")).toBeNull();
     expect(screen.getByTestId("history-chip-failed")).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("history-clear")).toBeDisabled();
+  });
+
+  it("clears immediately when confirmation is off", async () => {
+    const user = userEvent.setup();
+    setPref("confirmClearHistory", false);
+    api.historyClear.mockResolvedValue({ revision: 2, rows: [] });
+    renderDock();
+    await rowButtons();
+
+    await user.click(screen.getByTestId("history-clear"));
+
+    expect(screen.queryByText(messages.history.clear.title)).toBeNull();
+    expect(api.historyClear).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText(messages.history.dock.empty)).toBeInTheDocument();
+    expect(screen.getByTestId("history-dock-toggle")).toHaveTextContent(messages.history.dock.titleWithCount(0));
     expect(screen.getByTestId("history-clear")).toBeDisabled();
   });
 });
