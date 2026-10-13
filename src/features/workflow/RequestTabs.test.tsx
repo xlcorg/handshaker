@@ -39,13 +39,18 @@ describe("RequestTabs", () => {
     expect(screen.getByLabelText("metadata-key-0")).toHaveValue("x");
   });
 
-  it("Auth pane renders the inherited service auth read-only", async () => {
+  it("Auth pane renders the inherited collection auth read-only", async () => {
     const user = userEvent.setup();
     const p = setup("env_var");
     renderTabs(<RequestTabs {...p} />);
     await user.click(screen.getByRole("tab", { name: /auth/i }));
     expect(screen.getByText(/env_var/i)).toBeInTheDocument();
     expect(screen.getByText(/TOK/)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Auth is inherited from the collection (configured on the Authorization tab).",
+      ),
+    ).toBeInTheDocument();
     // read-only: no editable inputs in the Auth pane
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
   });

@@ -9,8 +9,6 @@
 //! materializes through the async `TokenSource` seam — there is no sync
 //! `resolve_auth` for it.
 
-use std::collections::HashMap;
-
 use serde::{Deserialize, Serialize};
 
 use crate::error::CoreError;
@@ -26,9 +24,11 @@ pub fn auth_active_for_env(environments: &[String], active_env: Option<&str>) ->
     environments.is_empty() || active_env.is_some_and(|e| environments.iter().any(|x| x == e))
 }
 
-/// Pure pick: nearest active non-`None` config wins along request → collection.
-/// A config scoped to environments not including `active_env` is skipped (treated
-/// as absent). Returns the winning config by reference, or `None` (unauthenticated).
+/// Pure pick: nearest active config that carries credentials wins along
+/// request → collection. `SavedAuthConfig::None` adds no credentials and does
+/// not block the ancestor. A config scoped to environments not including
+/// `active_env` is skipped (treated as absent). Returns the winning config
+/// by reference, or `None` (unauthenticated).
 /// This is the single home of the auth-pick rule — UI asks via IPC, never re-derives.
 pub fn pick_auth_config<'a>(
     request_auth: &'a SavedAuthConfig,
@@ -100,27 +100,13 @@ pub struct OAuth2ClientCredentialsConfig {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum SavedAuthConfig {
-    /// Explicitly unauthenticated — stops inheritance (Postman "No Auth").
+    /// No credentials on this node. Does not stop inheritance: `pick_auth_config`
+    /// skips it and the collection config can still apply. A non-`None` request
+    /// config is what overrides the collection.
     None,
     EnvVar(EnvVarAuthConfig),
     #[serde(rename = "oauth2_client_credentials")]
     OAuth2ClientCredentials(OAuth2ClientCredentialsConfig),
-}
-
-/// Per-environment auth map carried by Collection / Folder / Request.
-///
-/// A key present (even `SavedAuthConfig::None`) means "this node defines auth for
-/// that env" and stops inheritance. A key absent means "inherit from the ancestor".
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AuthByEnv {
-    pub configs: HashMap<String, SavedAuthConfig>,
-}
-
-impl AuthByEnv {
-    /// The config this node defines for `env_name`, if any.
-    pub fn for_env(&self, env_name: &str) -> Option<&SavedAuthConfig> {
-        self.configs.get(env_name)
-    }
 }
 
 /// Read the secret named by `cfg.env_var` from the OS env and build `prefix + secret`.
@@ -166,15 +152,6 @@ mod tests {
             CoreError::Auth(m) => assert!(m.contains("not set")),
             other => panic!("expected Auth, got {other:?}"),
         }
-    }
-
-    #[test]
-    fn auth_by_env_serde_round_trip() {
-        let mut abe = AuthByEnv::default();
-        abe.configs.insert("prod".into(), SavedAuthConfig::None);
-        let json = serde_json::to_string(&abe).unwrap();
-        let back: AuthByEnv = serde_json::from_str(&json).unwrap();
-        assert_eq!(abe, back);
     }
 
     #[test]

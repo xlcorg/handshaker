@@ -36,9 +36,9 @@ The HTTP Auth tab is read-only (`AuthReadOnly`). Configuration is the collection
 
 Not implemented, so they are not checks: HTTP Basic, API key in the query string, authorization-code, PKCE, digest, SigV4.
 
-Collection auth applies only after the request is saved (`setDraftOrigin` stamps `collectionId`). An unsaved draft has `collectionId: null`. A saved request stores `auth: { kind: "none" }`. `pick_auth_config` skips `SavedAuthConfig::None` and falls through to the collection, so request-level `none` does not block collection auth. The overview copy says a request can override collection auth; the HTTP editor has no place to set request auth.
+Collection auth applies only after the request is saved (`setDraftOrigin` stamps `collectionId`). An unsaved draft has `collectionId: null`. A saved request stores `auth: { kind: "none" }`. `pick_auth_config` skips `SavedAuthConfig::None` and falls through to the collection, so request-level `none` does not block collection auth. There is no request-level auth editor. The overview says the collection config is applied to every request in the collection. A non-`none` request config would still win the pick; the UI never writes one.
 
-The Auth tab sentence `Auth is inherited from the service (configured in the service panel).` (`messages.ts` `authInherited`) is wrong for HTTP. The live drive still sees that sentence. Configuration is the collection Authorization tab.
+The Auth tab sentence is `Auth is inherited from the collection (configured on the Authorization tab).` (`messages.ts` `authInherited`). Configuration is the collection Authorization tab. The same sentence is on a gRPC request. The old service panel is gone.
 
 OAuth2 tokens are cached for the process. The cache key is token URL + client id + client secret + scopes. A second send with the same credentials does not POST `/token` again; the echo still receives `authorization: Bearer <access_token>`. Switching the active environment to different credentials does POST a new token.
 
@@ -171,5 +171,5 @@ Saved HTTP items in the collection JSON are flattened (`protocol`, `method`,
 - The toolbar Save is `aria-label="Save"`. The dialog confirm is the `Save` button inside the footer (`sm:justify-end`), and clicking the first `Save` in the DOM hits the toolbar behind the dialog.
 - An empty environment variable turns `{{baseUrl}}/echo` into `/echo`, and Send reports `Invalid URL: start it with http:// or https://`. The resolved preview is drawn next to the template, so `innerText` looks like a doubled path.
 - 4xx is a response value. Connection refused is the client error view titled `Service unavailable`.
-- Closing the environment editor unmounts the dialog and can leave `document.body` with `pointer-events: none` and `data-scroll-locked`. Later WebDriver clicks then fail with "element not interactable". `drive-http.py` prints `BUG scroll-lock stuck` and clears those two attributes. That is a harness workaround for an app bug, not the intended close behavior. See `environments.md`.
+- Closing the environment editor must leave `document.body` without `pointer-events: none` and without `data-scroll-locked`. `drive-http.py` raises if either remains. See `environments.md`.
 - `hsdrv.py launch` forwards `HS_BEARER` and `HS_APIKEY` into the app process only when they are set in the shell that runs `launch.sh`. A tmux `env` prefix does not inherit the rest of the parent environment. Confirm with `/proc/<appPid>/environ` from `session.json`.

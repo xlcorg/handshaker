@@ -217,7 +217,7 @@ def create_env(name: str, variables: dict[str, str]) -> None:
         dialog_open = evaljs("return !!document.querySelector(\"[role='dialog']\")")
         if f'"name": "{name}"' in raw or f'"name":"{name}"' in raw:
             if not dialog_open and pill_label() == name:
-                release_scroll_lock(f"after creating env {name}")
+                assert_scroll_lock_clear(f"after creating env {name}")
                 print(f"created env {name}", flush=True)
                 return
         time.sleep(0.25)
@@ -239,14 +239,8 @@ def pill_label() -> str:
     return value if isinstance(value, str) else ""
 
 
-def release_scroll_lock(where: str) -> None:
-    """The env editor unmounts on close and can leave Radix's scroll lock behind.
-
-    `document.body` keeps `style="pointer-events: none"` and
-    `data-scroll-locked`, so every later WebDriver click is "element not
-    interactable". Record that and clear the stuck inline style. This does
-    not fix the app; it only lets the rest of this drive reach the window.
-    """
+def assert_scroll_lock_clear(where: str) -> None:
+    """Fail if a closed dialog left Radix's scroll lock on document.body."""
     state = evaljs(
         """
         return JSON.stringify({
@@ -256,16 +250,8 @@ def release_scroll_lock(where: str) -> None:
         """
     )
     stuck = isinstance(state, dict) and (state.get("pe") == "none" or state.get("locked"))
-    if not stuck:
-        return
-    print(f"BUG scroll-lock stuck {where}: {state}", flush=True)
-    evaljs(
-        """
-        document.body.style.pointerEvents = "";
-        document.body.removeAttribute("data-scroll-locked");
-        return document.body.style.pointerEvents || "cleared";
-        """
-    )
+    if stuck:
+        raise DriveError(f"scroll lock still held {where}: {state}")
 
 
 def click_pill() -> None:
@@ -416,7 +402,7 @@ def save_request(name: str) -> None:
                 if item.get("type") == "request" and item.get("name") == name:
                     protocol = item.get("protocol") or (item.get("template") or {}).get("protocol")
                     if protocol == "http":
-                        release_scroll_lock("after save dialog")
+                        assert_scroll_lock_clear("after save dialog")
                         print(f"saved {name} in {path.name}", flush=True)
                         return
         time.sleep(0.25)
@@ -554,6 +540,11 @@ def configure_none() -> None:
     open_my_collection_auth()
     click('[aria-label="None"]')
     wait_auth(lambda auth: auth.get("kind") == "none")
+    if "Applied to every request in this collection." not in page_text():
+        raise DriveError(f"overview auth copy missing: {page_text()[:800]}")
+    if "can override" in page_text():
+        raise DriveError("overview still says a request can override collection auth")
+    shot("http-collection-auth")
     close_overview()
 
 
@@ -595,7 +586,7 @@ def main() -> None:
     if doctor.returncode != 0:
         raise DriveError(f"doctor failed before HTTP drive\n{doctor.stdout}\n{doctor.stderr}")
     print(doctor.stdout.strip(), flush=True)
-    release_scroll_lock("at HTTP drive start")
+    assert_scroll_lock_clear("at HTTP drive start")
 
     # App process must see the OS secrets. launch forwards them; check the recorded pid.
     app_pids = session().get("appPids") or []
@@ -692,8 +683,13 @@ def main() -> None:
     auth_text = page_text()
     if "kind: env_var" not in auth_text or "variable: HS_BEARER" not in auth_text:
         raise DriveError(f"auth tab did not show bearer: {auth_text[:800]}")
-    inherited = "Auth is inherited from the service (configured in the service panel)."
-    print(f"auth-tab-inherited-copy={inherited in auth_text}", flush=True)
+    inherited = "Auth is inherited from the collection (configured on the Authorization tab)."
+    if inherited not in auth_text:
+        raise DriveError(f"auth tab copy missing: {auth_text[:800]}")
+    if "service panel" in auth_text:
+        raise DriveError(f"auth tab still mentions the service panel: {auth_text[:800]}")
+    shot("http-auth-inherited")
+    print("pass auth tab copy", flush=True)
     view = send_and_wait()
     if "200" not in view["meta"]:
         raise DriveError(f"bearer meta: {view['meta']!r}\n{view['text'][:800]}")

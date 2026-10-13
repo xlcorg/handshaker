@@ -22,7 +22,7 @@ export const messages = {
       newWorkflow: "New workflow",
     },
     requestTabs: {
-      authInherited: "Auth is inherited from the service (configured in the service panel).",
+      authInherited: "Auth is inherited from the collection (configured on the Authorization tab).",
     },
     tls: {
       // Tri-state address-bar lock. `override` is the per-request choice; `defaultTls`
@@ -168,7 +168,7 @@ export const messages = {
       },
       auth: {
         title: "Authorization",
-        desc: "A single auth config applied to this collection's requests (a request can override it).",
+        desc: "Applied to every request in this collection.",
         /** Auth-kind toggle options. */
         kinds: {
           none: "None",

@@ -104,6 +104,13 @@ describe("CollectionOverview", () => {
     );
   });
 
+  it("the Authorization tab says collection auth applies to its requests", async () => {
+    r(<CollectionOverview {...props()} />);
+    fireEvent.click(screen.getByText("Authorization"));
+    await act(async () => {});
+    expect(screen.getByText("Applied to every request in this collection.")).toBeInTheDocument();
+  });
+
   it("the Authorization tab persists a chosen auth via collectionSetNodeAuth", async () => {
     r(<CollectionOverview {...props()} />);
     fireEvent.click(screen.getByText("Authorization"));

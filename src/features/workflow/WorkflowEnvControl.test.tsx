@@ -220,4 +220,18 @@ describe("WorkflowEnvControl", () => {
     expect(stopProp).not.toHaveBeenCalled();
     expect(ev.defaultPrevented).toBe(false);
   });
+
+  it("closing the environment editor releases the body scroll lock", async () => {
+    const user = userEvent.setup();
+    render(<WorkflowEnvControl />);
+    await user.click(await screen.findByText("No environment"));
+    await user.click(await screen.findByLabelText("New environment"));
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(document.body.style.pointerEvents).toBe("");
+    expect(document.body.hasAttribute("data-scroll-locked")).toBe(false);
+    await user.click(screen.getByText("No environment"));
+    expect(await screen.findByLabelText("New environment")).toBeInTheDocument();
+  });
 });

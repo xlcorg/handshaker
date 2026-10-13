@@ -135,30 +135,68 @@ export interface EnvEditorDialogProps {
   onRequestDelete?: (name: string) => void;
   /**
    * Switch the editor subject to another persisted env. Does not change the
-   * workflow's active env. Parent remounts this dialog (`key={originalName}`).
+   * workflow's active env.
    */
   onSwitch?: (name: string) => void;
 }
 
-export function EnvEditorDialog({
-  open,
-  originalName,
+type EnvDraftSeed = {
+  originalName: string | null;
+  name: string;
+  vars: Record<string, string>;
+  color: string | null;
+};
+
+function draftSeed(originalName: string | null, envs: EnvironmentIpc[]): EnvDraftSeed {
+  return {
+    originalName,
+    name: originalName ?? "",
+    vars: loadVars(originalName, envs),
+    color: loadColor(originalName, envs),
+  };
+}
+
+export function EnvEditorDialog(props: EnvEditorDialogProps) {
+  return (
+    <Dialog open={props.open} onOpenChange={props.onOpenChange}>
+      <DialogContent className="flex max-h-[85vh] min-h-[70vh] w-full max-w-[min(90vw,960px)] flex-col sm:max-w-[min(90vw,960px)]">
+        <EnvEditorBody
+          key={props.originalName ?? "__new__"}
+          seed={draftSeed(props.originalName, props.envs)}
+          activeEnv={props.activeEnv}
+          envs={props.envs}
+          onOpenChange={props.onOpenChange}
+          onSaved={props.onSaved}
+          onRequestDelete={props.onRequestDelete}
+          onSwitch={props.onSwitch}
+        />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EnvEditorBody({
+  seed,
   activeEnv,
   envs,
   onOpenChange,
   onSaved,
   onRequestDelete,
   onSwitch,
-}: EnvEditorDialogProps) {
+}: {
+  seed: EnvDraftSeed;
+  activeEnv: string | null;
+  envs: EnvironmentIpc[];
+  onOpenChange: (open: boolean) => void;
+  onSaved: (savedName: string, becameActive: boolean) => void;
+  onRequestDelete?: (name: string) => void;
+  onSwitch?: (name: string) => void;
+}) {
+  const originalName = seed.originalName;
   const isCreate = originalName === null;
-  const [name, setName] = useState<string>(originalName ?? "");
-  // Load variables synchronously at mount so the (uncontrolled) VariablesTable seeds
-  // its rows from the correct value on its first render. Both callers mount this dialog
-  // fresh per open (`{editor && <EnvEditorDialog open .../>}`), so a mount-time
-  // initializer is sufficient — and, running once, it also can't be clobbered by a
-  // background parent refetch of `envs`.
-  const [vars, setVars] = useState<Record<string, string>>(() => loadVars(originalName, envs));
-  const [pickedColor, setPickedColor] = useState<string | null>(() => loadColor(originalName, envs));
+  const [name, setName] = useState(seed.name);
+  const [vars, setVars] = useState(seed.vars);
+  const [pickedColor, setPickedColor] = useState(seed.color);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [colorOpen, setColorOpen] = useState(false);
@@ -248,152 +286,147 @@ export function EnvEditorDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[85vh] min-h-[70vh] w-full max-w-[min(90vw,960px)] flex-col sm:max-w-[min(90vw,960px)]">
-        <DialogHeader>
-          <div className={cn("flex items-center justify-between gap-2", showSwitcher && "pr-8")}>
-            <DialogTitle>{isCreate ? m.createTitle : m.editTitle}</DialogTitle>
-            {showSwitcher && (
-              <EnvSubjectMenu
-                envs={envs}
-                originalName={originalName}
-                subjectEnv={subjectEnv}
-                onPick={requestSwitch}
-                disabled={busy}
-              />
-            )}
-          </div>
-          <DialogDescription className="sr-only">
-            {isCreate ? m.createDescription : m.editDescription}
-          </DialogDescription>
-        </DialogHeader>
-
-        {/* Identity row: name + color (pinned) */}
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-2">
-            <Input
-              id="env-name"
-              aria-label={m.nameAria}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className={cn("font-mono text-sm", nameIsDuplicate && "border-destructive")}
-              aria-invalid={nameIsDuplicate}
-              autoFocus
-              placeholder={m.namePlaceholder}
-            />
-            <Popover open={colorOpen} onOpenChange={setColorOpen}>
-              <PopoverTrigger asChild>
-                <button
-                  type="button"
-                  aria-label={m.colorAria}
-                  className="flex size-9 shrink-0 items-center justify-center rounded-md border border-input"
-                >
-                  <span
-                    aria-hidden
-                    className="size-5 rounded-full"
-                    style={{ backgroundColor: colorHex(effectiveColor) }}
-                  />
-                </button>
-              </PopoverTrigger>
-              <PopoverContent align="end" className="w-auto p-2">
-                <div className="flex max-w-[136px] flex-wrap gap-1.5">
-                  {ENV_COLORS.map((c) => {
-                    const selected = effectiveColor === c.key;
-                    return (
-                      <button
-                        key={c.key}
-                        type="button"
-                        aria-label={c.label}
-                        aria-pressed={selected}
-                        onClick={() => {
-                          setPickedColor(c.key);
-                          setColorOpen(false);
-                        }}
-                        className={cn(
-                          "size-6 rounded-full transition focus:outline-none",
-                          selected
-                            ? "ring-2 ring-foreground ring-offset-2 ring-offset-background"
-                            : "hover:ring-2 hover:ring-muted-foreground hover:ring-offset-2 hover:ring-offset-background",
-                        )}
-                        style={{ backgroundColor: c.hex }}
-                      />
-                    );
-                  })}
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
-          {nameIsDuplicate && (
-            <p className="text-xs text-destructive mt-1">{m.nameDuplicate}</p>
-          )}
-        </div>
-
-        {/* Variables (scrolls internally) */}
-        <div className="min-h-0 flex-1 space-y-1.5 overflow-auto">
-          <Label>{m.variables}</Label>
-          <VariablesTable
-            value={vars}
-            onChange={setVars}
-            resolveRow={resolveRow}
-            resolveKey={JSON.stringify(vars)}
-          />
-        </div>
-
-        {error && (
-          <div className="border-l-2 border-destructive bg-destructive/5 px-3 py-1.5 text-xs text-destructive">
-            {error}
-          </div>
-        )}
-
-        {pendingSwitch !== null && (
-          // The draft stays visible while the user decides.
-          <div
-            role="group"
-            aria-label={m.discardTitle}
-            className="flex flex-wrap items-center justify-between gap-3 border-l-2 border-destructive bg-destructive/5 px-3 py-2"
-          >
-            <div className="min-w-0">
-              <p className="text-sm font-medium">{m.discardTitle}</p>
-              <p className="text-xs text-muted-foreground">{m.discardDescription}</p>
-            </div>
-            <div className="flex gap-2">
-              <Button type="button" variant="ghost" size="sm" onClick={() => setPendingSwitch(null)}>
-                {m.cancel}
-              </Button>
-              <Button
-                type="button"
-                variant="destructive"
-                size="sm"
-                onClick={() => {
-                  if (!onSwitch) return;
-                  onSwitch(pendingSwitch);
-                }}
-              >
-                {m.discard}
-              </Button>
-            </div>
-          </div>
-        )}
-
-        <DialogFooter>
-          {!isCreate && onRequestDelete && (
-            <Button
-              variant="ghost"
-              onClick={() => onRequestDelete(originalName as string)}
+    <>
+      <DialogHeader>
+        <div className={cn("flex items-center justify-between gap-2", showSwitcher && "pr-8")}>
+          <DialogTitle>{isCreate ? m.createTitle : m.editTitle}</DialogTitle>
+          {showSwitcher && (
+            <EnvSubjectMenu
+              envs={envs}
+              originalName={originalName}
+              subjectEnv={subjectEnv}
+              onPick={requestSwitch}
               disabled={busy}
-              className="mr-auto text-destructive hover:bg-destructive/10 hover:text-destructive"
-            >
-              {m.delete}
-            </Button>
+            />
           )}
-          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>
-            {m.cancel}
+        </div>
+        <DialogDescription className="sr-only">
+          {isCreate ? m.createDescription : m.editDescription}
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="space-y-1.5">
+        <div className="flex items-center gap-2">
+          <Input
+            id="env-name"
+            aria-label={m.nameAria}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className={cn("font-mono text-sm", nameIsDuplicate && "border-destructive")}
+            aria-invalid={nameIsDuplicate}
+            autoFocus
+            placeholder={m.namePlaceholder}
+          />
+          <Popover open={colorOpen} onOpenChange={setColorOpen}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                aria-label={m.colorAria}
+                className="flex size-9 shrink-0 items-center justify-center rounded-md border border-input"
+              >
+                <span
+                  aria-hidden
+                  className="size-5 rounded-full"
+                  style={{ backgroundColor: colorHex(effectiveColor) }}
+                />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-auto p-2">
+              <div className="flex max-w-[136px] flex-wrap gap-1.5">
+                {ENV_COLORS.map((c) => {
+                  const selected = effectiveColor === c.key;
+                  return (
+                    <button
+                      key={c.key}
+                      type="button"
+                      aria-label={c.label}
+                      aria-pressed={selected}
+                      onClick={() => {
+                        setPickedColor(c.key);
+                        setColorOpen(false);
+                      }}
+                      className={cn(
+                        "size-6 rounded-full transition focus:outline-none",
+                        selected
+                          ? "ring-2 ring-foreground ring-offset-2 ring-offset-background"
+                          : "hover:ring-2 hover:ring-muted-foreground hover:ring-offset-2 hover:ring-offset-background",
+                      )}
+                      style={{ backgroundColor: c.hex }}
+                    />
+                  );
+                })}
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
+        {nameIsDuplicate && (
+          <p className="text-xs text-destructive mt-1">{m.nameDuplicate}</p>
+        )}
+      </div>
+
+      <div className="min-h-0 flex-1 space-y-1.5 overflow-auto">
+        <Label>{m.variables}</Label>
+        <VariablesTable
+          value={vars}
+          onChange={setVars}
+          resolveRow={resolveRow}
+          resolveKey={JSON.stringify(vars)}
+        />
+      </div>
+
+      {error && (
+        <div className="border-l-2 border-destructive bg-destructive/5 px-3 py-1.5 text-xs text-destructive">
+          {error}
+        </div>
+      )}
+
+      {pendingSwitch !== null && (
+        <div
+          role="group"
+          aria-label={m.discardTitle}
+          className="flex flex-wrap items-center justify-between gap-3 border-l-2 border-destructive bg-destructive/5 px-3 py-2"
+        >
+          <div className="min-w-0">
+            <p className="text-sm font-medium">{m.discardTitle}</p>
+            <p className="text-xs text-muted-foreground">{m.discardDescription}</p>
+          </div>
+          <div className="flex gap-2">
+            <Button type="button" variant="ghost" size="sm" onClick={() => setPendingSwitch(null)}>
+              {m.cancel}
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={() => {
+                if (!onSwitch) return;
+                onSwitch(pendingSwitch);
+              }}
+            >
+              {m.discard}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <DialogFooter>
+        {!isCreate && onRequestDelete && (
+          <Button
+            variant="ghost"
+            onClick={() => onRequestDelete(originalName as string)}
+            disabled={busy}
+            className="mr-auto text-destructive hover:bg-destructive/10 hover:text-destructive"
+          >
+            {m.delete}
           </Button>
-          <Button onClick={handleSave} disabled={!canSave || busy}>
-            {busy ? m.saving : isCreate ? m.create : m.save}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        )}
+        <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>
+          {m.cancel}
+        </Button>
+        <Button onClick={handleSave} disabled={!canSave || busy}>
+          {busy ? m.saving : isCreate ? m.create : m.save}
+        </Button>
+      </DialogFooter>
+    </>
   );
 }

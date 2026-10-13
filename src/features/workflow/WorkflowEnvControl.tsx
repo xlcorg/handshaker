@@ -27,8 +27,14 @@ export function WorkflowEnvControl() {
   // so imported envs surface without a remount.
   const envRevision = useEnvRevision();
   const [envs, setEnvs] = useState<EnvironmentIpc[]>([]);
-  const [editor, setEditor] = useState<{ originalName: string | null } | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editorName, setEditorName] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+
+  function openEditor(originalName: string | null) {
+    setEditorName(originalName);
+    setEditorOpen(true);
+  }
 
   const refreshEnvs = useCallback(async () => {
     try {
@@ -98,12 +104,12 @@ export function WorkflowEnvControl() {
       e.stopPropagation();
       // The editor is already open. Replacing its subject here would drop the
       // draft. Switching belongs to the in-dialog control, which asks first.
-      if (editor !== null) return;
-      setEditor({ originalName: activeEnv });
+      if (editorOpen) return;
+      openEditor(activeEnv);
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [activeEnv, editor]);
+  }, [activeEnv, editorOpen]);
 
   return (
     <>
@@ -126,34 +132,29 @@ export function WorkflowEnvControl() {
           </button>
         }
         onActiveSet={(next) => workflowStore.setWorkflowEnv(next)}
-        onEditEnv={(name) => setEditor({ originalName: name })}
-        onNewEnv={() => setEditor({ originalName: null })}
+        onEditEnv={openEditor}
+        onNewEnv={() => openEditor(null)}
         onReorder={handleReorder}
       />
-      {editor && (
-        <EnvEditorDialog
-          key={editor.originalName ?? "__new__"}
-          open={true}
-          originalName={editor.originalName}
-          activeEnv={activeEnv}
-          envs={envs}
-          onSwitch={(name) => setEditor({ originalName: name })}
-          onOpenChange={(open) => {
-            if (!open) setEditor(null);
-          }}
-          onSaved={async (savedName, becameActive) => {
-            await refreshEnvs();
-            // Env contents changed — re-resolve any preview bound to the active env
-            // (e.g. the collection-variables editor, which resolves via the backend).
-            bumpEnvRevision();
-            if (becameActive) workflowStore.setWorkflowEnv(savedName);
-          }}
-          onRequestDelete={(name) => {
-            setEditor(null);
-            setDeleteTarget(name);
-          }}
-        />
-      )}
+      <EnvEditorDialog
+        open={editorOpen}
+        originalName={editorName}
+        activeEnv={activeEnv}
+        envs={envs}
+        onSwitch={openEditor}
+        onOpenChange={(open) => {
+          if (!open) setEditorOpen(false);
+        }}
+        onSaved={async (savedName, becameActive) => {
+          await refreshEnvs();
+          bumpEnvRevision();
+          if (becameActive) workflowStore.setWorkflowEnv(savedName);
+        }}
+        onRequestDelete={(name) => {
+          setEditorOpen(false);
+          setDeleteTarget(name);
+        }}
+      />
       <ConfirmDeleteEnvDialog
         target={deleteTarget}
         activeEnv={activeEnv}
