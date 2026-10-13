@@ -891,6 +891,18 @@ export const commands = {
       else return { status: "error", error: e as any };
     }
   },
+  /**
+   * Delete every recorded call and return the page after it. An empty log returns the
+   * current page.
+   */
+  async historyClear(): Promise<Result<HistoryPageIpc, IpcError>> {
+    try {
+      return { status: "ok", data: await TAURI_INVOKE("history_clear") };
+    } catch (e) {
+      if (e instanceof Error) throw e;
+      else return { status: "error", error: e as any };
+    }
+  },
 };
 
 /** user-defined events **/

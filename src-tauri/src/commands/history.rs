@@ -32,3 +32,11 @@ pub async fn history_record(
     let page = state.history_store.append(record.into_core()?)?;
     Ok(HistoryPageIpc::from_core(page))
 }
+
+/// Delete every recorded call and return the page after it. An empty log returns the
+/// current page.
+#[tauri::command]
+#[specta::specta]
+pub async fn history_clear(state: State<'_, AppState>) -> Result<HistoryPageIpc, IpcError> {
+    Ok(HistoryPageIpc::from_core(state.history_store.clear()?))
+}

@@ -92,6 +92,10 @@ again with `HANDSHAKER_SEED_DATA` set to it. `launch.sh` still creates a fresh
 run directory, then copies the seed in before the binary starts. The dock
 comes back with the same rows, and `history/index.json` is unchanged.
 
+## Clear
+
+The expanded header has `[data-testid="history-clear"]` labeled `Clear history`, disabled when the ready list is empty. Clicking it opens an alert dialog titled `Clear call history?`. The confirm button is `Delete`. After confirm the dock shows `Calls you send from the editor appear here.` and `History · 0`, and `$XDG_DATA_HOME/dev.handshaker.app/history` is absent. Cancel leaves the rows and the files.
+
 ## Gotchas
 
 - Rows are newest first. Assert on the first row, not on a position you computed.

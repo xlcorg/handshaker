@@ -542,6 +542,12 @@ export const messages = {
       placeholder: "Filter by service, method, address or status",
       chipsLabel: "Show calls",
     },
+    clear: {
+      button: "Clear history",
+      title: "Clear call history?",
+      description:
+        "Every recorded call is deleted from this device. This cannot be undone. Collections, environments, and saved requests stay.",
+    },
     chip: { all: "All", ok: "OK", failed: "Failed" },
     column: { time: "Time", method: "Method", status: "Status", elapsed: "Elapsed", address: "Address" },
     row: {
@@ -573,6 +579,7 @@ export const messages = {
     toast: {
       unavailable: "This call's details are no longer available.",
       recordFailed: "Couldn't save this call to history.",
+      clearFailed: "Couldn't clear call history.",
     },
   },
   http: {

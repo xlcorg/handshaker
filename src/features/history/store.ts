@@ -60,12 +60,22 @@ export const historyStore = {
       toast.error(messages.history.toast.recordFailed);
     }
   },
+  /** Delete every recorded call and apply the page after it. Never rejects: a failed
+   *  clear toasts and leaves the page. */
+  async clear(): Promise<void> {
+    try {
+      apply(await ipc.historyClear());
+    } catch {
+      toast.error(messages.history.toast.clearFailed);
+    }
+  },
   /** A record by id. Never rejects: `null` means evicted, never recorded, or unreadable. */
   async load(id: string): Promise<CallRecordIpc | null> {
     const hit = records.get(id);
     if (hit) return hit;
     try {
       const record = await ipc.historyGet(id);
+      if (state.phase === "ready" && !state.rows.some((row) => row.id === id)) return null;
       if (record) records.set(id, record);
       return record;
     } catch {

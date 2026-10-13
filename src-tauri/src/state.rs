@@ -237,6 +237,30 @@ mod tests {
         assert!(state2.take_recovered().is_empty());
     }
 
+    #[test]
+    fn history_clear_leaves_the_other_stores() {
+        let dir = tempfile::tempdir().unwrap();
+        let record = crate::ipc::history::tests::record();
+        let state = AppState::load(dir.path()).unwrap();
+        state
+            .env_store
+            .upsert(Environment { name: "prod".into(), variables: Default::default(), color: None })
+            .unwrap();
+        state.history_store.append(record).unwrap();
+        state.history_store.clear().unwrap();
+
+        drop(state);
+        let state2 = AppState::load(dir.path()).unwrap();
+        assert!(state2.history_store.list().rows.is_empty());
+        assert_eq!(
+            state2.env_store.list(),
+            vec![Environment { name: "prod".into(), variables: Default::default(), color: None }]
+        );
+        assert!(dir.path().join("contracts").is_dir());
+        assert!(!dir.path().join("history").exists());
+        assert!(!dir.path().join("history.clearing").exists());
+    }
+
     #[tokio::test]
     async fn stale_active_env_is_dropped_on_reload() {
         let dir = tempfile::tempdir().unwrap();
