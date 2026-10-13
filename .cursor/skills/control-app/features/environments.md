@@ -57,6 +57,13 @@ together with the pill text.
 - `No environment` is a menu row and the pill label. After the menu opens, an
   xpath of `contains(., "No environment")` matches both. Click the pill before
   the menu exists, then use `aria-label="New environment"` for the `+`.
+- The menu heading is CSS `uppercase`, so `innerText` is `ENVIRONMENTS`.
+  Environment rows are `//*[@data-env-row="NAME"]//*[@role="menuitem"]`.
+  A row xpath that only matches `menuitem` hits the row and its edit control.
+- `onSaved` is not awaited. `environments.json` and `active_env.json` can
+  exist before the pill text changes. Poll the pill.
+- A full export includes environments. A one-collection export writes
+  `environments: []`. See `collections.md`.
 - Duplicate names surface the inline error `name already exists` and do not write.
 - Variables are edited in the same dialog (`aria-label` like `delete variable <key>`). An empty key is kept in the table until save.
 - The active name is also written to `active_env.json` in the data dir. The pill follows the active workflow, which starts as `workflow-1`.

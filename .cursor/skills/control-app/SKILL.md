@@ -3,9 +3,9 @@ name: control-app
 description: >-
   Drive the Handshaker desktop gRPC client (Tauri window, Linux WebKitGTK
   via tauri-driver). Use when checking that the real window starts, or when
-  verifying collections, a unary call, environments, a streaming RPC,
-  settings, the Ctrl+Tab recent switcher, call history, or an HTTP request
-  against the running app.
+  verifying collections, collection export and import, a unary call,
+  environments, a streaming RPC, settings, the Ctrl+Tab recent switcher,
+  call history, or an HTTP request against the running app.
 ---
 
 # control-app
@@ -137,6 +137,14 @@ action:
 .cursor/skills/control-app/scripts/drive-collections.sh
 ```
 
+Collection export and import, including a send from the imported collection,
+is a separate script. Steps and the file format are in
+`features/collections.md`.
+
+```sh
+python3 .cursor/skills/control-app/scripts/drive-transfer.py
+```
+
 It clicks `[aria-label="new-item"]`, then `[aria-label="new-collection"]`,
 waits until `[aria-label="rename-input"]` has value `New collection`, and
 checks that `$XDG_DATA_HOME/dev.handshaker.app/collections/<id>.json` is a new
@@ -204,10 +212,12 @@ written under `evidence/` remains.
 | `scripts/hsdrv.py` | `.cursor/skills/control-app/scripts/hsdrv.py screenshot <name>` |
 | `scripts/http-echo.py` | `.cursor/skills/control-app/scripts/http-echo.py` |
 | `scripts/drive-http.py` | `.cursor/skills/control-app/scripts/drive-http.py` |
+| `scripts/drive-transfer.py` | `python3 .cursor/skills/control-app/scripts/drive-transfer.py` |
 
-All seven files are executable. `hsdrv.py` is the implementation; the shell
+All eight files are executable. `hsdrv.py` is the implementation; the shell
 scripts call it. `http-echo.py` is the local HTTP echo used by
-`features/http.md`. `drive-http.py` assumes `launch.sh` (with `HS_BEARER` and
+`features/http.md` and by `drive-transfer.py`. `drive-http.py` assumes `launch.sh` (with `HS_BEARER` and
 `HS_APIKEY` exported) and `doctor.sh` already succeeded and that the echo is
 already listening. It copies each screenshot into the run's `evidence/`
-directory and to `/opt/cursor/artifacts/`.
+directory and to `/opt/cursor/artifacts/`. `drive-transfer.py` does its own
+launch, doctor, and cleanup, and copies the same way.

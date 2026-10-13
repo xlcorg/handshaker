@@ -40,11 +40,12 @@ Click it. The right-hand pane leaves `Awaiting first call` and shows `OK`.
 .cursor/skills/control-app/scripts/hsdrv.py click "[aria-label='draft-address']"
 ```
 
-The address input is content-managed by `VarHighlightInput`. Set it with a
-native value setter and an input event, then blur so React commits:
+The address input is `VarHighlightInput`. Set it with a native value setter
+and an `input` event. That event calls `onChange` and commits the address.
+`blur` only clears the suggestion list.
 
 ```sh
-.cursor/skills/control-app/scripts/hsdrv.py eval 'const el=document.querySelector("[aria-label=draft-address]"); const proto=Object.getPrototypeOf(el); const set=Object.getOwnPropertyDescriptor(proto,"value").set; set.call(el,"127.0.0.1:50051"); el.dispatchEvent(new Event("input",{bubbles:true})); el.blur(); return el.value'
+.cursor/skills/control-app/scripts/hsdrv.py eval 'const el=document.querySelector("[aria-label=draft-address]"); const proto=Object.getPrototypeOf(el); const set=Object.getOwnPropertyDescriptor(proto,"value").set; set.call(el,"127.0.0.1:50051"); el.dispatchEvent(new Event("input",{bubbles:true})); return el.value'
 .cursor/skills/control-app/scripts/hsdrv.py screenshot unary-address
 ```
 
@@ -77,7 +78,8 @@ Handshaker session.
 ## Gotchas
 
 - `▶ Send` is `disabled` until `step.method` is non-empty. Clicking it early does nothing.
-- A new draft's TLS state is inherit, and a new collection's `default_tls` is false, so inherit already means plaintext. Clicking the lock cycles inherit → on → off. On will try TLS against the echo server and fail.
+- A new draft's TLS state is inherit, and a new collection's `default_tls` is false, so inherit already means plaintext. An unbound draft has no collection, and inherit is plaintext there too. `nextTlsState` cycles inherit → on → off → inherit. On will try TLS against the echo server and fail.
+- The unedited body template is `{\n}`. `test.Echo/Send` then echoes an empty id (`echo: ` with nothing after the space). `echo: hi` requires a body whose `id` is `hi`. The template still returns `OK` and an `echoed` field.
 - The method list is empty until reflection returns. The picker footer is the status, not a second address-bar button.
 - Server-streaming `ServerStream` still uses `▶ Send`. `▶ Open` is only for client-streaming and bidi. Those are the streaming feature.
 - The Send button's tooltip is a portal; the visible label is `▶ Send`. Match that label. A button whose text merely contains `Send` is also the method picker once the chosen method is `Send`, and clicking it reopens the list.
