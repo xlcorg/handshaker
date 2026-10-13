@@ -1,8 +1,10 @@
 # Call history
 
-Every Focus call that reaches the wire leaves one row in the History dock at
-the bottom of the main column, newest first. The end state that proves this
-works: after a unary Send to `test.Echo/Send`, the first
+A unary Send that finishes leaves one row in the History dock at the bottom
+of the main column, newest first. A cancel (`res.kind === "cancelled"`) writes
+no row. A stream row is recorded after Opened, or as a refused fault when the
+connection fails before open. The end state that proves the dock works: after
+a unary Send to `test.Echo/Send`, the first
 `[data-testid="history-row-open"]` button reads `Echo.Send` and `OK`, and
 `$XDG_DATA_HOME/dev.handshaker.app/history/` holds one `<uuid>.json` per row
 plus `index.json`.

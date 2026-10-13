@@ -11,8 +11,8 @@ placeholder `Empty collection` is visible under the field.
 - Filter the tree (`aria-label="collection-filter"`, placeholder `Filter collections…`).
 - New collection, new gRPC request, and new HTTP request from the `+` menu (`aria-label="new-item"`, then `new-collection`, `new-request`, or `new-http-request`).
 - Open a collection overview (`aria-label="open-collection"`) with tabs Overview, Authorization, Variables, and `aria-label="close-overview"`.
-- Collapse / expand all, sort (`aria-label="sort-collections"`), pin (`aria-label="pin-collection"`).
-- Export / import from `aria-label="collection actions"`.
+- Collapse / expand all, sort (`aria-label="sort-collections"`), pin. The pin button is `aria-label="pin-collection"` while unpinned and `aria-label="unpin-collection"` while pinned.
+- Export and import of one JSON format, `handshaker-export`. Sidebar `aria-label="collection actions"`, the collection row menu, and Settings → Import / Export. `scripts/drive-transfer.py` drives all of those paths.
 
 ## How to get to it (user POV)
 
@@ -55,10 +55,65 @@ The main pane then shows `[aria-label="draft-address"]` (placeholder
 `host:port`) and a `Save` button (`aria-label="Save"`). The address bar Send
 button reads `▶ Send` and stays disabled until a method is chosen.
 
+Export and import:
+
+```sh
+python3 .cursor/skills/control-app/scripts/drive-transfer.py
+```
+
+`drive-transfer.py` starts and stops `scripts/http-echo.py`. It does not start the gRPC echo server.
+
+The only format is an envelope written by `persist`. `schema_version` is 1.
+`data.kind` is `handshaker-export`. `data.collections` and `data.environments`
+follow. Postman, Insomnia, OpenAPI, HAR, and cURL are not import paths.
+
+| Entry | What the file contains |
+| --- | --- |
+| Sidebar `aria-label="collection actions"`, then `aria-label="export"` | Every collection and every environment. Default name `handshaker-export.json`. |
+| Collection row `aria-label="More options"`, then menuitem `Export` | That collection. `environments` is `[]`. Default name is the collection name plus `.json`. The More options button is `opacity-0` until hover. WebDriver can still click it. The collection row's button is the following sibling of `div[data-node-id="<id>"]`. |
+| Settings rail button `Import / Export`, then `Export` | Same bytes as the sidebar all-export. |
+| Sidebar `aria-label="import"` | Opens the file, then `Import collections?`. |
+| Settings `Import` | Same confirm dialog. |
+
+The native save and open dialogs are GTK windows. WebDriver does not see them.
+`drive-transfer.py` proves `app_version` travels as `ipc://localhost/app_version`,
+then wraps `window.fetch` so only `plugin:dialog` save and open return a path.
+`bundle_export`, `bundle_import_inspect`, and `bundle_import_apply` stay real.
+The confirm dialog, the toasts, and the catalog reload stay real.
+
+Confirm title is `Import collections?`. Buttons are `Cancel` and `Import`.
+The body is `N collections and M environments will be imported.` When ids or
+environment names already exist it adds `K already exist and will be updated.`
+It always ends with `Nothing is deleted.` Export toast is `Exported`. Import
+toast is `Imported — A added, U updated`. The toaster duration is 1500ms.
+Mark existing `[data-sonner-toast]` nodes before the click, or the next wait
+sees a toast that already expired.
+
+A clean load with no collection files seeds `My Collection` before the import
+appears, so the sidebar shows that row plus the imported names. Display sort
+defaults to alpha. Item order inside a collection is the array order in the file.
+
+Corrupt JSON toasts `parse <path>: ...` and does not write. Kind `other`
+toasts `not a Handshaker export file (kind \`other\`)`. `schema_version` 2
+toasts `unsupported schema v2 in <path> (this build supports up to v1)`.
+
+Same collection name with a new id is kept as a second row. Same collection
+id is an update. `collection_store.upsert` writes the collection from the
+file over the local one. Environments merge by name. Imported keys replace
+local keys. A color on the import replaces the local color. An import with
+no color leaves the local color. New environments are appended. The active
+environment is unchanged. Nothing outside the file is removed.
+
+The sentence `Nothing is deleted.` is what the dialog shows. It does not
+describe collection items that exist only locally. Those items are absent
+from the upserted file, so a reimport of an older export drops them. Do not
+treat a byte-identical reimport as proof that local-only requests survive.
+
 ## Gotchas
 
-- The first launch of an empty data dir writes `My Collection` by itself. A
-  successful create is a second file, not the first.
+- Any load whose collection list is empty writes `My Collection`
+  (`useCatalogTree` reload). A successful create on that profile is a second
+  file. A seeded non-empty profile does not get another `My Collection`.
 - The new row is focused in `[aria-label="rename-input"]`. Blur with the same
   text cancels edit mode and keeps the name. Blur with different text renames
   it. Read the input before clicking anywhere else.
@@ -66,8 +121,8 @@ button reads `▶ Send` and stays disabled until a method is chosen.
   persisted `expanded` flag is still false; the tree opens the row only
   because it is being edited, which is why `Empty collection` shows.
 - Import and export call the native file dialog (`@tauri-apps/plugin-dialog`).
-  That dialog is outside the web view, so WebDriver does not see it. Drive
-  create / rename / filter, which stay in the page.
+  Drive them with `drive-transfer.py`, which stubs only that dialog. Create,
+  rename, and filter stay in the page and do not need the stub.
 - Collection JSON is one file per id under `collections/`. Sort order and the
   active request live in `ui-state.json` next to that directory, not in the
   collection file.
