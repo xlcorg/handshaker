@@ -1,9 +1,6 @@
 import { useEffect, useState } from "react";
 
 export type SplitDir = "horizontal" | "vertical";
-export type GrpcIconStyle = "solid" | "letter" | "outline" | "circle";
-/** gRPC-icon preference: any of the visual styles, or `"off"` to hide the icon entirely. */
-export type GrpcIconPref = GrpcIconStyle | "off";
 /** How a service group header is visually separated from its methods in the MethodPicker dropdown. */
 export type MethodGroupStyle = "band" | "tree" | "weight" | "card" | "bar" | "chip" | "zebra";
 /** Color palette for `{{var}}` token highlighting (resolved vs unresolved/cycle).
@@ -23,7 +20,6 @@ export interface Prefs {
   zoom: number;
   /** Per-request deadline in ms, applied backend-side via tokio timeout. */
   requestTimeoutMs: number;
-  grpcIcon: GrpcIconPref;
   /** Service-group header style in the MethodPicker dropdown. */
   methodGroupStyle: MethodGroupStyle;
   /** Color palette for `{{var}}` token highlighting in editors. */
@@ -49,7 +45,6 @@ export const PREFS_DEFAULTS: Prefs = {
   split: "vertical",
   zoom: 1,
   requestTimeoutMs: 30000,
-  grpcIcon: "letter",
   methodGroupStyle: "zebra",
   varHighlight: "indigo",
   bodyHints: true,
@@ -114,8 +109,16 @@ function read(): Prefs {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return PREFS_DEFAULTS;
-    const parsed = JSON.parse(raw) as Partial<Prefs>;
-    return { ...PREFS_DEFAULTS, ...parsed };
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      return PREFS_DEFAULTS;
+    }
+    const stored = parsed as Record<string, unknown>;
+    const next: Prefs = { ...PREFS_DEFAULTS };
+    for (const key of Object.keys(PREFS_DEFAULTS)) {
+      if (Object.hasOwn(stored, key)) Object.assign(next, { [key]: stored[key] });
+    }
+    return next;
   } catch {
     return PREFS_DEFAULTS;
   }

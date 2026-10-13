@@ -10,7 +10,6 @@ import { RenameInput } from "./RenameInput";
 import { DropLine } from "./DropLine";
 import { zoneFromPointer } from "./dnd";
 import type { TreeCallbacks } from "./treeTypes";
-import { GrpcIcon } from "./GrpcIcon";
 import { HttpMethodBadge } from "@/features/http/HttpMethodBadge";
 import {
   GRPC_METHOD_MARK,
@@ -18,7 +17,6 @@ import {
   HTTP_METHOD_MARK,
 } from "@/features/http/model";
 import { bleedStyle } from "./bleed";
-import { usePrefs, type GrpcIconPref } from "@/lib/use-prefs";
 import { messages } from "@/lib/messages";
 
 const m = messages.catalog.rowMenu;
@@ -33,13 +31,7 @@ const treeMarkInsetClass = "pl-4!";
 
 const methodColumnStyle = { width: `${HTTP_METHOD_COLUMN_CH}ch` };
 
-function RequestMark({
-  req,
-  grpcIcon,
-}: {
-  req: SavedRequestIpc;
-  grpcIcon: GrpcIconPref;
-}) {
+function RequestMark({ req }: { req: SavedRequestIpc }) {
   const mark =
     req.template.protocol === "http" ? (
       <HttpMethodBadge
@@ -47,16 +39,10 @@ function RequestMark({
         label={HTTP_METHOD_MARK[req.template.method]}
         className={methodLabelClass}
       />
-    ) : grpcIcon === "off" ? null : grpcIcon === "letter" ? (
-      <span
-        aria-label="grpc"
-        data-variant="letter"
-        className={cn(methodLabelClass, "text-grpc")}
-      >
+    ) : (
+      <span aria-label="grpc" className={cn(methodLabelClass, "text-grpc")}>
         {GRPC_METHOD_MARK}
       </span>
-    ) : (
-      <GrpcIcon variant={grpcIcon} className="flex-none" />
     );
   return (
     <span
@@ -83,7 +69,6 @@ export function RequestRow({
   depth = 1,
   cb,
 }: RequestRowProps) {
-  const [{ grpcIcon }] = usePrefs();
   const editing = cb.editingId === req.id;
   const active = cb.activeItemId === req.id;
   const focused = cb.focusedId === req.id;
@@ -147,7 +132,7 @@ export function RequestRow({
               treeMarkInsetClass,
             )}
           >
-            <RequestMark req={req} grpcIcon={grpcIcon} />
+            <RequestMark req={req} />
             <RenameInput
               initial={req.name}
               onCommit={(name) => {
@@ -187,7 +172,7 @@ export function RequestRow({
             >
               {hint === "before" && <DropLine zone="before" />}
               {hint === "after" && <DropLine zone="after" />}
-              <RequestMark req={req} grpcIcon={grpcIcon} />
+              <RequestMark req={req} />
               <span className="min-w-0 flex-1 truncate text-left">
                 {req.name || req.template.method}
               </span>
