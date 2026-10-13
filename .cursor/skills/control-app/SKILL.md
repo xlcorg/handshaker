@@ -4,7 +4,8 @@ description: >-
   Drive the Handshaker desktop gRPC client (Tauri window, Linux WebKitGTK
   via tauri-driver). Use when checking that the real window starts, or when
   verifying collections, a unary call, environments, a streaming RPC,
-  settings, or the Ctrl+Tab recent switcher against the running app.
+  settings, the Ctrl+Tab recent switcher, call history, or an HTTP request
+  against the running app.
 ---
 
 # control-app
@@ -59,6 +60,17 @@ cargo install tauri-driver --locked --version 2.0.5
 The script exports `WEBKIT_DISABLE_COMPOSITING_MODE=1`, `GDK_BACKEND=x11`,
 and `LIBGL_ALWAYS_SOFTWARE=1`, puts `node_modules/.bin` on `PATH`, and points
 `XDG_DATA_HOME`, `XDG_CONFIG_HOME`, and `XDG_CACHE_HOME` at the run directory.
+`hsdrv.py launch` starts `tauri-driver` with an explicit tmux `env` prefix.
+That prefix does not inherit the parent shell. It forwards `HS_BEARER` and
+`HS_APIKEY` when those names are set, plus any extra names listed in
+comma-separated `HANDSHAKER_FORWARD_ENV`. Bearer and API key auth read those
+OS variables inside the app process (`std::env::var`). Export them on the
+`launch.sh` command line:
+
+```sh
+HS_BEARER=BearerSecret HS_APIKEY=KeySecret \
+  .cursor/skills/control-app/scripts/launch.sh
+```
 A debug build runs `prettier --write` on startup (`src-tauri/src/lib.rs`,
 `#[cfg(debug_assertions)]`). If `prettier` is not on `PATH`, that export
 panics before the window exists. The same export overwrites the tracked file
@@ -98,6 +110,12 @@ when the title is `Handshaker`, the URL starts with `tauri://`, the splash
 node is gone, the filter is present, the sidebar text contains `COLLECTIONS`,
 and the corner badge contains `v` plus `package.json`'s `version`. The last
 line is `ok`.
+
+The badge check reads the full `document.body.innerText`. The readiness
+excerpt is only the first 1200 characters, and a long HTTP response body
+pushes the fixed badge past that slice. `COLLECTIONS` may match either the
+excerpt or the full text. The sidebar heading is CSS-uppercase, so the text
+is `COLLECTIONS`.
 
 ## Drive
 
@@ -184,6 +202,12 @@ written under `evidence/` remains.
 | `scripts/hsdrv.py` | `.cursor/skills/control-app/scripts/hsdrv.py eval '<javascript that returns a value>'` |
 | `scripts/hsdrv.py` | `.cursor/skills/control-app/scripts/hsdrv.py text` |
 | `scripts/hsdrv.py` | `.cursor/skills/control-app/scripts/hsdrv.py screenshot <name>` |
+| `scripts/http-echo.py` | `.cursor/skills/control-app/scripts/http-echo.py` |
+| `scripts/drive-http.py` | `.cursor/skills/control-app/scripts/drive-http.py` |
 
-All five files are executable. `hsdrv.py` is the implementation; the shell
-scripts call it.
+All seven files are executable. `hsdrv.py` is the implementation; the shell
+scripts call it. `http-echo.py` is the local HTTP echo used by
+`features/http.md`. `drive-http.py` assumes `launch.sh` (with `HS_BEARER` and
+`HS_APIKEY` exported) and `doctor.sh` already succeeded and that the echo is
+already listening. It copies each screenshot into the run's `evidence/`
+directory and to `/opt/cursor/artifacts/`.

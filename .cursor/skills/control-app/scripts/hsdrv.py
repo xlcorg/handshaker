@@ -10,6 +10,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import shlex
 import shutil
 import signal
 import socket
@@ -264,6 +265,30 @@ def restore_bindings(run: Path) -> None:
     print(f"hsdrv: restored {dest.relative_to(ROOT)} from the pre-launch snapshot")
 
 
+def forwarded_env_assignments() -> list[str]:
+    """Names the tmux `env` command must set so the app process can see them.
+
+    tauri-driver is started with an explicit `env` prefix, which only forwards
+    the variables listed there. Bearer and API key auth read OS environment
+    variables by name at send time, so those names have to be on that list.
+    `HANDSHAKER_FORWARD_ENV` is a comma-separated extra list.
+    """
+    names = ["HS_BEARER", "HS_APIKEY"]
+    extra = os.environ.get("HANDSHAKER_FORWARD_ENV", "")
+    names.extend(part.strip() for part in extra.split(",") if part.strip())
+    out: list[str] = []
+    seen: set[str] = set()
+    for name in names:
+        if name in seen or name not in os.environ:
+            continue
+        seen.add(name)
+        value = os.environ[name]
+        if any(ch in value for ch in "\n\r\0"):
+            fail(f"refusing to forward {name}: value contains a newline")
+        out.append(shlex.quote(f"{name}={value}"))
+    return out
+
+
 def launch() -> None:
     check_build()
     VERIFY_ROOT.mkdir(parents=True, exist_ok=True)
@@ -311,6 +336,7 @@ def launch() -> None:
             f"XDG_DATA_HOME={env['XDG_DATA_HOME']}",
             f"XDG_CONFIG_HOME={env['XDG_CONFIG_HOME']}",
             f"XDG_CACHE_HOME={env['XDG_CACHE_HOME']}",
+            *forwarded_env_assignments(),
             "tauri-driver",
             "--port",
             str(port),
@@ -416,6 +442,10 @@ def doctor() -> None:
     state = eval_json(sess, READY_SCRIPT)
     version = app_version()
     text = state.get("text") or ""
+    # READY_SCRIPT keeps a short excerpt. The version badge is fixed at the
+    # bottom of the window, so a long response body pushes it past that excerpt.
+    full = eval_json(sess, "return document.body ? document.body.innerText : ''")
+    full_text = full if isinstance(full, str) else ""
     problems = []
     if title != "Handshaker":
         problems.append(f"title is {title!r}")
@@ -425,9 +455,9 @@ def doctor() -> None:
         problems.append("splash overlay is still in the DOM")
     if not state.get("filter"):
         problems.append("collection filter is missing")
-    if f"v{version}" not in text:
+    if f"v{version}" not in full_text:
         problems.append(f"version badge v{version} is missing from the window text")
-    if "COLLECTIONS" not in text:
+    if "COLLECTIONS" not in text and "COLLECTIONS" not in full_text:
         problems.append("sidebar label COLLECTIONS is missing")
     print(f"title: {title}")
     print(f"url: {url}")
