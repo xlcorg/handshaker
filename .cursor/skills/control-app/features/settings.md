@@ -9,6 +9,7 @@ line equals the `version` field in `package.json` and in `src-tauri/Cargo.toml`.
 ## Sub-features
 
 - Appearance — gRPC icon, zoom (`aria-label="Zoom in"`, `Zoom out`, `Reset zoom`), sidebar, split direction, word wrap, method-picker group style (`aria-label="method-list-style"`), variable highlight (`aria-label="var-highlight-scheme"`).
+- History — `Confirm before clearing` (`aria-label="Confirm before clearing"`). On by default. Off makes Clear history delete the log on the first click. The value is `confirmClearHistory` in `handshaker.prefs.v1`.
 - Network — request deadline and max message size.
 - Keyboard — shortcut list.
 - Import / Export — bundle transfer. The file picker is a native dialog.
@@ -18,7 +19,7 @@ line equals the `version` field in `package.json` and in `src-tauri/Cargo.toml`.
 
 The gear button is at the right of the titlebar, before the window buttons.
 Its tooltip and accessible name are `Settings`. The dialog opens on
-Appearance. The left rail is Appearance, Network, Keyboard, Import / Export,
+Appearance. The left rail is Appearance, History, Network, Keyboard, Import / Export,
 About. Close it with Escape. The window-chrome buttons on Linux are
 `aria-label="Minimize window"`, `Maximize window`, and `Close window`.
 Minimize and close are real window operations; do not click Close during a

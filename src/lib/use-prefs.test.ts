@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
   PREFS_DEFAULTS,
   clampTimeoutMs,
@@ -163,6 +163,26 @@ describe("history dock prefs", () => {
   it("the dock starts expanded at 28% of the main column", () => {
     expect(PREFS_DEFAULTS.historyDock).toBe(true);
     expect(PREFS_DEFAULTS.historyDockPanel).toBe(28);
+  });
+});
+
+describe("confirmClearHistory pref", () => {
+  beforeEach(() => localStorage.clear());
+
+  it("loads true when storage has no value for it", async () => {
+    localStorage.setItem("handshaker.prefs.v1", JSON.stringify({ wordWrap: true }));
+    vi.resetModules();
+    const fresh = await import("./use-prefs");
+    expect(fresh.readPrefs().confirmClearHistory).toBe(true);
+    expect(fresh.readPrefs().wordWrap).toBe(true);
+  });
+
+  it("loads false from storage on a fresh module", async () => {
+    localStorage.setItem("handshaker.prefs.v1", JSON.stringify({ confirmClearHistory: false }));
+    vi.resetModules();
+    const fresh = await import("./use-prefs");
+    expect(fresh.readPrefs().confirmClearHistory).toBe(false);
+    expect(fresh.readPrefs().sidebar).toBe(true);
   });
 });
 

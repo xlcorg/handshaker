@@ -94,7 +94,7 @@ comes back with the same rows, and `history/index.json` is unchanged.
 
 ## Clear
 
-The expanded header has `[data-testid="history-clear"]` labeled `Clear history`, disabled when the ready list is empty. Clicking it opens an alert dialog titled `Clear call history?`. The confirm button is `Delete`. After confirm the dock shows `Calls you send from the editor appear here.` and `History · 0`, and `$XDG_DATA_HOME/dev.handshaker.app/history` is absent. Cancel leaves the rows and the files.
+The expanded header has `[data-testid="history-clear"]` labeled `Clear history`, disabled when the ready list is empty. With `Confirm before clearing` on (the default, Settings → History), clicking it opens an alert dialog titled `Clear call history?`. The confirm button is `Delete`. After confirm the dock shows `Calls you send from the editor appear here.` and `History · 0`, and `$XDG_DATA_HOME/dev.handshaker.app/history` is absent. Cancel leaves the rows and the files. With the switch off, the same click clears immediately and the dialog does not open. The switch lives in `handshaker.prefs.v1` as `confirmClearHistory` and comes back after a cold restart that copies the app data directory.
 
 ## Gotchas
 

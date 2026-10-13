@@ -1,20 +1,25 @@
 import { useState } from "react";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { AppearancePane } from "./AppearancePane";
 import { NetworkPane } from "./NetworkPane";
 import { KeyboardPane } from "./KeyboardPane";
 import { AboutPane } from "./AboutPane";
 import { ImportExportPane } from "./ImportExportPane";
+import { HistoryPane } from "./HistoryPane";
+import { messages } from "@/lib/messages";
 import { cn } from "@/lib/cn";
 
-type Section = "appearance" | "network" | "keyboard" | "import-export" | "about";
+type Section = "appearance" | "history" | "network" | "keyboard" | "import-export" | "about";
+
+const s = messages.settings;
 
 const SECTIONS: Array<[Section, string]> = [
-  ["appearance", "Appearance"],
-  ["network", "Network"],
-  ["keyboard", "Keyboard"],
-  ["import-export", "Import / Export"],
-  ["about", "About"],
+  ["appearance", s.sections.appearance],
+  ["history", s.sections.history],
+  ["network", s.sections.network],
+  ["keyboard", s.sections.keyboard],
+  ["import-export", s.sections.importExport],
+  ["about", s.sections.about],
 ];
 
 export interface SettingsDialogProps {
@@ -28,10 +33,8 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent showCloseButton={false} className="max-w-3xl p-0 overflow-hidden sm:max-w-3xl">
         <div className="border-b border-border px-6 py-4">
-          <h2 className="text-lg font-semibold leading-none tracking-tight">Settings</h2>
-          <p className="text-sm text-muted-foreground mt-1.5">
-            Preferences persist locally. Restart not required.
-          </p>
+          <DialogTitle className="tracking-tight">{s.title}</DialogTitle>
+          <DialogDescription className="mt-1.5">{s.subtitle}</DialogDescription>
         </div>
         <div className="grid grid-cols-[180px_1fr] h-[700px] max-h-[calc(100vh-20px)]">
           <div className="border-r border-border p-2 flex flex-col gap-0.5 bg-muted/20 overflow-auto scroll-thin">
@@ -53,6 +56,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
           </div>
           <div className="p-5 overflow-auto scroll-thin flex flex-col gap-5">
             {section === "appearance" && <AppearancePane />}
+            {section === "history" && <HistoryPane />}
             {section === "network" && <NetworkPane />}
             {section === "keyboard" && <KeyboardPane />}
             {section === "import-export" && <ImportExportPane />}

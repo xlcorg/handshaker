@@ -514,6 +514,21 @@ export const messages = {
     },
   },
   settings: {
+    title: "Settings",
+    subtitle: "Preferences persist locally. Restart not required.",
+    sections: {
+      appearance: "Appearance",
+      history: "History",
+      network: "Network",
+      keyboard: "Keyboard",
+      importExport: "Import / Export",
+      about: "About",
+    },
+    history: {
+      group: "Call history",
+      confirmClear: "Confirm before clearing",
+      confirmClearHint: "Ask before Clear history deletes every recorded call on this device.",
+    },
     network: {
       timeoutsGroup: "Timeouts",
       requestDeadline: "Request deadline",
