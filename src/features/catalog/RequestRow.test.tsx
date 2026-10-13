@@ -1,11 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ItemIpc } from "@/ipc/bindings";
 import type { TreeCallbacks } from "./treeTypes";
 import { RequestRow } from "./RequestRow";
 import { SidebarProvider } from "@/components/ui/sidebar";
-import { setPref } from "@/lib/use-prefs";
 import { HTTP_METHODS } from "@/features/http/model";
 
 function req(name: string): Extract<ItemIpc, { type: "request" }> {
@@ -94,33 +93,12 @@ function renderWithSidebar(ui: React.ReactElement) {
 }
 
 describe("RequestRow", () => {
-  beforeEach(() => {
-    act(() => setPref("grpcIcon", "letter"));
-  });
-
   it("renders the letter gRPC icon by default", () => {
     renderWithSidebar(
       <RequestRow collectionId="c1" req={req("My Req")} cb={makeCb()} />,
     );
-    expect(screen.getByLabelText("grpc").getAttribute("data-variant")).toBe(
-      "letter",
-    );
+    expect(screen.getByLabelText("grpc").textContent).toBe("gRPC");
     expect(screen.getByText("My Req")).toBeTruthy();
-  });
-
-  it("renders the gRPC icon when a style pref is set", () => {
-    setPref("grpcIcon", "solid");
-    try {
-      renderWithSidebar(
-        <RequestRow collectionId="c1" req={req("My Req")} cb={makeCb()} />,
-      );
-      const icon = screen.getByLabelText("grpc");
-      expect(icon.getAttribute("data-variant")).toBe("solid");
-      expect(icon.textContent).toBe("g");
-      expect(icon.className).toContain("size-4");
-    } finally {
-      act(() => setPref("grpcIcon", "letter"));
-    }
   });
 
   it("shows the name and opens the request on click", () => {
@@ -289,7 +267,6 @@ describe("RequestRow", () => {
       expect((column as HTMLElement).style.width).toBe("4ch");
     }
     const icon = screen.getByLabelText("grpc");
-    expect(icon.getAttribute("data-variant")).toBe("letter");
     expect(icon.textContent).toBe("gRPC");
     expect(icon.className).toContain("text-[9px]");
     expect(icon.className).toContain("font-semibold");
@@ -323,6 +300,20 @@ describe("RequestRow", () => {
     }
   });
 
+  it("shows the gRPC mark in the 4ch column while renaming", () => {
+    renderWithSidebar(
+      <RequestRow
+        collectionId="c1"
+        req={req("Old")}
+        cb={makeCb({ editingId: "r1" })}
+      />,
+    );
+    const mark = screen.getByLabelText("grpc");
+    expect(mark.textContent).toBe("gRPC");
+    expect((mark.parentElement as HTMLElement).style.width).toBe("4ch");
+    expect(screen.getByLabelText("rename-input")).toHaveValue("Old");
+  });
+
   it("keeps the short mark while renaming", () => {
     renderWithSidebar(
       <RequestRow
@@ -335,28 +326,6 @@ describe("RequestRow", () => {
     expect(word).toHaveAttribute("aria-label", "DELETE");
     expect((word.parentElement as HTMLElement).style.width).toBe("4ch");
     expect(screen.getByLabelText("rename-input")).toHaveValue("Posts");
-  });
-
-  it("keeps an empty column when the gRPC icon is off", () => {
-    act(() => setPref("grpcIcon", "off"));
-    renderWithSidebar(
-      <>
-        <RequestRow collectionId="c1" req={req("SendError")} cb={makeCb()} />
-        <RequestRow
-          collectionId="c1"
-          req={httpReq("Posts", "GET", "h1")}
-          cb={makeCb()}
-        />
-      </>,
-    );
-    expect(screen.queryByLabelText("grpc")).toBeNull();
-    const columns = document.querySelectorAll("[data-method-column]");
-    expect(columns).toHaveLength(2);
-    for (const column of columns) {
-      expect((column as HTMLElement).style.width).toBe("4ch");
-    }
-    expect(columns[0].textContent).toBe("");
-    expect(screen.getByText("GET").textContent).toBe("GET");
   });
 
   it("renders no drop line when dropHint targets another row", () => {

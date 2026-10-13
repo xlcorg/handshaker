@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   usePrefs,
-  type GrpcIconPref,
   type MethodGroupStyle,
   type VarHighlightScheme,
   ZOOM_MIN,
@@ -55,17 +54,6 @@ export function AppearancePane() {
   return (
     <>
       <SettingsGroup title="Display">
-        <SettingsRow
-          title="gRPC icon"
-          hint="Style of the gRPC method icon in the request list. Off hides it."
-          control={
-            <ToggleGroup
-              value={prefs.grpcIcon}
-              onValueChange={(v) => setPref("grpcIcon", v as GrpcIconPref)}
-              options={["off", "solid", "letter", "outline", "circle"]}
-            />
-          }
-        />
         <SettingsRow
           title="Zoom"
           hint="UI scale. Ctrl+= / Ctrl+- to step, Ctrl+0 to reset."

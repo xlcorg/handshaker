@@ -42,31 +42,6 @@ describe("prefs sidebarPanel", () => {
   });
 });
 
-describe("grpcIcon pref", () => {
-  beforeEach(() => localStorage.clear());
-
-  it("defaults grpcIcon to 'letter'", () => {
-    expect(PREFS_DEFAULTS.grpcIcon).toBe("letter");
-  });
-
-  it("merges a persisted grpcIcon over defaults", () => {
-    localStorage.setItem("handshaker.prefs.v1", JSON.stringify({ grpcIcon: "circle" }));
-    // readPrefs() reflects the module-loaded snapshot; assert the merge shape instead.
-    const merged = { ...PREFS_DEFAULTS, grpcIcon: "circle" };
-    expect(merged.sidebar).toBe(true);
-    expect(merged.grpcIcon).toBe("circle");
-    expect(typeof readPrefs().grpcIcon).toBe("string");
-  });
-
-  it("merges a persisted grpcIcon:'off' over defaults", () => {
-    localStorage.setItem("handshaker.prefs.v1", JSON.stringify({ grpcIcon: "off" }));
-    // readPrefs() reflects the module-loaded snapshot; assert the merge shape instead.
-    const merged = { ...PREFS_DEFAULTS, grpcIcon: "off" as const };
-    expect(merged.grpcIcon).toBe("off");
-    expect(typeof readPrefs().grpcIcon).toBe("string");
-  });
-});
-
 describe("methodGroupStyle pref", () => {
   beforeEach(() => localStorage.clear());
 
@@ -163,6 +138,31 @@ describe("history dock prefs", () => {
   it("the dock starts expanded at 28% of the main column", () => {
     expect(PREFS_DEFAULTS.historyDock).toBe(true);
     expect(PREFS_DEFAULTS.historyDockPanel).toBe(28);
+  });
+});
+
+describe("unknown stored pref keys", () => {
+  beforeEach(() => localStorage.clear());
+
+  it("keeps known prefs and drops a stored grpcIcon key on the next write", async () => {
+    localStorage.setItem(
+      "handshaker.prefs.v1",
+      JSON.stringify({ grpcIcon: "off", wordWrap: true }),
+    );
+    vi.resetModules();
+    const fresh = await import("./use-prefs");
+    expect(fresh.readPrefs().wordWrap).toBe(true);
+    expect(fresh.readPrefs().sidebar).toBe(true);
+    expect(Object.hasOwn(fresh.readPrefs(), "grpcIcon")).toBe(false);
+
+    fresh.setPref("sidebar", false);
+    const saved = JSON.parse(localStorage.getItem("handshaker.prefs.v1") ?? "null") as Record<
+      string,
+      unknown
+    >;
+    expect(saved.wordWrap).toBe(true);
+    expect(saved.sidebar).toBe(false);
+    expect(Object.hasOwn(saved, "grpcIcon")).toBe(false);
   });
 });
 

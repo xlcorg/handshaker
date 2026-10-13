@@ -3,12 +3,13 @@
 Opening Settings shows the local preferences dialog. The end state that
 proves this works: the dialog heading is `Settings`, the subtitle is
 `Preferences persist locally. Restart not required.`, and the default
-Appearance section shows the row `gRPC icon`. The About section's version
-line equals the `version` field in `package.json` and in `src-tauri/Cargo.toml`.
+Appearance section shows the row `Zoom`, and does not show `gRPC icon`. The
+About section's version line equals the `version` field in `package.json`
+and in `src-tauri/Cargo.toml`.
 
 ## Sub-features
 
-- Appearance — gRPC icon, zoom (`aria-label="Zoom in"`, `Zoom out`, `Reset zoom`), sidebar, split direction, word wrap, method-picker group style (`aria-label="method-list-style"`), variable highlight (`aria-label="var-highlight-scheme"`).
+- Appearance — zoom (`aria-label="Zoom in"`, `Zoom out`, `Reset zoom`), sidebar, split direction, word wrap, method-picker group style (`aria-label="method-list-style"`), variable highlight (`aria-label="var-highlight-scheme"`).
 - History — `Confirm before clearing` (`aria-label="Confirm before clearing"`). On by default. Off makes Clear history delete the log on the first click. The value is `confirmClearHistory` in `handshaker.prefs.v1`.
 - Network — request deadline and max message size.
 - Keyboard — shortcut list.
@@ -31,7 +32,7 @@ drive unless you mean to end the session.
 .cursor/skills/control-app/scripts/hsdrv.py screenshot settings-before
 .cursor/skills/control-app/scripts/hsdrv.py click "[aria-label='Settings']"
 .cursor/skills/control-app/scripts/hsdrv.py screenshot settings-appearance
-.cursor/skills/control-app/scripts/hsdrv.py eval 'return document.body.innerText.includes("Preferences persist locally") && document.body.innerText.includes("gRPC icon")'
+.cursor/skills/control-app/scripts/hsdrv.py eval 'return document.body.innerText.includes("Preferences persist locally") && document.body.innerText.includes("Zoom") && !document.body.innerText.includes("gRPC icon")'
 .cursor/skills/control-app/scripts/hsdrv.py click "xpath=//button[normalize-space()=\"About\"]"
 .cursor/skills/control-app/scripts/hsdrv.py screenshot settings-about
 .cursor/skills/control-app/scripts/hsdrv.py eval 'return document.body.innerText.includes("version") && document.body.innerText.includes("tauri 2")'
