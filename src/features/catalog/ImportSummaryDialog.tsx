@@ -9,6 +9,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import type { ImportSummaryIpc } from "@/ipc/bindings";
+import { messages } from "@/lib/messages";
 
 export interface ImportSummaryDialogProps {
   open: boolean;
@@ -17,25 +18,43 @@ export interface ImportSummaryDialogProps {
   onCancel: () => void;
 }
 
-/** Non-destructive import confirmation: shows what will be added/updated. */
-export function ImportSummaryDialog({ open, summary, onConfirm, onCancel }: ImportSummaryDialogProps) {
-  const existing = summary ? summary.collections_existing + summary.environments_existing : 0;
+export function ImportSummaryDialog({
+  open,
+  summary,
+  onConfirm,
+  onCancel,
+}: ImportSummaryDialogProps) {
+  const copy = messages.catalog.importDialog;
+  const existing = summary
+    ? summary.collections_existing + summary.environments_existing
+    : 0;
   return (
-    <AlertDialog open={open} onOpenChange={(o) => { if (!o) onCancel(); }}>
+    <AlertDialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) onCancel();
+      }}
+    >
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Import collections?</AlertDialogTitle>
+          <AlertDialogTitle>{copy.title}</AlertDialogTitle>
           <AlertDialogDescription>
             {summary
-              ? `${summary.collections_total} collections and ${summary.environments_total} environments will be imported.` +
-                (existing > 0 ? ` ${existing} already exist and will be updated.` : "") +
-                " Nothing is deleted."
+              ? copy.body(
+                  summary.collections_total,
+                  summary.environments_total,
+                  existing,
+                )
               : ""}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={onCancel}>Cancel</AlertDialogCancel>
-          <AlertDialogAction onClick={onConfirm}>Import</AlertDialogAction>
+          <AlertDialogCancel onClick={onCancel}>
+            {copy.cancel}
+          </AlertDialogCancel>
+          <AlertDialogAction onClick={onConfirm}>
+            {copy.confirm}
+          </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

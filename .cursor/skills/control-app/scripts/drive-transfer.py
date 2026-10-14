@@ -764,17 +764,17 @@ def main() -> None:
         wait_toast("Imported")
         reimported = load_data(target / "collections" / f"{CID}.json")
         kept = extra_ids & _request_ids(reimported)
-        if extra_ids and not kept:
-            print(
-                "BUG reimport replaced the collection and dropped locally added requests "
-                f"{sorted(extra_ids)}. The summary still says nothing is deleted.",
-                flush=True,
+        if not extra_ids:
+            raise DriveError("reimport check added no local request")
+        if not kept:
+            raise DriveError(
+                "reimport dropped locally added requests "
+                f"{sorted(extra_ids)}. The summary says nothing is deleted."
             )
-            require_same(reimported, stored, "reimported collection")
-        elif kept:
-            print(f"local requests survived reimport: {sorted(kept)}", flush=True)
-        else:
-            require_same(reimported, stored, "reimported collection")
+        missing = _request_ids(stored) - _request_ids(reimported)
+        if missing:
+            raise DriveError(f"reimport dropped exported requests {sorted(missing)}")
+        print(f"local requests survived reimport: {sorted(kept)}", flush=True)
 
         copy_path = evidence_dir() / "same-name-copy.json"
         copy_path.write_text(json.dumps(rewrite_ids(exported), indent=2) + "\n")

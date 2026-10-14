@@ -98,16 +98,21 @@ toasts `not a Handshaker export file (kind \`other\`)`. `schema_version` 2
 toasts `unsupported schema v2 in <path> (this build supports up to v1)`.
 
 Same collection name with a new id is kept as a second row. Same collection
-id is an update. `collection_store.upsert` writes the collection from the
-file over the local one. Environments merge by name. Imported keys replace
+id merges. Collection settings (name, auth, variables, TLS, links) come from
+the file. Items merge by id. A matching request or folder takes the file's
+fields and stays where it already sits. A request or folder that exists only
+locally stays in that slot. A new id from the file is appended under the
+parent it has in the file. Environments merge by name. Imported keys replace
 local keys. A color on the import replaces the local color. An import with
 no color leaves the local color. New environments are appended. The active
-environment is unchanged. Nothing outside the file is removed.
+environment is unchanged. Nothing outside the file is removed, and nothing
+that exists only locally is removed either.
 
-The sentence `Nothing is deleted.` is what the dialog shows. It does not
-describe collection items that exist only locally. Those items are absent
-from the upserted file, so a reimport of an older export drops them. Do not
-treat a byte-identical reimport as proof that local-only requests survive.
+The dialog says matching items are updated, items only on this machine are
+kept, and nothing is deleted. `scripts/drive-reimport-merge.py` exports a
+collection, adds a request in the window, edits one request in the file, and
+re-imports. The local request, the edited request, and the new file request
+are all present afterward.
 
 ## Gotchas
 
