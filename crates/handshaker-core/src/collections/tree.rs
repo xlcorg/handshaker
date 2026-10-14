@@ -5,7 +5,7 @@
 use crate::error::CoreError;
 
 use super::ids::ItemId;
-use super::Item;
+use super::{Folder, Item};
 
 /// A removed item plus where it lived, for undo (`collection_restore_item`).
 #[derive(Debug, Clone, PartialEq)]
@@ -176,6 +176,49 @@ pub fn duplicate_item(items: &mut Vec<Item>, id: ItemId) -> Result<ItemId, CoreE
     Ok(new_root_id)
 }
 
+pub fn merge_items(mut local: Vec<Item>, imported: Vec<Item>) -> Vec<Item> {
+    apply_imported_fields(&mut local, &imported);
+    append_missing(&mut local, &imported, None);
+    local
+}
+
+fn apply_imported_fields(local: &mut [Item], imported: &[Item]) {
+    for incoming in imported {
+        if let Some(slot) = find_item_mut(local, incoming.id()) {
+            match (&mut *slot, incoming) {
+                (Item::Folder(dest), Item::Folder(src)) => {
+                    dest.name = src.name.clone();
+                    dest.expanded = src.expanded;
+                }
+                (slot, src) => *slot = src.clone(),
+            }
+        }
+        if let Item::Folder(src) = incoming {
+            apply_imported_fields(local, &src.items);
+        }
+    }
+}
+
+fn append_missing(local: &mut Vec<Item>, imported: &[Item], parent: Option<ItemId>) {
+    for incoming in imported {
+        if find_item(local, incoming.id()).is_none() {
+            add_item(local, parent, shell(incoming)).expect("import parent is a folder");
+        }
+        if let Item::Folder(src) = incoming {
+            if matches!(find_item(local, src.id), Some(Item::Folder(_))) {
+                append_missing(local, &src.items, Some(src.id));
+            }
+        }
+    }
+}
+
+fn shell(item: &Item) -> Item {
+    match item {
+        Item::Request(request) => Item::Request(request.clone()),
+        Item::Folder(folder) => Item::Folder(Folder { items: Vec::new(), ..folder.clone() }),
+    }
+}
+
 /// Recursively assign fresh ids to an item and all descendants; return the root's.
 fn reassign_ids(item: &mut Item) -> ItemId {
     match item {
@@ -331,5 +374,50 @@ mod tests {
         } else {
             panic!("duplicate root is not a folder");
         }
+    }
+
+    #[test]
+    fn merge_items_keeps_local_updates_matches_and_appends_new() {
+        let local = vec![
+            req(iid(10), "keep"),
+            folder(iid(20), "folder", vec![req(iid(21), "nested-old"), req(iid(22), "nested-keep")]),
+            req(iid(30), "root-old"),
+            req(iid(50), "parked"),
+        ];
+        let imported = vec![
+            folder(
+                iid(20),
+                "folder-renamed",
+                vec![req(iid(21), "nested-new"), req(iid(23), "nested-added"), req(iid(50), "parked-moved")],
+            ),
+            req(iid(30), "root-new-name"),
+            req(iid(40), "root-added"),
+        ];
+
+        let merged = merge_items(local, imported);
+
+        assert_eq!(merged.iter().map(Item::id).collect::<Vec<_>>(), vec![iid(10), iid(20), iid(30), iid(50), iid(40)]);
+        assert_eq!(merged[0].name(), "keep");
+        assert_eq!(merged[1].name(), "folder-renamed");
+        let Item::Folder(nested) = &merged[1] else { panic!("folder") };
+        assert_eq!(
+            nested.items.iter().map(Item::name).collect::<Vec<_>>(),
+            vec!["nested-new", "nested-keep", "nested-added"]
+        );
+        assert_eq!(merged[2].name(), "root-new-name");
+        assert_eq!(merged[3].name(), "parked-moved");
+        assert_eq!(merged[4].name(), "root-added");
+    }
+
+    #[test]
+    fn merge_items_keeps_children_inside_a_folder_that_replaces_a_request() {
+        let local = vec![req(iid(20), "was-request")];
+        let imported = vec![folder(iid(20), "now-folder", vec![req(iid(21), "child")])];
+
+        let merged = merge_items(local, imported);
+
+        assert_eq!(merged.len(), 1);
+        let Item::Folder(replaced) = &merged[0] else { panic!("folder") };
+        assert_eq!(replaced.items.iter().map(Item::id).collect::<Vec<_>>(), vec![iid(21)]);
     }
 }

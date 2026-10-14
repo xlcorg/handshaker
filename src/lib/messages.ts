@@ -112,6 +112,21 @@ export const messages = {
       defaultFolderName: "New folder",
       defaultCollectionName: "New collection",
     },
+    importDialog: {
+      title: "Import collections?",
+      cancel: "Cancel",
+      confirm: "Import",
+      body: (collections: number, environments: number, existing: number): string => {
+        const collectionWord = collections === 1 ? "collection" : "collections";
+        const environmentWord = environments === 1 ? "environment" : "environments";
+        const totals = `${collections} ${collectionWord} and ${environments} ${environmentWord} will be imported.`;
+        const updated =
+          existing > 0
+            ? ` ${existing} already ${existing === 1 ? "exists" : "exist"} and will be updated.`
+            : "";
+        return `${totals}${updated} Matching items are updated. Items only on this machine are kept. Nothing is deleted.`;
+      },
+    },
     rowMenu: {
       addRequest: "Add request",
       addHttpRequest: "Add HTTP request",

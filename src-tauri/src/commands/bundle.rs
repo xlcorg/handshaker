@@ -47,13 +47,14 @@ impl AppState {
 
         let mut collections_added = 0u32;
         let mut collections_updated = 0u32;
-        for c in bundle.collections {
-            if self.collection_store.get(c.id).is_some() {
+        for imported in bundle.collections {
+            if let Some(existing) = self.collection_store.get(imported.id) {
                 collections_updated += 1;
+                self.collection_store.upsert(bundle::merge_collection(existing, imported))?;
             } else {
                 collections_added += 1;
+                self.collection_store.upsert(imported)?;
             }
-            self.collection_store.upsert(c)?;
         }
 
         let mut environments_added = 0u32;
@@ -139,8 +140,9 @@ mod tests {
     use uuid::Uuid;
 
     use super::*;
-    use crate::ipc::collection::CollectionIpc;
-    use crate::ipc::collection::SavedAuthConfigIpc;
+    use crate::ipc::collection::{
+        CollectionIpc, FolderIpc, GrpcTemplateIpc, ItemIpc, RequestTemplateIpc, SavedAuthConfigIpc, SavedRequestIpc,
+    };
 
     fn empty_collection_ipc(id: u128, name: &str) -> CollectionIpc {
         CollectionIpc {
@@ -279,6 +281,124 @@ mod tests {
         assert_eq!(prod.variables.get("b").map(String::as_str), Some("2"));
         assert!(target.env_store.get("keep").is_some());
         assert!(target.env_store.get("staging").is_some());
+    }
+
+    fn request_ipc(id: u128, name: &str, method: &str) -> ItemIpc {
+        ItemIpc::Request(SavedRequestIpc {
+            id: Uuid::from_u128(id).to_string(),
+            name: name.into(),
+            last_used_at: None,
+            use_count: 0,
+            template: RequestTemplateIpc::Grpc(GrpcTemplateIpc {
+                address_template: "{{host}}".into(),
+                tls_override: None,
+                service: "svc".into(),
+                method: method.into(),
+                body_template: "{}".into(),
+                metadata: vec![],
+                auth: SavedAuthConfigIpc::None,
+            }),
+        })
+    }
+
+    fn folder_ipc(id: u128, name: &str, items: Vec<ItemIpc>) -> ItemIpc {
+        ItemIpc::Folder(FolderIpc {
+            id: Uuid::from_u128(id).to_string(),
+            name: name.into(),
+            items,
+            expanded: false,
+        })
+    }
+
+    fn item_id(item: &ItemIpc) -> &str {
+        match item {
+            ItemIpc::Folder(folder) => &folder.id,
+            ItemIpc::Request(request) => &request.id,
+        }
+    }
+
+    fn grpc_method(item: &ItemIpc) -> &str {
+        match item {
+            ItemIpc::Request(SavedRequestIpc { template: RequestTemplateIpc::Grpc(template), .. }) => &template.method,
+            _ => panic!("expected a grpc request"),
+        }
+    }
+
+    #[test]
+    fn apply_merges_items_inside_an_existing_collection() {
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("src.json");
+
+        let mut from_file = empty_collection_ipc(1, "from-file");
+        from_file.description = Some("from-file".into());
+        from_file.default_tls = true;
+        from_file.variables.insert("host".into(), "file".into());
+        from_file.auth = SavedAuthConfigIpc::EnvVar {
+            env_var: "HS_BEARER".into(),
+            header_name: "authorization".into(),
+            prefix: "Bearer ".into(),
+            environments: vec![],
+        };
+        from_file.items = vec![
+            folder_ipc(20, "folder-renamed", vec![
+                request_ipc(21, "nested-match", "New"),
+                request_ipc(23, "nested-new", "NewChild"),
+                request_ipc(50, "moved-in-file", "Moved"),
+            ]),
+            request_ipc(30, "root-match", "NewRoot"),
+            request_ipc(40, "root-new", "Added"),
+        ];
+        let source = AppState::default();
+        source.collection_upsert_impl(from_file).unwrap();
+        source.bundle_export_impl(src.to_string_lossy().into_owned(), None).unwrap();
+
+        let mut local = empty_collection_ipc(1, "local-name");
+        local.variables.insert("only-local".into(), "stay".into());
+        local.items = vec![
+            request_ipc(10, "keep", "Keep"),
+            folder_ipc(20, "folder", vec![request_ipc(21, "nested-match", "Old"), request_ipc(22, "nested-keep", "NestedKeep")]),
+            request_ipc(30, "root-match", "OldRoot"),
+            request_ipc(50, "moved-in-file", "OldMoved"),
+        ];
+        let target = AppState::default();
+        target.collection_upsert_impl(local).unwrap();
+
+        let result = target.bundle_import_apply_impl(src.to_string_lossy().into_owned()).unwrap();
+        assert_eq!(result.collections_added, 0);
+        assert_eq!(result.collections_updated, 1);
+
+        let got = target.collection_get_impl(&Uuid::from_u128(1).to_string()).unwrap();
+        assert_eq!(got.name, "from-file");
+        assert_eq!(got.description.as_deref(), Some("from-file"));
+        assert!(got.default_tls);
+        assert_eq!(got.variables.get("host").map(String::as_str), Some("file"));
+        assert!(got.variables.get("only-local").is_none());
+        assert!(matches!(got.auth, SavedAuthConfigIpc::EnvVar { ref env_var, .. } if env_var == "HS_BEARER"));
+
+        let root_ids: Vec<&str> = got.items.iter().map(item_id).collect();
+        let expect_root = [
+            Uuid::from_u128(10).to_string(),
+            Uuid::from_u128(20).to_string(),
+            Uuid::from_u128(30).to_string(),
+            Uuid::from_u128(50).to_string(),
+            Uuid::from_u128(40).to_string(),
+        ];
+        assert_eq!(root_ids, expect_root.iter().map(String::as_str).collect::<Vec<_>>());
+
+        let ItemIpc::Folder(folder) = &got.items[1] else { panic!("expected folder") };
+        assert_eq!(folder.name, "folder-renamed");
+        let child_ids: Vec<&str> = folder.items.iter().map(item_id).collect();
+        let expect_children = [
+            Uuid::from_u128(21).to_string(),
+            Uuid::from_u128(22).to_string(),
+            Uuid::from_u128(23).to_string(),
+        ];
+        assert_eq!(child_ids, expect_children.iter().map(String::as_str).collect::<Vec<_>>());
+        assert_eq!(grpc_method(&folder.items[0]), "New");
+        assert_eq!(grpc_method(&folder.items[1]), "NestedKeep");
+        assert_eq!(grpc_method(&got.items[2]), "NewRoot");
+        assert_eq!(grpc_method(&got.items[3]), "Moved");
+        assert_eq!(grpc_method(&got.items[4]), "Added");
     }
 
     #[test]

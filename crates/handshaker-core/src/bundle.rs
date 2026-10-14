@@ -32,6 +32,12 @@ impl Bundle {
     }
 }
 
+pub fn merge_collection(local: Collection, mut imported: Collection) -> Collection {
+    let imported_items = std::mem::take(&mut imported.items);
+    imported.items = crate::collections::tree::merge_items(local.items, imported_items);
+    imported
+}
+
 /// Serialize `bundle` into an [`Envelope`] and atomically write it to `path`.
 pub fn write_bundle(path: &Path, bundle: &Bundle) -> Result<(), CoreError> {
     atomic_write_json(path, &Envelope::new(bundle))
