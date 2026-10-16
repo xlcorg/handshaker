@@ -526,6 +526,18 @@ export const messages = {
       discardDescription:
         "Switching environments will lose unsaved edits to this environment.",
       discard: "Discard",
+      filterAria: "Filter variables by key",
+      findPlaceholder: "Find a variable",
+      shownOfTotal: (shown: number, total: number) => `${shown} of ${total}`,
+      noMatch: (query: string) => `No keys match "${query}"`,
+      paletteHint: "Type a key, then Enter to edit that row",
+      sortSaved: "As saved",
+      sortByKey: "Sort by key",
+      sortByValue: "Sort by value",
+      sortKey: "Key",
+      sortValue: "Value",
+      columnKey: "Key",
+      columnValue: "Value",
     },
   },
   settings: {
