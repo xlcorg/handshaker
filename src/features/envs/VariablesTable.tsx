@@ -1,6 +1,14 @@
 import { Fragment, useLayoutEffect, useRef, useState } from "react";
+import {
+  ChevronDown,
+  ChevronUp,
+  ChevronsUpDown,
+  Search,
+  X,
+} from "lucide-react";
 
 import { cn } from "@/lib/cn";
+import { messages } from "@/lib/messages";
 import { VarResolveLine, hasVars } from "@/features/vars/VarResolveLine";
 import type { ResolutionReportIpc } from "@/ipc/bindings";
 import { Button } from "@/components/ui/button";
@@ -13,6 +21,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { cycleVarSort, viewVarRows, type VarSort } from "./varView";
+
+const mv = messages.envs.editor;
+
 export interface VariablesTableProps {
   /** Current variables as { key -> value }. */
   value: Record<string, string>;
@@ -40,7 +52,11 @@ function nextId(): string {
 }
 
 function initialRows(map: Record<string, string>): Row[] {
-  const rows: Row[] = Object.entries(map).map(([k, v]) => ({ key: k, value: v, id: nextId() }));
+  const rows: Row[] = Object.entries(map).map(([k, v]) => ({
+    key: k,
+    value: v,
+    id: nextId(),
+  }));
   // Trailing empty-row is always present at the end.
   rows.push({ key: "", value: "", id: nextId() });
   return rows;
@@ -132,107 +148,230 @@ function ValueCell({
   );
 }
 
-export function VariablesTable({ value, onChange, resolveRow, resolveKey }: VariablesTableProps) {
-  const [rows, setRows] = useState<Row[]>(() => initialRows(value));
+function SortGlyph({
+  column,
+  sort,
+}: {
+  column: "key" | "value";
+  sort: VarSort;
+}) {
+  if (sort.by !== column)
+    return <ChevronsUpDown className="size-3 opacity-40" aria-hidden />;
+  return sort.dir === "asc" ? (
+    <ChevronUp className="size-3" aria-hidden />
+  ) : (
+    <ChevronDown className="size-3" aria-hidden />
+  );
+}
 
-  function updateRow(idx: number, patch: Partial<Row>) {
+export function VariablesTable({
+  value,
+  onChange,
+  resolveRow,
+  resolveKey,
+}: VariablesTableProps) {
+  const [rows, setRows] = useState<Row[]>(() => initialRows(value));
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<VarSort>({ by: "saved" });
+
+  function updateRow(id: string, patch: Partial<Row>) {
+    const idx = rows.findIndex((r) => r.id === id);
+    if (idx < 0) return;
     const prevKey = rows[idx].key;
     const isLast = idx === rows.length - 1;
     let next = rows.map((r, i) => (i === idx ? { ...r, ...patch } : r));
     // If the user just started typing in the trailing empty-row, append a new
     // empty-row at the end. The current row keeps its stable id, so React does
     // NOT remount its inputs — focus and caret stay put.
-    if (isLast && prevKey === "" && typeof patch.key === "string" && patch.key !== "") {
+    if (
+      isLast &&
+      prevKey === "" &&
+      typeof patch.key === "string" &&
+      patch.key !== ""
+    ) {
       next = [...next, { key: "", value: "", id: nextId() }];
     }
     setRows(next);
     onChange(fromRows(next));
   }
 
-  function deleteRow(idx: number) {
+  function deleteRow(id: string) {
+    const idx = rows.findIndex((r) => r.id === id);
+    if (idx < 0) return;
     // Never delete the trailing empty-row — it's the input surface for new vars.
     if (idx === rows.length - 1 && rows[idx].key === "") return;
-    const next = rows.filter((_, i) => i !== idx);
+    const next = rows.filter((r) => r.id !== id);
     setRows(next);
     onChange(fromRows(next));
   }
 
   // Duplicate detection: skip empty-key rows (multiple "" rows aren't a "duplicate").
+  const dupIds = new Set<string>();
   const seenKeys = new Set<string>();
-  const dupFlags = rows.map((r) => {
-    if (r.key.length === 0) return false;
-    const dup = seenKeys.has(r.key);
+  for (const r of rows) {
+    if (r.key.length === 0) continue;
+    if (seenKeys.has(r.key)) dupIds.add(r.id);
     seenKeys.add(r.key);
-    return dup;
-  });
+  }
+
+  const trailing = rows[rows.length - 1];
+  const body = rows.slice(0, -1);
+  const viewed = viewVarRows(body, query, sort);
+  const display = trailing ? [...viewed, trailing] : viewed;
+  const filtering = query.trim().length > 0;
+
+  function renderRow(r: Row, isTrailingEmpty: boolean) {
+    return (
+      <Fragment key={r.id}>
+        <TableRow className="group hover:bg-transparent border-t">
+          <TableCell className="p-0 align-top">
+            <Input
+              value={r.key}
+              data-var-key={r.key}
+              data-var-row={r.id}
+              onChange={(e) => updateRow(r.id, { key: e.target.value })}
+              placeholder={isTrailingEmpty ? "Add variable" : "key"}
+              className={CELL_INPUT_CLASS}
+            />
+          </TableCell>
+          <TableCell className="p-0 align-top border-l">
+            <ValueCell
+              value={r.value}
+              onChange={(v) => updateRow(r.id, { value: v })}
+              disabled={isTrailingEmpty}
+              placeholder={isTrailingEmpty ? "" : "value"}
+            />
+          </TableCell>
+          <TableCell className="w-9 p-0 align-top border-l text-center">
+            {isTrailingEmpty ? null : (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="mt-1 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 text-muted-foreground hover:text-destructive"
+                onClick={() => deleteRow(r.id)}
+                aria-label={`delete variable ${r.key || "(unnamed)"}`}
+              >
+                ✕
+              </Button>
+            )}
+          </TableCell>
+        </TableRow>
+        {dupIds.has(r.id) && (
+          <TableRow className="hover:bg-transparent border-b-0">
+            <TableCell colSpan={3} className="py-1 px-2 text-xs text-warn">
+              duplicate key — last value wins
+            </TableCell>
+          </TableRow>
+        )}
+        {!isTrailingEmpty && resolveRow && hasVars(r.value) && (
+          <TableRow className="hover:bg-transparent border-b-0">
+            <TableCell colSpan={3} className="px-2 py-1">
+              <VarResolveLine
+                value={r.value}
+                resolver={resolveRow}
+                resolveKey={resolveKey}
+              />
+            </TableCell>
+          </TableRow>
+        )}
+      </Fragment>
+    );
+  }
 
   return (
-    <div className="rounded-md border overflow-hidden">
+    <div className="rounded-md border [&_[data-slot=table-container]]:!overflow-visible">
+      <div className="sticky top-0 z-10 flex h-11 items-center gap-2 border-b border-border bg-background px-2">
+        <div className="flex h-8 min-w-0 flex-1 items-center gap-1.5 rounded-md border border-input bg-background px-2">
+          <Search
+            className="size-3.5 shrink-0 text-muted-foreground"
+            aria-hidden
+          />
+          <input
+            type="text"
+            role="searchbox"
+            aria-label={mv.filterAria}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={mv.filterPlaceholder}
+            className="h-8 w-full bg-transparent font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground"
+          />
+          {filtering && (
+            <button
+              type="button"
+              aria-label={mv.clearFilter}
+              onClick={() => setQuery("")}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <X className="size-3.5" aria-hidden />
+            </button>
+          )}
+        </div>
+        <span className="w-16 shrink-0 text-right font-mono text-[10.5px] tabular-nums text-muted-foreground">
+          {filtering ? mv.shownOfTotal(viewed.length, body.length) : ""}
+        </span>
+      </div>
       <Table>
-        <TableHeader>
-          <TableRow className="hover:bg-transparent bg-muted/40">
-            <TableHead className="w-1/2 h-8 text-[11px] uppercase tracking-wide font-medium text-muted-foreground">
-              Key
+        <TableHeader className="sticky top-11 z-10 bg-muted">
+          <TableRow className="hover:bg-transparent bg-muted">
+            <TableHead
+              aria-sort={
+                sort.by === "key"
+                  ? sort.dir === "asc"
+                    ? "ascending"
+                    : "descending"
+                  : "none"
+              }
+              className="w-1/2 h-8 p-0"
+            >
+              <button
+                type="button"
+                aria-label={mv.sortByKey}
+                onClick={() =>
+                  setSort((current) => cycleVarSort(current, "key"))
+                }
+                className="flex h-8 w-full items-center gap-1 px-2 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground"
+              >
+                {mv.columnKey}
+                <SortGlyph column="key" sort={sort} />
+              </button>
             </TableHead>
-            <TableHead className="h-8 text-[11px] uppercase tracking-wide font-medium text-muted-foreground border-l">
-              Value
+            <TableHead
+              aria-sort={
+                sort.by === "value"
+                  ? sort.dir === "asc"
+                    ? "ascending"
+                    : "descending"
+                  : "none"
+              }
+              className="h-8 border-l p-0"
+            >
+              <button
+                type="button"
+                aria-label={mv.sortByValue}
+                onClick={() =>
+                  setSort((current) => cycleVarSort(current, "value"))
+                }
+                className="flex h-8 w-full items-center gap-1 px-2 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground"
+              >
+                {mv.columnValue}
+                <SortGlyph column="value" sort={sort} />
+              </button>
             </TableHead>
             <TableHead className="w-9 h-8 border-l" aria-label="actions" />
           </TableRow>
         </TableHeader>
         <TableBody>
-          {rows.map((r, i) => {
-            const isTrailingEmpty = i === rows.length - 1 && r.key === "";
-            return (
-              <Fragment key={r.id}>
-                <TableRow className="group hover:bg-transparent border-t">
-                  <TableCell className="p-0 align-top">
-                    <Input
-                      value={r.key}
-                      onChange={(e) => updateRow(i, { key: e.target.value })}
-                      placeholder={isTrailingEmpty ? "Add variable" : "key"}
-                      className={CELL_INPUT_CLASS}
-                    />
-                  </TableCell>
-                  <TableCell className="p-0 align-top border-l">
-                    <ValueCell
-                      value={r.value}
-                      onChange={(v) => updateRow(i, { value: v })}
-                      disabled={isTrailingEmpty}
-                      placeholder={isTrailingEmpty ? "" : "value"}
-                    />
-                  </TableCell>
-                  <TableCell className="w-9 p-0 align-top border-l text-center">
-                    {isTrailingEmpty ? null : (
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        className="mt-1 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 text-muted-foreground hover:text-destructive"
-                        onClick={() => deleteRow(i)}
-                        aria-label={`delete variable ${r.key || "(unnamed)"}`}
-                      >
-                        ✕
-                      </Button>
-                    )}
-                  </TableCell>
-                </TableRow>
-                {dupFlags[i] && (
-                  <TableRow className="hover:bg-transparent border-b-0">
-                    <TableCell colSpan={3} className="py-1 px-2 text-xs text-warn">
-                      duplicate key — last value wins
-                    </TableCell>
-                  </TableRow>
-                )}
-                {!isTrailingEmpty && resolveRow && hasVars(r.value) && (
-                  <TableRow className="hover:bg-transparent border-b-0">
-                    <TableCell colSpan={3} className="px-2 py-1">
-                      <VarResolveLine value={r.value} resolver={resolveRow} resolveKey={resolveKey} />
-                    </TableCell>
-                  </TableRow>
-                )}
-              </Fragment>
-            );
-          })}
+          {filtering && viewed.length === 0 && (
+            <TableRow className="hover:bg-transparent">
+              <TableCell
+                colSpan={3}
+                className="py-6 text-center text-xs text-muted-foreground"
+              >
+                {mv.noMatch(query.trim())}
+              </TableCell>
+            </TableRow>
+          )}
+          {display.map((r) => renderRow(r, r.id === trailing?.id))}
         </TableBody>
       </Table>
     </div>
