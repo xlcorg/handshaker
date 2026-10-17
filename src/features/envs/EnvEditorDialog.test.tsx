@@ -202,18 +202,43 @@ describe("EnvEditorDialog edit mode", () => {
     expect(screen.getByRole("button", { name: m.done })).toBeInTheDocument();
   });
 
-  it("opens in added order and labels the sort control oldest first", () => {
+  it("opens oldest first under VARIABLE and cycles the header through four orders", async () => {
+    const user = userEvent.setup();
     installStore(
-      [{ name: "prod", color: null, variables: { zebra: "z", alpha: "a" } }],
+      [
+        {
+          name: "prod",
+          color: null,
+          variables: { zeta: "1", alpha: "2", mango: "3" },
+        },
+      ],
       "prod",
     );
     renderEditor("prod");
-    const sort = screen.getByRole("button", { name: new RegExp(m.sortAria) });
-    expect(sort).toHaveTextContent(m.sort["added-oldest"]);
-    const keys = screen
-      .getAllByPlaceholderText(m.keyPlaceholder)
-      .map((el) => (el as HTMLInputElement).value);
-    expect(keys).toEqual(["zebra", "alpha"]);
+    const header = () => screen.getByRole("columnheader", { name: /Variable/ });
+    const keys = () =>
+      screen.getAllByPlaceholderText(m.keyPlaceholder).map((el) => (el as HTMLInputElement).value);
+    expect(screen.getByPlaceholderText(m.searchPlaceholder)).toBeInTheDocument();
+    expect(header()).toHaveAttribute("aria-sort", "ascending");
+    expect(header()).toHaveTextContent(m.sort["added-oldest"]);
+    expect(keys()).toEqual(["zeta", "alpha", "mango"]);
+
+    await user.click(screen.getByRole("button", { name: /Variable/ }));
+    expect(header()).toHaveAttribute("aria-sort", "descending");
+    expect(header()).toHaveTextContent(m.sort["added-newest"]);
+    expect(keys()).toEqual(["mango", "alpha", "zeta"]);
+
+    await user.click(screen.getByRole("button", { name: /Variable/ }));
+    expect(header()).toHaveAttribute("aria-sort", "ascending");
+    expect(keys()).toEqual(["alpha", "mango", "zeta"]);
+
+    await user.click(screen.getByRole("button", { name: /Variable/ }));
+    expect(header()).toHaveAttribute("aria-sort", "descending");
+    expect(keys()).toEqual(["zeta", "mango", "alpha"]);
+
+    await user.click(screen.getByRole("button", { name: /Variable/ }));
+    expect(header()).toHaveAttribute("data-sort", "added-oldest");
+    expect(keys()).toEqual(["zeta", "alpha", "mango"]);
   });
 
   it("saves a value edit after the pause and keeps an unpicked color null", async () => {
@@ -541,23 +566,11 @@ describe("EnvEditorDialog edit mode", () => {
     await waitFor(() => expect(onReverted).toHaveBeenCalled());
   });
 
-  it("Escape closes the sort menu before the editor", async () => {
+  it("Escape from the variable header closes the editor", async () => {
     const user = userEvent.setup();
     const { onLeave } = renderEditor("prod");
-    await user.click(
-      screen.getByRole("button", { name: new RegExp(m.sortAria) }),
-    );
-    expect(
-      await screen.findByRole("menuitemradio", { name: m.sort["key-desc"] }),
-    ).toBeInTheDocument();
-
-    await user.keyboard("{Escape}");
-    expect(
-      screen.queryByRole("menuitemradio", { name: m.sort["key-desc"] }),
-    ).toBeNull();
-    expect(onLeave).not.toHaveBeenCalled();
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
-
+    await user.click(screen.getByRole("button", { name: /Variable/ }));
+    expect(screen.queryByRole("menu")).toBeNull();
     await user.keyboard("{Escape}");
     expect(onLeave).toHaveBeenCalledWith({ kind: "closed" });
   });

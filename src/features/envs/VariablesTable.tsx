@@ -1,5 +1,5 @@
-import { Fragment, useId, useLayoutEffect, useRef, useState } from "react";
-import { Trash2 } from "lucide-react";
+import { Fragment, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { ArrowDown, ArrowDownAZ, ArrowDownZA, ArrowUp, Clock, Trash2 } from "lucide-react";
 
 import { cn } from "@/lib/cn";
 import { messages } from "@/lib/messages";
@@ -10,11 +10,13 @@ import { Input } from "@/components/ui/input";
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 import { fieldAttr, type EditorIntent, type VisibleRow } from "./useEnvEditor";
+import { nextSort, sortDirection, type SortMode } from "./varView";
 
 const m = messages.envs.editor;
 
 export interface VariablesTableProps {
   readonly rows: readonly VisibleRow[];
+  readonly sort?: SortMode;
   readonly dispatch: (intent: EditorIntent) => void;
   readonly resolveRow?: (value: string) => Promise<ResolutionReportIpc>;
   readonly resolveKey?: string;
@@ -156,13 +158,56 @@ function KeyCell({ row, dispatch }: { row: VisibleRow; dispatch: VariablesTableP
   );
 }
 
-export function VariablesTable({ rows, dispatch, resolveRow, resolveKey }: VariablesTableProps) {
+const MARK = { strokeWidth: 1.5, className: "size-3.5 shrink-0", "aria-hidden": true } as const;
+
+function SortMark({ sort }: { sort: SortMode }) {
+  if (sort === "key-asc") return <ArrowDownAZ {...MARK} />;
+  if (sort === "key-desc") return <ArrowDownZA {...MARK} />;
+  const Arrow = sort === "added-oldest" ? ArrowUp : ArrowDown;
+  return (
+    <span className="inline-flex items-center" aria-hidden>
+      <Clock {...MARK} />
+      <Arrow {...MARK} />
+    </span>
+  );
+}
+
+function sortHint(sort: SortMode): string {
+  return `${m.sort[sort]}. Next, ${m.sort[nextSort(sort)]}.`;
+}
+
+function HeaderButton({ sort, dispatch, children }: { sort: SortMode; dispatch: VariablesTableProps["dispatch"]; children: ReactNode }) {
+  const hint = sortHint(sort);
+  return (
+    <button
+      type="button"
+      title={hint}
+      data-sort-cycle=""
+      className="flex h-8 w-full items-center gap-1.5 text-left uppercase tracking-wide"
+      onClick={() => dispatch({ type: "setSort", sort: nextSort(sort) })}
+    >
+      {children}
+      <span className="sr-only">{hint}</span>
+    </button>
+  );
+}
+
+export function VariablesTable({ rows, sort = "added-oldest", dispatch, resolveRow, resolveKey }: VariablesTableProps) {
   return (
     <div className="rounded-md border">
       <table data-slot="table" className="w-full table-fixed caption-bottom text-sm">
         <TableHeader className="[&_tr]:border-b-0">
           <TableRow className="hover:bg-transparent">
-            <TableHead className={cn(HEAD_CLASS, HEAD_RULE, "w-1/3 rounded-tl-md")}>{m.keyHeader}</TableHead>
+            <TableHead
+              aria-sort={sortDirection(sort)}
+              data-sort={sort}
+              className={cn(HEAD_CLASS, HEAD_RULE, "w-1/3 rounded-tl-md")}
+            >
+              <HeaderButton sort={sort} dispatch={dispatch}>
+                <span>{m.keyHeader}</span>
+                <SortMark sort={sort} />
+              </HeaderButton>
+            </TableHead>
             <TableHead className={cn(HEAD_CLASS, HEAD_RULE_LEFT)}>{m.valueHeader}</TableHead>
             <TableHead className={cn(HEAD_CLASS, HEAD_RULE_LEFT, "w-9 rounded-tr-md")} aria-label={m.actionsHeader} />
           </TableRow>
