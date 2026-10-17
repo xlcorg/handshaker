@@ -1,58 +1,23 @@
-import { Fragment, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useId, useLayoutEffect, useRef, useState } from "react";
+import { Trash2 } from "lucide-react";
 
 import { cn } from "@/lib/cn";
+import { messages } from "@/lib/messages";
 import { VarResolveLine, hasVars } from "@/features/vars/VarResolveLine";
 import type { ResolutionReportIpc } from "@/ipc/bindings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
+import { fieldAttr, type EditorIntent, type VisibleRow } from "./useEnvEditor";
+
+const m = messages.envs.editor;
+
 export interface VariablesTableProps {
-  /** Current variables as { key -> value }. */
-  value: Record<string, string>;
-  /** Called on every change with the next variables map. */
-  onChange: (next: Record<string, string>) => void;
-  /** Optional per-row resolve preview (env editor passes an env_vars-overlay resolver). */
-  resolveRow?: (value: string) => Promise<ResolutionReportIpc>;
-  resolveKey?: string;
-}
-
-interface Row {
-  key: string;
-  value: string;
-  /** Stable per-row id used as React key. Created once at row birth and never mutated,
-   *  so React reconciles the same DOM element across edits and the input keeps focus. */
-  id: string;
-}
-
-// Module-level counter; ids never collide across instances or across promotions
-// of the trailing empty-row into a real row.
-let _idCounter = 0;
-function nextId(): string {
-  _idCounter += 1;
-  return `vrow_${_idCounter}`;
-}
-
-function initialRows(map: Record<string, string>): Row[] {
-  const rows: Row[] = Object.entries(map).map(([k, v]) => ({ key: k, value: v, id: nextId() }));
-  // Trailing empty-row is always present at the end.
-  rows.push({ key: "", value: "", id: nextId() });
-  return rows;
-}
-
-function fromRows(rows: Row[]): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const r of rows) {
-    if (r.key.length === 0) continue;
-    out[r.key] = r.value; // dup keys: last wins
-  }
-  return out;
+  readonly rows: readonly VisibleRow[];
+  readonly dispatch: (intent: EditorIntent) => void;
+  readonly resolveRow?: (value: string) => Promise<ResolutionReportIpc>;
+  readonly resolveKey?: string;
 }
 
 // Borderless input that fills its table cell. Padding matches TableHead/TableCell (px-2)
@@ -64,20 +29,30 @@ const CELL_INPUT_CLASS =
 // must not be able to blow up the dialog height.
 const VALUE_MAX_PX = 168;
 
+const HEAD_CLASS = "sticky top-0 z-10 h-8 bg-muted text-[11px] uppercase tracking-wide font-medium text-muted-foreground";
+// Collapsed table borders stay put when a sticky cell moves, so header rules are inset shadows.
+const HEAD_RULE = "shadow-[inset_0_-1px_0_var(--color-border)]";
+const HEAD_RULE_LEFT = "shadow-[inset_1px_-1px_0_var(--color-border)]";
+
+const ISSUE_TONE = {
+  empty: { ring: "ring-destructive", text: "text-destructive", label: m.keyEmpty },
+  duplicate: { ring: "ring-warn", text: "text-warn", label: m.keyDuplicate },
+} as const;
+
 /** Value editor cell. Blurred: one clipped line (reads like the old single-line
  *  input). Focused: wraps and auto-grows to fit content, capped at VALUE_MAX_PX,
  *  then scrolls. `scrollHeight` is 0 under jsdom, so the grow is a live-only
  *  behaviour — tests assert this is a <textarea>, not its height. */
 function ValueCell({
+  field,
   value,
   onChange,
   disabled,
-  placeholder,
 }: {
+  field: string;
   value: string;
   onChange: (v: string) => void;
   disabled?: boolean;
-  placeholder?: string;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const [focused, setFocused] = useState(false);
@@ -107,10 +82,13 @@ function ValueCell({
   return (
     <textarea
       ref={ref}
+      data-field={field}
+      aria-label={m.valueHeader}
       rows={1}
       value={value}
       disabled={disabled}
-      placeholder={placeholder}
+      placeholder={disabled ? "" : m.valuePlaceholder}
+      spellCheck={false}
       onChange={(e) => onChange(e.target.value)}
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
@@ -132,101 +110,98 @@ function ValueCell({
   );
 }
 
-export function VariablesTable({ value, onChange, resolveRow, resolveKey }: VariablesTableProps) {
-  const [rows, setRows] = useState<Row[]>(() => initialRows(value));
-
-  function updateRow(idx: number, patch: Partial<Row>) {
-    const prevKey = rows[idx].key;
-    const isLast = idx === rows.length - 1;
-    let next = rows.map((r, i) => (i === idx ? { ...r, ...patch } : r));
-    // If the user just started typing in the trailing empty-row, append a new
-    // empty-row at the end. The current row keeps its stable id, so React does
-    // NOT remount its inputs — focus and caret stay put.
-    if (isLast && prevKey === "" && typeof patch.key === "string" && patch.key !== "") {
-      next = [...next, { key: "", value: "", id: nextId() }];
-    }
-    setRows(next);
-    onChange(fromRows(next));
-  }
-
-  function deleteRow(idx: number) {
-    // Never delete the trailing empty-row — it's the input surface for new vars.
-    if (idx === rows.length - 1 && rows[idx].key === "") return;
-    const next = rows.filter((_, i) => i !== idx);
-    setRows(next);
-    onChange(fromRows(next));
-  }
-
-  // Duplicate detection: skip empty-key rows (multiple "" rows aren't a "duplicate").
-  const seenKeys = new Set<string>();
-  const dupFlags = rows.map((r) => {
-    if (r.key.length === 0) return false;
-    const dup = seenKeys.has(r.key);
-    seenKeys.add(r.key);
-    return dup;
-  });
-
+function KeyCell({ row, dispatch }: { row: VisibleRow; dispatch: VariablesTableProps["dispatch"] }) {
+  const issueId = useId();
+  const tone = row.issue ? ISSUE_TONE[row.issue] : null;
   return (
-    <div className="rounded-md border overflow-hidden">
-      <Table>
-        <TableHeader>
-          <TableRow className="hover:bg-transparent bg-muted/40">
-            <TableHead className="w-1/2 h-8 text-[11px] uppercase tracking-wide font-medium text-muted-foreground">
-              Key
-            </TableHead>
-            <TableHead className="h-8 text-[11px] uppercase tracking-wide font-medium text-muted-foreground border-l">
-              Value
-            </TableHead>
-            <TableHead className="w-9 h-8 border-l" aria-label="actions" />
+    <>
+      <div className={cn("relative", tone && ["ring-1 ring-inset", tone.ring])}>
+        <Input
+          data-field={fieldAttr({ kind: "key", rowId: row.id })}
+          aria-label={m.keyHeader}
+          aria-invalid={tone !== null}
+          aria-describedby={tone ? issueId : undefined}
+          value={row.keyText}
+          placeholder={m.keyPlaceholder}
+          autoComplete="off"
+          spellCheck={false}
+          onChange={(e) => dispatch({ type: "typeKey", rowId: row.id, text: e.target.value })}
+          onBlur={() => dispatch({ type: "commitKey", rowId: row.id, via: "blur" })}
+          onKeyDown={(e) => {
+            if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
+            e.preventDefault();
+            dispatch({ type: "commitKey", rowId: row.id, via: "enter" });
+          }}
+          className={cn(CELL_INPUT_CLASS, "peer relative z-[1] bg-transparent! dark:bg-transparent!")}
+        />
+        {row.match && (
+          // A focused input scrolls its own text, so the backdrop would drift; hide it while editing.
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 flex items-center overflow-hidden whitespace-pre px-2 font-mono text-sm text-transparent peer-focus:invisible"
+          >
+            {row.keyText.slice(0, row.match.start)}
+            <mark className="rounded-[2px] bg-info/40 text-transparent">
+              {row.keyText.slice(row.match.start, row.match.end)}
+            </mark>
+          </div>
+        )}
+      </div>
+      {tone && (
+        <p id={issueId} className={cn("px-2 pb-1.5 text-xs", tone.text)}>
+          {tone.label}
+        </p>
+      )}
+    </>
+  );
+}
+
+export function VariablesTable({ rows, dispatch, resolveRow, resolveKey }: VariablesTableProps) {
+  return (
+    <div className="rounded-md border">
+      <table data-slot="table" className="w-full table-fixed caption-bottom text-sm">
+        <TableHeader className="[&_tr]:border-b-0">
+          <TableRow className="hover:bg-transparent">
+            <TableHead className={cn(HEAD_CLASS, HEAD_RULE, "w-1/3 rounded-tl-md")}>{m.keyHeader}</TableHead>
+            <TableHead className={cn(HEAD_CLASS, HEAD_RULE_LEFT)}>{m.valueHeader}</TableHead>
+            <TableHead className={cn(HEAD_CLASS, HEAD_RULE_LEFT, "w-9 rounded-tr-md")} aria-label={m.actionsHeader} />
           </TableRow>
         </TableHeader>
         <TableBody>
-          {rows.map((r, i) => {
-            const isTrailingEmpty = i === rows.length - 1 && r.key === "";
+          {rows.map((row) => {
+            const preview = !row.pending && hasVars(row.value) ? resolveRow : undefined;
             return (
-              <Fragment key={r.id}>
-                <TableRow className="group hover:bg-transparent border-t">
-                  <TableCell className="p-0 align-top">
-                    <Input
-                      value={r.key}
-                      onChange={(e) => updateRow(i, { key: e.target.value })}
-                      placeholder={isTrailingEmpty ? "Add variable" : "key"}
-                      className={CELL_INPUT_CLASS}
-                    />
+              <Fragment key={row.id}>
+                <TableRow className={cn("group/envrow hover:bg-transparent", preview && "border-b-0")}>
+                  <TableCell className="p-0 align-top whitespace-normal">
+                    <KeyCell row={row} dispatch={dispatch} />
                   </TableCell>
                   <TableCell className="p-0 align-top border-l">
                     <ValueCell
-                      value={r.value}
-                      onChange={(v) => updateRow(i, { value: v })}
-                      disabled={isTrailingEmpty}
-                      placeholder={isTrailingEmpty ? "" : "value"}
+                      field={fieldAttr({ kind: "value", rowId: row.id })}
+                      value={row.value}
+                      onChange={(text) => dispatch({ type: "editValue", rowId: row.id, text })}
+                      disabled={row.pending && row.keyText === ""}
                     />
                   </TableCell>
                   <TableCell className="w-9 p-0 align-top border-l text-center">
-                    {isTrailingEmpty ? null : (
+                    {!row.pending && (
                       <Button
                         variant="ghost"
-                        size="icon-sm"
-                        className="mt-1 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 text-muted-foreground hover:text-destructive"
-                        onClick={() => deleteRow(i)}
-                        aria-label={`delete variable ${r.key || "(unnamed)"}`}
+                        size="icon-xs"
+                        className="mt-1.5 text-muted-foreground opacity-0 group-hover/envrow:opacity-100 focus-visible:opacity-100 hover:text-destructive"
+                        onClick={() => dispatch({ type: "deleteRow", rowId: row.id })}
+                        aria-label={m.deleteVariableAria(row.keyText)}
                       >
-                        ✕
+                        <Trash2 />
                       </Button>
                     )}
                   </TableCell>
                 </TableRow>
-                {dupFlags[i] && (
-                  <TableRow className="hover:bg-transparent border-b-0">
-                    <TableCell colSpan={3} className="py-1 px-2 text-xs text-warn">
-                      duplicate key — last value wins
-                    </TableCell>
-                  </TableRow>
-                )}
-                {!isTrailingEmpty && resolveRow && hasVars(r.value) && (
-                  <TableRow className="hover:bg-transparent border-b-0">
+                {preview && (
+                  <TableRow className="hover:bg-transparent">
                     <TableCell colSpan={3} className="px-2 py-1">
-                      <VarResolveLine value={r.value} resolver={resolveRow} resolveKey={resolveKey} />
+                      <VarResolveLine value={row.value} resolver={preview} resolveKey={resolveKey} />
                     </TableCell>
                   </TableRow>
                 )}
@@ -234,7 +209,7 @@ export function VariablesTable({ value, onChange, resolveRow, resolveKey }: Vari
             );
           })}
         </TableBody>
-      </Table>
+      </table>
     </div>
   );
 }

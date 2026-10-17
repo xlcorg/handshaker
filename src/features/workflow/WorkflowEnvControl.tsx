@@ -1,5 +1,6 @@
 import { ChevronDown } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
 import { ConfirmDeleteEnvDialog } from "@/features/envs/ConfirmDeleteEnvDialog";
 import { EnvEditorDialog } from "@/features/envs/EnvEditorDialog";
@@ -10,6 +11,7 @@ import { isEnvCycleHotkey, nextEnvName } from "@/features/envs/cycle";
 import { isEnvEditHotkey } from "@/features/envs/openEditor";
 import { envList, envReorder } from "@/ipc/client";
 import type { EnvironmentIpc } from "@/ipc/bindings";
+import { messages } from "@/lib/messages";
 
 import { useActiveWorkflow, workflowStore } from "./store";
 
@@ -27,7 +29,8 @@ export function WorkflowEnvControl() {
   // so imported envs surface without a remount.
   const envRevision = useEnvRevision();
   const [envs, setEnvs] = useState<EnvironmentIpc[]>([]);
-  const [editor, setEditor] = useState<{ originalName: string | null } | null>(null);
+  const [editor, setEditor] = useState<{ subject: string | null } | null>(null);
+  const envSnapshot = useRef<EnvironmentIpc[] | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   const refreshEnvs = useCallback(async () => {
@@ -96,10 +99,8 @@ export function WorkflowEnvControl() {
       if (e.repeat || !isEnvEditHotkey(e)) return;
       e.preventDefault();
       e.stopPropagation();
-      // The editor is already open. Replacing its subject here would drop the
-      // draft. Switching belongs to the in-dialog control, which asks first.
       if (editor !== null) return;
-      setEditor({ originalName: activeEnv });
+      setEditor({ subject: activeEnv });
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
@@ -126,31 +127,46 @@ export function WorkflowEnvControl() {
           </button>
         }
         onActiveSet={(next) => workflowStore.setWorkflowEnv(next)}
-        onEditEnv={(name) => setEditor({ originalName: name })}
-        onNewEnv={() => setEditor({ originalName: null })}
+        onEditEnv={(name) => setEditor({ subject: name })}
+        onNewEnv={() => setEditor({ subject: null })}
         onReorder={handleReorder}
       />
       {editor && (
         <EnvEditorDialog
-          key={editor.originalName ?? "__new__"}
-          open={true}
-          originalName={editor.originalName}
-          activeEnv={activeEnv}
+          key={editor.subject ?? "__new__"}
+          subject={editor.subject}
           envs={envs}
-          onSwitch={(name) => setEditor({ originalName: name })}
-          onOpenChange={(open) => {
-            if (!open) setEditor(null);
+          onOptimistic={(env, previousName) => {
+            setEnvs((prev) => {
+              if (envSnapshot.current === null) envSnapshot.current = prev;
+              const at = prev.findIndex((item) => item.name === previousName);
+              if (at < 0) return [...prev, env];
+              const next = prev.slice();
+              next[at] = env;
+              return next;
+            });
           }}
-          onSaved={async (savedName, becameActive) => {
+          onReverted={() => {
+            const snapshot = envSnapshot.current;
+            envSnapshot.current = null;
+            if (snapshot) setEnvs(snapshot);
+            else void refreshEnvs();
+            toast.error(messages.envs.editor.saveFailed);
+          }}
+          onStored={async ({ activated }) => {
+            envSnapshot.current = null;
             await refreshEnvs();
             // Env contents changed — re-resolve any preview bound to the active env
             // (e.g. the collection-variables editor, which resolves via the backend).
             bumpEnvRevision();
-            if (becameActive) workflowStore.setWorkflowEnv(savedName);
+            if (activated !== null) workflowStore.setWorkflowEnv(activated);
           }}
-          onRequestDelete={(name) => {
-            setEditor(null);
-            setDeleteTarget(name);
+          onLeave={(outcome) => {
+            if (outcome.kind === "switched") setEditor({ subject: outcome.to });
+            else if (outcome.kind === "deleteRequested") {
+              setEditor(null);
+              setDeleteTarget(outcome.name);
+            } else setEditor(null);
           }}
         />
       )}

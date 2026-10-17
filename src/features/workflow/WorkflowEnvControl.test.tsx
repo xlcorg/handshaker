@@ -191,13 +191,13 @@ describe("WorkflowEnvControl", () => {
       });
 
     pressEdit();
-    const name = await screen.findByLabelText("Name");
+    const name = await screen.findByLabelText("Environment name");
     await user.type(name, "draft");
     act(() => {
       workflowStore.setWorkflowEnv("prod");
     });
     pressEdit();
-    expect(screen.getByLabelText("Name")).toHaveValue("draft");
+    expect(screen.getByLabelText("Environment name")).toHaveValue("draft");
   });
 
   it("does NOT swallow Cmd+E when there are no envs — lets Monaco handle it", async () => {
