@@ -1,399 +1,433 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, ChevronDown } from "lucide-react";
+import { useId, useState } from "react";
+import { ArrowDownUp, ChevronDown, CircleCheck, Plus, Search, XIcon } from "lucide-react";
 
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Kbd } from "@/components/ui/kbd";
 import { Label } from "@/components/ui/label";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/cn";
 import { messages } from "@/lib/messages";
-import { ipc } from "@/ipc/client";
-import type { EnvironmentIpc } from "@/ipc/bindings";
+import { isMacOS } from "@/lib/platform";
 
-import { ENV_COLORS, colorHex, defaultColorKeyForName, resolveColorKey } from "./colors";
-import { isEnvEditorDirty, loadColor, loadVars } from "./editorDirty";
+import { colorHex } from "./colors";
+import {
+  PALETTE,
+  SORT_MODES,
+  fieldAttr,
+  useEnvEditor,
+  type EditorIntent,
+  type EditorView,
+  type LeavePrompt,
+  type SaveStatus,
+  type SortMode,
+  type UseEnvEditorProps,
+} from "./useEnvEditor";
 import { VariablesTable } from "./VariablesTable";
 
 const m = messages.envs.editor;
 
-function EnvSubjectMenu({
-  envs,
-  originalName,
-  subjectEnv,
-  onPick,
-  disabled,
-}: {
-  envs: EnvironmentIpc[];
-  originalName: string | null;
-  subjectEnv: EnvironmentIpc | null;
-  onPick: (name: string) => void;
-  disabled?: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const onPointer = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      // Window capture runs before the dialog's document listener, so Escape
-      // closes this menu and leaves the editor open.
-      event.stopPropagation();
-      setOpen(false);
-    };
-    document.addEventListener("pointerdown", onPointer);
-    window.addEventListener("keydown", onKey, true);
-    return () => {
-      document.removeEventListener("pointerdown", onPointer);
-      window.removeEventListener("keydown", onKey, true);
-    };
-  }, [open]);
+type Dispatch = (intent: EditorIntent) => void;
+
+const CLOSE: EditorIntent = { type: "leave", target: { to: "close" } };
+
+export type EnvEditorDialogProps = UseEnvEditorProps;
+
+export function EnvEditorDialog(props: EnvEditorDialogProps) {
+  const ed = useEnvEditor(props);
+  const { view, dispatch } = ed;
   return (
-    <div ref={rootRef} className="relative">
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="shrink-0 gap-1.5 font-normal"
-        aria-label={m.switchAria}
-        aria-expanded={open}
-        aria-haspopup="menu"
-        disabled={disabled}
-        onClick={() => setOpen((value) => !value)}
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) dispatch(CLOSE);
+      }}
+    >
+      <DialogContent
+        showCloseButton={false}
+        className="flex h-[min(85vh,760px)] w-[min(960px,calc(100vw_-_2rem))] max-w-none flex-col gap-0 p-0 sm:max-w-none"
+        onOpenAutoFocus={ed.onOpenAutoFocus}
+        onKeyDown={ed.onKeyDown}
       >
-        {subjectEnv && (
-          <span
-            aria-hidden
-            className="size-2 shrink-0 rounded-full"
-            style={{ backgroundColor: colorHex(resolveColorKey(subjectEnv)) }}
-          />
-        )}
-        <span className="max-w-[160px] truncate">{originalName ?? m.createTitle}</span>
-        <ChevronDown className="size-3.5 opacity-60" aria-hidden />
-      </Button>
-      {open && (
-        <div
-          role="menu"
-          className="absolute right-0 top-full z-50 mt-1 min-w-[180px] rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
-        >
-          {envs.map((env) => {
-            const current = env.name === originalName;
-            return (
-              <button
-                key={env.name}
-                type="button"
-                role="menuitem"
-                disabled={current}
-                className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent disabled:opacity-50"
-                onClick={() => {
-                  setOpen(false);
-                  onPick(env.name);
-                }}
-              >
-                <span
-                  aria-hidden
-                  className="size-2 shrink-0 rounded-full"
-                  style={{ backgroundColor: colorHex(resolveColorKey(env)) }}
-                />
-                <span className="truncate">{env.name}</span>
-                {current && <Check className="ml-auto size-3.5" aria-hidden />}
-              </button>
-            );
-          })}
+        <div ref={ed.contentRef} className="flex min-h-0 flex-1 flex-col">
+          <Header view={view} dispatch={dispatch} />
+          <NameField view={view} dispatch={dispatch} />
+          <SearchBar search={view.search} dispatch={dispatch} />
+          <div {...ed.regionProps} className="min-h-0 flex-1 overflow-y-auto px-6 pb-3 outline-none">
+            <VariablesTable
+              rows={view.rows}
+              dispatch={dispatch}
+              resolveRow={ed.resolveRow}
+              resolveKey={ed.resolveKey}
+            />
+            {view.search.noMatches && (
+              <div className="flex flex-col items-center gap-2 py-8 text-sm text-muted-foreground">
+                <p>{m.noMatches}</p>
+                <Button variant="outline" size="sm" onClick={() => dispatch({ type: "clearSearch" })}>
+                  {m.clearSearch}
+                </Button>
+              </div>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-2 text-muted-foreground"
+              data-field={fieldAttr({ kind: "add" })}
+              onClick={() => dispatch({ type: "addRow" })}
+            >
+              <Plus aria-hidden />
+              {m.addVariable}
+            </Button>
+          </div>
+          {view.prompt && <LeavePromptBanner prompt={view.prompt} dispatch={dispatch} />}
+          {view.mode === "edit" ? (
+            <EditFooter view={view} dispatch={dispatch} />
+          ) : (
+            <CreateFooter status={view.status} dispatch={dispatch} />
+          )}
         </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ColorDot({ color }: { color: string }) {
+  return <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ backgroundColor: colorHex(color) }} />;
+}
+
+function Header({ view, dispatch }: { view: EditorView; dispatch: Dispatch }) {
+  const create = view.mode === "create";
+  return (
+    <div className="flex items-center gap-2 px-6 pt-5 pb-4">
+      <DialogTitle className="min-w-0 flex-1 truncate">{create ? m.createTitle : m.editTitle}</DialogTitle>
+      <DialogDescription className="sr-only">{create ? m.createDescription : m.editDescription}</DialogDescription>
+      {view.mode === "edit" && view.subject && <Switcher view={view} dispatch={dispatch} />}
+      <Button variant="ghost" size="icon-sm" aria-label={m.closeAria} onClick={() => dispatch(CLOSE)}>
+        <XIcon />
+      </Button>
+    </div>
+  );
+}
+
+function focusIsOffBody(): boolean {
+  return document.activeElement !== document.body;
+}
+
+function Switcher({ view, dispatch }: { view: EditorView; dispatch: Dispatch }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="sm" className="max-w-[220px] gap-1.5 font-normal" aria-label={m.switchAria}>
+          {view.subject && <ColorDot color={view.subject.color} />}
+          <span className="truncate">{view.subject?.name ?? m.createTitle}</span>
+          <ChevronDown className="size-3.5 opacity-60" aria-hidden />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="end"
+        onCloseAutoFocus={(event) => {
+          if (focusIsOffBody()) event.preventDefault();
+        }}
+      >
+        {view.switchTargets.map((env) => (
+          <DropdownMenuItem
+            key={env.name}
+            onSelect={() => dispatch({ type: "leave", target: { to: "switch", name: env.name } })}
+          >
+            <ColorDot color={env.color} />
+            <span className="truncate">{env.name}</span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function NameField({ view, dispatch }: { view: EditorView; dispatch: Dispatch }) {
+  const id = useId();
+  const issueId = `${id}-issue`;
+  const issue = view.name.issue;
+  return (
+    <div className="px-6 pb-4">
+      <Label htmlFor={id} className="mb-1.5">
+        {m.nameLabel}
+      </Label>
+      <div className="flex items-center gap-2">
+        <Input
+          id={id}
+          data-field={fieldAttr({ kind: "name" })}
+          value={view.name.text}
+          placeholder={m.namePlaceholder}
+          autoComplete="off"
+          spellCheck={false}
+          aria-invalid={issue !== null}
+          aria-describedby={issue ? issueId : undefined}
+          onChange={(e) => dispatch({ type: "typeName", text: e.target.value })}
+          onBlur={() => dispatch({ type: "commitName" })}
+          onKeyDown={(e) => {
+            if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
+            e.preventDefault();
+            dispatch({ type: "commitName" });
+          }}
+        />
+        <ColorPicker color={view.color} dispatch={dispatch} />
+      </div>
+      {issue && (
+        <p id={issueId} className="mt-1 text-xs text-destructive">
+          {issue === "empty" ? m.nameEmpty : m.nameTaken}
+        </p>
       )}
     </div>
   );
 }
 
-export interface EnvEditorDialogProps {
-  open: boolean;
-  /** `null` ⇒ create mode (empty name + empty vars). String ⇒ edit mode. */
-  originalName: string | null;
-  /** Current active env (used to decide whether a rename needs to flip active). */
-  activeEnv: string | null;
-  /** Existing envs (for duplicate-name detection). */
-  envs: EnvironmentIpc[];
-  onOpenChange: (open: boolean) => void;
-  /** Called after a successful save. Parent should refetch envs + sync activeEnv. */
-  onSaved: (savedName: string, becameActive: boolean) => void;
-  /** Edit mode only: request deletion of this env (parent opens the confirm dialog). */
-  onRequestDelete?: (name: string) => void;
-  /**
-   * Switch the editor subject to another persisted env. Does not change the
-   * workflow's active env. Parent remounts this dialog (`key={originalName}`).
-   */
-  onSwitch?: (name: string) => void;
+function ColorPicker({ color, dispatch }: { color: EditorView["color"]; dispatch: Dispatch }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label={m.colorAria}
+          className="flex size-9 shrink-0 items-center justify-center rounded-md border border-input"
+        >
+          <span aria-hidden className="size-5 rounded-full" style={{ backgroundColor: colorHex(color) }} />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-auto p-2">
+        <div className="flex max-w-[136px] flex-wrap gap-1.5">
+          {PALETTE.map((c) => {
+            const selected = color === c.key;
+            return (
+              <button
+                key={c.key}
+                type="button"
+                aria-label={c.label}
+                aria-pressed={selected}
+                onClick={() => {
+                  dispatch({ type: "pickColor", color: c.key });
+                  setOpen(false);
+                }}
+                className={cn(
+                  "size-6 rounded-full transition focus:outline-none",
+                  selected
+                    ? "ring-2 ring-foreground ring-offset-2 ring-offset-background"
+                    : "hover:ring-2 hover:ring-muted-foreground hover:ring-offset-2 hover:ring-offset-background",
+                )}
+                style={{ backgroundColor: c.hex }}
+              />
+            );
+          })}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
-export function EnvEditorDialog({
-  open,
-  originalName,
-  activeEnv,
-  envs,
-  onOpenChange,
-  onSaved,
-  onRequestDelete,
-  onSwitch,
-}: EnvEditorDialogProps) {
-  const isCreate = originalName === null;
-  const [name, setName] = useState<string>(originalName ?? "");
-  // Load variables synchronously at mount so the (uncontrolled) VariablesTable seeds
-  // its rows from the correct value on its first render. Both callers mount this dialog
-  // fresh per open (`{editor && <EnvEditorDialog open .../>}`), so a mount-time
-  // initializer is sufficient — and, running once, it also can't be clobbered by a
-  // background parent refetch of `envs`.
-  const [vars, setVars] = useState<Record<string, string>>(() => loadVars(originalName, envs));
-  const [pickedColor, setPickedColor] = useState<string | null>(() => loadColor(originalName, envs));
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [colorOpen, setColorOpen] = useState(false);
-  const [pendingSwitch, setPendingSwitch] = useState<string | null>(null);
-  const alive = useRef(true);
-  useEffect(() => {
-    return () => {
-      alive.current = false;
-    };
-  }, []);
-
-  // Preview resolves against the EDITED rows (not the persisted env) — honest for
-  // unsaved changes and for a non-active environment. No collection ctx here.
-  const resolveRow = useCallback(
-    (t: string) => ipc.varsResolve(t, { collection_id: null, collection_vars: null, env_vars: vars }),
-    [vars],
-  );
-
-  const trimmedName = name.trim();
-  const nameEmpty = trimmedName.length === 0;
-  // The name may be any non-empty string (any characters). The only guards are
-  // non-empty and uniqueness (the name is the store key — a duplicate would clobber).
-  const nameIsDuplicate =
-    !nameEmpty &&
-    trimmedName !== originalName &&
-    envs.some((e) => e.name === trimmedName);
-  const canSave = !nameEmpty && !nameIsDuplicate;
-
-  const effectiveColor = pickedColor ?? defaultColorKeyForName(trimmedName);
-  const switchTargets = onSwitch ? envs.filter((e) => e.name !== originalName) : [];
-  const showSwitcher = switchTargets.length > 0;
-  const subjectEnv =
-    originalName === null ? null : (envs.find((e) => e.name === originalName) ?? null);
-
-  function requestSwitch(next: string) {
-    if (busy || !onSwitch || next === originalName) return;
-    const dirty = isEnvEditorDirty({ originalName, name, vars, pickedColor }, envs);
-    if (dirty) {
-      setPendingSwitch(next);
-      return;
-    }
-    onSwitch(next);
-  }
-
-  async function handleSave() {
-    if (!canSave) return;
-    const renamed = !isCreate && trimmedName !== originalName;
-    setBusy(true);
-    setError(null);
-    try {
-      // 1. Persist the (possibly renamed) env with its current variables.
-      await ipc.envUpsert({ name: trimmedName, variables: vars, color: effectiveColor });
-
-      // 2. Renaming the active env: switch active to the new name BEFORE
-      //    deleting the old one (backend env_delete refuses to delete active).
-      let becameActive = false;
-      if (renamed && activeEnv === originalName) {
-        await ipc.envActiveSet(trimmedName);
-        becameActive = true;
-      }
-
-      // 3. Renaming: drop the old name, then restore the env's position —
-      //    the upsert above appended the new name at the end of the order.
-      //    If envReorder fails, the catch below shows the dialog error; retry
-      //    is safe — envUpsert/envDelete are both idempotent at this point.
-      if (renamed && originalName !== null) {
-        await ipc.envDelete(originalName);
-        await ipc.envReorder(envs.map((e) => (e.name === originalName ? trimmedName : e.name)));
-      }
-
-      // 4. Create mode: auto-activate the new env.
-      if (isCreate) {
-        await ipc.envActiveSet(trimmedName);
-        becameActive = true;
-      }
-
-      onSaved(trimmedName, becameActive);
-      // A switch during this save unmounted us. Closing now would dismiss the
-      // environment the user already moved to.
-      if (alive.current) onOpenChange(false);
-    } catch (e) {
-      const t = e as { type?: string; message?: string };
-      setError(t.message ?? t.type ?? m.saveFailed);
-    } finally {
-      setBusy(false);
-    }
-  }
-
+function SearchBar({ search, dispatch }: { search: EditorView["search"]; dispatch: Dispatch }) {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[85vh] min-h-[70vh] w-full max-w-[min(90vw,960px)] flex-col sm:max-w-[min(90vw,960px)]">
-        <DialogHeader>
-          <div className={cn("flex items-center justify-between gap-2", showSwitcher && "pr-8")}>
-            <DialogTitle>{isCreate ? m.createTitle : m.editTitle}</DialogTitle>
-            {showSwitcher && (
-              <EnvSubjectMenu
-                envs={envs}
-                originalName={originalName}
-                subjectEnv={subjectEnv}
-                onPick={requestSwitch}
-                disabled={busy}
-              />
+    <div className="flex items-start gap-2 px-6 pb-3">
+      <div className="min-w-0 flex-1">
+        <div className="relative">
+          <Search
+            aria-hidden
+            className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
+          />
+          <Input
+            data-field={fieldAttr({ kind: "search" })}
+            aria-label={m.searchAria}
+            placeholder={m.searchPlaceholder}
+            value={search.query}
+            autoComplete="off"
+            spellCheck={false}
+            onChange={(e) => dispatch({ type: "setQuery", text: e.target.value })}
+            className="pr-20 pl-8"
+          />
+          <div className="absolute top-1/2 right-1.5 flex -translate-y-1/2 items-center gap-0.5">
+            {search.query === "" ? (
+              <>
+                <Kbd>{isMacOS ? "⌘" : "Ctrl"}</Kbd>
+                <Kbd>F</Kbd>
+              </>
+            ) : (
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label={m.clearSearch}
+                onClick={() => dispatch({ type: "clearSearch" })}
+              >
+                <XIcon />
+              </Button>
             )}
           </div>
-          <DialogDescription className="sr-only">
-            {isCreate ? m.createDescription : m.editDescription}
-          </DialogDescription>
-        </DialogHeader>
-
-        {/* Identity row: name + color (pinned) */}
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-2">
-            <Input
-              id="env-name"
-              aria-label={m.nameAria}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className={cn("font-mono text-sm", nameIsDuplicate && "border-destructive")}
-              aria-invalid={nameIsDuplicate}
-              autoFocus
-              placeholder={m.namePlaceholder}
-            />
-            <Popover open={colorOpen} onOpenChange={setColorOpen}>
-              <PopoverTrigger asChild>
-                <button
-                  type="button"
-                  aria-label={m.colorAria}
-                  className="flex size-9 shrink-0 items-center justify-center rounded-md border border-input"
-                >
-                  <span
-                    aria-hidden
-                    className="size-5 rounded-full"
-                    style={{ backgroundColor: colorHex(effectiveColor) }}
-                  />
-                </button>
-              </PopoverTrigger>
-              <PopoverContent align="end" className="w-auto p-2">
-                <div className="flex max-w-[136px] flex-wrap gap-1.5">
-                  {ENV_COLORS.map((c) => {
-                    const selected = effectiveColor === c.key;
-                    return (
-                      <button
-                        key={c.key}
-                        type="button"
-                        aria-label={c.label}
-                        aria-pressed={selected}
-                        onClick={() => {
-                          setPickedColor(c.key);
-                          setColorOpen(false);
-                        }}
-                        className={cn(
-                          "size-6 rounded-full transition focus:outline-none",
-                          selected
-                            ? "ring-2 ring-foreground ring-offset-2 ring-offset-background"
-                            : "hover:ring-2 hover:ring-muted-foreground hover:ring-offset-2 hover:ring-offset-background",
-                        )}
-                        style={{ backgroundColor: c.hex }}
-                      />
-                    );
-                  })}
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
-          {nameIsDuplicate && (
-            <p className="text-xs text-destructive mt-1">{m.nameDuplicate}</p>
-          )}
         </div>
+        <p className="mt-1 text-xs text-muted-foreground">{m.count(search.shown, search.total)}</p>
+      </div>
+      <SortMenu sort={search.sort} dispatch={dispatch} />
+    </div>
+  );
+}
 
-        {/* Variables (scrolls internally) */}
-        <div className="min-h-0 flex-1 space-y-1.5 overflow-auto">
-          <Label>{m.variables}</Label>
-          <VariablesTable
-            value={vars}
-            onChange={setVars}
-            resolveRow={resolveRow}
-            resolveKey={JSON.stringify(vars)}
-          />
-        </div>
+function SortMenu({ sort, dispatch }: { sort: SortMode; dispatch: Dispatch }) {
+  const labelId = useId();
+  const valueId = useId();
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" className="shrink-0 gap-1.5 font-normal" aria-labelledby={`${labelId} ${valueId}`}>
+          <ArrowDownUp aria-hidden />
+          <span id={labelId} className="sr-only">
+            {m.sortAria}
+          </span>
+          <span id={valueId}>{m.sort[sort]}</span>
+          <ChevronDown className="size-3.5 opacity-60" aria-hidden />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuRadioGroup
+          value={sort}
+          onValueChange={(value) => {
+            const next = SORT_MODES.find((mode) => mode === value);
+            if (next) dispatch({ type: "setSort", sort: next });
+          }}
+        >
+          {SORT_MODES.map((mode) => (
+            <DropdownMenuRadioItem key={mode} value={mode}>
+              {m.sort[mode]}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
-        {error && (
-          <div className="border-l-2 border-destructive bg-destructive/5 px-3 py-1.5 text-xs text-destructive">
-            {error}
-          </div>
-        )}
+const PROMPT_TITLE: Record<LeavePrompt["reason"], string> = {
+  failed: m.leaveFailedTitle,
+  invalid: m.leaveInvalidTitle,
+  discardNew: m.discardNewTitle,
+};
 
-        {pendingSwitch !== null && (
-          // The draft stays visible while the user decides.
-          <div
-            role="group"
-            aria-label={m.discardTitle}
-            className="flex flex-wrap items-center justify-between gap-3 border-l-2 border-destructive bg-destructive/5 px-3 py-2"
-          >
-            <div className="min-w-0">
-              <p className="text-sm font-medium">{m.discardTitle}</p>
-              <p className="text-xs text-muted-foreground">{m.discardDescription}</p>
-            </div>
-            <div className="flex gap-2">
-              <Button type="button" variant="ghost" size="sm" onClick={() => setPendingSwitch(null)}>
-                {m.cancel}
-              </Button>
-              <Button
-                type="button"
-                variant="destructive"
-                size="sm"
-                onClick={() => {
-                  if (!onSwitch) return;
-                  onSwitch(pendingSwitch);
-                }}
-              >
-                {m.discard}
-              </Button>
-            </div>
-          </div>
-        )}
-
-        <DialogFooter>
-          {!isCreate && onRequestDelete && (
-            <Button
-              variant="ghost"
-              onClick={() => onRequestDelete(originalName as string)}
-              disabled={busy}
-              className="mr-auto text-destructive hover:bg-destructive/10 hover:text-destructive"
-            >
-              {m.delete}
-            </Button>
-          )}
-          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>
-            {m.cancel}
+function LeavePromptBanner({ prompt, dispatch }: { prompt: LeavePrompt; dispatch: Dispatch }) {
+  const title = PROMPT_TITLE[prompt.reason];
+  return (
+    <div
+      role="group"
+      aria-label={title}
+      className="mx-6 mb-3 flex flex-wrap items-center justify-between gap-3 border-l-2 border-destructive bg-destructive/5 px-3 py-2"
+    >
+      <p className="text-sm font-medium">{title}</p>
+      <div className="flex gap-2">
+        <Button variant="ghost" size="sm" onClick={() => dispatch({ type: "keepEditing" })}>
+          {m.keepEditing}
+        </Button>
+        {prompt.reason === "failed" && (
+          <Button variant="outline" size="sm" onClick={() => dispatch({ type: "retry" })}>
+            {m.retry}
           </Button>
-          <Button onClick={handleSave} disabled={!canSave || busy}>
-            {busy ? m.saving : isCreate ? m.create : m.save}
+        )}
+        <Button
+          variant="destructive"
+          size="sm"
+          disabled={prompt.reason === "invalid" && prompt.busy}
+          onClick={() => dispatch({ type: "discard" })}
+        >
+          {prompt.reason === "discardNew" ? m.discard : m.discardChanges}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function NotSaved({ detail, hint }: { detail: string; hint?: string }) {
+  return (
+    <>
+      <span className="shrink-0 font-medium text-destructive">{m.statusNotSaved}</span>
+      <span className="truncate text-muted-foreground" title={hint}>
+        {detail}
+      </span>
+    </>
+  );
+}
+
+function StatusText({ status }: { status: SaveStatus }) {
+  switch (status.kind) {
+    case "saving":
+      return <span className="text-muted-foreground">{m.statusSaving}</span>;
+    case "clean":
+    case "saved":
+      return (
+        <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+          <CircleCheck className="size-4 text-ok" strokeWidth={1.5} aria-hidden />
+          {m.statusSaved}
+        </span>
+      );
+    case "invalid":
+      return <NotSaved detail={m.statusFixFields} />;
+    case "failed":
+      return <NotSaved detail={status.error.message} hint={status.error.detail} />;
+    case "held":
+      return null;
+  }
+}
+
+function EditFooter({ view, dispatch }: { view: EditorView; dispatch: Dispatch }) {
+  return (
+    <div className="flex items-center gap-3 border-t px-6 py-3">
+      <Button
+        variant="ghost"
+        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+        onClick={() => dispatch({ type: "leave", target: { to: "delete" } })}
+      >
+        {m.deleteEnvironment}
+      </Button>
+      <span aria-hidden className="h-9 w-px shrink-0 bg-muted-foreground/40" />
+      <div role="status" className="flex min-w-0 items-center gap-2 text-sm">
+        <StatusText status={view.status} />
+      </div>
+      {view.status.kind === "failed" && view.prompt?.reason !== "failed" && (
+        <Button variant="outline" size="sm" onClick={() => dispatch({ type: "retry" })}>
+          {m.retry}
+        </Button>
+      )}
+      {view.undo && (
+        <span className="flex shrink-0 items-center gap-1 text-sm text-muted-foreground">
+          {m.deleted(view.undo.key)}
+          <Button variant="link" size="sm" className="h-auto px-1" onClick={() => dispatch({ type: "undoDelete" })}>
+            {m.undo}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </span>
+      )}
+      <div className="flex-1" />
+      <Button onClick={() => dispatch(CLOSE)}>{m.done}</Button>
+    </div>
+  );
+}
+
+function CreateFooter({ status, dispatch }: { status: SaveStatus; dispatch: Dispatch }) {
+  const creating = status.kind === "saving";
+  return (
+    <div className="flex items-center gap-3 border-t px-6 py-3">
+      <div role="status" className="min-w-0 flex-1 truncate text-sm text-destructive">
+        {status.kind === "failed" && (
+          <span title={status.error.detail}>{status.error.message}</span>
+        )}
+      </div>
+      <Button variant="ghost" disabled={creating} onClick={() => dispatch(CLOSE)}>
+        {m.cancel}
+      </Button>
+      <Button disabled={creating} onClick={() => dispatch({ type: "create" })}>
+        {creating ? m.statusSaving : m.create}
+      </Button>
+    </div>
   );
 }
