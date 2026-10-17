@@ -4,6 +4,19 @@ export const SORT_MODES = ["key-asc", "key-desc", "added-newest", "added-oldest"
 export type SortMode = (typeof SORT_MODES)[number];
 export const DEFAULT_SORT: SortMode = "added-oldest";
 
+/** One click on the column header walks this cycle, then returns to the start. */
+export const SORT_CYCLE = ["added-oldest", "added-newest", "key-asc", "key-desc"] as const satisfies readonly SortMode[];
+
+export function nextSort(sort: SortMode): SortMode {
+  const at = SORT_CYCLE.indexOf(sort as (typeof SORT_CYCLE)[number]);
+  const next = SORT_CYCLE[(at < 0 ? 0 : at + 1) % SORT_CYCLE.length];
+  return next;
+}
+
+export function sortDirection(sort: SortMode): "ascending" | "descending" {
+  return sort === "added-oldest" || sort === "key-asc" ? "ascending" : "descending";
+}
+
 export interface Span {
   readonly start: number;
   readonly end: number;

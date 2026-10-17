@@ -1,13 +1,11 @@
 import { useId, useState } from "react";
-import { ArrowDownUp, ChevronDown, CircleCheck, Plus, Search, XIcon } from "lucide-react";
+import { ChevronDown, CircleCheck, Plus, Search, XIcon } from "lucide-react";
 
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
@@ -22,14 +20,12 @@ import { isMacOS } from "@/lib/platform";
 import { colorHex } from "./colors";
 import {
   PALETTE,
-  SORT_MODES,
   fieldAttr,
   useEnvEditor,
   type EditorIntent,
   type EditorView,
   type LeavePrompt,
   type SaveStatus,
-  type SortMode,
   type UseEnvEditorProps,
 } from "./useEnvEditor";
 import { VariablesTable } from "./VariablesTable";
@@ -65,6 +61,7 @@ export function EnvEditorDialog(props: EnvEditorDialogProps) {
           <div {...ed.regionProps} className="min-h-0 flex-1 overflow-y-auto px-6 pb-3 outline-none">
             <VariablesTable
               rows={view.rows}
+              sort={view.search.sort}
               dispatch={dispatch}
               resolveRow={ed.resolveRow}
               resolveKey={ed.resolveKey}
@@ -272,42 +269,7 @@ function SearchBar({ search, dispatch }: { search: EditorView["search"]; dispatc
         </div>
         <p className="mt-1 text-xs text-muted-foreground">{m.count(search.shown, search.total)}</p>
       </div>
-      <SortMenu sort={search.sort} dispatch={dispatch} />
     </div>
-  );
-}
-
-function SortMenu({ sort, dispatch }: { sort: SortMode; dispatch: Dispatch }) {
-  const labelId = useId();
-  const valueId = useId();
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="outline" className="shrink-0 gap-1.5 font-normal" aria-labelledby={`${labelId} ${valueId}`}>
-          <ArrowDownUp aria-hidden />
-          <span id={labelId} className="sr-only">
-            {m.sortAria}
-          </span>
-          <span id={valueId}>{m.sort[sort]}</span>
-          <ChevronDown className="size-3.5 opacity-60" aria-hidden />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuRadioGroup
-          value={sort}
-          onValueChange={(value) => {
-            const next = SORT_MODES.find((mode) => mode === value);
-            if (next) dispatch({ type: "setSort", sort: next });
-          }}
-        >
-          {SORT_MODES.map((mode) => (
-            <DropdownMenuRadioItem key={mode} value={mode}>
-              {m.sort[mode]}
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
   );
 }
 

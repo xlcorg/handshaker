@@ -481,6 +481,8 @@ export interface VisibleRow {
   readonly match: Span | null;
   readonly issue: RowIssue | null;
   readonly pending: boolean;
+  /** 1-based position in added order. Stable when the view sorts. */
+  readonly added: number;
 }
 
 export type LeavePrompt =
@@ -539,6 +541,7 @@ export function selectView(s: EditorState): EditorView {
       match,
       issue: p.issues.rows.get(row.id) ?? null,
       pending,
+      added: s.draft.rows.findIndex((stored) => stored.id === row.id) + 1 || s.draft.rows.length + 1,
     })),
     status,
     undo: s.undo ? { key: s.undo.row.key } : null,
