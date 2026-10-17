@@ -55,7 +55,7 @@ export interface EnvEditorHandle {
   readonly dispatch: (intent: EditorIntent) => void;
   readonly regionProps: {
     readonly tabIndex: -1;
-    readonly onFocus: () => void;
+    readonly onFocus: (e: FocusEvent<HTMLElement>) => void;
     readonly onBlur: (e: FocusEvent<HTMLElement>) => void;
   };
   readonly contentRef: RefObject<HTMLDivElement>;
@@ -248,9 +248,16 @@ export function useEnvEditor({ subject, envs, onStored, onLeave, onOptimistic, o
   const regionProps = useMemo(
     () => ({
       tabIndex: -1 as const,
-      onFocus: () => apply({ type: "regionFocus", inside: true }),
+      onFocus: (e: FocusEvent<HTMLElement>) => {
+        const target = e.target as HTMLElement | null;
+        if (target?.closest("[data-sort-cycle]")) return;
+        apply({ type: "regionFocus", inside: true });
+      },
       onBlur: (e: FocusEvent<HTMLElement>) => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) apply({ type: "regionFocus", inside: false });
+        const next = e.relatedTarget as HTMLElement | null;
+        if (next?.closest("[data-sort-cycle]") || !e.currentTarget.contains(next)) {
+          apply({ type: "regionFocus", inside: false });
+        }
       },
     }),
     [apply],

@@ -4,6 +4,7 @@ import { draftFromStored, mintRowId, parseDraft, storedName, type DraftRow } fro
 import {
   holdLayout,
   initialView,
+  nextSort,
   releaseLayout,
   setQuery,
   setSort,
@@ -33,6 +34,13 @@ function rekey(rows: readonly DraftRow[], from: string, to: string): readonly Dr
 }
 
 describe("variable view order", () => {
+  it("cycles added oldest, added newest, A to Z, Z to A, then oldest again", () => {
+    expect(nextSort("added-oldest")).toBe("added-newest");
+    expect(nextSort("added-newest")).toBe("key-asc");
+    expect(nextSort("key-asc")).toBe("key-desc");
+    expect(nextSort("key-desc")).toBe("added-oldest");
+  });
+
   it("renders added order by default and never reorders stored rows", () => {
     const rows = rowsOf("gamma", "alpha", "Beta");
     const stored = rows.map((r) => r.key);
