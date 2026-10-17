@@ -2,7 +2,7 @@ import type { RowId } from "./envDraft";
 
 export const SORT_MODES = ["key-asc", "key-desc", "added-newest", "added-oldest"] as const;
 export type SortMode = (typeof SORT_MODES)[number];
-export const DEFAULT_SORT: SortMode = "key-asc";
+export const DEFAULT_SORT: SortMode = "added-oldest";
 
 export interface Span {
   readonly start: number;

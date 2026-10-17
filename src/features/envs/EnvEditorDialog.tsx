@@ -386,9 +386,10 @@ function EditFooter({ view, dispatch }: { view: EditorView; dispatch: Dispatch }
       <Button
         variant="ghost"
         className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+        aria-label={m.deleteEnvironment}
         onClick={() => dispatch({ type: "leave", target: { to: "delete" } })}
       >
-        {m.deleteEnvironment}
+        {m.delete}
       </Button>
       <span aria-hidden className="h-9 w-px shrink-0 bg-muted-foreground/40" />
       <div role="status" className="flex min-w-0 items-center gap-2 text-sm">

@@ -202,6 +202,20 @@ describe("EnvEditorDialog edit mode", () => {
     expect(screen.getByRole("button", { name: m.done })).toBeInTheDocument();
   });
 
+  it("opens in added order and labels the sort control oldest first", () => {
+    installStore(
+      [{ name: "prod", color: null, variables: { zebra: "z", alpha: "a" } }],
+      "prod",
+    );
+    renderEditor("prod");
+    const sort = screen.getByRole("button", { name: new RegExp(m.sortAria) });
+    expect(sort).toHaveTextContent(m.sort["added-oldest"]);
+    const keys = screen
+      .getAllByPlaceholderText(m.keyPlaceholder)
+      .map((el) => (el as HTMLInputElement).value);
+    expect(keys).toEqual(["zebra", "alpha"]);
+  });
+
   it("saves a value edit after the pause and keeps an unpicked color null", async () => {
     const user = userEvent.setup();
     renderEditor("prod");
@@ -385,7 +399,9 @@ describe("EnvEditorDialog edit mode", () => {
   it("Delete environment hands off to the confirmation dialog", async () => {
     const user = userEvent.setup();
     const { onLeave } = renderEditor("prod");
-    await user.click(screen.getByRole("button", { name: m.deleteEnvironment }));
+    const del = screen.getByRole("button", { name: m.deleteEnvironment });
+    expect(del).toHaveTextContent(/^Delete$/);
+    await user.click(del);
     expect(onLeave).toHaveBeenCalledWith({
       kind: "deleteRequested",
       name: "prod",
