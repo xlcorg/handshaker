@@ -547,6 +547,7 @@ export const messages = {
       statusFixFields: "Fix the highlighted fields",
       saveFailed: "Couldn't write the environment file",
       retry: "Retry",
+      delete: "Delete",
       deleteEnvironment: "Delete environment",
       done: "Done",
       cancel: "Cancel",

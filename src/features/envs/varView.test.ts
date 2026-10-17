@@ -33,13 +33,17 @@ function rekey(rows: readonly DraftRow[], from: string, to: string): readonly Dr
 }
 
 describe("variable view order", () => {
-  it("renders keys A to Z by default and never reorders stored rows", () => {
+  it("renders added order by default and never reorders stored rows", () => {
     const rows = rowsOf("gamma", "alpha", "Beta");
     const stored = rows.map((r) => r.key);
 
-    expect(keysOf(viewRows(src(rows), initialView))).toEqual(["alpha", "Beta", "gamma"]);
+    expect(keysOf(viewRows(src(rows), initialView))).toEqual(stored);
     expect(rows.map((r) => r.key)).toEqual(stored);
-    expect(keysOf(viewRows(src(rows), setSort(initialView, "added-oldest")))).toEqual(stored);
+    expect(keysOf(viewRows(src(rows), setSort(initialView, "key-asc")))).toEqual([
+      "alpha",
+      "Beta",
+      "gamma",
+    ]);
   });
 
   it("shows Added newest as stored order reversed and Added oldest as stored order", () => {
@@ -64,7 +68,7 @@ describe("layout hold", () => {
     const hiddenId = rows[1].id;
     let view = setQuery(initialView, "db");
     const before = viewRows(src(rows), view);
-    expect(keysOf(before)).toEqual(["db_host", "db_port", "db_user"]);
+    expect(keysOf(before)).toEqual(["db_host", "db_user", "db_port"]);
 
     view = holdLayout(view, src(rows));
     const sortsFirstAndMisses = rekey(rows, "db_user", "aaa");
@@ -90,7 +94,7 @@ describe("layout hold", () => {
 
   it("lets the edited key take its sort position once the hold releases", () => {
     const rows = rowsOf("alpha", "beta", "gamma");
-    let view = holdLayout(initialView, src(rows));
+    let view = holdLayout(setSort(initialView, "key-asc"), src(rows));
     const edited = rekey(rows, "gamma", "aardvark");
     expect(keysOf(viewRows(src(edited), view))).toEqual(["alpha", "beta", "aardvark"]);
 
@@ -117,7 +121,7 @@ describe("rows added under a search", () => {
     expect(idsOf(viewRows(src(added), view))).toContain(id);
 
     view = setQuery(view, "db_h");
-    expect(keysOf(viewRows(src(added), view))).toEqual(["API_KEY", "db_host"]);
+    expect(keysOf(viewRows(src(added), view))).toEqual(["db_host", "API_KEY"]);
 
     view = setQuery(setQuery(view, ""), "db");
     expect(idsOf(viewRows(src(added), view))).not.toContain(id);
