@@ -1,19 +1,49 @@
 import { useEffect } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { clampZoom, ZOOM_STEP, readPrefs, usePrefs } from "@/lib/use-prefs";
+import { chordMatches, primaryChords, useChords, type Chord } from "./hotkeys";
 
 export type ZoomAction = "in" | "out" | "reset";
+
+const ZOOM_IN = ["=", "+", "NumpadAdd"] as const;
+const ZOOM_OUT = ["-", "NumpadSubtract"] as const;
+const ZOOM_RESET = ["0", "Numpad0"] as const;
+
+/** Ctrl/Cmd, optionally Shift (Ctrl++ is Shift+= on a US keyboard). Alt is excluded:
+ *  AltGr is Ctrl+Alt and types characters on European layouts. Capture, but do not
+ *  stopPropagation — the previous listener only called preventDefault. */
+function zoomChords(keys: readonly string[], run: Chord["run"]): Chord[] {
+  return primaryChords(keys, {
+    capture: true,
+    optional: ["shift"],
+    stop: false,
+    run,
+  });
+}
 
 /** Маппинг хоткея на действие зума. `key` — символ (раскладко-независимо для =/+/-/0),
  *  `code` — физические NumPad-клавиши, которые дают другой `key`. */
 export function zoomActionFromKey(
   e: Pick<KeyboardEvent, "key" | "code" | "ctrlKey" | "metaKey" | "altKey">,
 ): ZoomAction | null {
-  if (e.altKey) return null; // AltGr = ctrl+alt на Windows: печатает символы на евро-раскладках
-  if (!e.ctrlKey && !e.metaKey) return null;
-  if (e.key === "=" || e.key === "+" || e.code === "NumpadAdd") return "in";
-  if (e.key === "-" || e.code === "NumpadSubtract") return "out";
-  if (e.key === "0" || e.code === "Numpad0") return "reset";
+  if (
+    zoomChords(ZOOM_IN, () => undefined).some((row) =>
+      chordMatches(row, e, false),
+    )
+  )
+    return "in";
+  if (
+    zoomChords(ZOOM_OUT, () => undefined).some((row) =>
+      chordMatches(row, e, false),
+    )
+  )
+    return "out";
+  if (
+    zoomChords(ZOOM_RESET, () => undefined).some((row) =>
+      chordMatches(row, e, false),
+    )
+  )
+    return "reset";
   return null;
 }
 
@@ -32,8 +62,7 @@ export async function applyZoom(factor: number): Promise<void> {
 }
 
 /** Зум UI: применяет prefs.zoom к webview (на маунте и при каждом изменении)
- *  и вешает глобальные хоткеи Ctrl+=/Ctrl+-/Ctrl+0. Capture-фаза, чтобы фокус
- *  в Monaco не перехватывал сочетания. */
+ *  и регистрирует строки Ctrl/Cmd+=, Ctrl/Cmd+-, Ctrl/Cmd+0. */
 export function useUiZoom(): void {
   const [prefs, setPref] = usePrefs();
 
@@ -41,15 +70,13 @@ export function useUiZoom(): void {
     void applyZoom(prefs.zoom);
   }, [prefs.zoom]);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const action = zoomActionFromKey(e);
-      if (!action) return;
-      e.preventDefault();
-      setPref("zoom", nextZoom(readPrefs().zoom, action));
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-    // setPref пишет в модульный prefs-стор, readPrefs читает свежее — биндим однажды.
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const apply = (action: ZoomAction) => {
+    setPref("zoom", nextZoom(readPrefs().zoom, action));
+  };
+
+  useChords([
+    ...zoomChords(ZOOM_IN, () => apply("in")),
+    ...zoomChords(ZOOM_OUT, () => apply("out")),
+    ...zoomChords(ZOOM_RESET, () => apply("reset")),
+  ]);
 }

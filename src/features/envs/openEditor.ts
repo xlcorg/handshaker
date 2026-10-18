@@ -1,17 +1,25 @@
-/**
- * Ctrl+Shift+E "open Edit environment" hotkey helper. Pure + unit-tested; the
- * keydown listener lives in {@link WorkflowEnvControl}. Mirror of {@link isEnvCycleHotkey}
- * (cycle.ts) — physical key, layout-independent — but requires Shift, so it never
- * collides with the Shift-less Ctrl+E cycle.
- */
+import {
+  chordMatches,
+  primaryChords,
+  type Chord,
+} from "@/features/shell/hotkeys";
 
-/** Предикат «open Edit environment»: Ctrl/Cmd+Shift+E по ФИЗИЧЕСКОЙ клавише E
- *  (`e.code === "KeyE"`, раскладко-независимо), с Shift, без Alt (AltGr = Ctrl+Alt). */
+/**
+ * Ctrl/Cmd+Shift+E rows. Physical KeyE, Shift required, Alt excluded (AltGr).
+ * Shift keeps this off the Ctrl+E cycle rows. Registered by {@link WorkflowEnvControl}.
+ */
+export function envEditChords(run: Chord["run"]): Chord[] {
+  return primaryChords(["KeyE"], { capture: true, with: ["shift"], run });
+}
+
 export function isEnvEditHotkey(
-  e: Pick<KeyboardEvent, "code" | "ctrlKey" | "metaKey" | "altKey" | "shiftKey">,
+  e: Pick<
+    KeyboardEvent,
+    "code" | "ctrlKey" | "metaKey" | "altKey" | "shiftKey"
+  >,
 ): boolean {
-  if (e.altKey) return false; // AltGr prints symbols on euro layouts
-  if (!e.shiftKey) return false; // Shift distinguishes edit from the Ctrl+E cycle
-  if (!e.ctrlKey && !e.metaKey) return false;
-  return e.code === "KeyE";
+  if (!e.shiftKey) return false;
+  return envEditChords(() => undefined).some((row) =>
+    chordMatches(row, e, false),
+  );
 }

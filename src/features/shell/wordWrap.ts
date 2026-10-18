@@ -1,41 +1,36 @@
-import { useEffect } from "react";
 import { readPrefs, usePrefs } from "@/lib/use-prefs";
-import { isMacOS } from "@/lib/platform";
+import { chordMatches, useChords, type Chord } from "./hotkeys";
 
-/** Предикат хоткея word-wrap. Платформо-зависимый аккорд по физической клавише Z
- *  (раскладко-независимо):
- *   - **Windows/Linux** — `Alt+Z` (как в VS Code), без Ctrl (AltGr = Ctrl+Alt), Meta, Shift.
- *   - **macOS** — `⌥⌘Z` (Option+Command+Z). Голый `⌥Z` на маке зарезервирован под ввод
- *     символа (печатает `Ω`) и часто перехватывается глобальными приложениями, поэтому
- *     требуем ещё и Command (он же гасит композицию символа). Без Ctrl, без Shift.
- *  `mac` передаётся вызывающим (хук берёт `isMacOS`) — так предикат остаётся чистым и
- *  тестируется на обеих платформах. */
+/** Word-wrap rows. Physical Z, so the chord is layout-independent.
+ *  - Windows/Linux — Alt+Z (VS Code), no Ctrl (AltGr is Ctrl+Alt), Meta, or Shift.
+ *  - macOS — Option+Command+Z. Plain Option+Z types Omega and is often grabbed
+ *    globally; Command also cancels that character compose.
+ *  Capture so the row runs before Monaco. Monaco's own Alt+Z binding is unbound
+ *  in monaco.ts; a repeat is declined so holding the keys does not flicker the pref. */
+export const wordWrapChords: readonly Omit<Chord, "run">[] = [
+  { key: "KeyZ", mod: ["alt"], capture: true, platform: "other" },
+  { key: "KeyZ", mod: ["alt", "meta"], capture: true, platform: "mac" },
+];
+
 export function isWordWrapHotkey(
-  e: Pick<KeyboardEvent, "code" | "ctrlKey" | "metaKey" | "altKey" | "shiftKey">,
+  e: Pick<
+    KeyboardEvent,
+    "code" | "ctrlKey" | "metaKey" | "altKey" | "shiftKey"
+  >,
   mac: boolean,
 ): boolean {
-  if (e.code !== "KeyZ" || e.shiftKey) return false;
-  if (mac) return e.altKey && e.metaKey && !e.ctrlKey;
-  return e.altKey && !e.ctrlKey && !e.metaKey;
+  return wordWrapChords.some((row) => chordMatches(row, e, mac));
 }
 
-/** Глобальный хоткей word-wrap → переключает pref `wordWrap`. Аккорд берётся из
- *  `isWordWrapHotkey` (Alt+Z на Win/Linux, ⌥⌘Z на macOS). Capture-фаза +
- *  preventDefault/stopPropagation — оборонительно; встроенный `Alt+Z` Monaco
- *  (`editor.action.toggleWordWrap`) отвязан в `monaco.ts`, поэтому он больше не
- *  может дёрнуть внутренний флаг редактора в рассинхрон с pref (на маке голый ⌥Z
- *  теперь до Monaco и доходит, но ничего не переключает). Биндим однажды: setPref
- *  пишет в модульный стор, readPrefs() читает свежее значение. */
 export function useWordWrapHotkey(): void {
   const [, setPref] = usePrefs();
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.repeat || !isWordWrapHotkey(e, isMacOS)) return;
-      e.preventDefault();
-      e.stopPropagation();
-      setPref("wordWrap", !readPrefs().wordWrap);
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useChords(
+    wordWrapChords.map((row) => ({
+      ...row,
+      run: (event: KeyboardEvent) => {
+        if (event.repeat) return false;
+        setPref("wordWrap", !readPrefs().wordWrap);
+      },
+    })),
+  );
 }

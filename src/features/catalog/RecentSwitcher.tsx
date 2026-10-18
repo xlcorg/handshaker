@@ -3,12 +3,12 @@ import type { CollectionIpc, SavedRequestIpc } from "@/ipc/bindings";
 import { messages } from "@/lib/messages";
 import { cn } from "@/lib/cn";
 import { useWorkflowState } from "@/features/workflow/store";
+import { useChords } from "@/features/shell/hotkeys";
 import {
   INITIAL_SWITCHER,
   loadedDraft,
   locationKey,
   paneLocation,
-  readKey,
   reduceSwitcher,
   type SwitcherEvent,
   type SwitcherState,
@@ -82,25 +82,84 @@ export function RecentSwitcher(props: RecentSwitcherProps) {
   const dispatchRef = useRef(dispatch);
   dispatchRef.current = dispatch;
 
+  function noteFocus() {
+    worldRef.current = {
+      ...worldRef.current,
+      dialogOrMenuFocused: inTransientLayer(document.activeElement),
+    };
+  }
+
+  // Ctrl+Tab / Ctrl+Shift+Tab move the list. Escape cancels only while it is
+  // open. Any other keydown while holding cancels without swallowing, so a
+  // letter does not preventDefault. keyup Control stays a separate listener.
+  useChords([
+    {
+      key: "Tab",
+      mod: ["ctrl"],
+      capture: true,
+      run: () => {
+        noteFocus();
+        dispatchRef.current({ type: "tab", back: false });
+      },
+    },
+    {
+      key: "Tab",
+      mod: ["ctrl", "shift"],
+      capture: true,
+      run: () => {
+        noteFocus();
+        dispatchRef.current({ type: "tab", back: true });
+      },
+    },
+    {
+      key: "Escape",
+      mod: [],
+      exact: false,
+      capture: true,
+      run: () => {
+        if (stateRef.current.gesture.phase !== "holding") return false;
+        noteFocus();
+        dispatchRef.current({ type: "cancel" });
+      },
+    },
+    {
+      key: "*",
+      mod: [],
+      exact: false,
+      capture: true,
+      swallow: false,
+      run: (event) => {
+        if (stateRef.current.gesture.phase !== "holding") return false;
+        if (
+          event.key === "Escape" ||
+          event.key === "Control" ||
+          event.key === "Shift"
+        )
+          return false;
+        if (
+          event.key === "Tab" &&
+          event.ctrlKey &&
+          !event.metaKey &&
+          !event.altKey
+        )
+          return false;
+        noteFocus();
+        dispatchRef.current({ type: "cancel" });
+      },
+    },
+  ]);
+
   useEffect(() => {
     const loc = hereRef.current;
     if (loc) dispatchRef.current({ type: "visit", location: loc });
   }, [hereKey]);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const holding = stateRef.current.gesture.phase === "holding";
-      const read = readKey(e, holding);
-      if (!read) return;
-      if (read.swallow) {
-        e.preventDefault();
-        e.stopPropagation();
-      }
-      worldRef.current = {
-        ...worldRef.current,
-        dialogOrMenuFocused: inTransientLayer(document.activeElement),
-      };
-      dispatchRef.current(read.event);
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key !== "Control") return;
+      if (stateRef.current.gesture.phase !== "holding") return;
+      noteFocus();
+      dispatchRef.current({ type: "release" });
     };
 
     const onPointerDown = (e: PointerEvent) => {
@@ -126,14 +185,12 @@ export function RecentSwitcher(props: RecentSwitcherProps) {
       swallowContextMenu.current = false;
     };
 
-    window.addEventListener("keydown", onKey, true);
-    window.addEventListener("keyup", onKey, true);
+    window.addEventListener("keyup", onKeyUp, true);
     window.addEventListener("pointerdown", onPointerDown, true);
     window.addEventListener("blur", onBlur);
     window.addEventListener("contextmenu", onContextMenu, true);
     return () => {
-      window.removeEventListener("keydown", onKey, true);
-      window.removeEventListener("keyup", onKey, true);
+      window.removeEventListener("keyup", onKeyUp, true);
       window.removeEventListener("pointerdown", onPointerDown, true);
       window.removeEventListener("blur", onBlur);
       window.removeEventListener("contextmenu", onContextMenu, true);

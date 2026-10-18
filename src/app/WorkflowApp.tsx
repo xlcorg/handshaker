@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { FocusView } from "@/features/workflow/FocusView";
-import { useActiveWorkflow, useDraft, useDraftOrigin, workflowStore } from "@/features/workflow/store";
+import {
+  useActiveWorkflow,
+  useDraft,
+  useDraftOrigin,
+  workflowStore,
+} from "@/features/workflow/store";
 import type { SavedRequestIpc } from "@/ipc/bindings";
 import { Titlebar } from "@/features/shell/Titlebar";
 import { AppVersionBadge } from "@/features/shell/AppVersionBadge";
@@ -10,7 +15,11 @@ import { envActiveGet } from "@/ipc/client";
 import { SidebarShell } from "@/features/catalog/SidebarShell";
 import { CollectionOverview } from "@/features/catalog/overview/CollectionOverview";
 import { useCatalog } from "@/features/catalog/CatalogProvider";
-import { openSavedRequest, newHttpRequestDraft, newRequestDraft } from "@/features/catalog/actions";
+import {
+  openSavedRequest,
+  newHttpRequestDraft,
+  newRequestDraft,
+} from "@/features/catalog/actions";
 import { httpNameFromPathTail } from "@/features/http/model";
 import { findSavedRequest } from "@/features/catalog/treeNav";
 import { loadUiState, patchUiState } from "@/features/catalog/uiState";
@@ -23,12 +32,17 @@ import { findSavedLocations } from "@/features/catalog/grouping";
 import { planQuickAdd } from "@/features/catalog/quickAdd";
 import { CommandPalette } from "@/features/catalog/CommandPalette";
 import { RecentSwitcher } from "@/features/catalog/RecentSwitcher";
-import { isPaletteHotkey } from "@/features/catalog/paletteHotkey";
+import { paletteChords } from "@/features/catalog/paletteHotkey";
+import { primaryChords, useChords } from "@/features/shell/hotkeys";
 import { EMPTY_BODY_TEMPLATE } from "@/features/workflow/actions";
 import { toast } from "sonner";
 import { newId } from "@/lib/ids";
 import { messages } from "@/lib/messages";
-import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from "@/components/ui/resizable";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { usePrefs, readPrefs } from "@/lib/use-prefs";
 import type { PanelImperativeHandle } from "react-resizable-panels";
@@ -43,7 +57,10 @@ import { useSuppressNativeContextMenu } from "@/features/shell/nativeContextMenu
 import { dismissSplash } from "@/features/shell/splash";
 import { useStartupRecovery } from "@/features/shell/startupRecovery";
 import { HistoryDock } from "@/features/history/HistoryDock";
-import { openHistoryCall, type HistoryIntent } from "@/features/history/navigate";
+import {
+  openHistoryCall,
+  type HistoryIntent,
+} from "@/features/history/navigate";
 
 export function WorkflowApp() {
   const wf = useActiveWorkflow();
@@ -52,7 +69,9 @@ export function WorkflowApp() {
   // The ONE shared catalog instance — feeds overview + Save dialog AND the sidebar.
   const cat = useCatalog();
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [panelCollectionId, setPanelCollectionId] = useState<string | null>(null);
+  const [panelCollectionId, setPanelCollectionId] = useState<string | null>(
+    null,
+  );
   const [saveOpen, setSaveOpen] = useState(false);
   const [discardOpen, setDiscardOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -103,46 +122,43 @@ export function WorkflowApp() {
     }
   }
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const mod = e.metaKey || e.ctrlKey;
-      if (mod && (e.key === "s" || e.key === "S")) {
-        e.preventDefault();
-        // Save only opens the dialog for an UNBOUND draft; bound drafts already autosave.
+  // Save / new / sidebar are bubble rows (Ctrl or Cmd, Shift and Alt still match).
+  // The palette is capture: Monaco treats Ctrl+K as a chord prefix unless the
+  // event is stopped before it reaches the editor. Repeat is declined.
+  useChords([
+    ...primaryChords(["s"], {
+      capture: false,
+      optional: ["alt", "shift"],
+      run: () => {
         const st = workflowStore.getState();
         if (st.draft && st.draftOrigin === null) {
-          // A direct save is not a continuation of a deferred open — drop any pending action.
           pendingOpenRef.current = null;
           setSaveOpen(true);
         }
-      } else if (mod && (e.key === "n" || e.key === "N")) {
-        e.preventDefault();
+      },
+    }),
+    ...primaryChords(["n"], {
+      capture: false,
+      optional: ["alt", "shift"],
+      run: () => {
         guardedRun(() => {
           setPanelCollectionId(null);
           newRequestDraft();
         });
-      } else if (mod && (e.key === "b" || e.key === "B")) {
-        e.preventDefault();
+      },
+    }),
+    ...primaryChords(["b"], {
+      capture: false,
+      optional: ["alt", "shift"],
+      run: () => {
         setPref("sidebar", !readPrefs().sidebar);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-    // guardedRun reads fresh store state and only calls stable setters; bind once.
-  }, []);
-
-  // Командная палитра: Ctrl/Cmd+K|P. CAPTURE-фаза + stopPropagation — иначе Monaco
-  // перехватывает Ctrl+K как префикс чорда и палитра не откроется из редактора тела.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (!isPaletteHotkey(e)) return;
-      e.preventDefault();
-      e.stopPropagation();
+      },
+    }),
+    ...paletteChords((event) => {
+      if (event.repeat) return false;
       setPaletteOpen(true);
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, []);
+    }),
+  ]);
 
   // На открытии палитры освежаем дерево каталога (дёшево; гарантирует актуальные коллекции).
   useEffect(() => {
@@ -171,23 +187,36 @@ export function WorkflowApp() {
     restoredRef.current = true;
     void loadUiState().then((s) => {
       if (!s.active_request) return;
-      const req = findSavedRequest(cat.tree, s.active_request.collection_id, s.active_request.item_id);
+      const req = findSavedRequest(
+        cat.tree,
+        s.active_request.collection_id,
+        s.active_request.item_id,
+      );
       if (req) openSavedRequest(s.active_request.collection_id, req);
     });
   }, [cat.tree]);
 
   const panelCollection = panelCollectionId
-    ? cat.tree.find((c) => c.id === panelCollectionId) ?? null
+    ? (cat.tree.find((c) => c.id === panelCollectionId) ?? null)
     : null;
 
   // Save the current unbound draft as a new request, bind its origin, then run any pending open.
-  async function handleSave(dest: { collectionId: string; parentId: string | null; name: string }) {
+  async function handleSave(dest: {
+    collectionId: string;
+    parentId: string | null;
+    name: string;
+  }) {
     const current = workflowStore.getState().draft;
     if (!current) return;
     const id = await saveNewRequest(cat.addItem, current, dest);
-    const collectionName = cat.tree.find((c) => c.id === dest.collectionId)?.name;
+    const collectionName = cat.tree.find(
+      (c) => c.id === dest.collectionId,
+    )?.name;
     workflowStore.setDraftOrigin({
-      collectionId: dest.collectionId, requestId: id, collectionName, requestName: dest.name,
+      collectionId: dest.collectionId,
+      requestId: id,
+      collectionName,
+      requestName: dest.name,
     });
     await cat.reload();
     const pending = pendingOpenRef.current;
@@ -197,11 +226,24 @@ export function WorkflowApp() {
 
   const grpcDraft = draft?.protocol === "grpc" ? draft : null;
   const draftMethod = grpcDraft?.method ?? "";
-  const defaultName = draft?.protocol === "http" ? httpNameFromPathTail(draft.template) : draftMethod;
+  const defaultName =
+    draft?.protocol === "http"
+      ? httpNameFromPathTail(draft.template)
+      : draftMethod;
 
-  const createFolder = async (collectionId: string, parentId: string | null, name: string) => {
+  const createFolder = async (
+    collectionId: string,
+    parentId: string | null,
+    name: string,
+  ) => {
     const id = newId();
-    await cat.addItem(collectionId, parentId, { type: "folder", id, name, items: [], expanded: false });
+    await cat.addItem(collectionId, parentId, {
+      type: "folder",
+      id,
+      name,
+      items: [],
+      expanded: false,
+    });
     return id;
   };
 
@@ -212,7 +254,9 @@ export function WorkflowApp() {
       openSavedRequest(collectionId, req);
       // Record the now-open request so it is restored next launch (inside the guard
       // callback → only persists on an actual open, not a cancelled discard prompt).
-      void patchUiState({ active_request: { collection_id: collectionId, item_id: req.id } });
+      void patchUiState({
+        active_request: { collection_id: collectionId, item_id: req.id },
+      });
     });
 
   // Quick «+» on a MethodPicker row: save by recommendation and open the result.
@@ -222,18 +266,36 @@ export function WorkflowApp() {
     const address = current?.address ?? "";
     // Save into the collection of the request the user is editing (origin); a brand-new
     // unbound draft has no origin → planQuickAdd falls back to the first collection.
-    const originCollectionId = workflowStore.getState().draftOrigin?.collectionId ?? null;
-    const plan = planQuickAdd(cat.tree, service, method, address, originCollectionId);
+    const originCollectionId =
+      workflowStore.getState().draftOrigin?.collectionId ?? null;
+    const plan = planQuickAdd(
+      cat.tree,
+      service,
+      method,
+      address,
+      originCollectionId,
+    );
     if (plan.kind === "exists") {
-      const req = findSavedRequest(cat.tree, plan.location.collectionId, plan.location.requestId);
+      const req = findSavedRequest(
+        cat.tree,
+        plan.location.collectionId,
+        plan.location.requestId,
+      );
       if (req) {
-        toast.info(messages.workflow.toast.alreadyInCollection(plan.location.collectionName));
+        toast.info(
+          messages.workflow.toast.alreadyInCollection(
+            plan.location.collectionName,
+          ),
+        );
         openRequest(plan.location.collectionId, req);
       }
       return;
     }
-    const collectionId = plan.collectionId ?? (await cat.createCollection(plan.collectionName));
-    const folderId = plan.folderId ?? (await createFolder(collectionId, null, plan.folderName));
+    const collectionId =
+      plan.collectionId ?? (await cat.createCollection(plan.collectionName));
+    const folderId =
+      plan.folderId ??
+      (await createFolder(collectionId, null, plan.folderName));
     const saved: SavedRequestIpc = {
       id: newId(),
       name: plan.requestName,
@@ -251,7 +313,9 @@ export function WorkflowApp() {
       },
     };
     await cat.addItem(collectionId, folderId, { type: "request", ...saved });
-    toast.success(messages.workflow.toast.savedTo(plan.collectionName, plan.folderName));
+    toast.success(
+      messages.workflow.toast.savedTo(plan.collectionName, plan.folderName),
+    );
     openRequest(collectionId, saved);
   }
 
@@ -278,140 +342,146 @@ export function WorkflowApp() {
   return (
     <UpdaterProvider value={update}>
       <div className="flex h-screen flex-col bg-background text-foreground">
-      <Titlebar
-        onOpenSettings={() => setSettingsOpen(true)}
-        onCheckForUpdates={update.recheck}
-        updatePhase={update.phase}
-        updateAvailable={update.hasUpdate}
-      />
+        <Titlebar
+          onOpenSettings={() => setSettingsOpen(true)}
+          onCheckForUpdates={update.recheck}
+          updatePhase={update.phase}
+          updateAvailable={update.hasUpdate}
+        />
 
-      <SidebarProvider className="min-h-0 flex-1">
-        <ResizablePanelGroup
-          orientation="horizontal"
-          defaultLayout={{ sidebar: prefs.sidebarPanel, main: 100 - prefs.sidebarPanel }}
-          onLayoutChanged={(layout) => {
-            const pct = layout["sidebar"];
-            if (prefs.sidebar && typeof pct === "number" && pct > 0) setPref("sidebarPanel", pct);
-          }}
-        >
-          <ResizablePanel
-            id="sidebar"
-            panelRef={sidebarPanelRef}
-            collapsible
-            collapsedSize="0%"
-            minSize="12%"
-            maxSize="40%"
-            defaultSize={`${prefs.sidebarPanel}%`}
+        <SidebarProvider className="min-h-0 flex-1">
+          <ResizablePanelGroup
+            orientation="horizontal"
+            defaultLayout={{
+              sidebar: prefs.sidebarPanel,
+              main: 100 - prefs.sidebarPanel,
+            }}
+            onLayoutChanged={(layout) => {
+              const pct = layout["sidebar"];
+              if (prefs.sidebar && typeof pct === "number" && pct > 0)
+                setPref("sidebarPanel", pct);
+            }}
           >
-            <SidebarShell
-              onOpenCollection={(id) => setPanelCollectionId(id)}
-              onOpenRequest={openRequest}
-              onAddRequest={addRequest}
-              onAddHttpRequest={addHttpRequest}
-              activeItemId={activeItemId}
-              activeCollectionId={panelCollectionId}
-            />
-          </ResizablePanel>
-          <ResizableHandle />
-          <ResizablePanel id="main" minSize="40%">
-            <HistoryDock onOpen={openCall}>
-              <div className="h-full min-h-0">
-                {panelCollection ? (
-                  <CollectionOverview
-                    collection={panelCollection}
-                    onChanged={() => void cat.reload()}
-                    onSelectRequest={openRequest}
-                    onClose={() => setPanelCollectionId(null)}
-                  />
-                ) : (
-                  <FocusView
-                    onRequestSave={() => {
-                      // A direct save is not a continuation of a deferred open — drop any pending action.
-                      pendingOpenRef.current = null;
-                      setSaveOpen(true);
-                    }}
-                    onQuickAddMethod={(service, method) => void quickAddMethod(service, method).catch(() => {})}
-                  />
-                )}
-              </div>
-            </HistoryDock>
-          </ResizablePanel>
-        </ResizablePanelGroup>
-      </SidebarProvider>
+            <ResizablePanel
+              id="sidebar"
+              panelRef={sidebarPanelRef}
+              collapsible
+              collapsedSize="0%"
+              minSize="12%"
+              maxSize="40%"
+              defaultSize={`${prefs.sidebarPanel}%`}
+            >
+              <SidebarShell
+                onOpenCollection={(id) => setPanelCollectionId(id)}
+                onOpenRequest={openRequest}
+                onAddRequest={addRequest}
+                onAddHttpRequest={addHttpRequest}
+                activeItemId={activeItemId}
+                activeCollectionId={panelCollectionId}
+              />
+            </ResizablePanel>
+            <ResizableHandle />
+            <ResizablePanel id="main" minSize="40%">
+              <HistoryDock onOpen={openCall}>
+                <div className="h-full min-h-0">
+                  {panelCollection ? (
+                    <CollectionOverview
+                      collection={panelCollection}
+                      onChanged={() => void cat.reload()}
+                      onSelectRequest={openRequest}
+                      onClose={() => setPanelCollectionId(null)}
+                    />
+                  ) : (
+                    <FocusView
+                      onRequestSave={() => {
+                        // A direct save is not a continuation of a deferred open — drop any pending action.
+                        pendingOpenRef.current = null;
+                        setSaveOpen(true);
+                      }}
+                      onQuickAddMethod={(service, method) =>
+                        void quickAddMethod(service, method).catch(() => {})
+                      }
+                    />
+                  )}
+                </div>
+              </HistoryDock>
+            </ResizablePanel>
+          </ResizablePanelGroup>
+        </SidebarProvider>
 
-      <SaveRequestDialog
-        open={saveOpen}
-        onOpenChange={(o) => {
-          setSaveOpen(o);
-          if (!o) pendingOpenRef.current = null;
-        }}
-        collections={cat.tree}
-        defaultName={defaultName}
-        draftService={grpcDraft?.service ?? ""}
-        draftMethod={draftMethod}
-        onSave={handleSave}
-        onCreateCollection={cat.createCollection}
-        onCreateFolder={createFolder}
-        existingLocations={
-          grpcDraft
-            ? findSavedLocations(cat.tree, {
-                service: grpcDraft.service,
-                method: grpcDraft.method,
-                address: grpcDraft.address,
-              })
-            : []
-        }
-      />
+        <SaveRequestDialog
+          open={saveOpen}
+          onOpenChange={(o) => {
+            setSaveOpen(o);
+            if (!o) pendingOpenRef.current = null;
+          }}
+          collections={cat.tree}
+          defaultName={defaultName}
+          draftService={grpcDraft?.service ?? ""}
+          draftMethod={draftMethod}
+          onSave={handleSave}
+          onCreateCollection={cat.createCollection}
+          onCreateFolder={createFolder}
+          existingLocations={
+            grpcDraft
+              ? findSavedLocations(cat.tree, {
+                  service: grpcDraft.service,
+                  method: grpcDraft.method,
+                  address: grpcDraft.address,
+                })
+              : []
+          }
+        />
 
-      <DiscardDraftDialog
-        open={discardOpen}
-        onOpenChange={setDiscardOpen}
-        onDiscard={() => {
-          const a = pendingOpenRef.current;
-          pendingOpenRef.current = null;
-          a?.();
-        }}
-        onSaveFirst={() => {
-          setDiscardOpen(false);
-          setSaveOpen(true);
-        }}
-      />
+        <DiscardDraftDialog
+          open={discardOpen}
+          onOpenChange={setDiscardOpen}
+          onDiscard={() => {
+            const a = pendingOpenRef.current;
+            pendingOpenRef.current = null;
+            a?.();
+          }}
+          onSaveFirst={() => {
+            setDiscardOpen(false);
+            setSaveOpen(true);
+          }}
+        />
 
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+        <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
 
-      <CommandPalette
-        open={paletteOpen}
-        onClose={() => setPaletteOpen(false)}
-        collections={cat.tree}
-        onOpenRequest={(cid, req) => {
-          setPaletteOpen(false);
-          openRequest(cid, req);
-        }}
-        onOpenCollection={(cid) => {
-          setPaletteOpen(false);
-          setPanelCollectionId(cid);
-        }}
-      />
+        <CommandPalette
+          open={paletteOpen}
+          onClose={() => setPaletteOpen(false)}
+          collections={cat.tree}
+          onOpenRequest={(cid, req) => {
+            setPaletteOpen(false);
+            openRequest(cid, req);
+          }}
+          onOpenCollection={(cid) => {
+            setPaletteOpen(false);
+            setPanelCollectionId(cid);
+          }}
+        />
 
-      <RecentSwitcher
-        overviewId={panelCollection?.id ?? null}
-        collections={cat.tree}
-        onOpenRequest={openRequest}
-        onOpenCollection={setPanelCollectionId}
-        onRevealDraft={() => setPanelCollectionId(null)}
-      />
+        <RecentSwitcher
+          overviewId={panelCollection?.id ?? null}
+          collections={cat.tree}
+          onOpenRequest={openRequest}
+          onOpenCollection={setPanelCollectionId}
+          onRevealDraft={() => setPanelCollectionId(null)}
+        />
 
-      <UpdateToast
-        phase={update.phase}
-        version={update.version}
-        progress={update.progress}
-        manual={update.manual}
-        onUpdate={update.install}
-        onDismiss={update.dismiss}
-      />
-      <AppVersionBadge />
-      <Toaster />
-    </div>
+        <UpdateToast
+          phase={update.phase}
+          version={update.version}
+          progress={update.progress}
+          manual={update.manual}
+          onUpdate={update.install}
+          onDismiss={update.dismiss}
+        />
+        <AppVersionBadge />
+        <Toaster />
+      </div>
     </UpdaterProvider>
   );
 }

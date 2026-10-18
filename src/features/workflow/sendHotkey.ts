@@ -1,22 +1,30 @@
+import {
+  chordMatches,
+  primaryChords,
+  type Chord,
+} from "@/features/shell/hotkeys";
+
 /**
- * Predicate for the global "Send request" keyboard shortcuts.
+ * Send rows. Two chords both fire Send: Ctrl/Cmd+Enter and Ctrl/Cmd+R.
  *
- * Two chords both fire Send (mirroring the Send button): the canonical
- * **Ctrl/Cmd+Enter** and the alternate **Ctrl/Cmd+R**.
- *
- * Layout independence: `R` is matched by its PHYSICAL key (`e.code === "KeyR"`),
- * not `e.key`, so it works on non-QWERTY layouts (on ЙЦУКЕН the physical R key
- * yields `e.key === "к"`). Enter is layout-stable, so it stays on `e.key`. AltGr
- * is `Ctrl+Alt` on Windows (it sets `ctrlKey`), so the letter chord excludes
- * `altKey` — AltGr+R composing a character must never send.
- *
- * The caller is expected to `preventDefault()` on a match: for Ctrl+R that also
- * suppresses the WebView's built-in reload, which is a cancelable keydown default
- * action in the Chromium-based WebView2 (verified — see the feature notes).
+ * `R` is the physical key, so ЙЦУКЕН still matches (`e.key` is "к", `e.code` is
+ * KeyR). Enter stays on `e.key`. AltGr is Ctrl+Alt, so the R rows exclude Alt —
+ * a composed character must never send. Enter keeps the previous looseness
+ * (Shift or Alt still match). Bubble phase: Monaco swallows these chords while
+ * an editor is focused, and the editor re-binds the returned trigger.
+ * preventDefault on R also suppresses the WebView reload.
  */
+export function sendChords(run: Chord["run"]): Chord[] {
+  return [
+    ...primaryChords(["Enter"], {
+      capture: false,
+      optional: ["shift", "alt"],
+      run,
+    }),
+    ...primaryChords(["KeyR"], { capture: false, optional: ["shift"], run }),
+  ];
+}
+
 export function isSendHotkey(e: KeyboardEvent): boolean {
-  if (!(e.metaKey || e.ctrlKey)) return false;
-  if (e.key === "Enter") return true;
-  if (e.code === "KeyR" && !e.altKey) return true;
-  return false;
+  return sendChords(() => undefined).some((row) => chordMatches(row, e, false));
 }

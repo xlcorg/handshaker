@@ -6,8 +6,9 @@ import { EnvEditorDialog } from "@/features/envs/EnvEditorDialog";
 import { EnvSwitcherMenu } from "@/features/envs/EnvSwitcherMenu";
 import { bumpEnvRevision, useEnvRevision } from "@/features/envs/envRevision";
 import { paintMarker } from "@/features/envs/colors";
-import { isEnvCycleHotkey, nextEnvName } from "@/features/envs/cycle";
-import { isEnvEditHotkey } from "@/features/envs/openEditor";
+import { envCycleChords, nextEnvName } from "@/features/envs/cycle";
+import { envEditChords } from "@/features/envs/openEditor";
+import { useChords } from "@/features/shell/hotkeys";
 import { envList, envReorder } from "@/ipc/client";
 import type { EnvironmentIpc } from "@/ipc/bindings";
 import { messages } from "@/lib/messages";
@@ -67,44 +68,27 @@ export function WorkflowEnvControl() {
   const label = activeEnv ?? "No environment";
   const activeEnvObj = envs.find((e) => e.name === activeEnv) ?? null;
 
-  // Глобальный Ctrl+E / Cmd+E циклит env активного воркфлоу (исключая «No
-  // environment»). Capture-фаза задаёт лишь ПОРЯДОК (мы раньше Monaco), но не
-  // подавление: на macOS Monaco биндит Cmd+E на actions.findWithSelection
-  // (открывает виджет поиска). Чтобы сфокусированный редактор не получил
-  // клавишу, на обработанном хоткее нужен stopPropagation — иначе событие в
-  // capture-фазе доходит до DOM-узла редактора и поверх цикла env всплывает
-  // окно поиска (один preventDefault Monaco не останавливает).
-  // Перепривязка на [envs, activeEnv] держит замыкание свежим.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.repeat || !isEnvCycleHotkey(e)) return;
+  // Ctrl/Cmd+E cycles the active workflow's env. Capture stops the key before
+  // Monaco: on macOS Cmd+E is actions.findWithSelection, and preventDefault alone
+  // does not keep the find widget from opening. Declining (repeat, or no env to
+  // select) leaves the key alone so Monaco can handle it. Ctrl/Cmd+Shift+E opens
+  // Edit environment and still swallows when the editor is already open.
+  useChords([
+    ...envCycleChords((event) => {
+      if (event.repeat) return false;
       const next = nextEnvName(
         envs.map((x) => x.name),
         activeEnv,
       );
-      if (next === null) return; // ноль env — не глотаем клавишу (Monaco обработает)
-      e.preventDefault();
-      e.stopPropagation();
+      if (next === null) return false;
       workflowStore.setWorkflowEnv(next);
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [envs, activeEnv]);
-
-  // Global Ctrl+Shift+E / Cmd+Shift+E opens Edit environment for the active env
-  // (no active env → create mode). Same capture-phase + stopPropagation discipline
-  // as the cycle hotkey so a focused Monaco editor never sees the key.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.repeat || !isEnvEditHotkey(e)) return;
-      e.preventDefault();
-      e.stopPropagation();
+    }),
+    ...envEditChords((event) => {
+      if (event.repeat) return false;
       if (editor !== null) return;
       setEditor({ opened: activeEnv });
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [activeEnv, editor]);
+    }),
+  ]);
 
   return (
     <>
