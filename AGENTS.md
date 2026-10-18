@@ -46,6 +46,7 @@ Use scoped Conventional Commits, such as `feat(grpc): ...` or `fix(tls): ...`. S
 | Rule | Check |
 | --- | --- |
 | A pull request runs `pnpm lint`, `pnpm test`, and `cargo test -p handshaker-core`. No commit in the pull request range contains `Co-authored-by`. The default Tauri capability grants `core:window:allow-start-dragging` and the window close permissions (`core:window:allow-close`, `core:window:allow-minimize`, `core:window:allow-toggle-maximize`, `core:window:allow-internal-toggle-maximize`). | `.github/workflows/ci.yml` runs those commands and `scripts/check-pr-trailers.mjs` on `base..head`. `src/features/shell/capabilities.test.ts` reads `src-tauri/capabilities/default.json`. |
+| User-facing prose lives in `src/lib/messages.ts`. New prose literals outside that file are not allowed. A single kebab-case or snake_case token (such as `collection-filter`) is not prose. | `python3 scripts/check-prose-ratchet.py` fails when the prose hit count grows past `scripts/prose-ui.baseline`. |
 
 ## Agent-Specific Instructions
 

@@ -1,0 +1,13 @@
+name: prose ratchet
+
+on:
+  pull_request:
+
+jobs:
+  prose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ratchet prose UI strings
+        run: python3 scripts/check-prose-ratchet.py

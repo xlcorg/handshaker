@@ -447,6 +447,11 @@ def live_mirrors() -> dict:
     }
 
 
+# Single kebab/snake token, including drive selectors such as collection-filter.
+# Every other string_hits() candidate is prose. This is the only definition of that split.
+TOKEN_TEXT = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
+
+
 def string_hits() -> list[str]:
     """Conservative user-facing string candidates. Not a finished lint."""
     hits = []
@@ -477,6 +482,30 @@ def string_hits() -> list[str]:
                         continue
                     hits.append(f"{rel}:{i}:{kind}:{text[:80]}")
     return hits
+
+
+def split_string_hits(hits: list[str]) -> tuple[list[str], list[str]]:
+    """Split candidates into prose and single kebab/snake tokens.
+
+    A token matches ``TOKEN_TEXT`` (for example ``collection-filter``).
+    Every other hit is prose.
+    """
+    prose: list[str] = []
+    tokens: list[str] = []
+    for hit in hits:
+        parts = hit.split(":", 3)
+        text = parts[3] if len(parts) > 3 else ""
+        if TOKEN_TEXT.match(text):
+            tokens.append(hit)
+        else:
+            prose.append(hit)
+    return prose, tokens
+
+
+def prose_hits() -> list[str]:
+    """Prose candidates from ``string_hits()``. Tokens are omitted."""
+    prose, _tokens = split_string_hits(string_hits())
+    return prose
 
 
 def grammar_corpus(rust_re: str, highlight_re: str) -> list[tuple[str, bool, bool, bool]]:
@@ -644,14 +673,12 @@ def main() -> int:
     print("A hit is `prose` otherwise.")
     print()
     kinds = Counter()
-    shapes = Counter()
-    token_re = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
+    prose, tokens = split_string_hits(hits)
+    shapes = Counter({"prose": len(prose), "token": len(tokens)})
     for h in hits:
         parts = h.split(":", 3)
         kind = parts[2] if len(parts) > 2 else "?"
-        text = parts[3] if len(parts) > 3 else ""
         kinds[kind] += 1
-        shapes["token" if token_re.match(text) else "prose"] += 1
     for kind, n in kinds.most_common():
         print(f"- {kind}: {n}")
     for shape, n in shapes.most_common():
