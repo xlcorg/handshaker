@@ -1,4 +1,5 @@
-//! Standalone binary that regenerates `src/ipc/bindings.ts`.
+//! Standalone binary that regenerates `src/ipc/bindings.ts` and the var tables
+//! (`varGrammar.gen.ts`, `wellKnown.gen.ts`, `builtins.gen.ts`).
 //!
 //! `cargo build` doesn't reach the export call inside `lib.rs::run()` (which
 //! only fires when the windowed app starts), and integration tests in this
@@ -14,6 +15,7 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use handshaker_core::var_tables::write_generated_var_tables;
 use handshaker_lib::specta_builder;
 use specta_typescript::Typescript;
 
@@ -48,4 +50,10 @@ fn main() {
         .expect("failed to export tauri-specta bindings");
 
     println!("wrote {}", out.display());
+
+    let root = std::path::Path::new(manifest_dir).join("..");
+    write_generated_var_tables(&root).expect("failed to write generated var tables");
+    for (rel, _) in handshaker_core::var_tables::generated_var_tables() {
+        println!("wrote {}", root.join(rel).display());
+    }
 }

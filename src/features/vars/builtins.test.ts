@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { BUILTIN_NAMES, isBuiltinName, BUILTIN_CANDIDATES } from "./builtins";
+import { BUILTIN_CANDIDATES } from "./candidates";
+import { BUILTIN_NAMES, isBuiltinName } from "./builtins.gen";
 
 describe("builtins", () => {
   it("recognizes known $-names only", () => {

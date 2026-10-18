@@ -25,10 +25,12 @@ pub const MAX_PASSES: usize = 4;
 /// `{` / `}` delimiters. The key is taken literally (no trimming) and may contain
 /// digits, dots, hyphens, or non-ASCII — it simply has to equal an env/collection key.
 /// (Relaxes the former `[a-zA-Z_][a-zA-Z0-9_-]*` rule from master spec §5.2.)
-static VAR_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"\{\{([^{}]+)\}\}")
-        .expect("VAR_RE is a known-good regex")
-});
+///
+/// `export-bindings` copies this source into `src/features/vars/varGrammar.gen.ts`.
+pub const VAR_PATTERN: &str = r"\{\{([^{}]+)\}\}";
+
+static VAR_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(VAR_PATTERN).expect("VAR_PATTERN is a known-good regex"));
 
 /// Borrowed view over the env- and collection-scope variable maps for one resolve call.
 /// Lookup priority is `env > collection`.

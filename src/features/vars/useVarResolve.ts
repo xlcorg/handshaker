@@ -3,15 +3,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ResolutionReportIpc } from "@/ipc/bindings";
 import type { ResolveKey } from "@/features/workflow/resolveKey";
 
+import { VAR_PATTERN_SOURCE } from "./varGrammar.gen";
+
 const DEBOUNCE_MS = 300;
+const VAR_DETECT = new RegExp(VAR_PATTERN_SOURCE);
 
 /** Per-token resolve state for highlight coloring. */
 export type VarTokenState = "resolved" | "error" | "dynamic";
 
-/** Detects a `{{name}}` placeholder. Mirrors the core `VAR_RE` (`\{\{([^{}]+)\}\}`):
- *  the name is any non-empty run of non-brace chars, so dots/slashes/hyphens count. */
+/** Detects a `{{name}}` placeholder using the generated core pattern. */
 export function hasVars(s: string): boolean {
-  return /\{\{[^{}]+\}\}/.test(s);
+  return VAR_DETECT.test(s);
 }
 
 /** Debounced resolve of `value` via `resolver`. Returns the latest report, or null
@@ -34,7 +36,9 @@ export function useVarResolve(
       return;
     }
     const t = setTimeout(() => {
-      resolve(value).then(setReport).catch(() => setReport(null));
+      resolve(value)
+        .then(setReport)
+        .catch(() => setReport(null));
     }, DEBOUNCE_MS);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -76,12 +80,13 @@ export function useTokenResolveStates(
       void Promise.all(
         names.map((n) =>
           resolve(`{{${n}}}`)
-            .then((r): VarTokenState =>
-              r.cycle_chain != null || r.unresolved_vars.length > 0
-                ? "error"
-                : r.dynamic_vars.length > 0
-                  ? "dynamic"
-                  : "resolved",
+            .then(
+              (r): VarTokenState =>
+                r.cycle_chain != null || r.unresolved_vars.length > 0
+                  ? "error"
+                  : r.dynamic_vars.length > 0
+                    ? "dynamic"
+                    : "resolved",
             )
             .catch((): VarTokenState => "error"),
         ),

@@ -4,21 +4,30 @@
 //! is injected via [`BuiltinGenerator`] so the core stays deterministic in tests.
 //!
 //! Per-occurrence semantics: [`expand_builtins`] generates a fresh value for EACH
-//! `{{$name}}` occurrence (two `{{$guid}}` → two different GUIDs). Mirror of the
-//! frontend set in `src/features/vars/builtins.ts` — keep in sync.
+//! `{{$name}}` occurrence (two `{{$guid}}` → two different GUIDs).
+//!
+//! [`BUILTIN_NAMES`] is the set `export-bindings` writes to
+//! `src/features/vars/builtins.gen.ts`.
 
 use uuid::Uuid;
 
 use super::VAR_RE;
 
-/// True for a recognized built-in name (always `$`-prefixed). The `$` prefix makes
-/// collision with user variables practically impossible; an unknown `$foo` is NOT a
-/// builtin and stays a normal (unresolved) variable.
+/// Recognized built-in names (always `$`-prefixed). The `$` prefix makes collision
+/// with user variables practically impossible; an unknown `$foo` is NOT a builtin
+/// and stays a normal (unresolved) variable.
+pub const BUILTIN_NAMES: &[&str] = &[
+    "$guid",
+    "$guid7",
+    "$timestamp",
+    "$unixMs",
+    "$isoTimestamp",
+    "$randomInt",
+];
+
+/// True for a recognized built-in name.
 pub fn is_builtin(name: &str) -> bool {
-    matches!(
-        name,
-        "$guid" | "$guid7" | "$timestamp" | "$unixMs" | "$isoTimestamp" | "$randomInt"
-    )
+    BUILTIN_NAMES.contains(&name)
 }
 
 /// Generates a value for a built-in name, or `None` if the name is not a builtin
@@ -150,6 +159,14 @@ mod tests {
         assert!(!is_builtin("$foo")); // $-prefixed but not a known builtin
         assert!(!is_builtin("guid")); // no $-prefix → user var
         assert!(!is_builtin("host"));
+    }
+
+    #[test]
+    fn every_builtin_name_generates() {
+        let gen = SystemBuiltins;
+        for name in BUILTIN_NAMES {
+            assert!(gen.generate(name).is_some(), "{name}");
+        }
     }
 
     #[test]

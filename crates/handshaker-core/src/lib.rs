@@ -16,6 +16,7 @@ pub mod persist;
 pub mod send;
 pub mod stream;
 pub mod ui_state;
+pub mod var_tables;
 pub mod vars;
 
 pub use error::CoreError;

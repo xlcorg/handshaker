@@ -43,5 +43,10 @@ jobs:
         # dev packages. This runner does not install them.
         run: cargo test -p handshaker-core
 
+      - name: Check generated var tables
+        # Compares committed *.gen.ts to the Rust sources. Does not run
+        # export-bindings (that compiles the Tauri crate).
+        run: python3 scripts/check_var_tables.py
+
       - name: Reject Co-authored-by trailers
         run: node scripts/check-pr-trailers.mjs "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"

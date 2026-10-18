@@ -39,6 +39,8 @@ pub(crate) enum ScalarWellKnown {
 /// 12 scalar well-known types; every other message (including `Struct`,
 /// `Value`, `ListValue`, `Any`, `Empty`) returns `None` and keeps the ordinary
 /// message path.
+///
+/// `export-bindings` reads these match arms into `src/lib/wellKnown.gen.ts`.
 pub(crate) fn classify(full_name: &str) -> Option<ScalarWellKnown> {
     use ScalarWellKnown::*;
     Some(match full_name {

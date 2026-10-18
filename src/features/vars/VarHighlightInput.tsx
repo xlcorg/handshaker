@@ -1,4 +1,11 @@
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { cn } from "@/lib/cn";
 import { Tooltip, TooltipProvider } from "@/components/ui/tooltip";
@@ -8,8 +15,14 @@ import type { ResolutionReportIpc } from "@/ipc/bindings";
 import { idleResolveKey, type ResolveKey } from "@/features/workflow/resolveKey";
 import { useTokenResolveStates, useVarResolve } from "./useVarResolve";
 import { VarSuggestDropdown, optionId } from "./VarSuggestDropdown";
-import { openVarToken, filterCandidates, applyVarPick, MAX_VAR_SUGGESTIONS } from "./varContext";
+import {
+  openVarToken,
+  filterCandidates,
+  applyVarPick,
+  MAX_VAR_SUGGESTIONS,
+} from "./varContext";
 import type { VarCandidate } from "./candidates";
+import { VAR_PATTERN_SOURCE } from "./varGrammar.gen";
 
 // Default font/box metrics so the (transparent-text) input and the highlight backdrop
 // lay out identically character-for-character. The address bar uses this; hosts with
@@ -29,10 +42,10 @@ interface Segment {
 function parseSegments(value: string): Segment[] {
   const out: Segment[] = [];
   let last = 0;
-  // Mirror the core VAR_RE (`\{\{([^{}]+)\}\}`): the name is any non-empty non-brace run.
-  for (const m of value.matchAll(/\{\{([^{}]+)\}\}/g)) {
+  for (const m of value.matchAll(new RegExp(VAR_PATTERN_SOURCE, "g"))) {
     const start = m.index ?? 0;
-    if (start > last) out.push({ text: value.slice(last, start), varName: null });
+    if (start > last)
+      out.push({ text: value.slice(last, start), varName: null });
     out.push({ text: m[0], varName: m[1] });
     last = start + m[0].length;
   }
@@ -66,8 +79,15 @@ export interface VarHighlightInputProps {
  *  resolved value shows muted at the field's right edge when it fits, and is always
  *  available via a hover tooltip on the field (so long addresses still expose it). */
 export function VarHighlightInput({
-  value, onChange, resolver, resolveKey, placeholder, ariaLabel,
-  metrics = DEFAULT_METRICS, className, variables,
+  value,
+  onChange,
+  resolver,
+  resolveKey,
+  placeholder,
+  ariaLabel,
+  metrics = DEFAULT_METRICS,
+  className,
+  variables,
 }: VarHighlightInputProps) {
   const [prefs] = usePrefs();
   const key = resolveKey ?? idleResolveKey;
@@ -78,19 +98,28 @@ export function VarHighlightInput({
   // report's unresolved_vars are LEAF names, so a chained-but-defined token (uri-root →
   // {{missing}}) would mis-color as resolved if keyed off them. See useTokenResolveStates.
   const tokenNames = useMemo(
-    () => [...new Set(segments.flatMap((s) => (s.varName == null ? [] : [s.varName])))],
+    () => [
+      ...new Set(
+        segments.flatMap((s) => (s.varName == null ? [] : [s.varName])),
+      ),
+    ],
     [segments],
   );
   const tokenStates = useTokenResolveStates(tokenNames, resolver, key);
 
-  const ok = report != null && report.cycle_chain == null && report.unresolved_vars.length === 0;
+  const ok =
+    report != null &&
+    report.cycle_chain == null &&
+    report.unresolved_vars.length === 0;
   const resolvedValue = ok ? report.resolved : "";
 
   // Tooltip text: the full resolved value on success, the failure detail on error.
   let tooltip: string | undefined;
   if (report) {
-    if (report.cycle_chain) tooltip = `Cycle: ${report.cycle_chain.join(" → ")}`;
-    else if (report.unresolved_vars.length > 0) tooltip = `Unresolved: ${report.unresolved_vars.join(", ")}`;
+    if (report.cycle_chain)
+      tooltip = `Cycle: ${report.cycle_chain.join(" → ")}`;
+    else if (report.unresolved_vars.length > 0)
+      tooltip = `Unresolved: ${report.unresolved_vars.join(", ")}`;
     else tooltip = report.resolved;
   }
 
@@ -103,14 +132,23 @@ export function VarHighlightInput({
 
   // Autocomplete dropdown state
   const listboxId = useId();
-  const [suggest, setSuggest] = useState<{ items: VarCandidate[]; total: number; active: number; left: number; top: number } | null>(null);
+  const [suggest, setSuggest] = useState<{
+    items: VarCandidate[];
+    total: number;
+    active: number;
+    left: number;
+    top: number;
+  } | null>(null);
   // Track the last-typed text + caret position independently of the controlled value.
   // `inputRef.current.value` is reset to the controlled `value` prop on React re-render,
   // so reading from it after a re-render (e.g. in onKeyUp that fires after the re-render)
   // would see the prop value, not what the user just typed. Similarly, `selectionStart`
   // gets clamped to 0 when React resets the value to a shorter string. Storing both here
   // lets refreshSuggest always operate on the latest typed text + caret position.
-  const lastTypedRef = useRef<{ text: string; caret: number }>({ text: value, caret: value.length });
+  const lastTypedRef = useRef<{ text: string; caret: number }>({
+    text: value,
+    caret: value.length,
+  });
 
   // Keep the typed-text ref in sync with external value changes (method switch /
   // programmatic edits) so a later keyUp/select doesn't open a stale dropdown.
@@ -137,13 +175,22 @@ export function VarHighlightInput({
   // the DOM directly. Position the dropdown at the `{{` via the measuring span.
   const refreshSuggest = () => {
     const el = inputRef.current;
-    if (!el || !variables || variables.length === 0) { setSuggest(null); return; }
+    if (!el || !variables || variables.length === 0) {
+      setSuggest(null);
+      return;
+    }
     const text = lastTypedRef.current.text;
     const caret = lastTypedRef.current.caret;
     const tok = openVarToken(text.slice(0, caret));
-    if (!tok) { setSuggest(null); return; }
+    if (!tok) {
+      setSuggest(null);
+      return;
+    }
     const all = filterCandidates(variables, tok.partial);
-    if (all.length === 0) { setSuggest(null); return; }
+    if (all.length === 0) {
+      setSuggest(null);
+      return;
+    }
     // Cap the visible list (no scroll); the "…ещё M" hint signals the rest. Narrow by typing.
     const items = all.slice(0, MAX_VAR_SUGGESTIONS);
     const total = all.length;
@@ -157,7 +204,13 @@ export function VarHighlightInput({
     const rect = wrapperRef.current?.getBoundingClientRect();
     const left = (rect ? rect.left : 0) + Math.max(0, caretX);
     const top = (rect ? rect.bottom : 0) + 4;
-    setSuggest((prev) => ({ items, total, active: prev ? Math.min(prev.active, items.length - 1) : 0, left, top }));
+    setSuggest((prev) => ({
+      items,
+      total,
+      active: prev ? Math.min(prev.active, items.length - 1) : 0,
+      left,
+      top,
+    }));
   };
 
   const pick = (index: number) => {
@@ -172,7 +225,10 @@ export function VarHighlightInput({
     // Restore caret after the controlled value re-renders (parent feeds `value` back).
     requestAnimationFrame(() => {
       const e = inputRef.current;
-      if (e) { e.focus(); e.setSelectionRange(res.caret, res.caret); }
+      if (e) {
+        e.focus();
+        e.setSelectionRange(res.caret, res.caret);
+      }
     });
   };
 
@@ -183,7 +239,13 @@ export function VarHighlightInput({
       setSuggest((s) => s && { ...s, active: (s.active + 1) % s.items.length });
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setSuggest((s) => s && { ...s, active: (s.active - 1 + s.items.length) % s.items.length });
+      setSuggest(
+        (s) =>
+          s && {
+            ...s,
+            active: (s.active - 1 + s.items.length) % s.items.length,
+          },
+      );
     } else if (e.key === "Enter" || e.key === "Tab") {
       e.preventDefault();
       e.stopPropagation();
@@ -215,7 +277,10 @@ export function VarHighlightInput({
       // `content` is an inline-block span hugging the typed text, so offsetWidth is the
       // real text width (the backdrop box itself is stretched full-width and would not be).
       const avail = wrap.clientWidth;
-      setChipFits(avail > 0 && content.offsetWidth + chip.scrollWidth + FIT_SLACK <= avail);
+      setChipFits(
+        avail > 0 &&
+          content.offsetWidth + chip.scrollWidth + FIT_SLACK <= avail,
+      );
     };
     measure();
     // The field is flex-sized, so a window/pane resize changes clientWidth with no prop
@@ -230,34 +295,41 @@ export function VarHighlightInput({
   }, [value, resolvedValue, resolveKey]);
 
   const field = (
-    <div ref={wrapperRef} data-vh-scheme={prefs.varHighlight} className={cn("relative", className)}>
+    <div
+      ref={wrapperRef}
+      data-vh-scheme={prefs.varHighlight}
+      className={cn("relative", className)}
+    >
       <div
         ref={backdropRef}
         aria-hidden
-        className={cn("pointer-events-none absolute inset-0 overflow-hidden whitespace-pre text-foreground", metrics)}
+        className={cn(
+          "pointer-events-none absolute inset-0 overflow-hidden whitespace-pre text-foreground",
+          metrics,
+        )}
       >
         <span ref={contentRef} className="inline-block">
-        {segments.map((seg, i) =>
-          seg.varName == null ? (
-            <span key={i}>{seg.text}</span>
-          ) : (
-            <span
-              key={i}
-              className={cn(
-                "rounded-[3px]",
-                tokenStates[seg.varName] == null
-                  ? undefined
-                  : tokenStates[seg.varName] === "error"
-                    ? "vh-error"
-                    : tokenStates[seg.varName] === "dynamic"
-                      ? "vh-dynamic"
-                      : "vh-resolved",
-              )}
-            >
-              {seg.text}
-            </span>
-          ),
-        )}
+          {segments.map((seg, i) =>
+            seg.varName == null ? (
+              <span key={i}>{seg.text}</span>
+            ) : (
+              <span
+                key={i}
+                className={cn(
+                  "rounded-[3px]",
+                  tokenStates[seg.varName] == null
+                    ? undefined
+                    : tokenStates[seg.varName] === "error"
+                      ? "vh-error"
+                      : tokenStates[seg.varName] === "dynamic"
+                        ? "vh-dynamic"
+                        : "vh-resolved",
+                )}
+              >
+                {seg.text}
+              </span>
+            ),
+          )}
         </span>
       </div>
       <input
@@ -267,11 +339,20 @@ export function VarHighlightInput({
         aria-expanded={suggest != null}
         aria-controls={suggest ? listboxId : undefined}
         aria-autocomplete="list"
-        aria-activedescendant={suggest ? optionId(listboxId, suggest.active) : undefined}
+        aria-activedescendant={
+          suggest ? optionId(listboxId, suggest.active) : undefined
+        }
         value={value}
         // NOTE: caret is stored as value.length (end-of-text). Editing mid-string (placing
         // the cursor inside existing text) is a known limitation — the partial won't reflect it.
-        onChange={(e) => { lastTypedRef.current = { text: e.target.value, caret: e.target.value.length }; onChange(e.target.value); refreshSuggest(); }}
+        onChange={(e) => {
+          lastTypedRef.current = {
+            text: e.target.value,
+            caret: e.target.value.length,
+          };
+          onChange(e.target.value);
+          refreshSuggest();
+        }}
         onKeyDown={onInputKeyDown}
         onKeyUp={refreshSuggest}
         onSelect={refreshSuggest}
@@ -300,7 +381,10 @@ export function VarHighlightInput({
       <span
         ref={measureRef}
         aria-hidden
-        className={cn("pointer-events-none invisible absolute left-0 top-0 whitespace-pre", metrics)}
+        className={cn(
+          "pointer-events-none invisible absolute left-0 top-0 whitespace-pre",
+          metrics,
+        )}
       />
       {suggest && (
         <VarSuggestDropdown

@@ -1,4 +1,5 @@
-import { BUILTIN_CANDIDATES } from "./builtins";
+import { messages } from "@/lib/messages";
+import { BUILTIN_NAMES } from "./builtins.gen";
 
 export type VarOrigin = "env" | "collection" | "builtin";
 
@@ -11,6 +12,15 @@ export interface VarCandidate {
   overrides?: boolean;
 }
 
+/** Autocomplete candidates appended to every var surface. The description rides the
+ *  `value` slot. Indexing `desc` with the generated name union fails to compile when
+ *  a builtin has no description. */
+export const BUILTIN_CANDIDATES: VarCandidate[] = BUILTIN_NAMES.map((name) => ({
+  name,
+  value: messages.vars.builtin.desc[name],
+  origin: "builtin",
+}));
+
 type VarMap = Partial<Record<string, string>> | undefined;
 
 /** Active environment wins over a same-named collection var (mirrors resolve order
@@ -18,7 +28,10 @@ type VarMap = Partial<Record<string, string>> | undefined;
  *  vars scoped to the current collection surface at the top of the autocomplete. A
  *  name present in both is deduped to its env candidate (env wins) and lands in the
  *  env section at the bottom, marked `overrides`. */
-export function buildVarCandidates(env: VarMap, collection: VarMap): VarCandidate[] {
+export function buildVarCandidates(
+  env: VarMap,
+  collection: VarMap,
+): VarCandidate[] {
   const envEntries = Object.entries(env ?? {}).filter(
     (e): e is [string, string] => e[1] !== undefined,
   );
@@ -34,9 +47,11 @@ export function buildVarCandidates(env: VarMap, collection: VarMap): VarCandidat
     out.push({ name, value, origin: "collection" });
   }
   for (const [name, value] of envEntries) {
-    out.push(collNames.has(name)
-      ? { name, value, origin: "env", overrides: true }
-      : { name, value, origin: "env" });
+    out.push(
+      collNames.has(name)
+        ? { name, value, origin: "env", overrides: true }
+        : { name, value, origin: "env" },
+    );
   }
   out.push(...BUILTIN_CANDIDATES);
   return out;

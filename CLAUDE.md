@@ -34,7 +34,7 @@ Package manager is **pnpm** (`pnpm@9`). Rust is a Cargo workspace
 - Format — `pnpm format`
 - **Regen IPC bindings** after any Rust command/DTO change —
   `cargo run -p handshaker --bin export-bindings --features export-bindings --quiet`
-  (rewrites the **tracked** `src/ipc/bindings.ts` — commit the regenerated file;
+  (rewrites the **tracked** `src/ipc/bindings.ts` and the three `*.gen.ts` var tables — commit the regenerated files;
   `tauri dev` also regenerates it, prettier-formatted)
 
 **The gate** (green before any fast-forward merge) = `pnpm lint` + `pnpm test` +

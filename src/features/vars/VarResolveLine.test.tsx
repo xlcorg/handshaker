@@ -20,6 +20,8 @@ async function flushDebounce() {
 describe("hasVars", () => {
   it("detects {{name}} placeholders", () => {
     expect(hasVars("{{uri-root}}/v1")).toBe(true);
+    expect(hasVars("{{user.name}}")).toBe(true);
+    expect(hasVars("{{a/b}}")).toBe(true);
     expect(hasVars("plain")).toBe(false);
   });
 });
@@ -28,7 +30,9 @@ describe("VarResolveLine", () => {
   it("renders nothing for a value without vars", () => {
     vi.useFakeTimers();
     const resolver = vi.fn();
-    const { container } = render(<VarResolveLine value="plain" resolver={resolver} />);
+    const { container } = render(
+      <VarResolveLine value="plain" resolver={resolver} />,
+    );
     expect(container).toBeEmptyDOMElement();
     expect(resolver).not.toHaveBeenCalled();
     vi.useRealTimers();
@@ -36,26 +40,36 @@ describe("VarResolveLine", () => {
 
   it("shows the resolved value after the debounce", async () => {
     vi.useFakeTimers();
-    const resolver = vi.fn(async () => report({ resolved: "https://api.example.com" }));
+    const resolver = vi.fn(async () =>
+      report({ resolved: "https://api.example.com" }),
+    );
     render(<VarResolveLine value="{{notes-api-root}}" resolver={resolver} />);
     expect(screen.queryByText(/resolves/)).toBeNull(); // still debouncing
     await flushDebounce();
-    expect(screen.getByText(/→ resolves: https:\/\/api\.example\.com/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/→ resolves: https:\/\/api\.example\.com/),
+    ).toBeInTheDocument();
     vi.useRealTimers();
   });
 
   it("shows unresolved vars as a warning", async () => {
     vi.useFakeTimers();
-    const resolver = vi.fn(async () => report({ unresolved_vars: ["notes-api-root"] }));
+    const resolver = vi.fn(async () =>
+      report({ unresolved_vars: ["notes-api-root"] }),
+    );
     render(<VarResolveLine value="{{notes-api-root}}" resolver={resolver} />);
     await flushDebounce();
-    expect(screen.getByText(/⚠ Unresolved: notes-api-root/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/⚠ Unresolved: notes-api-root/),
+    ).toBeInTheDocument();
     vi.useRealTimers();
   });
 
   it("shows a cycle chain as a warning", async () => {
     vi.useFakeTimers();
-    const resolver = vi.fn(async () => report({ cycle_chain: ["a", "b", "a"] }));
+    const resolver = vi.fn(async () =>
+      report({ cycle_chain: ["a", "b", "a"] }),
+    );
     render(<VarResolveLine value="{{a}}" resolver={resolver} />);
     await flushDebounce();
     expect(screen.getByText(/⚠ Cycle: a → b → a/)).toBeInTheDocument();

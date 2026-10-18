@@ -133,6 +133,9 @@ pub fn run() {
                 &out,
             )
             .expect("failed to export tauri-specta bindings");
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        handshaker_core::var_tables::write_generated_var_tables(&root)
+            .expect("failed to write generated var tables");
     }
 
     tauri::Builder::default()

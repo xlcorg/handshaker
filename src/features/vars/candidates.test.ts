@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildVarCandidates } from "./candidates";
-import { BUILTIN_NAMES } from "./builtins";
+import { BUILTIN_NAMES } from "./builtins.gen";
 
 describe("buildVarCandidates", () => {
   it("lists collection first, then env, env wins on name clash (marked overrides)", () => {
@@ -15,7 +15,9 @@ describe("buildVarCandidates", () => {
       { name: "token", value: "jwt", origin: "env" },
     ]);
     // builtins appended after user vars
-    expect(out.slice(-BUILTIN_NAMES.length).map((c) => c.name)).toEqual([...BUILTIN_NAMES]);
+    expect(out.slice(-BUILTIN_NAMES.length).map((c) => c.name)).toEqual([
+      ...BUILTIN_NAMES,
+    ]);
   });
 
   it("handles missing sides and skips undefined values", () => {
@@ -25,11 +27,15 @@ describe("buildVarCandidates", () => {
     expect(emptyOut.every((c) => c.origin === "builtin")).toBe(true);
 
     const aOnly = buildVarCandidates({ a: "1", b: undefined }, undefined);
-    expect(aOnly.slice(0, 1)).toEqual([{ name: "a", value: "1", origin: "env" }]);
+    expect(aOnly.slice(0, 1)).toEqual([
+      { name: "a", value: "1", origin: "env" },
+    ]);
     expect(aOnly).toHaveLength(1 + BUILTIN_NAMES.length);
 
     const cOnly = buildVarCandidates(undefined, { c: "3" });
-    expect(cOnly.slice(0, 1)).toEqual([{ name: "c", value: "3", origin: "collection" }]);
+    expect(cOnly.slice(0, 1)).toEqual([
+      { name: "c", value: "3", origin: "collection" },
+    ]);
     expect(cOnly).toHaveLength(1 + BUILTIN_NAMES.length);
   });
 

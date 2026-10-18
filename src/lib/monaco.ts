@@ -1,5 +1,19 @@
 import { lazy } from "react";
 import { registerBodyCompletion } from "@/features/bodyview/completion";
+import { VAR_PATTERN_SOURCE } from "@/features/vars/varGrammar.gen";
+
+/** Core `{{var}}` pattern, and the same pattern with a `$` prefix so `{{$name}}` keeps the dynamic color. */
+function varTokenRules(): [RegExp, string][] {
+  const open = "\\{\\{(";
+  if (!VAR_PATTERN_SOURCE.startsWith(open)) {
+    throw new Error("VAR_PATTERN_SOURCE must start with {{(");
+  }
+  const dynamicSource = "\\{\\{\\$(" + VAR_PATTERN_SOURCE.slice(open.length);
+  return [
+    [new RegExp(dynamicSource), "variable.dynamic"],
+    [new RegExp(VAR_PATTERN_SOURCE), "variable.template"],
+  ];
+}
 
 /**
  * Bundle Monaco locally — no CDN dependency. Desktop apps need to work offline.
@@ -39,13 +53,11 @@ const setupPromise = (async () => {
   // a closing quote followed by `:` (= an object key); without lookahead,
   // Monarch tokenizes left-to-right and can't tell yet.
   //
-  // Dynamic built-ins (`{{$guid7}}`, `{{$timestamp}}`, …) carry a leading `$`,
-  // which the user-var rule's charset excludes — so without a dedicated rule
-  // they'd fall through to plain-string coloring. A separate `variable.dynamic`
-  // token (placed BEFORE the user-var rule in each state) paints any `{{$ident}}`
-  // violet, mirroring the `.vh-dynamic` highlight in the plain `{{var}}` inputs.
-  // Like the user-var rule, this colors the reference syntactically (any `$`
-  // name), independent of whether the core recognizes that built-in.
+  // Dynamic built-ins (`{{$guid7}}`, `{{$timestamp}}`, …) carry a leading `$`.
+  // The user-var rule is the generated core pattern, which also matches those
+  // names, so a `$`-prefixed copy of that pattern is placed BEFORE it in each
+  // state and paints `{{$…}}` violet (`.vh-dynamic` in the plain inputs). The
+  // color is syntactic: any `$` name, whether or not core recognizes the builtin.
   monaco.languages.register({ id: "json-with-vars" });
   registerBodyCompletion(monaco);
 
@@ -93,10 +105,12 @@ const setupPromise = (async () => {
   monaco.languages.setMonarchTokensProvider("json-with-vars", {
     tokenizer: {
       root: [
-        [/\{\{\$[a-zA-Z][a-zA-Z0-9_\-]*\}\}/, "variable.dynamic"],
-        [/\{\{[a-zA-Z_][a-zA-Z0-9_\-]*\}\}/, "variable.template"],
+        ...varTokenRules(),
         // Lookahead: opening quote followed by anything-then-quote-then-colon = a key.
-        [/"(?=(?:[^"\\]|\\.)*"\s*:)/, { token: "string.key.quote", next: "@stringKey" }],
+        [
+          /"(?=(?:[^"\\]|\\.)*"\s*:)/,
+          { token: "string.key.quote", next: "@stringKey" },
+        ],
         [/"/, { token: "string.quote", next: "@string" }],
         [/-?\d+(\.\d+)?([eE][+\-]?\d+)?/, "number"],
         [/\b(?:true|false|null)\b/, "keyword"],
@@ -104,16 +118,14 @@ const setupPromise = (async () => {
         [/[ \t\r\n]+/, "white"],
       ],
       string: [
-        [/\{\{\$[a-zA-Z][a-zA-Z0-9_\-]*\}\}/, "variable.dynamic"],
-        [/\{\{[a-zA-Z_][a-zA-Z0-9_\-]*\}\}/, "variable.template"],
+        ...varTokenRules(),
         [/[^"\\{]+/, "string"],
         [/\\./, "string.escape"],
         [/\{/, "string"],
         [/"/, { token: "string.quote", next: "@pop" }],
       ],
       stringKey: [
-        [/\{\{\$[a-zA-Z][a-zA-Z0-9_\-]*\}\}/, "variable.dynamic"],
-        [/\{\{[a-zA-Z_][a-zA-Z0-9_\-]*\}\}/, "variable.template"],
+        ...varTokenRules(),
         [/[^"\\]+/, "string.key"],
         [/\\./, "string.key.escape"],
         [/"/, { token: "string.key.quote", next: "@pop" }],
@@ -166,7 +178,8 @@ export const MonacoEditor = lazy(async () => ({ default: await setupPromise }));
 
 export const EDITOR_OPTIONS = {
   fontSize: 12.5,
-  fontFamily: '"JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace',
+  fontFamily:
+    '"JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace',
   minimap: { enabled: false },
   scrollBeyondLastLine: false,
   automaticLayout: true,
@@ -188,7 +201,11 @@ export const EDITOR_OPTIONS = {
   // 14px vertical bar (VS Code default) is a real mouse target; the thin 8px bar
   // was hard to grab on a big response. scrollByPage: clicking the trough pages by
   // a screenful instead of teleporting — jump-anywhere is covered by the minimap.
-  scrollbar: { verticalScrollbarSize: 14, horizontalScrollbarSize: 8, scrollByPage: true },
+  scrollbar: {
+    verticalScrollbarSize: 14,
+    horizontalScrollbarSize: 8,
+    scrollByPage: true,
+  },
   padding: { top: 10, bottom: 24 },
 } as const;
 

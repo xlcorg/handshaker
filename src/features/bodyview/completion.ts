@@ -1,6 +1,10 @@
-import type { MessageSchemaIpc, MessageNodeIpc, FieldNodeIpc } from "@/ipc/bindings";
+import type {
+  MessageSchemaIpc,
+  MessageNodeIpc,
+  FieldNodeIpc,
+} from "@/ipc/bindings";
 import type * as Monaco from "monaco-editor";
-import { scalarWktShape } from "@/lib/wellKnown";
+import { scalarWktShape } from "@/lib/wellKnown.gen";
 import { filterCandidates, openVarToken } from "@/features/vars/varContext";
 import type { VarCandidate } from "@/features/vars/candidates";
 import { bodyFieldKey, matchesField, fieldPresent } from "./fieldName";
@@ -106,7 +110,9 @@ function resolveCompletionContext(text: string): CompletionContext {
   }
 
   const top = stack[stack.length - 1];
-  const pathKeys = stack.map((fr) => fr.openKey).filter((k): k is string => k !== null);
+  const pathKeys = stack
+    .map((fr) => fr.openKey)
+    .filter((k): k is string => k !== null);
 
   if (!top) return { path: [], where: "key" };
 
@@ -116,7 +122,11 @@ function resolveCompletionContext(text: string): CompletionContext {
     return { path: pathKeys.slice(0, -1), where: "value", valueField };
   }
   if (afterColon) {
-    return { path: pathKeys, where: "value", valueField: pendingKey ?? undefined };
+    return {
+      path: pathKeys,
+      where: "value",
+      valueField: pendingKey ?? undefined,
+    };
   }
   return { path: pathKeys, where: "key" };
 }
@@ -130,7 +140,10 @@ function resolveCompletionContext(text: string): CompletionContext {
  * (acceptable mid-typing degradation).
  */
 function collectPresentKeys(text: string, caret: number): ReadonlySet<string> {
-  interface KeyFrame { type: "object" | "array"; keys: Set<string> }
+  interface KeyFrame {
+    type: "object" | "array";
+    keys: Set<string>;
+  }
   const stack: KeyFrame[] = [];
   let caretFrame: KeyFrame | null = null;
   let lastString: string | null = null;
@@ -141,7 +154,8 @@ function collectPresentKeys(text: string, caret: number): ReadonlySet<string> {
   while (i < n) {
     // Strings never push/pop frames, so capturing at the next loop top after a
     // token that spans the caret still snapshots the correct enclosing frame.
-    if (caretFrame === null && i >= caret) caretFrame = stack[stack.length - 1] ?? null;
+    if (caretFrame === null && i >= caret)
+      caretFrame = stack[stack.length - 1] ?? null;
     const c = text[i];
     if (c === '"') {
       let j = i + 1;
@@ -184,7 +198,11 @@ function collectPresentKeys(text: string, caret: number): ReadonlySet<string> {
         break;
       case ":": {
         const top = stack[stack.length - 1];
-        if (top?.type === "object" && lastString !== null && !caretInLastString) {
+        if (
+          top?.type === "object" &&
+          lastString !== null &&
+          !caretInLastString
+        ) {
           top.keys.add(lastString);
         }
         break;
@@ -211,8 +229,12 @@ export type Descent =
   | { kind: "map"; field: FieldNodeIpc }
   | null;
 
-export function descendSchema(schema: MessageSchemaIpc, path: string[]): Descent {
-  const byName = (name: string) => schema.messages.find((m) => m.full_name === name) ?? null;
+export function descendSchema(
+  schema: MessageSchemaIpc,
+  path: string[],
+): Descent {
+  const byName = (name: string) =>
+    schema.messages.find((m) => m.full_name === name) ?? null;
   let node = byName(schema.root);
   if (!node) return null;
 
@@ -263,8 +285,18 @@ interface Suggestion {
 const sortKey = (i: number) => String(i).padStart(4, "0");
 
 const NUMBER_LABELS = new Set([
-  "double", "float", "int32", "int64", "uint32", "uint64",
-  "sint32", "sint64", "fixed32", "fixed64", "sfixed32", "sfixed64",
+  "double",
+  "float",
+  "int32",
+  "int64",
+  "uint32",
+  "uint64",
+  "sint32",
+  "sint64",
+  "fixed32",
+  "fixed64",
+  "sfixed32",
+  "sfixed64",
 ]);
 
 /** snippet body inserted after `"jsonName": ` for a key suggestion. */
@@ -272,7 +304,8 @@ function scaffold(field: FieldNodeIpc): string {
   if (field.repeated) return "[$0]";
   // Scalar well-known types insert a bare proto3-JSON scalar, not a `{…}` message.
   const wkt = scalarWktShape(field.message_type);
-  if (wkt) return wkt === "bool" ? "${1:false}" : wkt === "number" ? "${1:0}" : '"$0"';
+  if (wkt)
+    return wkt === "bool" ? "${1:false}" : wkt === "number" ? "${1:0}" : '"$0"';
   switch (field.value_kind) {
     case "message":
     case "map":
@@ -311,7 +344,8 @@ function buildKeySuggestions(
   // oneof are invalid protobuf JSON.
   const takenOneofs = new Set<string>();
   for (const fl of d.node.fields) {
-    if (fl.oneof_group && fieldPresent(fl, presentKeys)) takenOneofs.add(fl.oneof_group);
+    if (fl.oneof_group && fieldPresent(fl, presentKeys))
+      takenOneofs.add(fl.oneof_group);
   }
   return d.node.fields
     .filter(
@@ -333,7 +367,10 @@ function buildKeySuggestions(
     }));
 }
 
-function buildValueSuggestions(schema: MessageSchemaIpc, ctx: CompletionContext): Suggestion[] {
+function buildValueSuggestions(
+  schema: MessageSchemaIpc,
+  ctx: CompletionContext,
+): Suggestion[] {
   const d = descendSchema(schema, ctx.path);
   if (!d) return [];
 
@@ -342,7 +379,10 @@ function buildValueSuggestions(schema: MessageSchemaIpc, ctx: CompletionContext)
     field = d.field; // value type of the map
   } else {
     const vf = ctx.valueField;
-    field = vf === undefined ? undefined : d.node.fields.find((fl) => matchesField(fl, vf));
+    field =
+      vf === undefined
+        ? undefined
+        : d.node.fields.find((fl) => matchesField(fl, vf));
   }
   if (!field) return [];
 
@@ -411,7 +451,12 @@ export interface BodyCompletionItem {
   /** Re-trigger suggest after accepting (next nesting level). */
   triggerNext?: boolean;
   /** 1-based, Monaco convention. */
-  range: { startLineNumber: number; startColumn: number; endLineNumber: number; endColumn: number };
+  range: {
+    startLineNumber: number;
+    startColumn: number;
+    endLineNumber: number;
+    endColumn: number;
+  };
 }
 
 export interface BodyCompletion {
@@ -447,13 +492,24 @@ function positionAt(fullText: string, offset: number): TextPos {
     }
   }
   const nextNl = fullText.indexOf("\n", lineStart);
-  const lineContent = fullText.slice(lineStart, nextNl === -1 ? fullText.length : nextNl);
-  return { lineNumber, column: offset - lineStart + 1, lineStartOffset: lineStart, lineContent };
+  const lineContent = fullText.slice(
+    lineStart,
+    nextNl === -1 ? fullText.length : nextNl,
+  );
+  return {
+    lineNumber,
+    column: offset - lineStart + 1,
+    lineStartOffset: lineStart,
+    lineContent,
+  };
 }
 
 /** `getWordUntilPosition` equivalent: the run of non-separator, non-whitespace
  *  chars ending at `column` (endColumn = the caret column, Monaco convention). */
-function wordUntil(lineContent: string, column: number): { startColumn: number; endColumn: number } {
+function wordUntil(
+  lineContent: string,
+  column: number,
+): { startColumn: number; endColumn: number } {
   let start = column;
   while (start > 1) {
     const ch = lineContent[start - 2];
@@ -511,12 +567,20 @@ export function computeCompletion(
   const cctx = resolveCompletionContext(textBefore);
   const items =
     cctx.where === "key"
-      ? buildKeySuggestions(schema, cctx, collectPresentKeys(fullText, caretOffset))
+      ? buildKeySuggestions(
+          schema,
+          cctx,
+          collectPresentKeys(fullText, caretOffset),
+        )
       : buildValueSuggestions(schema, cctx);
   if (items.length === 0) return { source: null, suggestions: [] };
 
   const word = wordUntil(pos.lineContent, pos.column);
-  const cols = insertionColumns(pos.lineContent, word.startColumn, word.endColumn);
+  const cols = insertionColumns(
+    pos.lineContent,
+    word.startColumn,
+    word.endColumn,
+  );
   const range = {
     startLineNumber: pos.lineNumber,
     endLineNumber: pos.lineNumber,
@@ -528,7 +592,9 @@ export function computeCompletion(
   const keyOnly = cctx.where === "key" && /^\s*:/.test(afterCaretOnLine);
   // Separator comma when the next token after the replaced range is another
   // property/value (VS Code parity). Not for key-only inserts — a `:` follows.
-  const sep = separatorAfter(fullText.slice(pos.lineStartOffset + cols.endColumn - 1));
+  const sep = separatorAfter(
+    fullText.slice(pos.lineStartOffset + cols.endColumn - 1),
+  );
   // When the caret is inside a string, `insertionColumns` extended the range left
   // over the opening `"`. Monaco then filters suggestions against the leading text
   // INCLUDING that quote (e.g. `"ti`), so a bare label like `title` matches nothing
@@ -589,10 +655,15 @@ export function setModelVarCandidates(
  *  or end-of-text needs nothing. */
 function separatorAfter(textAfter: string): "" | "," {
   const next = /\S/.exec(textAfter)?.[0];
-  return next === undefined || next === "," || next === "}" || next === "]" ? "" : ",";
+  return next === undefined || next === "," || next === "}" || next === "]"
+    ? ""
+    : ",";
 }
 
-function monacoKind(monaco: typeof Monaco, kind: Suggestion["kind"]): Monaco.languages.CompletionItemKind {
+function monacoKind(
+  monaco: typeof Monaco,
+  kind: Suggestion["kind"],
+): Monaco.languages.CompletionItemKind {
   const K = monaco.languages.CompletionItemKind;
   switch (kind) {
     case "message":
@@ -624,7 +695,8 @@ function insertionColumns(
   wordEndColumn: number,
 ): { startColumn: number; endColumn: number } {
   const before = lineContent[wordStartColumn - 2]; // char just before the word (1-based → -2)
-  if (before !== '"') return { startColumn: wordStartColumn, endColumn: wordEndColumn };
+  if (before !== '"')
+    return { startColumn: wordStartColumn, endColumn: wordEndColumn };
   const after = lineContent[wordEndColumn - 1]; // char at the caret / word end
   return {
     startColumn: wordStartColumn - 1,
@@ -638,23 +710,31 @@ export function registerBodyCompletion(monaco: typeof Monaco): void {
   monaco.languages.registerCompletionItemProvider("json-with-vars", {
     triggerCharacters: ['"', ":", " ", "{"],
     provideCompletionItems(model, position) {
-      const r = computeCompletion(model.getValue(), model.getOffsetAt(position), {
-        schema: schemaByModel.get(model) ?? null,
-        vars: varsByModel.get(model) ?? null,
-      });
-      const suggestions: Monaco.languages.CompletionItem[] = r.suggestions.map((s) => ({
-        label: s.label,
-        detail: s.detail,
-        kind: monacoKind(monaco, s.kind),
-        insertText: s.insertText,
-        sortText: s.sortText,
-        filterText: s.filterText,
-        insertTextRules: s.isSnippet
-          ? monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet
-          : undefined,
-        range: s.range,
-        command: s.triggerNext ? { id: "editor.action.triggerSuggest", title: "" } : undefined,
-      }));
+      const r = computeCompletion(
+        model.getValue(),
+        model.getOffsetAt(position),
+        {
+          schema: schemaByModel.get(model) ?? null,
+          vars: varsByModel.get(model) ?? null,
+        },
+      );
+      const suggestions: Monaco.languages.CompletionItem[] = r.suggestions.map(
+        (s) => ({
+          label: s.label,
+          detail: s.detail,
+          kind: monacoKind(monaco, s.kind),
+          insertText: s.insertText,
+          sortText: s.sortText,
+          filterText: s.filterText,
+          insertTextRules: s.isSnippet
+            ? monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet
+            : undefined,
+          range: s.range,
+          command: s.triggerNext
+            ? { id: "editor.action.triggerSuggest", title: "" }
+            : undefined,
+        }),
+      );
       return { suggestions };
     },
   });

@@ -335,8 +335,8 @@ export const messages = {
       /** Tag shown on a builtin candidate (origin is "builtin" in data). */
       tag: "dynamic",
       /** name → one-line description (shown as the candidate preview). Keys must cover
-       *  every BUILTIN_NAMES entry — `as const` makes a missing key fail to compile at
-       *  the indexing site in features/vars/builtins.ts. */
+       *  every generated `BuiltinName` — indexing in features/vars/candidates.ts fails
+       *  to compile when a description is missing. */
       desc: {
         $guid: "v4 GUID · generated on send",
         $guid7: "v7 GUID (time-ordered) · generated on send",
