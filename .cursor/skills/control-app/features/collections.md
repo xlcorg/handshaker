@@ -131,3 +131,8 @@ are all present afterward.
 - Collection JSON is one file per id under `collections/`. Sort order and the
   active request live in `ui-state.json` next to that directory, not in the
   collection file.
+- The sidebar seeds which rows are open once, on the first non-empty tree.
+  An import that arrives later leaves those rows collapsed. A folder whose
+  file says `expanded: true` can still be closed in the window. Click
+  `toggle-collection` and `toggle-folder` until the chevrons are open.
+  `drive-transfer.py` does that in a loop.

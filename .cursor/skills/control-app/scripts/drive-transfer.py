@@ -467,16 +467,24 @@ def dismiss_discard() -> None:
 
 
 def expand_tree() -> None:
-    evaljs(
-        """
-        document.querySelectorAll("[aria-label=toggle-collection], [aria-label=toggle-folder]").forEach((b) => {
-          const icon = b.querySelector("svg");
-          const open = icon && (icon.getAttribute("class") || "").includes("rotate-90");
-          if (!open) b.click();
-        });
-        return true;
-        """
-    )
+    # Open state is seeded once, before an import lands, so a collection that
+    # arrives expanded on disk can still be collapsed in the window. One click
+    # pass only sees toggles that are already rendered. Repeat so a folder
+    # revealed by opening its collection gets opened too.
+    for _ in range(6):
+        clicked = evaljs(
+            """
+            const closed = [...document.querySelectorAll("[aria-label=toggle-collection], [aria-label=toggle-folder]")].filter((b) => {
+              const icon = b.querySelector("svg");
+              return !(icon && (icon.getAttribute("class") || "").includes("rotate-90"));
+            });
+            closed.forEach((b) => b.click());
+            return closed.length;
+            """
+        )
+        if not isinstance(clicked, int) or clicked == 0:
+            return
+        time.sleep(0.2)
 
 
 def send_saved(item_id: str) -> str:
@@ -733,22 +741,15 @@ def main() -> None:
         # nothing is deleted.
         extra_ids: set[str] = set()
         expand_tree()
-        opened = evaljs(
-            f"""
-            const row = document.querySelector('[data-node-id="{POST}"]');
-            if (!row) return {{ ok: false, why: "no-row" }};
-            const scope = row.closest('[class*="group/row"]') || row.parentElement;
-            const btn = scope && scope.querySelector('[aria-label="More options"]');
-            if (!btn) return {{ ok: false, why: "no-btn", html: (scope && scope.outerHTML || "").slice(0, 240) }};
-            btn.click();
-            return {{ ok: true }};
-            """
+        # element.click() does not open this Radix menu. The WebDriver pointer
+        # click does. The button stays opacity-0 until hover; the pointer click
+        # still reaches it.
+        click(
+            f'xpath=//div[@data-node-id="{POST}"]/ancestor::div[contains(@class,"group/row")][1]//button[@aria-label="More options"]'
         )
-        print(f"duplicate menu: {opened}", flush=True)
-        if isinstance(opened, dict) and opened.get("ok"):
-            click('xpath=//*[@role="menuitem"][normalize-space()="Duplicate"]')
-            time.sleep(0.5)
-            extra_ids = _request_ids(load_data(target / "collections" / f"{CID}.json")) - _request_ids(stored)
+        click('xpath=//*[@role="menuitem"][normalize-space()="Duplicate"]')
+        time.sleep(0.5)
+        extra_ids = _request_ids(load_data(target / "collections" / f"{CID}.json")) - _request_ids(stored)
         print(f"local duplicate ids: {sorted(extra_ids)}", flush=True)
 
         arm(str(all_path))
