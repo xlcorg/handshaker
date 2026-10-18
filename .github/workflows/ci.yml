@@ -1,0 +1,47 @@
+name: ci
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The trailer check reads `git log` of base..head. A shallow
+          # checkout does not contain both commits.
+          fetch-depth: 0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        # version is read from package.json "packageManager" (pnpm@9.0.0).
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test
+
+      - name: Test handshaker-core
+        # The Tauri crate (`cargo test -p handshaker`) needs the WebKitGTK
+        # dev packages. This runner does not install them.
+        run: cargo test -p handshaker-core
+
+      - name: Reject Co-authored-by trailers
+        run: node scripts/check-pr-trailers.mjs "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"

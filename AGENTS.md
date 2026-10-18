@@ -41,6 +41,12 @@ Before merging, run `pnpm lint`, `pnpm test`, and `cargo test --workspace`. Fron
 
 Use scoped Conventional Commits, such as `feat(grpc): ...` or `fix(tls): ...`. Squash feature work into cohesive commits before merging into `main`; keep release bumps separate. PRs should describe the behavior change, link relevant issues/specs, report validation, and include screenshots for visible UI changes.
 
+## Rule table
+
+| Rule | Check |
+| --- | --- |
+| A pull request runs `pnpm lint`, `pnpm test`, and `cargo test -p handshaker-core`. No commit in the pull request range contains `Co-authored-by`. The default Tauri capability grants `core:window:allow-start-dragging` and the window close permissions (`core:window:allow-close`, `core:window:allow-minimize`, `core:window:allow-toggle-maximize`, `core:window:allow-internal-toggle-maximize`). | `.github/workflows/ci.yml` runs those commands and `scripts/check-pr-trailers.mjs` on `base..head`. `src/features/shell/capabilities.test.ts` reads `src-tauri/capabilities/default.json`. |
+
 ## Agent-Specific Instructions
 
 When `.codegraph/` exists, use `codegraph explore "<symbol or question>"` or the CodeGraph MCP tool before text searches or source reads. Do not create an index automatically.
