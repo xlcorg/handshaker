@@ -10,7 +10,7 @@ collection named `My Collection`.
 | --- | --- |
 | [Collections](collections.md) | Sidebar rename field is `New collection`, and a new `collections/<id>.json` stores that name (`scripts/drive-collections.sh`). Export and import of `handshaker-export` round-trips and the imported HTTP rows send (`scripts/drive-transfer.py`). |
 | [Unary call](unary-call.md) | After Send to `test.Echo/Send` on the echo server, the response header reads `OK` and the body contains `echoed`. |
-| [Environments](environments.md) | Create persists a named environment into `environments.json`, and the titlebar pill shows that name. |
+| [Environments](environments.md) | Create persists a named environment into `environments.json`, and the titlebar pill shows that name. The editor is a left list plus a variable pane: default sort `Oldest first`, `VARIABLE` header toggles name order, and `Done` closes it. |
 | [Streaming](streaming.md) | Opening `test.Echo/ServerStream` fills the Messages timeline and the footer (`data-testid="stream-footer"`) ends on `OK`. |
 | [Settings](settings.md) | The Settings dialog shows `Preferences persist locally` and the About pane shows the Cargo version. |
 | [Recent switcher](recent-switcher.md) | Ctrl+Tab shows a list named `Recently opened`. Releasing Ctrl opens the highlighted row. |

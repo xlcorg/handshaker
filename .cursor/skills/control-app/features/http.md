@@ -135,21 +135,23 @@ history and from the sidebar:
 
 ```sh
 .cursor/skills/control-app/scripts/hsdrv.py click "xpath=//button[@data-testid=\"history-row-open\"][contains(.,\"POST\")]"
-.cursor/skills/control-app/scripts/hsdrv.py click "xpath=//div[@data-node-id][.//span[normalize-space()=\"Create user\"]]"
+.cursor/skills/control-app/scripts/hsdrv.py click "xpath=//div[@data-node-id][.//span[normalize-space()=\"Echo probe\"]]"
 ```
 
 Collection auth, after the request is saved under `My Collection`. Open the overview, then the Authorization tab, then the toggle. Bearer and API key fields are placeholders, not aria-labels. OAuth2 fields are `aria-label="Token URL"`, `Client ID`, `Client secret`, and `Scope`.
 
 ```sh
 .cursor/skills/control-app/scripts/hsdrv.py click "xpath=//div[@data-node-id][.//span[normalize-space()=\"My Collection\"]]//button[@aria-label=\"open-collection\"]"
-.cursor/skills/control-app/scripts/hsdrv.py click "xpath=//button[@role=\"tab\" and normalize-space()=\"Authorization\"]"
+.cursor/skills/control-app/scripts/hsdrv.py click "xpath=//button[normalize-space()=\"Authorization\"]"
 .cursor/skills/control-app/scripts/hsdrv.py click "[aria-label='Bearer']"
 ```
 
-The environment value cell is a `textarea` (placeholder `value`), disabled
-until that row's key is non-empty. The add-variable key placeholder is
-`Add variable`. Edit an existing environment with `aria-label="Edit local"`,
-set the enabled textarea, and press the dialog `Save`. Query rows are
+The environment editor is the two-pane dialog in `environments.md`. Add a
+variable with `data-field="add"`, type into `aria-label="Variable name"`
+(placeholder `VARIABLE_NAME`) and `textarea[aria-label="Value"]`, then commit
+with the icon `aria-label="Add variable"`. `Create` leaves the dialog open;
+`Done` closes it. Edit an existing environment with `aria-label="Edit local"`.
+There is no dialog `Save` button; edits save on their own. Query rows are
 `metadata-key-0` and `metadata-value-0` on the Params tab, which is the
 default tab. The env pill is the second titlebar button whose label uses
 `max-w-[180px]` (the first is the workflow name). A Radix menu needs the
@@ -171,5 +173,5 @@ Saved HTTP items in the collection JSON are flattened (`protocol`, `method`,
 - The toolbar Save is `aria-label="Save"`. The dialog confirm is the `Save` button inside the footer (`sm:justify-end`), and clicking the first `Save` in the DOM hits the toolbar behind the dialog.
 - An empty environment variable turns `{{baseUrl}}/echo` into `/echo`, and Send reports `Invalid URL: start it with http:// or https://`. The resolved preview is drawn next to the template, so `innerText` looks like a doubled path.
 - 4xx is a response value. Connection refused is the client error view titled `Service unavailable`.
-- Closing the environment editor unmounts the dialog and can leave `document.body` with `pointer-events: none` and `data-scroll-locked`. Later WebDriver clicks then fail with "element not interactable". `drive-http.py` prints `BUG scroll-lock stuck` and clears those two attributes. That is a harness workaround for an app bug, not the intended close behavior. See `environments.md`.
+- `Done` closes the environment editor. On the current build that close left the body clickable. `drive-http.py` still clears `pointer-events: none` and `data-scroll-locked` if a close sets them, and prints `BUG scroll-lock stuck` when it does. See `environments.md`.
 - `hsdrv.py launch` forwards `HS_BEARER` and `HS_APIKEY` into the app process only when they are set in the shell that runs `launch.sh`. A tmux `env` prefix does not inherit the rest of the parent environment. Confirm with `/proc/<appPid>/environ` from `session.json`.

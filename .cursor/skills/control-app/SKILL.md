@@ -213,11 +213,14 @@ written under `evidence/` remains.
 | `scripts/http-echo.py` | `.cursor/skills/control-app/scripts/http-echo.py` |
 | `scripts/drive-http.py` | `.cursor/skills/control-app/scripts/drive-http.py` |
 | `scripts/drive-transfer.py` | `python3 .cursor/skills/control-app/scripts/drive-transfer.py` |
+| `scripts/drive-reimport-merge.py` | `python3 .cursor/skills/control-app/scripts/drive-reimport-merge.py` |
 
-All eight files are executable. `hsdrv.py` is the implementation; the shell
+All nine files are executable. `hsdrv.py` is the implementation; the shell
 scripts call it. `http-echo.py` is the local HTTP echo used by
 `features/http.md` and by `drive-transfer.py`. `drive-http.py` assumes `launch.sh` (with `HS_BEARER` and
 `HS_APIKEY` exported) and `doctor.sh` already succeeded and that the echo is
 already listening. It copies each screenshot into the run's `evidence/`
 directory and to `/opt/cursor/artifacts/`. `drive-transfer.py` does its own
 launch, doctor, and cleanup, and copies the same way.
+`drive-reimport-merge.py` loads that script and does the same for the
+re-import merge in `features/collections.md`.

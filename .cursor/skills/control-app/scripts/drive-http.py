@@ -164,29 +164,39 @@ def set_labeled(aria: str, value: str) -> None:
 
 
 def add_env_var(key: str, value: str) -> None:
+    click('[data-field="add"]')
+    wait_until(
+        "return !!document.querySelector('[aria-label=\"Variable name\"]')",
+        lambda v: v is True,
+        timeout=5,
+    )
     script = (
         SET_NATIVE
         + f"""
-        const dialog = document.querySelector("[role='dialog']");
-        if (!dialog) return JSON.stringify({{ok:false, reason:'no dialog'}});
-        const keyInput = [...dialog.querySelectorAll('input')].find((i) => i.placeholder === 'Add variable');
-        if (!keyInput) return JSON.stringify({{ok:false, reason:'no Add variable input'}});
+        const keyInput = document.querySelector('[aria-label="Variable name"]');
+        const area = document.querySelector('textarea[aria-label="Value"]');
+        if (!keyInput || !area) return JSON.stringify({{ok:false, reason:'draft missing'}});
         setNative(keyInput, {json.dumps(key)});
-        const area = keyInput.closest('tr')?.querySelector('textarea');
-        if (!area) return JSON.stringify({{ok:false, reason:'no value cell'}});
-        if (area.disabled) return JSON.stringify({{ok:false, reason:'value disabled'}});
         setNative(area, {json.dumps(value)});
-        return JSON.stringify({{ok:true, key:keyInput.value, value:area.value, disabled:area.disabled}});
+        return JSON.stringify({{ok:true, key:keyInput.value, value:area.value}});
         """
     )
-    deadline = time.time() + 8
-    last = None
-    while time.time() < deadline:
-        last = evaljs(script)
-        if isinstance(last, dict) and last.get("ok") and last.get("key") == key and last.get("value") == value:
-            return
-        time.sleep(0.2)
-    raise DriveError(f"add env var {key}: {last}")
+    result = evaljs(script)
+    if not isinstance(result, dict) or not result.get("ok") or result.get("key") != key or result.get("value") != value:
+        raise DriveError(f"add env var {key}: {result}")
+    # The toolbar button's accessible name is also "Add variable". The commit
+    # control is the only one with that aria-label attribute.
+    click('[aria-label="Add variable"]')
+    shown = json.dumps(key)
+    wait_until(
+        f"""
+        const draft = document.querySelector('[aria-label="Variable name"]');
+        const row = [...document.querySelectorAll('[data-field^="key:"]')].some((el) => (el.innerText || "").includes({shown}));
+        return !draft && row;
+        """,
+        lambda v: v is True,
+        timeout=5,
+    )
 
 
 def create_env(name: str, variables: dict[str, str]) -> None:
@@ -204,24 +214,35 @@ def create_env(name: str, variables: dict[str, str]) -> None:
     )
     click("[aria-label='New environment']")
     wait_until(
-        "return !!document.querySelector(\"[role='dialog'] [aria-label='Name']\")",
+        "return !!document.querySelector(\"[role='dialog'] [aria-label='Environment name']\")",
         lambda v: v is True,
     )
-    set_labeled("Name", name)
+    set_labeled("Environment name", name)
     for key, value in variables.items():
         add_env_var(key, value)
     click('xpath=//div[@role="dialog"]//button[normalize-space()="Create"]')
     deadline = time.time() + 10
     while time.time() < deadline:
         raw = envs.read_text() if envs.exists() else ""
-        dialog_open = evaljs("return !!document.querySelector(\"[role='dialog']\")")
         if f'"name": "{name}"' in raw or f'"name":"{name}"' in raw:
-            if not dialog_open and pill_label() == name:
-                release_scroll_lock(f"after creating env {name}")
-                print(f"created env {name}", flush=True)
-                return
+            break
         time.sleep(0.25)
-    raise DriveError(f"env {name} did not persist; pill={pill_label()!r}")
+    else:
+        raise DriveError(f"env {name} did not persist; pill={pill_label()!r}")
+    # Create keeps the editor open on the stored environment. Done closes it.
+    if evaljs("return !!document.querySelector(\"[role='dialog']\")"):
+        click('xpath=//div[@role="dialog"]//button[normalize-space()="Done"]')
+    wait_until(
+        "return !!document.querySelector(\"[role='dialog']\")",
+        lambda v: v is False,
+        timeout=5,
+    )
+    wait_until(
+        f"const spans = {env_pill_spans()}; return spans[1] ? spans[1].textContent : '';",
+        lambda value: value == name,
+    )
+    release_scroll_lock(f"after creating env {name}")
+    print(f"created env {name}", flush=True)
 
 
 def env_pill_spans() -> str:
