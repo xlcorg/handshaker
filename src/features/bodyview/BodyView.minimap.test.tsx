@@ -1,13 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render } from "@testing-library/react";
 
-// Capture every editor.updateOptions(...) call so we can assert the size-gate's
-// minimap + scrollbar toggle. The fake editor reports an overflowing content
-// height so the gate wants the minimap shown.
-const captured = vi.hoisted(() => ({ updates: [] as Array<Record<string, unknown>> }));
+// The fake editor reports an overflowing content height so the gate wants the
+// minimap shown. BodyView must ask the handle, not the editor.
+const captured = vi.hoisted(() => ({ minimap: [] as boolean[] }));
 
 vi.mock("@/lib/monaco", () => ({
-  MonacoEditor: ({ onMount }: { onMount?: (editor: unknown, monaco: unknown) => void }) => {
+  MonacoEditor: ({
+    onMount,
+  }: {
+    onMount?: (editor: unknown, monaco: unknown) => void;
+  }) => {
     const editor = {
       getValue: () => "{}",
       getModel: () => null,
@@ -20,8 +23,9 @@ vi.mock("@/lib/monaco", () => ({
       addAction: () => ({ dispose: () => {} }),
       onMouseDown: () => ({ dispose: () => {} }),
       // Request-mode ghost zone.
-      changeViewZones: (cb: (acc: { addZone: () => string; removeZone: () => void }) => void) =>
-        cb({ addZone: () => "z", removeZone: () => {} }),
+      changeViewZones: (
+        cb: (acc: { addZone: () => string; removeZone: () => void }) => void,
+      ) => cb({ addZone: () => "z", removeZone: () => {} }),
       applyFontInfo: () => {},
       createDecorationsCollection: () => ({ set: () => {}, clear: () => {} }),
       // Size-gate surface: content (5000) overflows the viewport (100) → minimap wanted.
@@ -29,17 +33,26 @@ vi.mock("@/lib/monaco", () => ({
       getLayoutInfo: () => ({ height: 100, contentLeft: 0 }),
       onDidContentSizeChange: () => ({ dispose: () => {} }),
       onDidLayoutChange: () => ({ dispose: () => {} }),
-      updateOptions: (o: Record<string, unknown>) => captured.updates.push(o),
     };
     onMount?.(editor, {
       KeyMod: { CtrlCmd: 2048 },
       KeyCode: { Enter: 3 },
-      editor: { setModelMarkers: () => {}, MouseTargetType: { CONTENT_VIEW_ZONE: 8 } },
+      editor: {
+        setModelMarkers: () => {},
+        MouseTargetType: { CONTENT_VIEW_ZONE: 8 },
+      },
       MarkerSeverity: { Error: 8 },
       Range: class {},
     });
     return <div data-testid="monaco" />;
   },
+  createBodyEditor: () => ({
+    getValue: () => "{}",
+    setValue: () => {},
+    setMinimap: (on: boolean) => captured.minimap.push(on),
+    onContextMenu: () => {},
+    dispose: () => {},
+  }),
   BODY_EDIT_OPTIONS: { readOnly: false },
   BODY_READONLY_OPTIONS: { readOnly: true },
   MONACO_THEME: "handshaker-dark",
@@ -58,22 +71,18 @@ import { BodyView } from "./BodyView";
 
 describe("BodyView minimap size-gate", () => {
   beforeEach(() => {
-    captured.updates = [];
+    captured.minimap = [];
   });
 
   // Both editors share the same large-body experience: on overflow the minimap
-  // appears and the redundant vertical scrollbar is hidden (no two parallel bars).
-  it("gates the minimap + hides the vertical scrollbar for the RESPONSE body", () => {
+  // is turned on through the handle. The scrollbar payload lives in setMinimap.
+  it("turns the minimap on for an overflowing RESPONSE body", () => {
     render(<BodyView mode="response" value="{}" />);
-    const last = captured.updates.at(-1);
-    expect(last?.minimap).toMatchObject({ enabled: true, showSlider: "always" });
-    expect(last?.scrollbar).toMatchObject({ vertical: "hidden" });
+    expect(captured.minimap).toEqual([true]);
   });
 
-  it("gates the minimap + hides the vertical scrollbar for the REQUEST body (uniformity)", () => {
+  it("turns the minimap on for an overflowing REQUEST body (uniformity)", () => {
     render(<BodyView mode="request" value="{}" onChange={vi.fn()} />);
-    const last = captured.updates.at(-1);
-    expect(last?.minimap).toMatchObject({ enabled: true, showSlider: "always" });
-    expect(last?.scrollbar).toMatchObject({ vertical: "hidden" });
+    expect(captured.minimap).toEqual([true]);
   });
 });

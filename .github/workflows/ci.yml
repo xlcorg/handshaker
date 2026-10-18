@@ -48,5 +48,8 @@ jobs:
         # export-bindings (that compiles the Tauri crate).
         run: python3 scripts/check_var_tables.py
 
+      - name: Check bracket colorization stays in monaco.ts
+        run: python3 scripts/check-bracket-colorization.py
+
       - name: Reject Co-authored-by trailers
         run: node scripts/check-pr-trailers.mjs "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"

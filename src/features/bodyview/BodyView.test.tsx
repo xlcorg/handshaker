@@ -3,15 +3,21 @@ import { render, screen } from "@testing-library/react";
 
 // Mock the heavy Monaco module: render a textarea-ish stub, expose value/readOnly/wordWrap.
 vi.mock("@/lib/monaco", () => ({
-  MonacoEditor: ({ value, options }: {
+  MonacoEditor: ({
+    value,
+    options,
+  }: {
     value: string;
-    options?: { readOnly?: boolean; wordWrap?: string };
+    options?: { readOnly?: boolean; wordWrap?: string; folding?: boolean };
   }) => (
     <pre
       data-testid="monaco"
       data-readonly={String(!!options?.readOnly)}
       data-wordwrap={String(options?.wordWrap)}
-    >{value}</pre>
+      data-folding={options?.folding === false ? "false" : "true"}
+    >
+      {value}
+    </pre>
   ),
   BODY_EDIT_OPTIONS: { readOnly: false },
   BODY_READONLY_OPTIONS: { readOnly: true },
@@ -41,19 +47,32 @@ describe("BodyView", () => {
 
   it("response mode is read-only", () => {
     render(<BodyView mode="response" value={`{"a":1}`} />);
-    expect(screen.getByTestId("monaco").getAttribute("data-readonly")).toBe("true");
+    expect(screen.getByTestId("monaco").getAttribute("data-readonly")).toBe(
+      "true",
+    );
   });
 
   it("passes wordWrap 'off' when the pref is off (default)", () => {
     prefs.wordWrap = false;
     render(<BodyView mode="request" value={`{"a":1}`} onChange={vi.fn()} />);
-    expect(screen.getByTestId("monaco").getAttribute("data-wordwrap")).toBe("off");
+    expect(screen.getByTestId("monaco").getAttribute("data-wordwrap")).toBe(
+      "off",
+    );
+  });
+
+  it("turns folding off for a plaintext response", () => {
+    render(<BodyView mode="response" value="hello" language="plaintext" />);
+    expect(screen.getByTestId("monaco").getAttribute("data-folding")).toBe(
+      "false",
+    );
   });
 
   it("passes wordWrap 'on' when the pref is on", () => {
     prefs.wordWrap = true;
     render(<BodyView mode="response" value={`{"a":1}`} />);
-    expect(screen.getByTestId("monaco").getAttribute("data-wordwrap")).toBe("on");
+    expect(screen.getByTestId("monaco").getAttribute("data-wordwrap")).toBe(
+      "on",
+    );
     prefs.wordWrap = false; // restore — shared module-level mock object
   });
 });

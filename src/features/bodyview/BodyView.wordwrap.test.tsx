@@ -6,16 +6,28 @@ import { render } from "@testing-library/react";
 // re-runs onMount on every render and the re-register-on-pref-flip test would pass via
 // onMount re-running rather than the effect under test.
 const captured = vi.hoisted(() => ({
-  actions: [] as Array<{ id: string; label: string; contextMenuGroupId?: string; run: () => void }>,
+  actions: [] as Array<{
+    id: string;
+    label: string;
+    contextMenuGroupId?: string;
+    run: () => void;
+  }>,
   mounted: false,
 }));
 // Shared prefs the mock's setPref mutates — proves BodyView's toggle is wired to it.
 const state = vi.hoisted(() => ({
-  prefs: { bodyHints: false, wordWrap: false } as { bodyHints: boolean; wordWrap: boolean },
+  prefs: { bodyHints: false, wordWrap: false } as {
+    bodyHints: boolean;
+    wordWrap: boolean;
+  },
 }));
 
 vi.mock("@/lib/monaco", () => ({
-  MonacoEditor: ({ onMount }: { onMount?: (editor: unknown, monaco: unknown) => void }) => {
+  MonacoEditor: ({
+    onMount,
+  }: {
+    onMount?: (editor: unknown, monaco: unknown) => void;
+  }) => {
     if (!captured.mounted) {
       captured.mounted = true;
       const editor = {
@@ -26,31 +38,46 @@ vi.mock("@/lib/monaco", () => ({
         onContextMenu: () => ({ dispose: () => {} }),
         onKeyUp: () => ({ dispose: () => {} }),
         createContextKey: () => ({ set: () => {} }),
-        addAction: (d: { id: string; label: string; contextMenuGroupId?: string; run: () => void }) => {
+        addAction: (d: {
+          id: string;
+          label: string;
+          contextMenuGroupId?: string;
+          run: () => void;
+        }) => {
           captured.actions.push(d);
           return { dispose: () => {} };
         },
         onMouseDown: () => ({ dispose: () => {} }),
-        changeViewZones: (cb: (acc: { addZone: () => string; removeZone: () => void }) => void) =>
-          cb({ addZone: () => "z", removeZone: () => {} }),
+        changeViewZones: (
+          cb: (acc: { addZone: () => string; removeZone: () => void }) => void,
+        ) => cb({ addZone: () => "z", removeZone: () => {} }),
         applyFontInfo: () => {},
         createDecorationsCollection: () => ({ set: () => {}, clear: () => {} }),
         getContentHeight: () => 0,
         getLayoutInfo: () => ({ height: 100, contentLeft: 0 }),
         onDidContentSizeChange: () => ({ dispose: () => {} }),
         onDidLayoutChange: () => ({ dispose: () => {} }),
-        updateOptions: () => {},
       };
       onMount?.(editor, {
         KeyMod: { CtrlCmd: 2048 },
         KeyCode: { Enter: 3, KeyR: 48 },
-        editor: { setModelMarkers: () => {}, MouseTargetType: { CONTENT_VIEW_ZONE: 8 } },
+        editor: {
+          setModelMarkers: () => {},
+          MouseTargetType: { CONTENT_VIEW_ZONE: 8 },
+        },
         MarkerSeverity: { Error: 8 },
         Range: class {},
       });
     }
     return <div data-testid="monaco" />;
   },
+  createBodyEditor: () => ({
+    getValue: () => "{}",
+    setValue: () => {},
+    setMinimap: () => {},
+    onContextMenu: () => {},
+    dispose: () => {},
+  }),
   BODY_EDIT_OPTIONS: { readOnly: false },
   BODY_READONLY_OPTIONS: { readOnly: true },
   MONACO_THEME: "handshaker-dark",
@@ -74,7 +101,8 @@ vi.mock("./controller", () => ({
 
 import { BodyView } from "./BodyView";
 
-const wrapActions = () => captured.actions.filter((a) => a.id === "hs.toggleWordWrap");
+const wrapActions = () =>
+  captured.actions.filter((a) => a.id === "hs.toggleWordWrap");
 
 describe("BodyView word-wrap context-menu action", () => {
   beforeEach(() => {

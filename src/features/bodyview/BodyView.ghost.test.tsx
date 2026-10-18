@@ -28,7 +28,10 @@ vi.mock("@/lib/monaco", () => ({
         onContextMenu: () => ({ dispose: () => {} }),
         onKeyUp: () => ({ dispose: () => {} }),
         changeViewZones: (
-          cb: (acc: { addZone: (z: unknown) => string; removeZone: (id: string) => void }) => void,
+          cb: (acc: {
+            addZone: (z: unknown) => string;
+            removeZone: (id: string) => void;
+          }) => void,
         ) => {
           cb({
             addZone: () => {
@@ -50,12 +53,25 @@ vi.mock("@/lib/monaco", () => ({
         getLayoutInfo: () => ({ contentLeft: 0 }),
         onDidContentSizeChange: () => ({ dispose: () => {} }),
         onDidLayoutChange: () => ({ dispose: () => {} }),
-        updateOptions: () => {},
       };
-      onMount?.(editor, { editor: { setModelMarkers: () => {}, MouseTargetType: { CONTENT_VIEW_ZONE: 8 } }, MarkerSeverity: { Error: 8 }, Range: class {} });
+      onMount?.(editor, {
+        editor: {
+          setModelMarkers: () => {},
+          MouseTargetType: { CONTENT_VIEW_ZONE: 8 },
+        },
+        MarkerSeverity: { Error: 8 },
+        Range: class {},
+      });
     }
     return <div data-testid="monaco" />;
   },
+  createBodyEditor: () => ({
+    getValue: () => "{}",
+    setValue: () => {},
+    setMinimap: () => {},
+    onContextMenu: () => {},
+    dispose: () => {},
+  }),
   MONACO_THEME: "handshaker-dark",
   BODY_EDIT_OPTIONS: { readOnly: false },
   BODY_READONLY_OPTIONS: { readOnly: true },
@@ -77,7 +93,12 @@ import { BodyView } from "./BodyView";
 // Минимальная схема: computeGhostLines читает только root/messages[].full_name/fields[].json_name+type_label.
 const schema = {
   root: "t.Msg",
-  messages: [{ full_name: "t.Msg", fields: [{ json_name: "name", type_label: "string" }] }],
+  messages: [
+    {
+      full_name: "t.Msg",
+      fields: [{ json_name: "name", type_label: "string" }],
+    },
+  ],
   enums: [],
 } as unknown as MessageSchemaIpc;
 
@@ -91,14 +112,24 @@ beforeEach(() => {
 describe("BodyView ghost vs external value updates", () => {
   it("clears the ghost when the controlled value is replaced externally (Reset-to-template)", () => {
     const { rerender } = render(
-      <BodyView mode="request" value={"{\n}"} onChange={vi.fn()} schema={schema} />,
+      <BodyView
+        mode="request"
+        value={"{\n}"}
+        onChange={vi.fn()}
+        schema={schema}
+      />,
     );
     // поле "name" отсутствует → ghost-зона видна
     expect(captured.zones.length).toBe(1);
 
     // Reset-to-template: value заменяется снаружи, onChange НЕ вызывается
     rerender(
-      <BodyView mode="request" value={'{\n  "name": "x"\n}'} onChange={vi.fn()} schema={schema} />,
+      <BodyView
+        mode="request"
+        value={'{\n  "name": "x"\n}'}
+        onChange={vi.fn()}
+        schema={schema}
+      />,
     );
     // все поля на месте → ghost обязан исчезнуть
     expect(captured.zones.length).toBe(0);

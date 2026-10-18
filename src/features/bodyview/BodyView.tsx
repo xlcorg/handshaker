@@ -1,6 +1,13 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef } from "react";
 import type * as Monaco from "monaco-editor";
-import { MonacoEditor, BODY_EDIT_OPTIONS, BODY_READONLY_OPTIONS, MONACO_THEME } from "@/lib/monaco";
+import {
+  MonacoEditor,
+  BODY_EDIT_OPTIONS,
+  BODY_READONLY_OPTIONS,
+  MONACO_THEME,
+  createBodyEditor,
+  type BodyEditor,
+} from "@/lib/monaco";
 import { usePrefs, readPrefs, setPref } from "@/lib/use-prefs";
 import { parseWithSpans } from "./parse";
 import { renderJsonTree, type Badge } from "./render";
@@ -11,7 +18,11 @@ import { exceedsByteCeiling } from "./elide";
 import { attachBodyController } from "./controller";
 import { badgeDecorationOptions } from "./badgeDecoration";
 import type { MessageSchemaIpc } from "@/ipc/bindings";
-import { setModelSchema, computeCompletion, setModelVarCandidates } from "./completion";
+import {
+  setModelSchema,
+  computeCompletion,
+  setModelVarCandidates,
+} from "./completion";
 import type { VarCandidate } from "@/features/vars/candidates";
 import { GhostZone, computeGhostLines } from "./ghost";
 import { computeUnknownFieldMarkers } from "./validate";
@@ -26,9 +37,11 @@ import { installContextMenuCleanup } from "./contextMenuCleanup";
 import { copyDecodedBase64 } from "./copyDecoded";
 import { attachFoldActions, type FoldMenuEditor } from "./foldActions";
 import { attachSaveResponseAction, type SaveMenuEditor } from "./saveAction";
-import { attachWordWrapAction, type WordWrapMenuEditor } from "./wordWrapAction";
-import { forwardViewZoneContextMenu } from "./openContextMenu";
-import { shouldShowMinimap, minimapToggleOptions } from "./minimapGate";
+import {
+  attachWordWrapAction,
+  type WordWrapMenuEditor,
+} from "./wordWrapAction";
+import { shouldShowMinimap } from "./minimapGate";
 import type { SelectionRange } from "./selectValue";
 
 type Mode = "request" | "response";
@@ -52,6 +65,8 @@ export interface BodyViewProps {
 
 interface Live {
   editor: Monaco.editor.IStandaloneCodeEditor;
+  /** Minimap writes go through setMinimap on this handle. */
+  body: BodyEditor;
   monaco: typeof Monaco;
   tree: JsonTree | null;
   spans: ValueSpan[];
@@ -66,8 +81,6 @@ interface Live {
   save: DisposableLike | null;
   /** Word-wrap toggle context-menu action (both modes). */
   wrap: DisposableLike | null;
-  /** Forwards a right-click on a view zone (the ghost hint) to the editor menu. */
-  ctxMenu: DisposableLike | null;
   typeSub: DisposableLike | null;
   ghost: GhostZone | null;
   ghostTimer: number | null;
@@ -82,7 +95,16 @@ interface Live {
   minimapSubs: DisposableLike[];
 }
 
-export function BodyView({ mode, value, onChange, onSubmit, schema, varCandidates, onSaveBody, language = "json-with-vars" }: BodyViewProps) {
+export function BodyView({
+  mode,
+  value,
+  onChange,
+  onSubmit,
+  schema,
+  varCandidates,
+  onSaveBody,
+  language = "json-with-vars",
+}: BodyViewProps) {
   const [prefs] = usePrefs();
   const live = useRef<Live | null>(null);
   // Ref so the Monaco command (bound once in onMount) always calls the freshest handler.
@@ -100,8 +122,9 @@ export function BodyView({ mode, value, onChange, onSubmit, schema, varCandidate
     const l = live.current;
     if (!l) return;
     if (language !== "json-with-vars" || exceedsByteCeiling(text)) {
-      l.tree = null; l.spans = []; l.badges = [];
-      l.editor.updateOptions({ folding: false });
+      l.tree = null;
+      l.spans = [];
+      l.badges = [];
       l.editor.getModel()?.setValue(text);
       l.decorations?.clear();
       return;
@@ -109,7 +132,9 @@ export function BodyView({ mode, value, onChange, onSubmit, schema, varCandidate
     const parsed = parseWithSpans(text);
     if (!parsed) {
       // Invalid JSON: show raw, no spans/badges.
-      l.tree = null; l.spans = []; l.badges = [];
+      l.tree = null;
+      l.spans = [];
+      l.badges = [];
       l.editor.getModel()?.setValue(text);
       l.decorations?.clear();
       return;
@@ -129,7 +154,12 @@ export function BodyView({ mode, value, onChange, onSubmit, schema, varCandidate
     const decos: Monaco.editor.IModelDeltaDecoration[] = l.badges.map((b) => {
       const pos = model.getPositionAt(b.previewEnd);
       return {
-        range: new l.monaco.Range(pos.lineNumber, pos.column, pos.lineNumber, pos.column),
+        range: new l.monaco.Range(
+          pos.lineNumber,
+          pos.column,
+          pos.lineNumber,
+          pos.column,
+        ),
         options: badgeDecorationOptions(b.label),
       };
     });
@@ -143,7 +173,9 @@ export function BodyView({ mode, value, onChange, onSubmit, schema, varCandidate
     if (!l || !model) return null;
     const clickLine = model.getPositionAt(offset).lineNumber;
     // Pick the badge anchored on the clicked line (≤1 badge per line in practice).
-    const hit = l.badges.find((b) => model.getPositionAt(b.previewEnd).lineNumber === clickLine);
+    const hit = l.badges.find(
+      (b) => model.getPositionAt(b.previewEnd).lineNumber === clickLine,
+    );
     return hit?.nodeId ?? null;
   };
 
@@ -171,7 +203,12 @@ export function BodyView({ mode, value, onChange, onSubmit, schema, varCandidate
       const startPos = model.getPositionAt(range.start);
       const endPos = model.getPositionAt(range.end);
       l.editor.setSelection(
-        new l.monaco.Selection(startPos.lineNumber, startPos.column, endPos.lineNumber, endPos.column),
+        new l.monaco.Selection(
+          startPos.lineNumber,
+          startPos.column,
+          endPos.lineNumber,
+          endPos.column,
+        ),
       );
     });
   };
@@ -188,7 +225,9 @@ export function BodyView({ mode, value, onChange, onSubmit, schema, varCandidate
     }
     const sc = schemaRef.current;
     const block =
-      readPrefs().bodyHints && sc ? computeGhostLines(l.editor.getValue(), sc) : null;
+      readPrefs().bodyHints && sc
+        ? computeGhostLines(l.editor.getValue(), sc)
+        : null;
     l.ghost.apply(block);
     // Contract diagnostics ride the same cadence but ignore the hints toggle: an
     // unknown field FAILS the Send (prost-reflect denies unknown fields), so this
@@ -196,53 +235,80 @@ export function BodyView({ mode, value, onChange, onSubmit, schema, varCandidate
     // markers (VS Code behavior) instead of flashing them off per keystroke.
     const model = l.editor.getModel();
     if (!model) return;
-    const markers = sc ? computeUnknownFieldMarkers(l.editor.getValue(), sc) : [];
+    const markers = sc
+      ? computeUnknownFieldMarkers(l.editor.getValue(), sc)
+      : [];
     if (markers === null) return;
-    l.monaco.editor.setModelMarkers(model, "hs-contract", markers.map((mk) => {
-      const s = model.getPositionAt(mk.start);
-      const e = model.getPositionAt(mk.end);
-      return {
-        severity: l.monaco.MarkerSeverity.Error,
-        message: mk.message,
-        startLineNumber: s.lineNumber,
-        startColumn: s.column,
-        endLineNumber: e.lineNumber,
-        endColumn: e.column,
-      };
-    }));
+    l.monaco.editor.setModelMarkers(
+      model,
+      "hs-contract",
+      markers.map((mk) => {
+        const s = model.getPositionAt(mk.start);
+        const e = model.getPositionAt(mk.end);
+        return {
+          severity: l.monaco.MarkerSeverity.Error,
+          message: mk.message,
+          startLineNumber: s.lineNumber,
+          startColumn: s.column,
+          endLineNumber: e.lineNumber,
+          endColumn: e.column,
+        };
+      }),
+    );
   }, []);
 
   // Debounced recompute for same-line typing, so mid-token (briefly invalid JSON)
   // states don't flicker the ghost on every keystroke.
-  const scheduleGhost = useCallback((delay: number) => {
-    const l = live.current;
-    if (!l || !l.ghost) return;
-    if (l.ghostTimer !== null) window.clearTimeout(l.ghostTimer);
-    l.ghostTimer = window.setTimeout(() => {
-      l.ghostTimer = null;
-      applyGhost();
-    }, delay);
-  }, [applyGhost]);
+  const scheduleGhost = useCallback(
+    (delay: number) => {
+      const l = live.current;
+      if (!l || !l.ghost) return;
+      if (l.ghostTimer !== null) window.clearTimeout(l.ghostTimer);
+      l.ghostTimer = window.setTimeout(() => {
+        l.ghostTimer = null;
+        applyGhost();
+      }, delay);
+    },
+    [applyGhost],
+  );
 
   // --- mount -------------------------------------------------------------
   const onMount = useCallback(
     (editor: Monaco.editor.IStandaloneCodeEditor, monaco: typeof Monaco) => {
       // Keyed remount fires onMount fresh per response value; tear down the
       // prior mount's subscriptions before attaching new ones.
-      if (live.current?.ghostTimer != null) window.clearTimeout(live.current.ghostTimer);
+      if (live.current?.ghostTimer != null)
+        window.clearTimeout(live.current.ghostTimer);
       live.current?.ghost?.dispose();
       live.current?.controller?.dispose();
       live.current?.decode?.dispose();
       live.current?.fold?.dispose();
       live.current?.save?.dispose();
       live.current?.wrap?.dispose();
-      live.current?.ctxMenu?.dispose();
+      live.current?.body.dispose();
       live.current?.typeSub?.dispose();
       live.current?.minimapSubs?.forEach((d) => d.dispose());
+      const body = createBodyEditor(
+        editor,
+        monaco.editor.MouseTargetType.CONTENT_VIEW_ZONE,
+      );
       live.current = {
-        editor, monaco, tree: null, spans: [], badges: [],
-        decorations: null, expanded: new Set(), controller: null, decode: null, fold: null, save: null, wrap: null, ctxMenu: null, typeSub: null,
-        ghost: null, ghostTimer: null,
+        editor,
+        body,
+        monaco,
+        tree: null,
+        spans: [],
+        badges: [],
+        decorations: null,
+        expanded: new Set(),
+        controller: null,
+        decode: null,
+        fold: null,
+        save: null,
+        wrap: null,
+        typeSub: null,
+        ghost: null,
+        ghostTimer: null,
         lineCount: editor.getModel()?.getLineCount() ?? 1,
         lastText: editor.getValue(),
         minimapOn: false,
@@ -255,7 +321,10 @@ export function BodyView({ mode, value, onChange, onSubmit, schema, varCandidate
       // Attach schema to the model (request mode is the only consumer:
       // autocomplete + ghost + unknown-field markers; response passes none).
       setModelSchema(editor.getModel(), schemaRef.current ?? null);
-      setModelVarCandidates(editor.getModel(), varCandidatesRef.current ?? null);
+      setModelVarCandidates(
+        editor.getModel(),
+        varCandidatesRef.current ?? null,
+      );
       // Word-wrap toggle in the right-click menu — both editors share prefs.wordWrap,
       // so the item lives in both. Label reflects the current state; the effect below
       // re-attaches it when the pref flips.
@@ -263,14 +332,6 @@ export function BodyView({ mode, value, onChange, onSubmit, schema, varCandidate
         editor as unknown as WordWrapMenuEditor,
         readPrefs().wordWrap,
         () => setPref("wordWrap", !readPrefs().wordWrap),
-      );
-      // Monaco refuses to open its context menu over a view zone, so a right-click
-      // on the request body's ghost-skeleton hint shows no menu at all. Forward
-      // such clicks to the editor's own menu (both editors — only the request
-      // ghost is a view zone, so this never fires in the response viewer).
-      live.current.ctxMenu = forwardViewZoneContextMenu(
-        editor,
-        monaco.editor.MouseTargetType.CONTENT_VIEW_ZONE,
       );
       if (mode === "request") {
         // Postman-style: opening a quote (a key or a value string) force-opens the
@@ -286,10 +347,14 @@ export function BodyView({ mode, value, onChange, onSubmit, schema, varCandidate
           const model = editor.getModel();
           const pos = editor.getPosition();
           if (!model || !pos) return;
-          const r = computeCompletion(model.getValue(), model.getOffsetAt(pos), {
-            schema: schemaRef.current ?? null,
-            vars: varCandidatesRef.current ?? null,
-          });
+          const r = computeCompletion(
+            model.getValue(),
+            model.getOffsetAt(pos),
+            {
+              schema: schemaRef.current ?? null,
+              vars: varCandidatesRef.current ?? null,
+            },
+          );
           // Vars pop on any key inside an open `{{…` ; schema keys only on a quote —
           // the `"` gate is BodyView's UI policy, the "is there anything" answer is
           // computeCompletion's.
@@ -309,17 +374,20 @@ export function BodyView({ mode, value, onChange, onSubmit, schema, varCandidate
       }
       // Size-gate the minimap in BOTH editors (request + response) for a uniform
       // large-body experience: the minimap appears only when content overflows the
-      // viewport and, when shown, replaces the redundant vertical scrollbar (see
-      // minimapToggleOptions) — short bodies / tall panes stay strip-free with a
-      // plain scrollbar. Re-evaluated on content growth (typing / badge-expand) and
-      // pane resize; the minimapOn guard makes updateOptions a no-op when unchanged.
+      // viewport and, when shown, replaces the redundant vertical scrollbar.
+      // Short bodies / tall panes stay strip-free with a plain scrollbar.
+      // Re-evaluated on content growth (typing / badge-expand) and pane resize;
+      // the minimapOn guard skips setMinimap when nothing changed.
       const syncMinimap = () => {
         const l = live.current;
         if (!l) return;
-        const want = shouldShowMinimap(l.editor.getContentHeight(), l.editor.getLayoutInfo().height);
+        const want = shouldShowMinimap(
+          l.editor.getContentHeight(),
+          l.editor.getLayoutInfo().height,
+        );
         if (want === l.minimapOn) return;
         l.minimapOn = want;
-        l.editor.updateOptions(minimapToggleOptions(want));
+        l.body.setMinimap(want);
       };
       live.current.minimapSubs = [
         editor.onDidContentSizeChange(syncMinimap),
@@ -334,22 +402,31 @@ export function BodyView({ mode, value, onChange, onSubmit, schema, varCandidate
             .then((p) => {
               if (p) savedFileToast(p);
             })
-            .catch((e) => toast.error(typeof e === "string" ? e : messages.response.save.failed));
-        live.current.decode = attachDecodeActions(editor as unknown as DecodeEditorLike, {
-          getTree: () => live.current?.tree ?? null,
-          getSpans: () => live.current?.spans ?? [],
-          onCopyDecoded: (v) => {
-            void copyDecodedBase64(v);
+            .catch((e) =>
+              toast.error(
+                typeof e === "string" ? e : messages.response.save.failed,
+              ),
+            );
+        live.current.decode = attachDecodeActions(
+          editor as unknown as DecodeEditorLike,
+          {
+            getTree: () => live.current?.tree ?? null,
+            getSpans: () => live.current?.spans ?? [],
+            onCopyDecoded: (v) => {
+              void copyDecodedBase64(v);
+            },
+            onCopyValue: (v) => {
+              void copyToClipboard(v, `Copied: ${toastSnippet(v)}`);
+            },
+            onSaveDecoded: (v) => reportSave(base64Save(v)),
+            onSaveBase64: (v) => reportSave(base64SaveEncoded(v)),
           },
-          onCopyValue: (v) => {
-            void copyToClipboard(v, `Copied: ${toastSnippet(v)}`);
-          },
-          onSaveDecoded: (v) => reportSave(base64Save(v)),
-          onSaveBase64: (v) => reportSave(base64SaveEncoded(v)),
-        });
+        );
         // Collapse all / Expand all live in the right-click menu (document-wide
         // fold actions), beside the decode/copy items.
-        live.current.fold = attachFoldActions(editor as unknown as FoldMenuEditor);
+        live.current.fold = attachFoldActions(
+          editor as unknown as FoldMenuEditor,
+        );
         live.current.save = attachSaveResponseAction(
           editor as unknown as SaveMenuEditor,
           () => onSaveBodyRef.current?.(),
@@ -386,18 +463,22 @@ export function BodyView({ mode, value, onChange, onSubmit, schema, varCandidate
   );
 
   // Dispose the controller + type subscriptions when BodyView itself unmounts.
-  useEffect(() => () => {
-    live.current?.controller?.dispose();
-    live.current?.decode?.dispose();
-    live.current?.fold?.dispose();
-    live.current?.save?.dispose();
-    live.current?.wrap?.dispose();
-    live.current?.ctxMenu?.dispose();
-    live.current?.typeSub?.dispose();
-    if (live.current?.ghostTimer != null) window.clearTimeout(live.current.ghostTimer);
-    live.current?.ghost?.dispose();
-    live.current?.minimapSubs?.forEach((d) => d.dispose());
-  }, []);
+  useEffect(
+    () => () => {
+      live.current?.controller?.dispose();
+      live.current?.decode?.dispose();
+      live.current?.fold?.dispose();
+      live.current?.save?.dispose();
+      live.current?.wrap?.dispose();
+      live.current?.body.dispose();
+      live.current?.typeSub?.dispose();
+      if (live.current?.ghostTimer != null)
+        window.clearTimeout(live.current.ghostTimer);
+      live.current?.ghost?.dispose();
+      live.current?.minimapSubs?.forEach((d) => d.dispose());
+    },
+    [],
+  );
 
   // Keep the model's attached schema current as the selected method changes.
   // Only request mode receives a schema (autocomplete + ghost + markers);
@@ -412,7 +493,9 @@ export function BodyView({ mode, value, onChange, onSubmit, schema, varCandidate
 
   // Re-apply (or clear) the ghost zone when the bodyHints toggle changes.
   // No mode guard needed: applyGhost no-ops when ghost is null (response mode).
-  useEffect(() => { applyGhost(); }, [prefs.bodyHints, applyGhost]);
+  useEffect(() => {
+    applyGhost();
+  }, [prefs.bodyHints, applyGhost]);
 
   // Re-register the word-wrap menu action with a fresh label when the pref flips.
   // Monaco fixes an action's label at registration, so reflecting state means
@@ -486,22 +569,36 @@ export function BodyView({ mode, value, onChange, onSubmit, schema, varCandidate
 
   // wordWrap — источник истины prefs.wordWrap (общий для запроса и ответа), поэтому
   // переопределяем базовую опцию здесь; base-консты в monaco.ts остаются как есть.
-  // Смена prefs.wordWrap меняет идентичность options → @monaco-editor/react применяет
-  // updateOptions на смонтированном редакторе (живое переключение, без ремаунта).
+  // Смена prefs.wordWrap меняет идентичность options, и обёртка применяет её на
+  // смонтированном редакторе (живое переключение, без ремаунта).
   // Default off → длинное значение не уходит «башней» под ключ (см. spec 2026-06-16).
+  // Folding stays on the options object too. A plaintext or over-ceiling response
+  // has no fold gutter; that used to be a direct editor write from this file.
   const base = mode === "response" ? BODY_READONLY_OPTIONS : BODY_EDIT_OPTIONS;
+  const foldingOff =
+    mode === "response" &&
+    (language !== "json-with-vars" || exceedsByteCeiling(value));
   const options = useMemo(
-    () => ({ ...base, wordWrap: (prefs.wordWrap ? "on" : "off") as "on" | "off" }),
-    [base, prefs.wordWrap],
+    () => ({
+      ...base,
+      wordWrap: (prefs.wordWrap ? "on" : "off") as "on" | "off",
+      ...(foldingOff ? { folding: false as const } : {}),
+    }),
+    [base, prefs.wordWrap, foldingOff],
   );
   // Response model text is derived (pretty/elided) and set imperatively in onMount;
   // pass the raw value only as the initial Monaco value, then never via React again
   // for response (so prop-sync doesn't clobber the rendered text). Keyed remount on
   // value change keeps it simple and correct.
-  const key = useMemo(() => (mode === "response" ? value : "request"), [mode, value]);
+  const key = useMemo(
+    () => (mode === "response" ? value : "request"),
+    [mode, value],
+  );
 
   return (
-    <Suspense fallback={<div className="h-full w-full bg-background" aria-hidden />}>
+    <Suspense
+      fallback={<div className="h-full w-full bg-background" aria-hidden />}
+    >
       <MonacoEditor
         key={key}
         height="100%"

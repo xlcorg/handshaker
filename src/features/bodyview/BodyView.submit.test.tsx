@@ -41,7 +41,9 @@ vi.mock("@/lib/monaco", () => ({
       getContentHeight: () => 0,
       onDidContentSizeChange: () => ({ dispose: () => {} }),
       onDidLayoutChange: () => ({ dispose: () => {} }),
-      changeViewZones: (cb: (acc: { addZone: () => string; removeZone: () => void }) => void) => {
+      changeViewZones: (
+        cb: (acc: { addZone: () => string; removeZone: () => void }) => void,
+      ) => {
         cb({ addZone: () => "z1", removeZone: () => {} });
       },
       createDecorationsCollection: () => ({ set: () => {}, clear: () => {} }),
@@ -49,6 +51,13 @@ vi.mock("@/lib/monaco", () => ({
     onMount?.(editor, monaco);
     return <div data-testid="monaco" />;
   },
+  createBodyEditor: () => ({
+    getValue: () => "{}",
+    setValue: () => {},
+    setMinimap: () => {},
+    onContextMenu: () => {},
+    dispose: () => {},
+  }),
   BODY_EDIT_OPTIONS: { readOnly: false },
   BODY_READONLY_OPTIONS: { readOnly: true },
   MONACO_THEME: "handshaker-dark",
@@ -72,7 +81,14 @@ describe("BodyView Send submit shortcuts", () => {
 
   it("binds Ctrl/Cmd+Enter and forwards it to onSubmit", () => {
     const onSubmit = vi.fn();
-    render(<BodyView mode="request" value="{}" onChange={vi.fn()} onSubmit={onSubmit} />);
+    render(
+      <BodyView
+        mode="request"
+        value="{}"
+        onChange={vi.fn()}
+        onSubmit={onSubmit}
+      />,
+    );
     // CtrlCmd | Enter === 2048 | 3
     const enter = captured.commands.find((c) => c.keybinding === (2048 | 3));
     expect(enter).toBeDefined();
@@ -82,7 +98,14 @@ describe("BodyView Send submit shortcuts", () => {
 
   it("also binds Ctrl/Cmd+R and forwards it to onSubmit", () => {
     const onSubmit = vi.fn();
-    render(<BodyView mode="request" value="{}" onChange={vi.fn()} onSubmit={onSubmit} />);
+    render(
+      <BodyView
+        mode="request"
+        value="{}"
+        onChange={vi.fn()}
+        onSubmit={onSubmit}
+      />,
+    );
     // CtrlCmd | KeyR === 2048 | 48
     const ctrlR = captured.commands.find((c) => c.keybinding === (2048 | 48));
     expect(ctrlR).toBeDefined();

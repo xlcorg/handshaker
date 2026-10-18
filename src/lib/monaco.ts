@@ -238,10 +238,139 @@ export const BODY_READONLY_OPTIONS = {
   ...EDITOR_OPTIONS,
   folding: true,
   readOnly: true,
-  // Minimap starts OFF; BodyView (response) flips `enabled` on only when the
+  // Minimap starts OFF. BodyEditor.setMinimap flips it on only when the
   // rendered content overflows the viewport (size-gated, see minimapGate.ts).
   // renderCharacters:false → a clean color-block overview matching the dark theme.
   minimap: { enabled: false, renderCharacters: false },
 } as const;
 
 export const MONACO_THEME = "handshaker-dark" as const;
+
+export type BodyEditor = {
+  getValue(): string;
+  setValue(next: string): void;
+  setMinimap(on: boolean): void;
+  onContextMenu(
+    cb: (ev: { pageX: number; pageY: number; onViewZone: boolean }) => void,
+  ): void;
+  dispose(): void;
+};
+
+/** Monaco host methods the handle needs. The handle does not expose `updateOptions`. */
+interface BodyEditorHost {
+  getValue(): string;
+  getModel(): { setValue(next: string): void } | null;
+  updateOptions(options: MinimapToggleOptions): void;
+  getContribution(id: string): unknown;
+  onContextMenu(listener: (e: EditorContextMenuEvent) => void): {
+    dispose(): void;
+  };
+}
+
+interface EditorContextMenuEvent {
+  target: { type: number };
+  event: { posx: number; posy: number; preventDefault(): void };
+}
+
+interface ContextMenuContribLike {
+  showContextMenu?: (anchor: { x: number; y: number }) => void;
+}
+
+interface MinimapToggleOptions {
+  minimap: {
+    enabled: boolean;
+    renderCharacters: boolean;
+    showSlider: "always";
+  };
+  scrollbar: {
+    vertical: "hidden" | "auto";
+    verticalScrollbarSize: number;
+    horizontalScrollbarSize: number;
+    scrollByPage: boolean;
+  };
+}
+
+// Same contribution id contextMenuCleanup.ts uses (Monaco's stable contrib id).
+const CONTEXT_MENU_CONTRIB_ID = "editor.contrib.contextmenu";
+
+/**
+ * Minimap and the vertical scrollbar are two position indicators on the same
+ * right edge. They toggle together, and the scrollbar object is re-specified
+ * in both states because `updateOptions` replaces it rather than merging it.
+ * An unspecified field would fall back to a Monaco default.
+ *
+ * `verticalScrollbarSize` is 0 while the minimap shows: Monaco reserves that
+ * many px even when `vertical` is `"hidden"`, which leaves a blank band
+ * between the minimap and the edge. Horizontal fields stay equal to
+ * `EDITOR_OPTIONS.scrollbar`.
+ */
+function minimapToggleOptions(show: boolean): MinimapToggleOptions {
+  return {
+    minimap: { enabled: show, renderCharacters: false, showSlider: "always" },
+    scrollbar: {
+      vertical: show ? "hidden" : "auto",
+      verticalScrollbarSize: show
+        ? 0
+        : EDITOR_OPTIONS.scrollbar.verticalScrollbarSize,
+      horizontalScrollbarSize: EDITOR_OPTIONS.scrollbar.horizontalScrollbarSize,
+      scrollByPage: EDITOR_OPTIONS.scrollbar.scrollByPage,
+    },
+  };
+}
+
+/** Open the editor menu at a page point. No-op if the contribution is missing. */
+function openEditorContextMenu(
+  editor: BodyEditorHost,
+  x: number,
+  y: number,
+): void {
+  const contrib = editor.getContribution(
+    CONTEXT_MENU_CONTRIB_ID,
+  ) as ContextMenuContribLike | null;
+  contrib?.showContextMenu?.({ x, y });
+}
+
+/**
+ * Wrap a Monaco editor. `setMinimap` is the only options write. A right-click
+ * on a view zone (the request ghost hint) opens the editor menu here, because
+ * Monaco's own controller drops those clicks. `onContextMenu` reports the
+ * same click to callers.
+ */
+export function createBodyEditor(
+  editor: BodyEditorHost,
+  viewZoneTargetType: number,
+): BodyEditor {
+  const callbacks: Array<
+    (ev: { pageX: number; pageY: number; onViewZone: boolean }) => void
+  > = [];
+  let disposed = false;
+  const sub = editor.onContextMenu((e) => {
+    if (disposed) return;
+    const onViewZone = e.target.type === viewZoneTargetType;
+    if (onViewZone) {
+      // Suppress the native menu. Monaco bails for view zones after that.
+      e.event.preventDefault();
+      openEditorContextMenu(editor, e.event.posx, e.event.posy);
+    }
+    const ev = { pageX: e.event.posx, pageY: e.event.posy, onViewZone };
+    for (const cb of callbacks) cb(ev);
+  });
+  return {
+    getValue: () => editor.getValue(),
+    setValue: (next) => {
+      editor.getModel()?.setValue(next);
+    },
+    setMinimap: (on) => {
+      editor.updateOptions(minimapToggleOptions(on));
+    },
+    onContextMenu: (cb) => {
+      if (!disposed) callbacks.push(cb);
+    },
+    dispose: () => {
+      if (disposed) return;
+      disposed = true;
+      sub.dispose();
+      callbacks.length = 0;
+    },
+  };
+}
