@@ -241,7 +241,7 @@ def create_env(name: str, variables: dict[str, str]) -> None:
         f"const spans = {env_pill_spans()}; return spans[1] ? spans[1].textContent : '';",
         lambda value: value == name,
     )
-    release_scroll_lock(f"after creating env {name}")
+    assert_scroll_lock_clear(f"after creating env {name}")
     print(f"created env {name}", flush=True)
 
 
@@ -260,15 +260,8 @@ def pill_label() -> str:
     return value if isinstance(value, str) else ""
 
 
-def release_scroll_lock(where: str) -> None:
-    """The env editor unmounts on close and can leave Radix's scroll lock behind.
-
-    `document.body` keeps `style="pointer-events: none"` and
-    `data-scroll-locked`, so every later WebDriver click is "element not
-    interactable". Record that and clear the stuck inline style. This does
-    not fix the app; it only lets the rest of this drive reach the window.
-    """
-    state = evaljs(
+def scroll_lock_state():
+    return evaljs(
         """
         return JSON.stringify({
           pe: document.body.style.pointerEvents || "",
@@ -276,16 +269,57 @@ def release_scroll_lock(where: str) -> None:
         });
         """
     )
+
+
+def assert_scroll_lock_clear(where: str) -> None:
+    """Fail if a closed dialog left Radix's scroll lock on document.body.
+
+    The drive does not clear `pointer-events` or `data-scroll-locked`.
+    """
+    state = scroll_lock_state()
     stuck = isinstance(state, dict) and (state.get("pe") == "none" or state.get("locked"))
-    if not stuck:
-        return
-    print(f"BUG scroll-lock stuck {where}: {state}", flush=True)
-    evaljs(
-        """
-        document.body.style.pointerEvents = "";
-        document.body.removeAttribute("data-scroll-locked");
-        return document.body.style.pointerEvents || "cleared";
-        """
+    if stuck:
+        raise DriveError(f"scroll lock still held {where}: {state}")
+
+
+def prove_menu_after_cancel() -> None:
+    """Open the env editor, Cancel, then open the env menu.
+
+    Cancel must leave the page clickable. The menu click is the proof.
+    """
+    click_pill()
+    wait_until(
+        "return !!document.querySelector('[aria-label=\"New environment\"]')",
+        lambda v: v is True,
+        timeout=5,
+    )
+    click("[aria-label='New environment']")
+    wait_until(
+        "return !!document.querySelector(\"[role='dialog'] [aria-label='Environment name']\")",
+        lambda v: v is True,
+    )
+    click('xpath=//div[@role="dialog"]//button[normalize-space()="Cancel"]')
+    wait_until(
+        "return !!document.querySelector(\"[role='dialog']\")",
+        lambda v: v is False,
+        timeout=5,
+    )
+    assert_scroll_lock_clear("after Cancel")
+    click_pill()
+    wait_until(
+        "return !!document.querySelector('[aria-label=\"New environment\"]')",
+        lambda v: v is True,
+        timeout=5,
+    )
+    shot("scroll-lock-env-menu")
+    print("pass env menu after Cancel", flush=True)
+    # The open menu is modal, so the pill and the page behind it are not
+    # interactable. Choosing the current row closes the menu.
+    click('xpath=//*[@role="menuitem"][normalize-space()="No environment"]')
+    wait_until(
+        "return !!document.querySelector('[aria-label=\"New environment\"]')",
+        lambda v: v is False,
+        timeout=5,
     )
 
 
@@ -437,7 +471,7 @@ def save_request(name: str) -> None:
                 if item.get("type") == "request" and item.get("name") == name:
                     protocol = item.get("protocol") or (item.get("template") or {}).get("protocol")
                     if protocol == "http":
-                        release_scroll_lock("after save dialog")
+                        assert_scroll_lock_clear("after save dialog")
                         print(f"saved {name} in {path.name}", flush=True)
                         return
         time.sleep(0.25)
@@ -616,7 +650,8 @@ def main() -> None:
     if doctor.returncode != 0:
         raise DriveError(f"doctor failed before HTTP drive\n{doctor.stdout}\n{doctor.stderr}")
     print(doctor.stdout.strip(), flush=True)
-    release_scroll_lock("at HTTP drive start")
+    assert_scroll_lock_clear("at HTTP drive start")
+    prove_menu_after_cancel()
 
     # App process must see the OS secrets. launch forwards them; check the recorded pid.
     app_pids = session().get("appPids") or []
@@ -879,9 +914,21 @@ def main() -> None:
     print("http drive ok", flush=True)
 
 
+def cancel_menu() -> None:
+    doctor = hs("doctor")
+    if doctor.returncode != 0:
+        raise DriveError(f"doctor failed before Cancel proof\n{doctor.stdout}\n{doctor.stderr}")
+    print(doctor.stdout.strip(), flush=True)
+    prove_menu_after_cancel()
+    print("cancel-menu ok", flush=True)
+
+
 if __name__ == "__main__":
     try:
-        main()
+        if "--cancel-menu" in sys.argv[1:]:
+            cancel_menu()
+        else:
+            main()
     except Exception as err:
         print(f"DRIVE FAILED: {err}", file=sys.stderr, flush=True)
         try:

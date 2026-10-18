@@ -84,39 +84,69 @@ function isEnter(e: KeyboardEvent<HTMLElement>): boolean {
   return e.key === "Enter" && !e.nativeEvent.isComposing;
 }
 
-export type EnvEditorDialogProps = UseEnvEditorProps;
+export type EnvEditorDialogProps = UseEnvEditorProps & {
+  /** The dialog stays mounted. Close by setting this to false. */
+  readonly open: boolean;
+  /**
+   * Bumps when the editor opens so the session restarts. Unchanged while
+   * the dialog is closing, so the form does not reset to create mode.
+   */
+  readonly epoch: number;
+};
 
-export function EnvEditorDialog(props: EnvEditorDialogProps) {
+export function EnvEditorDialog({
+  open,
+  epoch,
+  ...props
+}: EnvEditorDialogProps) {
+  const close = useRef<() => void>(() => {});
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) close.current();
+      }}
+    >
+      {epoch > 0 ? (
+        <EnvEditorSession key={epoch} {...props} close={close} />
+      ) : null}
+    </Dialog>
+  );
+}
+
+function EnvEditorSession({
+  close,
+  ...props
+}: UseEnvEditorProps & {
+  readonly close: { current: () => void };
+}) {
   const ed = useEnvEditor(props);
   const { dispatch } = ed;
+  close.current = () => dispatch({ type: "close" });
   return (
-    <Dialog open onOpenChange={ed.onOpenChange}>
-      <DialogContent
-        showCloseButton={false}
-        className="flex h-[min(752px,calc(100vh_-_64px))] w-[min(1160px,calc(100vw_-_64px))] max-w-none flex-col gap-0 overflow-hidden rounded-[10px] p-0 sm:max-w-none"
-        {...ed.contentProps}
+    <DialogContent
+      showCloseButton={false}
+      className="flex h-[min(752px,calc(100vh_-_64px))] w-[min(1160px,calc(100vw_-_64px))] max-w-none flex-col gap-0 overflow-hidden rounded-[10px] p-0 sm:max-w-none"
+      {...ed.contentProps}
+    >
+      <DialogDescription className="sr-only">{m.description}</DialogDescription>
+      <div
+        ref={ed.contentRef}
+        className="grid min-h-0 flex-1 grid-cols-[216px_minmax(0,1fr)]"
       >
-        <DialogDescription className="sr-only">
-          {m.description}
-        </DialogDescription>
-        <div
-          ref={ed.contentRef}
-          className="grid min-h-0 flex-1 grid-cols-[216px_minmax(0,1fr)]"
-        >
-          <EnvList list={ed.list} dispatch={dispatch} />
-          {ed.pane ? (
-            <EnvPane key={ed.paneKey} view={ed.pane} ed={ed} />
-          ) : (
-            <EmptyPane key={ed.paneKey} dispatch={dispatch} />
-          )}
-        </div>
-        <ConfirmDeleteEnvDialog
-          view={ed.confirm}
-          onConfirm={() => dispatch({ type: "confirmDelete" })}
-          onCancel={() => dispatch({ type: "cancelDelete" })}
-        />
-      </DialogContent>
-    </Dialog>
+        <EnvList list={ed.list} dispatch={dispatch} />
+        {ed.pane ? (
+          <EnvPane key={ed.paneKey} view={ed.pane} ed={ed} />
+        ) : (
+          <EmptyPane key={ed.paneKey} dispatch={dispatch} />
+        )}
+      </div>
+      <ConfirmDeleteEnvDialog
+        view={ed.confirm}
+        onConfirm={() => dispatch({ type: "confirmDelete" })}
+        onCancel={() => dispatch({ type: "cancelDelete" })}
+      />
+    </DialogContent>
   );
 }
 

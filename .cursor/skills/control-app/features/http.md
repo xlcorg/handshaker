@@ -173,5 +173,5 @@ Saved HTTP items in the collection JSON are flattened (`protocol`, `method`,
 - The toolbar Save is `aria-label="Save"`. The dialog confirm is the `Save` button inside the footer (`sm:justify-end`), and clicking the first `Save` in the DOM hits the toolbar behind the dialog.
 - An empty environment variable turns `{{baseUrl}}/echo` into `/echo`, and Send reports `Invalid URL: start it with http:// or https://`. The resolved preview is drawn next to the template, so `innerText` looks like a doubled path.
 - 4xx is a response value. Connection refused is the client error view titled `Service unavailable`.
-- `Done` closes the environment editor. On the current build that close left the body clickable. `drive-http.py` still clears `pointer-events: none` and `data-scroll-locked` if a close sets them, and prints `BUG scroll-lock stuck` when it does. See `environments.md`.
+- `Cancel` and `Done` close the environment editor without leaving `pointer-events: none` or `data-scroll-locked` on `document.body`. `drive-http.py` raises if either remains. See `environments.md`.
 - `hsdrv.py launch` forwards `HS_BEARER` and `HS_APIKEY` into the app process only when they are set in the shell that runs `launch.sh`. A tmux `env` prefix does not inherit the rest of the parent environment. Confirm with `/proc/<appPid>/environ` from `session.json`.

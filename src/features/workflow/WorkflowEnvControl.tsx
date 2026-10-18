@@ -29,7 +29,22 @@ export function WorkflowEnvControl() {
   // so imported envs surface without a remount.
   const envRevision = useEnvRevision();
   const [envs, setEnvs] = useState<EnvironmentIpc[]>([]);
-  const [editor, setEditor] = useState<{ opened: string | null } | null>(null);
+  // The dialog stays mounted. Closing sets `open` to false and leaves the
+  // subject in place, so the form does not reset to create mode while Radix
+  // is releasing the scroll lock. `epoch` bumps only when opening again.
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editorName, setEditorName] = useState<string | null>(null);
+  const [editorEpoch, setEditorEpoch] = useState(0);
+
+  const openEditor = useCallback((opened: string | null) => {
+    setEditorName(opened);
+    setEditorEpoch((n) => n + 1);
+    setEditorOpen(true);
+  }, []);
+
+  const closeEditor = useCallback(() => {
+    setEditorOpen(false);
+  }, []);
 
   const refreshEnvs = useCallback(async () => {
     try {
@@ -85,8 +100,8 @@ export function WorkflowEnvControl() {
     }),
     ...envEditChords((event) => {
       if (event.repeat) return false;
-      if (editor !== null) return;
-      setEditor({ opened: activeEnv });
+      if (editorOpen) return;
+      openEditor(activeEnv);
     }),
   ]);
 
@@ -118,37 +133,37 @@ export function WorkflowEnvControl() {
           </button>
         }
         onActiveSet={(next) => workflowStore.setWorkflowEnv(next)}
-        onEditEnv={(name) => setEditor({ opened: name })}
-        onNewEnv={() => setEditor({ opened: null })}
+        onEditEnv={openEditor}
+        onNewEnv={() => openEditor(null)}
         onReorder={handleReorder}
       />
-      {editor && (
-        <EnvEditorDialog
-          opened={editor.opened}
-          envs={envs}
-          onOptimistic={(env, previousName) => {
-            setEnvs((prev) => replaceEnv(prev, previousName, env));
-          }}
-          onReverted={(currentName, env) => {
-            setEnvs((prev) => replaceEnv(prev, currentName, env));
-            toast.error(messages.envs.editor.saveFailed);
-          }}
-          onStored={async ({ activated }) => {
-            await refreshEnvs();
-            // Env contents changed — re-resolve any preview bound to the active env
-            // (e.g. the collection-variables editor, which resolves via the backend).
-            bumpEnvRevision();
-            if (activated !== null) workflowStore.setWorkflowEnv(activated);
-          }}
-          onDeleted={async ({ name }) => {
-            await refreshEnvs();
-            bumpEnvRevision();
-            if (workflowStore.activeWorkflow().envName === name)
-              workflowStore.setWorkflowEnv(null);
-          }}
-          onClosed={() => setEditor(null)}
-        />
-      )}
+      <EnvEditorDialog
+        open={editorOpen}
+        epoch={editorEpoch}
+        opened={editorName}
+        envs={envs}
+        onOptimistic={(env, previousName) => {
+          setEnvs((prev) => replaceEnv(prev, previousName, env));
+        }}
+        onReverted={(currentName, env) => {
+          setEnvs((prev) => replaceEnv(prev, currentName, env));
+          toast.error(messages.envs.editor.saveFailed);
+        }}
+        onStored={async ({ activated }) => {
+          await refreshEnvs();
+          // Env contents changed — re-resolve any preview bound to the active env
+          // (e.g. the collection-variables editor, which resolves via the backend).
+          bumpEnvRevision();
+          if (activated !== null) workflowStore.setWorkflowEnv(activated);
+        }}
+        onDeleted={async ({ name }) => {
+          await refreshEnvs();
+          bumpEnvRevision();
+          if (workflowStore.activeWorkflow().envName === name)
+            workflowStore.setWorkflowEnv(null);
+        }}
+        onClosed={closeEditor}
+      />
     </>
   );
 }

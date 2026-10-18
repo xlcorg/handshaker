@@ -113,6 +113,8 @@ function renderEditor(opened: string | null) {
     if (!open) return null;
     return (
       <EnvEditorDialog
+        open
+        epoch={1}
         opened={opened}
         envs={envs}
         onStored={(event) => {
