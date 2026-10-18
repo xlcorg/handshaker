@@ -3,19 +3,20 @@
 ## Overview
 Handshaker is a desktop client for invoking **gRPC** services — think "Postman, but for gRPC" — that also handles plain **HTTP/REST** endpoints. Users register a server by address (e.g. `orders.api.example.com:443`), discover its services via reflection, organize requests into **collections**, pick a `Service.Method` (or an HTTP verb + path), edit a request body in JSON, send it, and inspect the response (body, trailers, headers, errors).
 
-The app is a **multi-tab workspace**: every open request is its own tab with independent state. A **collections-first sidebar** holds the saved requests; a **Collection Overview** and **Server Overview** present per-collection / per-server configuration; and an in-design **Tweaks** panel switches theme / density / fonts / layout.
+The shipped workspace is **Focus**: one request in the main area (`src/features/workflow/FocusView.tsx`). A **collections-first sidebar** holds the saved requests, and clicking a collection opens **Collection Overview** (`src/features/catalog/overview/CollectionOverview.tsx`). Streaming gRPC ships next to unary gRPC and HTTP. This folder is the **visual-token source** (color, type, spacing, component shape). The in-design **Tweaks** panel is prototype-only.
 
-> **Read these load-bearing decisions first:**
-> 0. **MVP scope — no streaming.** The first release ships **unary gRPC calls + HTTP** only. Server/client/bidi streaming is **out of scope for the MVP**: there is no streaming response pane in shipped UI, no Stream state, no "Streaming" filter result surfaced to users. The `stream` color token, the `kind: server|client|bidi` fixtures, the stream arrows in the tree, and the `streaming` scenario all still exist in the design files (and the demo state-switcher can reach a streaming preset) but **must not surface in shipped UI**. Streaming is a post-MVP follow-up.
-> 1. **The workspace is multi-tab.** Each open request is a tab (`RequestTabs` bar, directly under the title bar). A tab owns its own `selected` method, `host`, `tls`, `scenario`, and a `dirty` flag. **+** opens a new blank request tab; the middle-click or × closes a tab; closing a **dirty** tab prompts a *Save & close / Discard / Cancel* dialog (`CloseConfirm`).
-> 2. **Adding a server is address-first — there is NO "Add server" dialog.** Pressing **+** (tab bar or sidebar) opens a *blank request draft* (`newServer` scenario): the address bar is empty + autofocused, the user types `host:port` and hits **Connect**. Discovery/registration happens implicitly by connecting. See **New request draft** below.
-> 3. **The sidebar is collections-first** (NOT servers-first, NOT service/history/collections tabs). The tree is **Collection → (recursive) Folder → Request**. There is **no server level** in the tree — each *request* references a server method by `{ serverId, svc, mth }` and resolves its own target host from the server registry, so one collection freely mixes servers. Every collection / folder / request row is deletable via a hover **⋯** menu *and* a **right-click context menu**.
-> 4. **The header is a single 36px title bar.** Brand wordmark, env picker, the three utility buttons (sidebar / theme / settings), and the window controls all live there.
-> 5. **Clicking a collection opens its Collection Overview** in the main area (tabbed: Overview · Authorization · Variables · Settings). Auth secrets are referenced **by environment-variable name**, never as raw secrets. (`collection` scenario.)
-> 6. **Server color tags were removed from the main UI.** The `dot` field still exists per server in `data.js` but isn't rendered. The only colored dot that stays is the **environment** indicator in the title bar.
+> **Read these load-bearing decisions first.** Shipped behavior is the code plus the archived specs under `docs/archive/`. Sections below that describe request tabs, Server Overview, Server Browser, or the floating state bar are the prototype. Do not rebuild them. Do not change the tokens in **Design Tokens**.
+>
+> 0. **Streaming ships.** Unary gRPC, HTTP, and server / client / bidi streaming are in the product. Behavior: `docs/archive/2026-10-04-streaming-rpcs/spec.md`. A stream's response pane is `src/features/stream/StreamView.tsx` (Messages timeline, Headers, Trailers, Contract, Save messages, Assemble). Server-streaming uses Send, which becomes Cancel while the call is open. Client and bidi use Open, then Send message / End stream / Cancel (`src/features/workflow/DraftAddressBar.tsx`). The method picker and address bar show a `stream` / `client` / `bidi` badge (`src/features/shell/KindBadge.tsx`). The sidebar does not: every gRPC row is one `gRPC` mark (`src/features/catalog/RequestRow.tsx`, `GRPC_METHOD_MARK` in `src/features/http/model.ts`). The prototype's `streaming` scenario is a design preset, not a ban.
+> 1. **The workspace is Focus, one request at a time.** Ledger and List are gone; Focus is the only request view ([#41](https://github.com/xlcorg/handshaker/pull/41)). The main area is `FocusView` or Collection Overview (`src/app/WorkflowApp.tsx`). `StreamView` is the response pane inside Focus (`ResponseSlot` in `src/features/workflow/CallPanel.tsx`), not a third main area. Opening a saved request or starting a draft replaces the current one (`src/features/catalog/actions.ts`). A dirty unbound draft confirms first (`src/features/catalog/DiscardDraftDialog.tsx`: Cancel / Save… / Discard). An origin-bound draft autosaves. There is no request-tab bar and no per-tab close. The prototype's `RequestTabs` bar, `tabs[]`, and `CloseConfirm` describe these design files only. The titlebar workflow menu (`src/features/workflow/WorkflowSelector.tsx`) can create named workflows; the open draft is one store-level field (`src/features/workflow/store.ts`), not one tab per request. Empty Focus shows "No active request — pick a method in the sidebar." (`messages.workflow.focus.noActiveRequest` in `src/lib/messages.ts`).
+> 2. **Adding a server is address-first — there is no "Add server" dialog.** The sidebar **+** opens a menu (`src/features/catalog/SidebarShell.tsx`): New request, New HTTP request, New collection (`messages.catalog.sidebar`). That click does not itself start a draft. Ctrl/Cmd+N starts an empty gRPC Focus draft (`src/app/WorkflowApp.tsx` → `newRequestDraft` in `src/features/catalog/actions.ts`). New request in the menu does the same; New HTTP request calls `newHttpRequestDraft`. The address placeholder is `host:port`. There is no Connect button: a non-empty address reflects on its own, debounced (`src/features/workflow/useDraftReflection.ts`). The shipped bar is `src/features/workflow/DraftAddressBar.tsx` — TLS lock, host, method picker, and Send or Open. The prototype's separate Connect button and `newServer` scenario are design-file only.
+> 3. **The sidebar is collections-first** (NOT servers-first, NOT service/history/collections tabs). The shipped tree is **Collection → (recursive) Folder → Request** (`src/features/catalog/CollectionNode.tsx`). There is **no server level**. A folder with no children still renders, and delete does not remove that parent (`FolderNode.tsx`, `removeItemFromTree` in `src/features/catalog/treeEdit.ts`). The `{ serverId, svc, mth }` registry sentence is the prototype; a shipped request is `SavedRequestIpc` (see Data shapes). Every collection / folder / request row is deletable via a hover **⋯** menu *and* a **right-click context menu**, then `ConfirmDeleteDialog`.
+> 4. **The header is a single 36px title bar.** In the prototype: brand wordmark, env picker, sidebar / theme / settings, and the window controls. The 36px height stays. Off macOS the shipped bar shows the Handshaker wordmark (`!isMacOS` in `src/features/shell/Titlebar.tsx`). The rest of the bar is the workflow menu, environment control, sidebar toggle, split-direction toggle, update check, settings, and window controls off macOS. There is no theme button on the bar (`src/features/shell/Titlebar.test.tsx`). The document is forced dark in `src/main.tsx`. Do not insert a request-tab row under this bar.
+> 5. **Clicking a collection opens its Collection Overview** in the main area. Shipped tabs are Overview, Authorization, and Variables (`src/features/catalog/overview/CollectionOverview.tsx`). There is no Settings tab; TLS defaults sit on Overview. The auth picker is None, Bearer, API key, and OAuth2 (`KIND_OPTIONS` in `src/features/catalog/overview/SavedAuthEditor.tsx`). Bearer and API key store an OS env-var name (`EnvVarAuthConfig.env_var` in `crates/handshaker-core/src/auth/mod.rs`). The OAuth2 client secret is a `{{var}}` template, not an env-var name (`OAuth2ClientCredentialsConfig.client_secret` in that file). Do not describe every auth field as an env-var name, and do not add a disabled Mutual TLS row.
+> 6. **The env control is not the only colored dot.** It paints one marker (`paintMarker` in `src/features/workflow/WorkflowEnvControl.tsx`). Other colored dots ship on the stream statusline (`src/features/stream/StreamView.tsx`), the unbound-draft dirty mark (`src/features/workflow/FocusView.tsx`), and the update-available mark (`src/features/shell/Titlebar.tsx`). The prototype's per-server `dot` field in `data.js` is not a shipped server color tag. Do not remove the dots that ship.
 
 ## About the Design Files
-The files in this bundle are **design references created in HTML/JSX** — a high-fidelity prototype showing intended look and behavior, **not production code to copy directly**. The task is to **recreate this design in the target codebase's environment** (a desktop shell — Tauri, Electron, or native — using whatever component system the target uses) following its established patterns and libraries. If no environment exists yet, pick the most appropriate stack: a **React + Tailwind + shadcn/ui** setup mirrors the prototype most directly (the token names map 1:1 to a shadcn/ui install); a native macOS/Windows app is also reasonable for a desktop API client.
+The files in this bundle are **design references created in HTML/JSX** — a high-fidelity prototype, **not production code to copy directly**. The app already exists (Tauri 2 + React). Use this folder for color, type, spacing, and component shape. Behavior is the load-bearing list above, the code, and `docs/archive/`. Do not treat the prototype's scenarios as the product. The token names map 1:1 onto the shadcn-style primitives already in `src/components/ui/`.
 
 The prototype uses inline React + Babel + Tailwind Play CDN for fast iteration. **Do not ship that stack** — it's a sketching tool, not a production build. Likewise the multi-file `*.jsx` split (components attached to `window`) is a prototype convenience; use real modules/imports in production.
 
@@ -30,19 +31,19 @@ The app is a fixed-size desktop window. Vertical stack:
 ┌──────────────────────────────────────────────────────────────────────┐
 │ Titlebar  (36px, drag) — logo·name·env picker ╎ tools ╎ min/max/×      │
 ├───────────┬──────────────────────────────────────────────────────────┤
-│           │ Request tabs   (36px) — [tab][tab][tab] … [+]              │
+│           │ (no request-tab bar — Focus or Collection Overview)       │
 │ Sidebar   ├──────────────────────────────────────────────────────────┤
 │ (collec-  │ Address bar    (56px) — TLS / host / method picker / Send  │
 │  tions    ├──────────────────────────────────────────────────────────┤
 │  tree)    │ Request pane              │ Response pane                  │
-│           │  - tabs (underline)       │  - tabs (underline)            │
-│ Checkout  │  - body / metadata / auth │  - body / trailers / headers   │
+│           │  - tabs (underline)       │  - body, or the stream timeline │
+│ Checkout  │  - body / metadata / auth │  - trailers / headers          │
 │ Identity  │                           │                                │
-│ Edge/REST │   …OR the active tab's main area is one of:                │
+│ Edge/REST │   …OR the main area is:                                     │
 │ Sandbox   │     · Collection Overview (clicking a collection)          │
-│           │     · Server Overview     (server scenario)                │
-│           │     · Server Browser      (browse scenario)                │
-│           │     · New-request / Disconnected hero                      │
+│           │     · Focus empty state   (no active request)              │
+│           │     · Server Overview / Browser — prototype only           │
+│           │     · New-request / Disconnected hero — prototype only     │
 ├───────────┴──────────────────────────────────────────────────────────┤
 │ StateBar  (floating pill, bottom-center) — scenario switcher (design)  │
 └────────────────────────────────────────────────────────────────────────┘
@@ -50,11 +51,11 @@ The app is a fixed-size desktop window. Vertical stack:
 
 The split between Request and Response panes is **horizontal by default** (stacked top/bottom — note: the `split` tweak default is `"horizontal"` which renders `flex-col`) and can be flipped to `vertical` (side-by-side) via the `split` tweak.
 
-> **There is no separate top toolbar row.** The brand wordmark, environment picker, the three utility buttons, and the window controls all live in the **single 36px title bar**.
+> **There is no separate top toolbar row.** The prototype puts the brand wordmark, environment picker, three utility buttons, and the window controls in the **single 36px title bar**. Shipped contents are decision 4.
 
 ## Screens / Views
 
-There is one window; what fills the **main area** is driven by **scenarios** (held per-tab). The bottom floating state-bar exposes a subset as pills for review: `request`, `sending`, `success` (OK), `error`, `browse` (Browse), `env` (Env), `settings` (Settings). Other scenarios (`connected`, `idle`, `connecting`, `newServer`, `collection`, `server`, `streaming`) are reached through normal interaction.
+The scenario table describes the **prototype** state switcher (one window, scenarios held per design-tab). The shipped main area is Focus or Collection Overview — not this scenario enum. A stream timeline is the response pane inside Focus (decision 1). The bottom floating state-bar exposes a subset as pills for review: `request`, `sending`, `success` (OK), `error`, `browse` (Browse), `env` (Env), `settings` (Settings). Other scenarios (`connected`, `idle`, `connecting`, `newServer`, `collection`, `server`, `streaming`) are reached through normal interaction in the prototype.
 
 | Scenario     | What's visible in the main area                                                                       |
 |--------------|------------------------------------------------------------------------------------------------------|
@@ -71,7 +72,7 @@ There is one window; what fills the **main area** is driven by **scenarios** (he
 | `browse`     | **Server browser** — filter + multi-select methods to add to a collection.                            |
 | `env`        | Environment modal open.                                                                               |
 | `settings`   | Settings modal open.                                                                                  |
-| `streaming`  | **Out of MVP scope** — incremental frames pane + Cancel. Deferred. Do not ship.                       |
+| `streaming`  | Prototype preset. Shipped pane is `StreamView` (decision 0), not this scenario.                      |
 
 The scenario state-bar (`StateBar`, the floating pill at bottom-center) is **a design-review affordance only** — it lets reviewers flip between states. **Do not ship it.**
 
@@ -87,19 +88,22 @@ The scenario state-bar (`StateBar`, the floating pill at bottom-center) is **a d
 - **Window controls** (`tb-nodrag`, gap 2px): Minimize / Maximize / Close — 24×20px ghost buttons. Close hover = `bg-destructive`.
 
 #### Request tabs bar (`RequestTabs`)
+Prototype only. The shipped app has no request-tab bar (decision 1). The sizes below are the prototype's tab chrome, not a layout to rebuild.
 - Height: 36px (`h-9`). `bg-card/50`, bottom border, `z-30`. A horizontally-scrolling row of tabs followed by a fixed **+** button (36px wide).
 - **Each tab**: `min-w-[132px] max-w-[210px]`, `border-r border-border`, `pl-3 pr-1.5`. Active tab = `bg-background` with a 1.5px foreground bar across its **top** edge; inactive = transparent, `hover:bg-accent/40`.
   - Label: the saved-request name, else the method name, else the typed host, else "New request" — mono 12px, truncated. Active = `text-foreground`, inactive = `text-muted-foreground` (→ foreground on hover).
-  - A new/unconnected tab shows a small `Plus` glyph before the label. A streaming method shows a `bg-stream` dot (out of MVP scope visually).
+  - A new/unconnected tab shows a small `Plus` glyph before the label. A streaming method shows a `bg-stream` dot (prototype tab chrome; kind in the shipped app is the badge in decision 0, not a tab dot).
   - **Close affordance** (right): a 20px ghost button. When the tab is **dirty**, it shows a filled `bg-foreground/80` dot that swaps to an × on hover; the dot stays visible even when the tab isn't hovered. Clean tabs show the × only on hover/active.
   - **Middle-click** anywhere on the tab closes it (via `requestClose`, which routes through the dirty check).
 - **+ button**: full-height, 36px wide, `Plus` icon, `hover:bg-accent/50`, `border-r`. Opens a new `newServer` draft tab.
 
 #### Close-tab confirmation (`CloseConfirm`)
+Prototype dialog for closing a dirty request tab. The shipped confirm is `DiscardDraftDialog` when replacing a dirty unbound draft (decision 1), not a per-tab close.
 - A `Dialog` (`max-w-md`). Title "Unsaved changes", body *"'{label}' has edits that haven't been saved yet. Close it anyway?"*. Footer: **Cancel** (ghost) · **Discard** (outline, destructive-tinted text) · **Save & close** (primary). Only appears when closing a tab whose `dirty` flag is set.
 
 #### Address bar (`ConnectionBar`, Postman-style)
-- Height: 56px (`h-14`). Bottom border, `px-3.5`, `gap-2`.
+Prototype layout. The shipped bar is `DraftAddressBar` (decision 2): no separate Connect button, and the method picker stays in the row.
+- Height: 56px (`h-14`). Bottom border, `px-3.5`, `gap-2`. The shipped bar uses `h-14` as well (`DraftAddressBar.tsx`).
 - Children, left to right:
   1. **TLS button** — 36×36 outline icon button. Lock when TLS on, Unlock when plaintext. Tooltip explains; click toggles.
   2. **Combined input shell** — `flex-1`, height 36, `rounded-md border bg-background`. Ring on focus-within. In a `newServer` draft it gets a persistent `border-ring ring-1 ring-ring` highlight. Contains:
@@ -112,33 +116,33 @@ The scenario state-bar (`StateBar`, the floating pill at bottom-center) is **a d
 #### Method picker (`MethodPicker`, in `panels.jsx`)
 - Trigger: inline-flex button, mono 12.5px — cube icon + `serviceShort` (muted) + "/" + `methodName` (medium) + optional kind badge + chevron. Labels truncate (max ~150px in the address bar). Hover/open = `bg-accent`.
 - Popover (~420px, no padding): a search input on top (h-40, leading search icon, trailing `esc` `Kbd`) over a scrollable list (max-h 360) grouped by service. Group header = small-caps label + cube icon. Method row = h-28, mono, `methodName` + `Request → Response` types (muted 10px) + kind dot.
-- **Kind dot colors**: `unary` = muted-foreground/50, `server` = `--stream`, `client` = `--warn`, `bidi` = purple-400. (Streaming kinds: don't surface in shipped MVP.)
+- **Kind dot colors**: `unary` = muted-foreground/50, `server` = `--stream`, `client` = `--warn`, `bidi` = purple-400. Streaming kinds **do** surface: `KindBadge` and `KindDot` in `src/features/shell/KindBadge.tsx`. Leave these token names as written.
 - Empty: "No methods match \"q\"".
 
 #### Sidebar (collections-first — `sidebar.jsx`)
 - Width: fixed (~300px via `SidebarShell`). **Header row**: filter input (leading filter icon, placeholder "Filter collections & requests") + a **+** ghost icon button (tooltip "New request" → opens a `newServer` draft) + an overflow **⋯** menu (`RowActions`): *New collection · Reveal active request · Expand all · Collapse all · Import collection… · Export collection…*.
 - **Body**: the collection tree.
   - **Collection row** (`CollectionNode`): `h-24`-ish (`!h-[24px]`), 12px text, `text-foreground/80`. A chevron toggle sits at the far left (absolute); the row label is a button that **opens the Collection Overview** (`onOpenCollection`). Trailing mono request-count. Expanding reveals children.
-  - **Folder row** (`FolderNode`, recursive): muted, 11.5px, chevron + folder icon + name + count. **Empty folders are hidden.**
+  - **Folder row** (`FolderNode`, recursive): muted, 11.5px, chevron + folder icon + name + count. Shipped tree renders a folder with no children (`src/features/catalog/FolderNode.tsx`, `CollectionNode.tsx`). Empty folders are not hidden.
   - **Request row** (`RequestRow`): a left **type marker** (`ReqTypeTag`) then the label. Saved requests show their `name` in sans; bare pinned methods show the method name in mono. Active request gets a 2px foreground left bar + `isActive` styling. A right-anchored tooltip shows the full signature + target host.
-  - **Type markers** (Postman-style, left gutter): gRPC unary = a quiet blue mono **"g"**; gRPC streaming = a stream arrow (`↓` server / `↑` client / `↕` bidi) in `--stream` (MVP: streaming hidden); HTTP = a colored mono **verb** (`GET` green / `POST` amber / `PATCH` purple / `PUT` blue / `DELETE`→"DEL" red).
-- **Row delete + actions**: hovering a row reveals a trailing **⋯** button; **right-clicking** the row opens the same menu *at the cursor* (`RowMenu`, a fixed-position floating list that closes on outside-click / Esc / scroll). Menu items vary by node type (collection / folder / request) but **Delete** is always present and is the only destructive (red) item — it stays red on hover via a `bg-destructive/10` tint. Deleting prunes the node (and now-empty folders) from the tree (prototype tracks removed ids in local state).
+  - **Type markers** (Postman-style, left gutter, prototype): gRPC unary = a quiet blue mono **"g"**; gRPC streaming = a stream arrow (`↓` server / `↑` client / `↕` bidi) in `--stream`; HTTP = a colored mono **verb** (`GET` green / `POST` amber / `PATCH` purple / `PUT` blue / `DELETE`→"DEL" red). Shipped tree (`RequestRow.tsx`): every gRPC request is the `gRPC` mark, HTTP is a verb badge, and kind arrows are not drawn. Do not hide streaming elsewhere because the tree has no arrows.
+- **Row delete + actions**: hovering a row reveals a trailing **⋯** button; **right-clicking** the row opens the same menu *at the cursor* (`RowMenu`, a fixed-position floating list that closes on outside-click / Esc / scroll). Menu items vary by node type (collection / folder / request) but **Delete** is always present and is the only destructive (red) item — it stays red on hover via a `bg-destructive/10` tint. Deleting removes that node only. `removeItemFromTree` (`src/features/catalog/treeEdit.ts`) does not drop a parent folder that is left empty. The prototype's "prune now-empty folders" note is not the shipped delete.
 - **Empty states**: no collections → a centered block with "New collection" + "Import collection…" buttons; a collection with no requests → an inline "No requests yet · + Add" row; filter with no matches → "Nothing matches \"q\"".
 
 #### Collection Overview (`CollectionOverview` in `browser.jsx`; building blocks in `collection-overview.jsx`)
 Opened by clicking a collection in the sidebar (`collection` scenario). Fills the main area; **not a modal**.
 - **Header** (48px, `h-12`): Layers icon + **inline-editable title** (`CollectionTitle` — click to edit, Enter saves, Esc cancels, pencil affordance on hover) + a muted "N requests · M targets" summary + an **Export** outline button + a close **×**.
-- **Tabs** (`COTabs`, underline style, with optional count hint): **Overview · Authorization · Variables · Settings**. Body is a centered `max-w-[720px]` scroll column.
+- **Tabs** (`COTabs`, underline style, with optional count hint). Shipped: **Overview · Authorization · Variables** (`CollectionOverview.tsx`). There is no Settings tab. The prototype's fourth Settings tab is design-file only. Body is a centered column (`max-w-[680px]`, variables `max-w-[min(90vw,960px)]`).
   - **Overview**: an empty-state callout if the collection has no requests; a **Description** block (`DescriptionBlock` — view / inline-edit / "Add a description" empty state, markdown-supported textarea); a **Targets** block (wrap of mono host chips); and a **Requests** block — the collection's saved requests + pinned methods grouped by folder (recursive `CO_Rows`), each row clickable to open the request (marker + label + signature + target host + a send glyph on hover).
-  - **Authorization**: per-environment auth (`AuthBlock`). A segmented environment selector, a method `MiniSelect` (No auth / Bearer / Basic / API key / **Mutual TLS — disabled** with a lock + tooltip), and an editor whose fields reference **environment-variable names** (`EnvVarField`, a `{}`-prefixed mono input), never raw secrets. Footer note reinforces "secrets live in the environment, never the collection."
+  - **Authorization**: `SavedAuthEditor`. Kind picker: None, Bearer, API key, OAuth2. There is no Mutual TLS row, shown or disabled. Bearer and API key fields are an OS env-var name (`EnvVarField`). OAuth2 fields, including the client secret, are `{{var}}` templates (decision 5). The prototype's Basic / disabled mTLS / "every secret is an env-var name" copy is design-file only.
   - **Variables**: `VariablesBlock` — a Name/Value table of `{{name}}` collection variables with add/remove; empty state explains the `{{name}}` convention.
-  - **Settings**: **TLS defaults** (`TlsBlock` — "Use TLS by default" switch; "Skip certificate verification" switch that is only enabled when TLS is on, with a warning banner when active) + a **Danger zone** "Delete collection" (destructive button → in-panel confirm overlay).
-- **Delete confirm**: an in-panel overlay (`absolute inset-0`, dimmed backdrop, centered card) — destructive icon, "Delete collection?", body naming the collection + request count, **Cancel** / **Delete** footer. Reads as part of the window, not a global modal.
+  - **TLS** ships on the Overview tab (`TlsBlock` in `CollectionOverview.tsx`), not on a Settings tab. The prototype Settings tab (TLS defaults + danger zone) is design-file only.
+- **Delete confirm** is `ConfirmDeleteDialog` (`src/features/catalog/CollectionTree.tsx`), an alert dialog, not an in-panel overlay. The prototype's in-panel "Delete collection?" card is design-file only.
 
 > `collection-overview.jsx` also contains a standalone `CollectionOverviewPanel` (an alternate single-/tabbed packaging used during exploration). The **shipping** path is `CollectionOverview` in `browser.jsx`, which reuses the building-block components (`COTabs`, `COBlock`, `CollectionTitle`, `DescriptionBlock`, `VariablesBlock`, `TlsBlock`, `AuthBlock`, `EnvVarField`, `MiniSelect`) exported from `collection-overview.jsx`.
 
 #### Server Overview (`ServerOverview` in `browser.jsx`)
-Shown in the `server` scenario. Fills the main area.
+Prototype screen. There is no Server Overview component under `src/`. Shown in the prototype's `server` scenario. Fills the main area of the design files.
 - **Header** (48px): server name + mono host + a reachability label (`Reachable` ok / `Slow` warn / `Unreachable` destructive) + a **Refresh** outline button + close ×.
 - **Tabs** (underline): **Overview · Authorization · Variables**.
   - **Overview** (`SO_Overview`): a one-line summary ("exposes N methods across M services over gRPC/HTTP"), two KV cards (Connection: Host / TLS / Protocol; Catalog: Services / Methods / Reflection), then a filterable method list grouped by service — each method row clickable to open it in the editor.
@@ -146,9 +150,9 @@ Shown in the `server` scenario. Fills the main area.
   - **Variables** (`SO_Vars`): a server-scoped variable table + "Add variable".
 
 #### Server browser (`ServerBrowser` in `browser.jsx`)
-Shown in the `browse` scenario.
+Prototype screen. There is no Server Browser component under `src/`. Shown in the prototype's `browse` scenario.
 - **Header** (48px): server name + host + (gRPC) a reflection summary chip + Update / settings / close.
-- **Filter row** (44px): a search input ("Filter N methods…"), a gRPC-only "Streaming" toggle (out of MVP scope), and a "shown of total" count.
+- **Filter row** (44px): a search input ("Filter N methods…"), a gRPC-only "Streaming" toggle (a control on this prototype screen only — do not read it as hiding method kind in the picker), and a "shown of total" count.
 - **Method list**: grouped by service; each row is a **checkbox** row (custom 14px check tile → `bg-primary` when checked, a 2px `bg-primary` left bar when selected) + method tag + name + `req → res` types.
 - **Selection action bar** (52px, bottom): "N selected" + Clear, a target-collection chip, and a primary **Add to collection** button (disabled at 0).
 
@@ -156,7 +160,7 @@ Shown in the `browse` scenario.
 
 #### Request pane (`RequestPanel`, `panels.jsx`)
 - Pane head (40px, `h-10`): underline tabs `[Body] [Metadata 3] [Auth bearer]` on the left + ghost icon buttons (Beautify / Word-wrap / Copy) on the right. Backdrop blur, semi-transparent bg.
-- **Body** tab: line-numbered JSON code view, mono 12.5px, syntax-highlighted via `--syntax-*` tokens (key=blue, string=green, number/bool/var=orange, punct=mid-gray). `{{vars}}` rendered in the number color. Editing sets the active tab's `dirty` flag.
+- **Body** tab: line-numbered JSON code view, mono 12.5px, syntax-highlighted via `--syntax-*` tokens (key=blue, string=green, number/bool/var=orange, punct=mid-gray). `{{vars}}` rendered in the number color. Editing an unbound draft sets `draftDirty` on `workflowStore`.
 - **Metadata** tab: a 3-column Key / Value / delete table; `{{vars}}` in values styled as numbers.
 - **Auth** tab: inline auth config (bearer token, etc).
 
@@ -172,9 +176,10 @@ Used for the pane heads, the Collection Overview, and the Server Overview.
 - **Active underline**: absolutely positioned `left-2 right-2 -bottom-px h-[1.5px] rounded-full bg-foreground`, sitting on top of the head's own `border-b`. No `TabsList` chrome / pill background.
 
 #### Tweaks panel
-A **design-time affordance**. Ship the values it produces (theme, accent, density, sidebar on/off, split orientation, fonts, dotted-bg) wired into real settings/prefs UI — **don't ship the panel itself**.
+A **design-time affordance**. **Don't ship the panel itself.** Do not add a theme toggle from it — the app stays dark (`src/main.tsx`). Sidebar and split direction already live in Settings (`src/features/settings/AppearancePane.tsx`).
 
 #### New request draft / Disconnected hero (`app.jsx`)
+Prototype copy. Shipped empty Focus is the one sentence in decision 1. `src/features/shell/Heroes.tsx` still contains this copy and nothing imports it.
 - **`NewRequestHero`** (`newServer`): centered `+` tile, "New request" title, one line — *"Type a server address in the bar above and hit Connect. Handshaker runs reflection and lists every method — no dialog, no setup."* — and a `↑ address bar · ↵ to connect` hint. **No "Recent addresses" list and no `.proto` copy** (both removed deliberately). If you add a reflection-failure path, that's where a `.proto`/descriptor fallback would go.
 - **`DisconnectedHero`** (`idle` / `connecting`): connecting shows a spinner + "Negotiating TLS…" + host; idle shows a "Disconnected" hero inviting reconnect or picking a method from the sidebar.
 
@@ -189,26 +194,26 @@ Both share `Dialog` / `DialogContent` from `shadcn.jsx`. Rules learned during it
 
 ## Interactions & behavior
 
-- **Tabs**: `+` (tab bar or sidebar) → new `newServer` draft tab. Click a tab to activate; middle-click or × to close. Closing a `dirty` tab → `CloseConfirm` (Save & close / Discard / Cancel). Closing the last tab replaces it with a fresh draft. Each tab keeps independent `selected` / `host` / `tls` / `scenario`.
-- **Connect / Disconnect**: address bar "Connect" → `connecting` → (fake ~850ms latency) → `connected`. Toggling TLS while connected → `idle`. From a draft, Connect (or **Enter** in the host field) runs reflection and would add the server. *Production: trigger gRPC reflection, populate the registry + tree.*
-- **Pick a method**: from the sidebar tree, the method picker, a Collection/Server Overview row. Sets the tab's `selected`, host, tls; loads the body template for `${svc}/${mth}` (HTTP keys use the path).
-- **Send**: primary button. Unary/HTTP → `sending` → `success` after ~750ms. *Production: until the call resolves.* (Streaming kinds map to the deferred `streaming` scenario — out of MVP.)
-- **Open a collection**: click the collection row → `collection` scenario → Collection Overview. **Open a server overview**: `server` scenario. **Browse a server**: `browse` scenario.
-- **Delete** (collection / folder / request): hover ⋯ or right-click → **Delete**. Empty folders auto-hide. *Production: delete from the collection store.* Collection delete uses an in-panel confirm.
+- **Opening a request** (prototype called this tabs): Ctrl/Cmd+N, or New request in the sidebar **+** menu, starts a new gRPC draft in Focus (decision 2). The **+** click itself only opens that menu. Opening another request replaces the current one. A dirty unbound draft confirms (decision 1). There is no tab bar, middle-click close, or per-tab scenario.
+- **Connect / Disconnect** (prototype only): address bar "Connect" → `connecting` → (fake ~850ms latency) → `connected`. Shipped reflection is decision 2, not this button.
+- **Pick a method**: from the sidebar, the method picker, or a Collection Overview row. Sets the Focus draft's service and method. Server Overview rows are prototype-only.
+- **Send**: primary button. Unary/HTTP → `sending` → `success` after ~750ms in the prototype. *Production: until the call resolves.* Streaming uses the timeline in decision 0 (Send/Cancel for server streams; Open / Send message / End stream / Cancel for client and bidi).
+- **Open a collection**: click the collection row → Collection Overview in the main area (`WorkflowApp.tsx`). **Server overview** and **browse** are prototype scenarios only (no such screens under `src/`).
+- **Delete** (collection / folder / request): hover ⋯ or right-click → **Delete**, then `ConfirmDeleteDialog`. Empty folders stay in the tree, and deleting a child does not remove its parent (decision above; `FolderNode.tsx`, `treeEdit.ts`).
 - **Inline edits**: collection title (Enter/Esc), collection description (Save/Cancel/Esc), variables table rows, env-var auth fields.
-- **Theme toggle / Env dropdown**: persist theme; env switch affects `{{var}}` substitution.
+- **Theme / env**: the prototype persists a theme toggle. The shipped app does not: `src/main.tsx` forces `dark`, and Settings has no theme control (`src/features/settings/AppearancePane.tsx`). The env dropdown still switches `{{var}}` substitution.
 - **Beautify / Wrap / Copy** in the request pane head: act on the body editor (no-ops in prototype).
 
 ### Animations / transitions
 - Tab underline: opacity 0↔1, `transition-opacity` (~150ms ease). Tab text: `transition-colors`.
-- Dialog / in-panel confirm: `fade-in` (.15s) backdrop + `zoom-in` (.15s, scale .96→1) card.
+- Prototype dialog animation: `fade-in` (.15s) backdrop + `zoom-in` (.15s, scale .96→1) card. Shipped delete confirm is `ConfirmDeleteDialog`, not an in-panel overlay.
 - Send / connect spinner: 0.8s linear infinite, 1.5px border, transparent top.
 - Dotted background glow: radial mask follows the cursor over the main area (`--mx`/`--my` CSS vars), `transition: opacity .25s`. Toggled by the `dots` tweak.
-- (Deferred) streaming dot pulse: 1.4s ease-in-out, opacity 1→.35→1.
+- Streaming status dot: 1.4s ease-in-out pulse. It ships as `.pulse-dot` (`src/styles/globals.css`, `animation: hs-pulse 1.4s ease-in-out infinite`) on the timeline footer and empty state (`src/features/stream/StreamView.tsx`). Do not drop it as deferred.
 
 ## State management
 
-Most state lives at `App` level (`useState` in the prototype — translate to your store of choice). **Per-request state is held in a `tabs[]` array**, one entry per open request:
+The prototype keeps per-request state in a `tabs[]` array. **Do not rebuild that.** Shipped state is one Focus draft on `workflowStore` (`src/features/workflow/store.ts`) plus a stream entry in `src/features/stream/streamStore.ts`. The table below is the prototype's shape.
 
 | Per-tab key   | Type                                  | Notes                                                         |
 |---------------|---------------------------------------|--------------------------------------------------------------|
@@ -219,7 +224,7 @@ Most state lives at `App` level (`useState` in the prototype — translate to yo
 | `scenario`    | enum (see table)                      | drives the main area for this tab                            |
 | `requestTab`  | `'body' \| 'metadata' \| 'auth'`      | request pane                                                 |
 | `responseTab` | `'body' \| 'trailers' \| 'headers'`   | response pane                                                |
-| `streamFrames`| array                                 | deferred (streaming, out of MVP)                             |
+| `streamFrames`| array                                 | Prototype only. Shipped messages live in the stream store.  |
 | `browseServerId` | string \| null                     | which server the browse/server overview targets             |
 | `dirty`       | boolean                               | unsaved edits → close confirm                                |
 
@@ -238,14 +243,16 @@ Production: replace the fake scenario timers (`setTimeout(... 750 / 850)`) with 
 
 ## Data shapes (`data.js`, `window.HS_DATA`)
 
-The model is a **server registry** + a **collections tree** that references it.
+Prototype fixtures. The shipped saved request is `SavedRequestIpc` in `src/ipc/bindings.ts` (a grpc template with `address_template`, `service`, and `method`, or an http template). Do not rebuild a separate server registry from this section.
+
+The prototype model is a **server registry** + a **collections tree** that references it.
 
 - **`servers[]`** — master registry. Each: `{ id, name, host, tls, dot, status: 'ok'|'slow'|'unreachable', proto: 'grpc'|'http', reflection: {services, methods}|null, services[] }`. A gRPC service is `{ name (FQN), short, methods[] }`; a gRPC method is `{ name, kind: 'unary'|'server'|'client'|'bidi', req, res }`. For HTTP servers, the single service has `short: ""` and methods are `{ name: '/path/{id}', verb: 'GET'|'POST'|'PATCH'|'PUT'|'DELETE', req, res }`.
 - **`collections[]`** — the **sidebar tree** (collections-first). Each node has a `type`:
   - `collection`: `{ type, id, name, description, variables: [{id,k,v}], tls: {enabled, skipVerify}, authByEnv: { <envName>: {type, …} }, children[] }`.
   - `folder`: `{ type, id, name, children[] }` (recursive).
   - `request`: `{ type, id, serverId, svc, mth, name? }` — references a registry method; `name` present = a user-saved request, absent = a bare pinned method. Target host is resolved from `serverId`.
-  - `authByEnv` value per env: `{ type: 'none'|'bearer'|'basic'|'apikey' }` plus `bearer:{tokenVar}` / `basic:{userVar,passVar}` / `apikey:{valueVar}` — **all values are env-variable NAMES**, not secrets. (`mtls` is a known type but **disabled** in the UI.)
+  - `authByEnv` in these fixtures is the prototype shape (`none` / `bearer` / `basic` / `apikey`, values as env-var names, `mtls` disabled). Shipped auth is decision 5: None, Bearer, API key, OAuth2. Do not rebuild Basic or a disabled Mutual TLS row from this fixture.
 - **`collection`** (singular) — a legacy single-collection fixture used by `ServerBrowser` / `ServerOverview` (target chip + "add to collection"). Distinct from `collections[]`.
 - **`environments[]`** — `{ name, color, host, vars }`.
 - **`bodies`** — map of `"Service/Method"` (or `"/http/path"`) → array of `{ ln: string }` editor rows.
@@ -287,7 +294,7 @@ Dark (`.dark`):
 ```
 --ok / --ok-foreground         green   (light 142 65% 38% · dark 142 50% 55%)
 --warn / --warn-foreground     amber   (light 38 80% 42%  · dark 38 70% 60%)
---stream / --stream-foreground blue    (light 200 65% 42% · dark 200 70% 65%)   ← streaming = out of MVP; token stays for kind dots/arrows
+--stream / --stream-foreground blue    (light 200 65% 42% · dark 200 70% 65%)   ← keep this token; streaming ships (decision 0)
 ```
 Use `--ok` for OK pills, `--destructive` for error pills, `--warn` for slow/skip-verify warnings. HTTP verb colors reuse these (GET=ok, POST=warn, PUT=stream, PATCH=purple-400, DELETE=destructive).
 
@@ -323,9 +330,9 @@ shadcn-style primitives present: `Button` (variants default/outline/ghost/second
 
 ## Files in this bundle
 - `Handshaker.html` — entry point. Tailwind Play config, shadcn HSL tokens (light + dark) + status tokens, script imports (load order: `data.js` → `icons` → `shadcn` → `tweaks-panel` → `sidebar` → `panels` → `modals` → `collection-overview` → `browser` → `app`).
-- `app.jsx` — App root, **multi-tab** state, `Titlebar`, `RequestTabs`, `CloseConfirm`, `ConnectionBar` (address bar), `NewRequestHero` / `DisconnectedHero`, `StateBar`, theme/font/accent effects, main-area router.
+- `app.jsx` — prototype App root (its own multi-tab state — not the shipped workspace), `Titlebar`, `RequestTabs`, `CloseConfirm`, `ConnectionBar` (address bar), `NewRequestHero` / `DisconnectedHero`, `StateBar`, theme/font/accent effects, main-area router.
 - `sidebar.jsx` — **collections-first** tree (`Sidebar`, `CollectionNode`, `FolderNode`, `RequestRow`), `RowMenu` / `RowActions` (hover-⋯ + right-click delete), type markers (`ReqTypeTag`/`MethodTag`/`MethodVerb`), `verbOf`.
-- `panels.jsx` — `RequestPanel`, `ResponsePanel`, `MethodPicker`, `UnderlineTabs`, `MetadataView`, `KVTable`, `CodeView`, `RespMeta`, tokenizer (+ deferred `StreamView`).
+- `panels.jsx` — `RequestPanel`, `ResponsePanel`, `MethodPicker`, `UnderlineTabs`, `MetadataView`, `KVTable`, `CodeView`, `RespMeta`, tokenizer, and the prototype `StreamView`. The shipped timeline is `src/features/stream/StreamView.tsx`.
 - `browser.jsx` — `ServerBrowser`, `ServerOverview` (+ `SO_*` tabs), and the shipping `CollectionOverview` (+ `CO_*` row helpers).
 - `collection-overview.jsx` — Collection-overview building blocks (`COTabs`, `COBlock`, `CollectionTitle`, `DescriptionBlock`, `VariablesBlock`, `TlsBlock`, `AuthBlock`, `EnvVarField`, `MiniSelect`) + the alternate `CollectionOverviewPanel`.
 - `modals.jsx` — Environment modal, Settings modal. (There is **no** AddServerModal — adding a server is the `newServer` draft.)
@@ -336,15 +343,15 @@ shadcn-style primitives present: `Button` (variants default/outline/ghost/second
 - `tweaks-panel.jsx` — design-time tweak controls (not shipping).
 
 ## Notes for the implementer
-- **Multi-tab is core.** Per-request state belongs to the tab, not the app. Closing a dirty tab must confirm.
-- **Adding a server is address-first** (a `newServer` draft) — there is **no Add-server dialog**. Don't reintroduce one unless asked.
-- **The sidebar is collections-first.** Don't model a server level in the tree; a request resolves its target from `serverId`. Collection/folder/request rows are deletable via hover **⋯** and right-click (single red **Delete**, opens at cursor, closes on outside-click / Esc / scroll).
-- **Auth references env-variable names, never raw secrets** — everywhere auth appears (Collection Overview, Server Overview). `mtls` is shown but disabled.
+- **Focus is the workspace.** One request in the main area. Do not add a request-tab bar. See decision 1.
+- **Adding a server is address-first** — there is **no Add-server dialog**. See decision 2. The sidebar **+** is a menu, not a draft button. Do not add a Connect button or a request-tab **+**.
+- **The sidebar is collections-first.** Don't model a server level in the tree. Empty folders stay visible, and delete does not remove an empty parent. Collection/folder/request rows are deletable via hover **⋯** and right-click; confirm with `ConfirmDeleteDialog`.
+- **Auth is None, Bearer, API key, or OAuth2.** Bearer and API key store an OS env-var name. The OAuth2 client secret is a `{{var}}` template, not an env-var name. There is no Mutual TLS row. See decision 5.
 - **Dialog sizing must use inline `style`** (width/height + viewport-bounded max), because the base `max-w-lg` beats utility `max-w-*` by source order. Settings height must stay constant across sections. Keep `text-foreground` + `border-border` on `DialogContent`.
 - The **address bar pattern** (TLS + host + method picker + Send in one row) and the **Linear/Vercel-style underline tabs** are load-bearing for the look. There is **no leading "/"** before the method picker — keep it gone.
 - The MethodPicker should be **searchable** and **keyboard-navigable** (arrows + Enter + Esc) in production; the prototype only wires the click path.
 - Keep the four semantic colors (`--ok / --warn / --destructive / --stream`) consistent wherever status surfaces (kind dots, HTTP verbs, pills, warnings).
-- **MVP = no streaming.** Don't surface streaming response panes, Stream pills, or the streaming filter result in shipped UI. The fixtures/tokens/arrows can stay dormant.
-- **No server color tags.** Don't reintroduce per-server colored dots on tabs or headers; selection accents use `--primary`. The only colored dot that stays is the **env** dot in the title bar.
-- **Don't ship the `StateBar`** (the floating bottom pill) or the **Tweaks panel** — both are design-review affordances. Ship the *values* the tweaks produce as real prefs.
+- **Streaming ships.** Do not hide the timeline, the kind badge, or the stream controls. See decision 0 and `docs/archive/2026-10-04-streaming-rpcs/`.
+- **Colored dots:** the env control is one of them, not the only one. See decision 6. Do not strip the stream, dirty, or update dots. The prototype per-server `dot` is not a shipped server color tag.
+- **Don't ship the `StateBar`** (the floating bottom pill) or the **Tweaks panel**. Do not add a theme toggle from the tweaks (decision 4).
 - The window chrome (`Titlebar`) is desktop-shell territory. On Tauri/Electron set `decorations: false` and reuse it; on web, relocate the env picker + utility buttons into your app shell rather than deleting them.
