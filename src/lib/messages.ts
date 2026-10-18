@@ -22,7 +22,8 @@ export const messages = {
       newWorkflow: "New workflow",
     },
     requestTabs: {
-      authInherited: "Auth is inherited from the service (configured in the service panel).",
+      authInherited:
+        "Auth is inherited from the service (configured in the service panel).",
     },
     tls: {
       // Tri-state address-bar lock. `override` is the per-request choice; `defaultTls`
@@ -37,7 +38,8 @@ export const messages = {
         override === null ? "TLS inherit" : override ? "TLS on" : "TLS off",
     },
     send: {
-      variableCycle: (chain: string[]) => `Variable cycle: ${chain.join(" → ")}`,
+      variableCycle: (chain: string[]) =>
+        `Variable cycle: ${chain.join(" → ")}`,
       unresolvedVariables: (names: string[]) =>
         `Unresolved variables: ${names.map((v) => `{{${v}}}`).join(", ")}`,
     },
@@ -47,18 +49,24 @@ export const messages = {
       cancelled: "Request cancelled",
       unresolvedVariable: (name: string) => `Unresolved variable: ${name}`,
       /** `stream_message` for a released store or a stale row (expanded timeline row). */
-      streamMessageNotFound: "Message no longer available — the stream was released",
+      streamMessageNotFound:
+        "Message no longer available — the stream was released",
       /** `stream_send` / `stream_half_close` on a call that is not open (not yet Opened,
        *  half-closed, ended or cancelled). */
       streamClosed: "Stream is not open — the message was not sent",
       /** `stream_save_messages` / `stream_assemble` on a released (or never opened) call. */
       streamNotFound: "Stream no longer available — it was released",
       /** `stream_assemble` for a field that is not a `bytes` candidate of the response type. */
-      streamFieldNotFound: "This field is not a bytes field of the response type",
+      streamFieldNotFound:
+        "This field is not a bytes field of the response type",
       /** The kind gate refused the call: `actual` is the contract's kind, `expected` the
        *  path it was called through. Kinds in human form (`methodKind.label`). */
-      kindMismatch: (service: string, method: string, expected: string, actual: string) =>
-        `${service}/${method} is ${actual} but was called as ${expected}`,
+      kindMismatch: (
+        service: string,
+        method: string,
+        expected: string,
+        actual: string,
+      ) => `${service}/${method} is ${actual} but was called as ${expected}`,
       /** The `kind_mismatch` face hint — the remedy only (the pinned message already names
        *  the method and both kinds). */
       kindMismatchHint: "Refresh reflection, then send again.",
@@ -72,7 +80,8 @@ export const messages = {
         timeout:
           "The server did not respond before the request deadline. Raise it in Settings → Network or check the server.",
         cancelled: "Request was cancelled.",
-        encode: "The request body could not be encoded for this method. Check the JSON against the contract.",
+        encode:
+          "The request body could not be encoded for this method. Check the JSON against the contract.",
         decode:
           "The server's response could not be decoded — the method's contract may be stale. Refresh reflection.",
         auth: "Authentication could not be prepared. Check the auth configuration and its variables.",
@@ -95,7 +104,8 @@ export const messages = {
     },
     toast: {
       alreadyInCollection: (name: string) => `Already in "${name}"`,
-      savedTo: (collection: string, folder: string) => `Saved to ${collection} / ${folder}`,
+      savedTo: (collection: string, folder: string) =>
+        `Saved to ${collection} / ${folder}`,
     },
   },
   catalog: {
@@ -116,9 +126,14 @@ export const messages = {
       title: "Import collections?",
       cancel: "Cancel",
       confirm: "Import",
-      body: (collections: number, environments: number, existing: number): string => {
+      body: (
+        collections: number,
+        environments: number,
+        existing: number,
+      ): string => {
         const collectionWord = collections === 1 ? "collection" : "collections";
-        const environmentWord = environments === 1 ? "environment" : "environments";
+        const environmentWord =
+          environments === 1 ? "environment" : "environments";
         const totals = `${collections} ${collectionWord} and ${environments} ${environmentWord} will be imported.`;
         const updated =
           existing > 0
@@ -138,7 +153,8 @@ export const messages = {
     },
     saveDialog: {
       /** Dialog heading — the two modes rename vs. save-as-new. */
-      title: (originBound: boolean): string => (originBound ? "Update request" : "Save request"),
+      title: (originBound: boolean): string =>
+        originBound ? "Update request" : "Save request",
       /** Screen-reader description of the dialog; the two modes offer different controls. */
       description: (originBound: boolean): string =>
         originBound
@@ -203,7 +219,8 @@ export const messages = {
         valueLabel: "Value",
         valuePlaceholder: "API_KEY_VAR",
         tokenUrl: "Token URL",
-        tokenUrlPlaceholder: "https://idp/realms/x/protocol/openid-connect/token",
+        tokenUrlPlaceholder:
+          "https://idp/realms/x/protocol/openid-connect/token",
         clientId: "Client ID",
         clientSecret: "Client secret",
         clientSecretPlaceholder: "{{secret}}",
@@ -224,7 +241,8 @@ export const messages = {
         /** Hint marking an environment name in the gating list that no longer exists (deleted/renamed). */
         envDeletedHint: "deleted",
         /** Native title on a dead env name; explains the strike-through and how to clean it. */
-        envDeletedTitle: "This environment no longer exists — uncheck to remove it from the list.",
+        envDeletedTitle:
+          "This environment no longer exists — uncheck to remove it from the list.",
         /** Default placeholder for the shared env-var field subcomponent. */
         envVarNamePlaceholder: "ENV_VAR_NAME",
         /** Footer hint; the `{{variables}}` sample stays a <code> element in the component. */
@@ -250,7 +268,8 @@ export const messages = {
         removeAria: "Remove link",
         reorderAria: "Reorder link",
         emptyTitle: "No links yet.",
-        emptyHint: "Grafana, logs or docs for the service this collection talks to.",
+        emptyHint:
+          "Grafana, logs or docs for the service this collection talks to.",
         openAria: "Open link",
         openHint: (url: string) => `Open ${url}`,
         openFailed: (url: string) => `Could not open ${url}`,
@@ -260,7 +279,8 @@ export const messages = {
         emptyUrl: "No URL set",
         editAria: "Edit links",
         dialogTitle: "Links",
-        dialogDesc: "External tooling for this collection — dashboards, logs, docs.",
+        dialogDesc:
+          "External tooling for this collection — dashboards, logs, docs.",
         done: "Done",
         overflowAria: (n: number) => `${n} more link${n === 1 ? "" : "s"}`,
         placement: {
@@ -274,7 +294,8 @@ export const messages = {
   },
   palette: {
     title: "Command palette",
-    description: "Search collections and saved requests by name, then open one.",
+    description:
+      "Search collections and saved requests by name, then open one.",
     searchFlat: "Search collections and requests…",
     searchScoped: (name: string) => `Search methods in ${name}…`,
     groupCollections: "Collections",
@@ -335,7 +356,8 @@ export const messages = {
     },
     empty: {
       awaitingFirstCall: "Awaiting first call",
-      awaitingFirstCallDesc: "Hit Send to invoke. Response body, trailers and timing will appear here.",
+      awaitingFirstCallDesc:
+        "Hit Send to invoke. Response body, trailers and timing will appear here.",
     },
     error: {
       noDetails: "No google.rpc details attached.",
@@ -355,7 +377,8 @@ export const messages = {
         other: "Request failed",
       },
       /** Shown when the fault kind has no specific hint. */
-      fallbackHint: "The request could not be completed. Check the address, port and TLS setting, then try again.",
+      fallbackHint:
+        "The request could not be completed. Check the address, port and TLS setting, then try again.",
       /** Label above the raw error text. */
       errorLabel: "Error",
     },
@@ -369,8 +392,10 @@ export const messages = {
       saved: "File saved",
       openFile: "Open file in the default application",
       openNamedFile: (name: string) => `Open ${name}`,
-      openFailed: "Couldn't open the file. It may have been moved or deleted, or no default application is available.",
-      revealFailed: "Couldn't show the file in its folder. It may have been moved or deleted.",
+      openFailed:
+        "Couldn't open the file. It may have been moved or deleted, or no default application is available.",
+      revealFailed:
+        "Couldn't show the file in its folder. It may have been moved or deleted.",
       failed: "Couldn't save",
     },
   },
@@ -381,13 +406,16 @@ export const messages = {
     },
     empty: {
       awaitingTitle: "Stream open — awaiting messages",
-      awaitingDesc: "Messages appear here as the server sends them, newest first.",
+      awaitingDesc:
+        "Messages appear here as the server sends them, newest first.",
       /** Two-way (client / bidi) call open, nothing sent or received yet. */
       sendTitle: "Stream open — send messages",
-      sendDesc: "Send message emits the current body as one message; End stream ends your side.",
+      sendDesc:
+        "Send message emits the current body as one message; End stream ends your side.",
       /** Two-way call after Half-close, nothing received yet. */
       halfClosedTitle: "Half-closed — waiting for the server",
-      halfClosedDesc: "Your side is closed; the server's messages and status appear here.",
+      halfClosedDesc:
+        "Your side is closed; the server's messages and status appear here.",
       /** Search matched no row (the rows are still there — clear the box). */
       noMatch: "No messages match",
     },
@@ -501,65 +529,107 @@ export const messages = {
       splitDirection: "Toggle split direction",
       /** Tooltip — reads as where a click will take the layout, not the current state. */
       splitDirectionTooltip: (split: "horizontal" | "vertical"): string =>
-        split === "horizontal" ? "Switch to left / right layout" : "Switch to top / bottom layout",
+        split === "horizontal"
+          ? "Switch to left / right layout"
+          : "Switch to top / bottom layout",
     },
   },
   envs: {
     editor: {
-      createTitle: "New environment",
-      editTitle: "Edit environment",
-      createDescription: "Create a new environment and define its variables.",
-      editDescription: "Rename the environment or edit its variables. Changes save automatically.",
+      title: "Environments",
+      description:
+        "Pick an environment to edit its name, color, and variables. Changes save automatically.",
+      listLabel: "Environments",
+      newEnvironmentAria: "New environment",
+      newEnvironmentRow: "New environment",
+      noEnvironments: "No environments",
+      noEnvironmentsHint: "Add an environment to get started.",
+      addEnvironment: "Add environment",
+      notSavedMark: "Not saved",
       nameLabel: "Environment name",
       namePlaceholder: "e.g. prod",
       nameEmpty: "Name is required",
       nameTaken: "An environment with this name already exists",
+      renameAria: "Rename environment",
+      applyRenameAria: "Apply name",
+      cancelRenameAria: "Cancel rename",
       colorAria: "Environment color",
-      switchAria: "Switch environment",
       closeAria: "Close",
+      variableCount: (total: number): string =>
+        total === 1 ? "1 variable" : `${total} variables`,
+      filterCount: (shown: number, total: number): string =>
+        `${shown} of ${total === 1 ? "1 variable" : `${total} variables`}`,
       searchAria: "Search keys",
       searchPlaceholder: "Search keys…",
       clearSearch: "Clear search",
-      count: (shown: number, total: number): string => {
-        const all = total === 1 ? "1 variable" : `${total} variables`;
-        return shown === total ? all : `${shown} of ${all}`;
-      },
-      sortAria: "Sort variables",
+      sortTrigger: (label: string): string => `Sort: ${label}`,
       sort: {
-        "key-asc": "Key: A to Z",
-        "key-desc": "Key: Z to A",
-        "added-newest": "Added: newest first",
-        "added-oldest": "Added: oldest first",
+        "name-asc": "Name A–Z",
+        "name-desc": "Name Z–A",
+        oldest: "Oldest first",
+        newest: "Newest first",
       },
-      keyHeader: "Key",
+      variableHeader: "Variable",
       valueHeader: "Value",
       actionsHeader: "Actions",
-      keyPlaceholder: "KEY",
-      valuePlaceholder: "value",
+      keyLabel: "Variable name",
+      keyPlaceholder: "VARIABLE_NAME",
+      valuePlaceholder: "Value",
+      emptyValue: "empty",
       addVariable: "Add variable",
-      deleteVariableAria: (key: string): string => `Delete variable ${key || "(unnamed)"}`,
+      commitDraftAria: "Add variable",
+      cancelDraftAria: "Cancel adding variable",
+      deleteVariableAria: (key: string): string =>
+        `Delete variable ${key || "(unnamed)"}`,
+      deleteVariableTooltip: "Delete variable",
+      emptyEnvTitle: "No variables yet",
+      emptyEnvHint: "Add a variable to get started.",
       noMatches: "No matching keys",
+      noMatchesHint: "Try another search or clear the filter.",
       keyEmpty: "Key is required",
       keyDuplicate: "Duplicate key",
       statusSaving: "Saving…",
-      statusSaved: "All changes saved",
+      statusSaved: "Saved",
       statusNotSaved: "Not saved",
       statusFixFields: "Fix the highlighted fields",
       saveFailed: "Couldn't write the environment file",
+      saveFailedKept: "Couldn't save changes. Your edits are kept here.",
+      deleteFailed: "Couldn't delete the environment",
       retry: "Retry",
-      deleteEnvironment: "Delete environment",
+      delete: "Delete",
+      deleteEnvironmentAria: "Delete environment",
       done: "Done",
       cancel: "Cancel",
       create: "Create",
-      deleted: (key: string): string => (key ? `Deleted ${key}` : "Deleted a variable"),
+      creating: "Creating…",
+      deleted: (key: string): string =>
+        key ? `${key} deleted` : "Variable deleted",
       undo: "Undo",
-      leaveFailedTitle: "Your last changes aren't saved",
-      leaveInvalidTitle: "Fix the highlighted fields to save",
+      dismissUndo: "Dismiss",
       discardNewTitle: "Discard this new environment?",
-      discardChanges: "Discard changes",
       discard: "Discard",
       keepEditing: "Keep editing",
-      cleanupFailed: "Couldn't remove a partly saved environment. Check the environment list.",
+      cleanupFailed:
+        "Couldn't remove a partly saved environment. Check the environment list.",
+      confirmDeleteTitle: (name: string): string => `Delete "${name}"?`,
+      confirmDeleteBody: (total: number): string =>
+        `This will delete the environment and its ${total === 1 ? "1 variable" : `${total} variables`}.`,
+      confirmDeleteAction: "Delete environment",
+      deleting: "Deleting…",
+    },
+    colors: {
+      gray: "Gray",
+      coral: "Coral",
+      orange: "Orange",
+      yellow: "Yellow",
+      green: "Green",
+      teal: "Teal",
+      cyan: "Cyan",
+      blue: "Blue",
+      indigo: "Indigo",
+      purple: "Purple",
+      pink: "Pink",
+      brown: "Brown",
     },
   },
   settings: {
@@ -576,7 +646,8 @@ export const messages = {
     history: {
       group: "Call history",
       confirmClear: "Confirm before clearing",
-      confirmClearHint: "Ask before Clear history deletes every recorded call on this device.",
+      confirmClearHint:
+        "Ask before Clear history deletes every recorded call on this device.",
     },
     network: {
       timeoutsGroup: "Timeouts",
@@ -587,7 +658,8 @@ export const messages = {
       seconds: "s",
       messageSizeGroup: "Message size",
       maxMessageSize: "Max message size",
-      maxMessageSizeHint: "Largest gRPC response accepted; bigger replies are rejected.",
+      maxMessageSizeHint:
+        "Largest gRPC response accepted; bigger replies are rejected.",
       unlimited: "Unlimited",
       unlimitedHint: "No limit — guards nothing against very large replies.",
     },
@@ -613,9 +685,16 @@ export const messages = {
         "Every recorded call is deleted from this device. This cannot be undone. Collections, environments, and saved requests stay.",
     },
     chip: { all: "All", ok: "OK", failed: "Failed" },
-    column: { time: "Time", method: "Method", status: "Status", elapsed: "Elapsed", address: "Address" },
+    column: {
+      time: "Time",
+      method: "Method",
+      status: "Status",
+      elapsed: "Elapsed",
+      address: "Address",
+    },
     row: {
-      openLabel: (method: string, time: string) => `Open ${method} from ${time}`,
+      openLabel: (method: string, time: string) =>
+        `Open ${method} from ${time}`,
       rerunLabel: (method: string) => `Re-run ${method}`,
     },
     status: { cancelled: "Cancelled" },
@@ -638,7 +717,8 @@ export const messages = {
       unavailable: "This call's details are no longer available.",
     },
     notice: {
-      originMissing: "The saved request this call came from no longer exists. It opened as an unsaved draft.",
+      originMissing:
+        "The saved request this call came from no longer exists. It opened as an unsaved draft.",
     },
     toast: {
       unavailable: "This call's details are no longer available.",
@@ -666,7 +746,8 @@ export const messages = {
       body: {
         empty: "Empty body",
         binary: "Binary body, not shown",
-        tooLarge: (limit: string) => `Body is over the ${limit} limit, not shown`,
+        tooLarge: (limit: string) =>
+          `Body is over the ${limit} limit, not shown`,
         omitted: "Body not kept in history",
       },
     },

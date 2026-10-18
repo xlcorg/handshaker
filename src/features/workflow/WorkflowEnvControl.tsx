@@ -1,12 +1,11 @@
 import { ChevronDown } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
-import { ConfirmDeleteEnvDialog } from "@/features/envs/ConfirmDeleteEnvDialog";
 import { EnvEditorDialog } from "@/features/envs/EnvEditorDialog";
 import { EnvSwitcherMenu } from "@/features/envs/EnvSwitcherMenu";
 import { bumpEnvRevision, useEnvRevision } from "@/features/envs/envRevision";
-import { colorHex, resolveColorKey } from "@/features/envs/colors";
+import { paintMarker } from "@/features/envs/colors";
 import { isEnvCycleHotkey, nextEnvName } from "@/features/envs/cycle";
 import { isEnvEditHotkey } from "@/features/envs/openEditor";
 import { envList, envReorder } from "@/ipc/client";
@@ -29,9 +28,7 @@ export function WorkflowEnvControl() {
   // so imported envs surface without a remount.
   const envRevision = useEnvRevision();
   const [envs, setEnvs] = useState<EnvironmentIpc[]>([]);
-  const [editor, setEditor] = useState<{ subject: string | null } | null>(null);
-  const envSnapshot = useRef<EnvironmentIpc[] | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [editor, setEditor] = useState<{ opened: string | null } | null>(null);
 
   const refreshEnvs = useCallback(async () => {
     try {
@@ -81,7 +78,10 @@ export function WorkflowEnvControl() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.repeat || !isEnvCycleHotkey(e)) return;
-      const next = nextEnvName(envs.map((x) => x.name), activeEnv);
+      const next = nextEnvName(
+        envs.map((x) => x.name),
+        activeEnv,
+      );
       if (next === null) return; // ноль env — не глотаем клавишу (Monaco обработает)
       e.preventDefault();
       e.stopPropagation();
@@ -100,7 +100,7 @@ export function WorkflowEnvControl() {
       e.preventDefault();
       e.stopPropagation();
       if (editor !== null) return;
-      setEditor({ subject: activeEnv });
+      setEditor({ opened: activeEnv });
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
@@ -119,68 +119,64 @@ export function WorkflowEnvControl() {
               <span
                 aria-hidden
                 className="size-2 shrink-0 rounded-full"
-                style={{ backgroundColor: colorHex(resolveColorKey(activeEnvObj ?? { name: activeEnv, color: null })) }}
+                style={{
+                  backgroundColor: paintMarker(
+                    activeEnvObj?.color ?? null,
+                    activeEnv,
+                  ).paint,
+                }}
               />
             )}
-            <span className="max-w-[180px] truncate text-foreground">{label}</span>
+            <span className="max-w-[180px] truncate text-foreground">
+              {label}
+            </span>
             <ChevronDown className="size-3" aria-hidden />
           </button>
         }
         onActiveSet={(next) => workflowStore.setWorkflowEnv(next)}
-        onEditEnv={(name) => setEditor({ subject: name })}
-        onNewEnv={() => setEditor({ subject: null })}
+        onEditEnv={(name) => setEditor({ opened: name })}
+        onNewEnv={() => setEditor({ opened: null })}
         onReorder={handleReorder}
       />
       {editor && (
         <EnvEditorDialog
-          key={editor.subject ?? "__new__"}
-          subject={editor.subject}
+          opened={editor.opened}
           envs={envs}
           onOptimistic={(env, previousName) => {
-            setEnvs((prev) => {
-              if (envSnapshot.current === null) envSnapshot.current = prev;
-              const at = prev.findIndex((item) => item.name === previousName);
-              if (at < 0) return [...prev, env];
-              const next = prev.slice();
-              next[at] = env;
-              return next;
-            });
+            setEnvs((prev) => replaceEnv(prev, previousName, env));
           }}
-          onReverted={() => {
-            const snapshot = envSnapshot.current;
-            envSnapshot.current = null;
-            if (snapshot) setEnvs(snapshot);
-            else void refreshEnvs();
+          onReverted={(currentName, env) => {
+            setEnvs((prev) => replaceEnv(prev, currentName, env));
             toast.error(messages.envs.editor.saveFailed);
           }}
           onStored={async ({ activated }) => {
-            envSnapshot.current = null;
             await refreshEnvs();
             // Env contents changed — re-resolve any preview bound to the active env
             // (e.g. the collection-variables editor, which resolves via the backend).
             bumpEnvRevision();
             if (activated !== null) workflowStore.setWorkflowEnv(activated);
           }}
-          onLeave={(outcome) => {
-            if (outcome.kind === "switched") setEditor({ subject: outcome.to });
-            else if (outcome.kind === "deleteRequested") {
-              setEditor(null);
-              setDeleteTarget(outcome.name);
-            } else setEditor(null);
+          onDeleted={async ({ name }) => {
+            await refreshEnvs();
+            bumpEnvRevision();
+            if (workflowStore.activeWorkflow().envName === name)
+              workflowStore.setWorkflowEnv(null);
           }}
+          onClosed={() => setEditor(null)}
         />
       )}
-      <ConfirmDeleteEnvDialog
-        target={deleteTarget}
-        activeEnv={activeEnv}
-        onOpenChange={(open) => {
-          if (!open) setDeleteTarget(null);
-        }}
-        onDeleted={async (_name, activeChangedToNull) => {
-          await refreshEnvs();
-          if (activeChangedToNull) workflowStore.setWorkflowEnv(null);
-        }}
-      />
     </>
   );
+}
+
+function replaceEnv(
+  envs: readonly EnvironmentIpc[],
+  name: string,
+  env: EnvironmentIpc,
+): EnvironmentIpc[] {
+  const at = envs.findIndex((item) => item.name === name);
+  if (at < 0) return [...envs, env];
+  const next = envs.slice();
+  next[at] = env;
+  return next;
 }
