@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { useEditBuffer } from "@/features/edit/useEditBuffer";
 import { Layers, X, AlignLeft, Lock, KeyRound, Braces, Bookmark, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip } from "@/components/ui/tooltip";
@@ -81,15 +82,10 @@ export interface CollectionOverviewProps {
 /** Main-area collection panel: Overview / Authorization / Variables (spec §8, single-auth). */
 export function CollectionOverview({ collection, onChanged, onSelectRequest, onClose }: CollectionOverviewProps) {
   const [tab, setTab] = useState("overview");
-  const [varRows, setVarRows] = useState<VarRow[]>(() => entriesToRows(collection.variables));
-  // Re-seed the variable buffer only when the collection identity changes, so a persist→reload
-  // of the SAME collection doesn't clobber an in-progress edit.
-  const [linkRows, setLinkRows] = useState<LinkRow[]>(() => linksToRows(collection.links));
-  useEffect(() => {
-    setVarRows(entriesToRows(collection.variables));
-    setLinkRows(linksToRows(collection.links));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collection.id]);
+  // Reseed variable and link rows only when the collection identity changes, so a
+  // persist→reload of the same collection does not clobber an in-progress edit.
+  const [varRows, setVarRows] = useEditBuffer(collection.id, collection.variables, entriesToRows);
+  const [linkRows, setLinkRows] = useEditBuffer(collection.id, collection.links, linksToRows);
 
   const hits = useMemo(() => flattenRequests([collection]), [collection]);
   const total = hits.length;

@@ -130,8 +130,9 @@ describe("SavedAuthEditor", () => {
     );
     // The default header seeds empty (placeholder); type a custom value into it.
     fireEvent.change(screen.getByPlaceholderText(m.headerNamePlaceholderApiKey), { target: { value: "my-header" } });
-    // Same collection re-renders with the stale (pre-edit) value — the buffer must win.
-    rerender(<SavedAuthEditor value={value} onChange={onChange} seedKey="col-1" />);
+    // Same collection, new object: the reload echo. The buffer must win.
+    // The hook-level lock is useEditBuffer.test.ts (4b09613).
+    rerender(<SavedAuthEditor value={{ ...value }} onChange={onChange} seedKey="col-1" />);
     await act(async () => {});
     expect(screen.getByDisplayValue("my-header")).toBeInTheDocument();
   });

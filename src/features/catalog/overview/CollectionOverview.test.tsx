@@ -124,6 +124,35 @@ describe("CollectionOverview", () => {
     expect(ipc.collectionSetVariables).toHaveBeenCalledWith("c1", { base: "y" });
   });
 
+  it("a stale reload of the same collection does not clobber a variable edit", () => {
+    const view = r(<CollectionOverview {...props()} />);
+    fireEvent.click(screen.getByText("Variables"));
+    fireEvent.change(screen.getByDisplayValue("x"), { target: { value: "edited" } });
+    view.rerender(
+      <TooltipProvider>
+        <CollectionOverview {...props({ collection: collection({ variables: { base: "x" } }) })} />
+      </TooltipProvider>,
+    );
+    expect(screen.getByDisplayValue("edited")).toBeInTheDocument();
+  });
+
+  it("switching collections reseeds variable rows", () => {
+    const view = r(<CollectionOverview {...props()} />);
+    fireEvent.click(screen.getByText("Variables"));
+    fireEvent.change(screen.getByDisplayValue("x"), { target: { value: "edited" } });
+    view.rerender(
+      <TooltipProvider>
+        <CollectionOverview
+          {...props({
+            collection: collection({ id: "c2", name: "Other", variables: { other: "z" } }),
+          })}
+        />
+      </TooltipProvider>,
+    );
+    expect(screen.getByDisplayValue("z")).toBeInTheDocument();
+    expect(screen.queryByDisplayValue("edited")).toBeNull();
+  });
+
   it("highlights a {{var}} value inline and shows its resolved value", async () => {
     vi.mocked(ipc.varsResolve).mockResolvedValue({
       resolved: "https://api.example.com",
@@ -207,6 +236,29 @@ describe("CollectionOverview", () => {
           links: [{ name: "Grafana", url: "https://grafana.example" }],
         }),
       );
+    });
+
+    it("a stale reload of the same collection does not clobber a link edit", () => {
+      const links = [{ name: "Grafana", url: "https://logs.example" }];
+      const view = r(<CollectionOverview {...props({ collection: collection({ links }) })} />);
+      fireEvent.click(screen.getByLabelText("Edit links"));
+      const dialog = screen.getByRole("dialog");
+      fireEvent.change(within(dialog).getByLabelText("link name"), {
+        target: { value: "Dashboards" },
+      });
+      view.rerender(
+        <TooltipProvider>
+          <CollectionOverview
+            {...props({
+              collection: collection({
+                links: [{ name: "Grafana", url: "https://logs.example" }],
+              }),
+            })}
+          />
+        </TooltipProvider>,
+      );
+      expect(screen.getAllByText("Dashboards").length).toBeGreaterThan(0);
+      expect(screen.queryByText("Grafana")).toBeNull();
     });
 
     it("editing a link's name in the dialog persists the whole list, order kept", () => {

@@ -246,6 +246,20 @@ describe("Escape routing", () => {
 });
 
 describe("add variable row", () => {
+  it("keeps the empty row id stable across keystrokes", () => {
+    const opened = run(initEditor(prod, envs), { type: "addRow" });
+    const id = opened.state.adding?.id;
+    expect(id).toBeTruthy();
+    const typed = run(
+      opened.state,
+      { type: "typeDraft", part: "key", text: "T" },
+      { type: "typeDraft", part: "key", text: "TO" },
+      { type: "typeDraft", part: "value", text: "1" },
+    );
+    expect(typed.state.adding?.id).toBe(id);
+    expect(typed.state.adding).toMatchObject({ key: "TO", value: "1" });
+  });
+
   it("stays out of the variables until a non-empty key commits", () => {
     const start = initEditor(prod, envs);
     const added = run(

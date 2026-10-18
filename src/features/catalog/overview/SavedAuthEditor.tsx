@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useEditBuffer } from "@/features/edit/useEditBuffer";
 import { Copy, Key } from "lucide-react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { toast } from "sonner";
@@ -70,14 +71,10 @@ function msg(e: unknown): string {
 }
 
 export function SavedAuthEditor({ value, onChange, seedKey, resolver, resolveKey, variables }: SavedAuthEditorProps) {
-  // Local edit buffer, mirroring the sibling Variables/Links blocks: normalization (trim,
-  // empty→default in formToConfig) happens only at persist time and never echoes back into
-  // the live input. Re-seed only when the collection identity changes.
-  const [form, setForm] = useState<AuthForm>(() => configToForm(value));
-  useEffect(() => {
-    setForm(configToForm(value));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seedKey]);
+  // Normalization (trim, empty→default in formToConfig) happens only at persist time.
+  // useEditBuffer reseeds when the collection identity changes, not when a reload
+  // echoes a new server value for the same collection.
+  const [form, setForm] = useEditBuffer(seedKey ?? "", value, configToForm);
   const patch = (next: Partial<AuthForm>) => {
     const nextForm = { ...form, ...next };
     setForm(nextForm);
