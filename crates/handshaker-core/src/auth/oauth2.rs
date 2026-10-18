@@ -18,17 +18,62 @@ const DEFAULT_EXPIRES_IN_SECS: u64 = 300;
 /// `u32` so there is no truncation surprise downstream.
 const MAX_EXPIRES_IN_SECS: u64 = u32::MAX as u64;
 
+/// Lifetime of an OAuth2 access token.
+///
+/// The only parse of the token `expires_in` field. Fractional, overflow, and
+/// negative values all fail or clamp here. Callers see `ExpiresIn`, not `i64`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ExpiresIn {
+    secs: u64,
+}
+
+impl ExpiresIn {
+    /// Read `expires_in` from a token-endpoint JSON body.
+    ///
+    /// Missing or JSON null defaults to 300 seconds. A non-number is an auth error.
+    pub fn from_token_json(value: &serde_json::Value) -> Result<Self, CoreError> {
+        let Some(field) = value.get("expires_in").filter(|v| !v.is_null()) else {
+            return Ok(Self { secs: DEFAULT_EXPIRES_IN_SECS });
+        };
+        let number = field.as_number().ok_or_else(|| {
+            CoreError::Auth("oauth2 token response expires_in is not a number".into())
+        })?;
+        Ok(Self { secs: clamped_secs(number) })
+    }
+
+    /// Whole seconds, already clamped to `u32::MAX`.
+    pub fn secs(self) -> u64 {
+        self.secs
+    }
+
+    /// IPC lifetime. Lossless because `secs` never exceeds `u32::MAX`.
+    pub fn as_u32(self) -> u32 {
+        u32::try_from(self.secs).unwrap_or(u32::MAX)
+    }
+}
+
+/// Interpret the JSON number. `as_f64`, not `as_u64`: serde_json stores `1800.0`
+/// as a float and `as_u64` returns `None` (`d5b88f0`). `u32::MAX` is exact in
+/// `f64`, so kept lifetimes are exact and anything larger clamps (`3932c5c`).
+/// Negative values clamp to 0.
+fn clamped_secs(number: &serde_json::Number) -> u64 {
+    let Some(f) = number.as_f64() else {
+        return 0;
+    };
+    if f.is_nan() || f < 0.0 {
+        return 0;
+    }
+    if f >= MAX_EXPIRES_IN_SECS as f64 {
+        return MAX_EXPIRES_IN_SECS;
+    }
+    f as u64
+}
+
 /// Parsed, validated token-endpoint response.
 #[derive(Debug)]
 pub struct TokenResponse {
     pub access_token: String,
-    pub expires_in_secs: u64,
-}
-
-#[derive(Deserialize)]
-struct RawTokenResponse {
-    access_token: Option<String>,
-    expires_in: Option<f64>,
+    pub expires_in: ExpiresIn,
 }
 
 #[derive(Deserialize)]
@@ -70,18 +115,13 @@ fn parse_token_response(status: u16, body: &str) -> Result<TokenResponse, CoreEr
             "oauth2 token request failed ({status}): {detail}"
         )));
     }
-    let raw: RawTokenResponse = serde_json::from_str(body)
+    let value: serde_json::Value = serde_json::from_str(body)
         .map_err(|e| CoreError::Auth(format!("oauth2 token response parse error: {e}")))?;
-    let access_token = raw
-        .access_token
-        .ok_or_else(|| CoreError::Auth("oauth2 token response missing access_token".into()))?;
-    Ok(TokenResponse {
-        access_token,
-        expires_in_secs: raw
-            .expires_in
-            .map(|v| (v as u64).min(MAX_EXPIRES_IN_SECS))
-            .unwrap_or(DEFAULT_EXPIRES_IN_SECS),
-    })
+    let access_token = match value.get("access_token") {
+        Some(serde_json::Value::String(token)) => token.clone(),
+        _ => return Err(CoreError::Auth("oauth2 token response missing access_token".into())),
+    };
+    Ok(TokenResponse { access_token, expires_in: ExpiresIn::from_token_json(&value)? })
 }
 
 /// Skew subtracted from expiry — a token within this window of expiring is refetched.
@@ -224,7 +264,7 @@ impl Oauth2TokenProvider {
     }
 
     fn store(&self, key: CacheKey, resp: TokenResponse) {
-        let expires_at = Instant::now() + Duration::from_secs(resp.expires_in_secs);
+        let expires_at = Instant::now() + Duration::from_secs(resp.expires_in.secs());
         self.cache.lock().expect("token cache poisoned").put(
             key,
             CachedToken { access_token: resp.access_token, expires_at },
@@ -319,13 +359,13 @@ mod tests {
         let body = r#"{"access_token":"tok","expires_in":1800,"token_type":"Bearer"}"#;
         let r = parse_token_response(200, body).unwrap();
         assert_eq!(r.access_token, "tok");
-        assert_eq!(r.expires_in_secs, 1800);
+        assert_eq!(r.expires_in.secs(), 1800);
     }
 
     #[test]
     fn parse_ok_defaults_missing_expiry_to_300() {
         let r = parse_token_response(200, r#"{"access_token":"tok"}"#).unwrap();
-        assert_eq!(r.expires_in_secs, 300);
+        assert_eq!(r.expires_in.secs(), 300);
     }
 
     #[test]
@@ -346,7 +386,7 @@ mod tests {
         // Some IdPs emit expires_in as a JSON float; truncate to whole seconds.
         let r = parse_token_response(200, r#"{"access_token":"tok","expires_in":1800.0}"#).unwrap();
         assert_eq!(r.access_token, "tok");
-        assert_eq!(r.expires_in_secs, 1800);
+        assert_eq!(r.expires_in.secs(), 1800);
     }
 
     #[test]
@@ -354,7 +394,34 @@ mod tests {
         // A buggy/hostile IdP returning a huge expires_in (here 1e20) would, uncapped,
         // saturate to u64::MAX and later overflow `Instant + Duration` → panic. Clamp it.
         let r = parse_token_response(200, r#"{"access_token":"tok","expires_in":1e20}"#).unwrap();
-        assert_eq!(r.expires_in_secs, u32::MAX as u64);
+        assert_eq!(r.expires_in.secs(), u32::MAX as u64);
+    }
+
+    #[test]
+    fn expires_in_from_token_json_accepts_fractional_body() {
+        // d5b88f0: some IdPs emit expires_in as a JSON float. `Number::as_u64`
+        // returns None for `1800.0`, so this test fails if that path runs first.
+        let body: serde_json::Value =
+            serde_json::from_str(r#"{"access_token":"tok","expires_in":1800.0}"#).unwrap();
+        let expires = ExpiresIn::from_token_json(&body).unwrap();
+        assert_eq!(expires.secs(), 1800);
+    }
+
+    #[test]
+    fn expires_in_from_token_json_clamps_overflowing_integer() {
+        // 3932c5c: `1e20` saturates and would overflow `Instant + Duration`.
+        let body: serde_json::Value =
+            serde_json::from_str(r#"{"access_token":"tok","expires_in":1e20}"#).unwrap();
+        let expires = ExpiresIn::from_token_json(&body).unwrap();
+        assert_eq!(expires.secs(), u32::MAX as u64);
+    }
+
+    #[test]
+    fn expires_in_from_token_json_clamps_negative() {
+        let body: serde_json::Value =
+            serde_json::from_str(r#"{"access_token":"tok","expires_in":-15}"#).unwrap();
+        let expires = ExpiresIn::from_token_json(&body).unwrap();
+        assert_eq!(expires.secs(), 0);
     }
 
     #[test]
@@ -462,7 +529,7 @@ mod tests {
         let provider = Oauth2TokenProvider::new();
         let cfg = cfg_at(format!("{}/token", server.uri()));
         let resp = provider.force_fetch(&cfg).await.unwrap();
-        assert_eq!(resp.expires_in_secs, 120);
+        assert_eq!(resp.expires_in.secs(), 120);
         // The raw token comes back too (the UI shows/copies it on "Get token").
         assert_eq!(resp.access_token, "live-tok");
         // Now cached: header_for serves it without another request.
@@ -506,7 +573,7 @@ mod tests {
         let provider = Oauth2TokenProvider::new();
         let cfg = cfg_at(format!("{}/token", server.uri()));
         let resp = provider.force_fetch(&cfg).await.unwrap();
-        assert_eq!(resp.expires_in_secs, u32::MAX as u64);
+        assert_eq!(resp.expires_in.secs(), u32::MAX as u64);
     }
 
     #[tokio::test]

@@ -35,7 +35,7 @@ impl AppState {
                 let resp = self.oauth2_provider.force_fetch(&c).await?;
                 Ok(OAuth2TokenInfoIpc {
                     access_token: resp.access_token,
-                    expires_in_secs: resp.expires_in_secs as u32,
+                    expires_in_secs: resp.expires_in.as_u32(),
                 })
             }
             _ => Err(CoreError::InvalidTarget(
