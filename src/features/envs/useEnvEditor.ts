@@ -5,6 +5,7 @@ import {
   useReducer,
   useRef,
   useState,
+  useSyncExternalStore,
   type FocusEvent,
   type KeyboardEvent,
   type RefObject,
@@ -16,285 +17,685 @@ import type { EnvironmentIpc, ResolutionReportIpc } from "@/ipc/bindings";
 import { ipc } from "@/ipc/client";
 import { messages } from "@/lib/messages";
 
-import { resolveColorKey } from "./colors";
-import { colorKey, storedName, type EnvGoal, type EnvName, type EnvSummary, type OpenEnv, type Variable } from "./envDraft";
+import { paintMarker } from "./colors";
+import {
+  colorKey,
+  storedName,
+  type EnvGoal,
+  type EnvName,
+  type EnvSummary,
+  type OpenEnv,
+  type Variable,
+} from "./envDraft";
 import {
   editorStep,
+  escapeIntent,
   fieldAttr,
   initEditor,
+  resumeEditor,
   selectView,
-  type EditorAction,
-  type EditorIntent,
+  settleStep,
+  type Cleanup,
+  type Destination,
   type EditorState,
   type EditorView,
   type FocusTarget,
   type LeaveOutcome,
+  type PaneAction,
+  type PaneContext,
+  type PaneEffect,
+  type PaneIntent,
+  type Step,
+  type Subject,
 } from "./envEditor";
-import { syncEnv, type SyncOutcome } from "./envSync";
-import { queueStatus, type Rev } from "./saveQueue";
+import {
+  initSession,
+  sessionStep,
+  type SessionCommand,
+  type SessionCore,
+  type SessionEvent,
+  type SessionIntent,
+} from "./envSession";
+import {
+  deleteEnvironment,
+  syncEnv,
+  type Footprint,
+  type SyncOutcome,
+} from "./envSync";
 import { isFindHotkey } from "./findHotkey";
-
-export { PALETTE, fieldAttr } from "./envEditor";
-export type { EditorIntent, EditorView, LeaveOutcome, LeavePrompt, VisibleRow } from "./envEditor";
-export type { SaveStatus } from "./saveQueue";
-export { SORT_MODES, type SortMode } from "./varView";
+import {
+  attachClock,
+  nextQuietWake,
+  observeClock,
+  quietStatus,
+  type QuietClock,
+  type QuietStatus,
+  type Rev,
+  type SaveFailure,
+  type SaveQueue,
+} from "./saveQueue";
+import type { SortMode } from "./varView";
 
 export const ENV_AUTOSAVE_DELAY_MS = 500;
 
 export interface UseEnvEditorProps {
-  readonly subject: string | null;
+  /** Read once. Afterwards the session owns which environment is shown. Null opens create mode. */
+  readonly opened: string | null;
   readonly envs: readonly EnvironmentIpc[];
   readonly onStored: (event: { readonly activated: EnvName | null }) => void;
-  readonly onLeave: (outcome: LeaveOutcome) => void;
+  readonly onDeleted: (event: { readonly name: EnvName }) => void;
+  readonly onClosed: () => void;
   readonly onOptimistic?: (env: EnvironmentIpc, previousName: string) => void;
-  readonly onReverted?: () => void;
+  readonly onReverted?: (currentName: string, env: EnvironmentIpc) => void;
+}
+
+export type EditorIntent = PaneIntent | SessionIntent;
+
+export interface EnvListRow {
+  readonly name: EnvName;
+  readonly paint: string;
+  readonly selected: boolean;
+  readonly notSaved: boolean;
+}
+
+export interface EnvListView {
+  readonly rows: readonly EnvListRow[];
+  readonly draft: { readonly label: string; readonly paint: string } | null;
+  readonly inert: boolean;
+}
+
+export interface ConfirmView {
+  readonly name: EnvName;
+  readonly variables: number;
+  readonly phase: "asking" | "deleting";
+  readonly ready: boolean;
+  readonly error: SaveFailure | null;
 }
 
 export interface EnvEditorHandle {
-  readonly view: EditorView;
+  readonly paneKey: number;
+  readonly sort: SortMode;
+  readonly list: EnvListView;
+  readonly pane: EditorView | null;
+  readonly confirm: ConfirmView | null;
   readonly dispatch: (intent: EditorIntent) => void;
+  readonly onOpenChange: (open: boolean) => void;
+  readonly contentProps: {
+    readonly onOpenAutoFocus: (e: Event) => void;
+    readonly onEscapeKeyDown: (e: globalThis.KeyboardEvent) => void;
+    readonly onKeyDown: (e: KeyboardEvent<HTMLElement>) => void;
+  };
+  readonly contentRef: RefObject<HTMLDivElement>;
   readonly regionProps: {
     readonly tabIndex: -1;
     readonly onFocus: () => void;
     readonly onBlur: (e: FocusEvent<HTMLElement>) => void;
   };
-  readonly contentRef: RefObject<HTMLDivElement>;
-  readonly onOpenAutoFocus: (e: Event) => void;
-  readonly onKeyDown: (e: KeyboardEvent<HTMLElement>) => void;
   readonly resolveRow: (value: string) => Promise<ResolutionReportIpc>;
   readonly resolveKey: string;
 }
 
-type SaveLane = {
-  state: EditorState;
-  notify: ((state: EditorState) => void) | null;
-  onStored: UseEnvEditorProps["onStored"];
-  onReverted?: () => void;
-};
+interface LaneSink {
+  readonly ctx: () => PaneContext;
+  readonly run: (effects: readonly PaneEffect[]) => void;
+}
 
-const saveLanes = new Map<string, SaveLane>();
+interface LaneHooks {
+  readonly onStored: UseEnvEditorProps["onStored"];
+  readonly onReverted: (currentName: string, env: EnvironmentIpc) => void;
+}
+
+interface EnvLane {
+  state: EditorState;
+  clock: QuietClock;
+  sink: LaneSink | null;
+  hooks: LaneHooks;
+}
+
+const lanes = new Map<EnvName, EnvLane>();
+const listeners = new Set<() => void>();
+let mountedSessions = 0;
+let failedSnapshot: ReadonlySet<EnvName> = new Set();
 
 export function resetEnvSaveLanes(): void {
-  saveLanes.clear();
+  lanes.clear();
+  mountedSessions = 0;
+  failedSnapshot = new Set();
 }
 
-function environmentOf(goal: EnvGoal): EnvironmentIpc {
-  return { name: goal.name, color: goal.color, variables: Object.fromEntries(goal.variables) };
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
 }
 
-function remember(state: EditorState, hooks: Pick<SaveLane, "onStored" | "onReverted">): void {
-  if (state.footprint.kind !== "stored") return;
-  const lane = saveLanes.get(state.footprint.name);
-  if (lane) {
-    lane.state = state;
-    lane.onStored = hooks.onStored;
-    lane.onReverted = hooks.onReverted;
+function failedOffScreen(): ReadonlySet<EnvName> {
+  return failedSnapshot;
+}
+
+function emit(): void {
+  const failed = new Set<EnvName>();
+  for (const [name, lane] of lanes)
+    if (lane.sink === null && lane.state.save.failure) failed.add(name);
+  if (
+    failed.size === failedSnapshot.size &&
+    [...failed].every((name) => failedSnapshot.has(name))
+  )
     return;
-  }
-  saveLanes.set(state.footprint.name, { state, notify: null, ...hooks });
+  failedSnapshot = failed;
+  for (const listener of listeners) listener();
 }
 
-function continueDetached(name: string, rev: Rev, outcome: SyncOutcome): void {
-  const lane = saveLanes.get(name);
-  if (!lane) return;
-  const step = editorStep(lane.state, { type: "syncSettled", rev, outcome });
+function storedNameOf(fp: Footprint): EnvName | null {
+  return fp.kind === "stored" ? fp.name : null;
+}
+
+function isIdle(q: SaveQueue<EnvGoal>): boolean {
+  return q.inFlight === null && !q.sendOnSettle && !q.timer;
+}
+
+function rekey(lane: EnvLane, before: Footprint): void {
+  const was = storedNameOf(before);
+  const now = storedNameOf(lane.state.footprint);
+  if (was === now) return;
+  if (was !== null && lanes.get(was) === lane) lanes.delete(was);
+  if (now !== null) lanes.set(now, lane);
+}
+
+function advance(lane: EnvLane, step: Step): void {
+  const before = lane.state.footprint;
   lane.state = step.state;
-  lane.notify?.(step.state);
+  lane.clock = observeClock(lane.clock, step.state.save, Date.now());
+  rekey(lane, before);
+  const pane: PaneEffect[] = [];
   for (const effect of step.effects) {
-    if (effect.type === "sync" && effect.footprint.kind === "stored") {
-      const nextName = effect.footprint.name;
-      void syncEnv(effect.goal, effect.footprint).then((next) => continueDetached(nextName, effect.rev, next));
-    } else if (effect.type === "stored") lane.onStored({ activated: effect.activated });
+    switch (effect.type) {
+      case "sync": {
+        const { rev, goal, footprint } = effect;
+        void syncEnv(goal, footprint).then((outcome) =>
+          settle(lane, rev, outcome),
+        );
+        break;
+      }
+      case "stored":
+        lane.hooks.onStored({ activated: effect.activated });
+        break;
+      default:
+        pane.push(effect);
+    }
   }
-  const idle = !step.state.save.inFlight && !step.state.save.sendOnSettle;
-  if (!outcome.ok && idle) {
-    lane.onReverted?.();
-    saveLanes.delete(name);
-    return;
-  }
-  if (outcome.ok && queueStatus(step.state.save).kind === "saved" && lane.notify === null) saveLanes.delete(name);
+  lane.sink?.run(pane);
+  retire(lane);
+  emit();
 }
 
-export function useEnvEditor({ subject, envs, onStored, onLeave, onOptimistic, onReverted }: UseEnvEditorProps): EnvEditorHandle {
-  const callbacks = useRef({ onStored, onLeave, onOptimistic, onReverted });
-  callbacks.current = { onStored, onLeave, onOptimistic, onReverted };
-  const summaries = useMemo(() => summarize(envs), [envs]);
-  const [initial] = useState(() => saveLanes.get(subject ?? "")?.state ?? initEditor(openEnv(subject, envs), summaries));
-  const stateRef = useRef(initial);
-  const [, rerender] = useReducer((n: number) => n + 1, 0);
-  const contentRef = useRef<HTMLDivElement>(null);
-  const shell = useRef<{ alive: boolean; closing: boolean; detached: boolean; timer?: ReturnType<typeof setTimeout> }>({
-    alive: true,
-    closing: false,
-    detached: false,
-  });
+function settle(lane: EnvLane, rev: Rev, outcome: SyncOutcome): void {
+  advance(lane, settleStep(lane.state, rev, outcome));
+  const q = lane.state.save;
+  if (
+    !outcome.ok &&
+    lane.sink === null &&
+    q.inFlight === null &&
+    !q.sendOnSettle
+  ) {
+    const acked = q.acked.goal;
+    const currentName =
+      q.head.state === "writable" ? q.head.goal.name : acked?.name;
+    if (acked && currentName)
+      lane.hooks.onReverted(currentName, environmentOf(acked));
+  }
+}
 
-  const focusField = useCallback((target: FocusTarget): HTMLElement | null => {
-    const el = contentRef.current?.querySelector<HTMLElement>(`[data-field="${fieldAttr(target)}"]`) ?? null;
-    el?.focus();
-    return el;
-  }, []);
+function retire(lane: EnvLane): void {
+  if (lane.sink !== null || mountedSessions > 0) return;
+  const q = lane.state.save;
+  if (q.inFlight !== null || q.sendOnSettle) return;
+  const name = storedNameOf(lane.state.footprint);
+  if (name !== null && lanes.get(name) === lane) lanes.delete(name);
+}
 
-  const apply: (action: EditorAction) => void = useCallback((action: EditorAction) => {
-    const s0 = shell.current;
-    if (s0.closing) return;
-    const prev = stateRef.current;
-    const { state, effects } = editorStep(prev, action);
-    stateRef.current = state;
-    remember(state, {
-      onStored: (event) => callbacks.current.onStored(event),
-      onReverted: () => callbacks.current.onReverted?.(),
-    });
-    if (state !== prev) rerender();
-    const s = shell.current;
-    let focus: FocusTarget | null = null;
-    for (const effect of effects) {
-      switch (effect.type) {
-        case "armSaveTimer":
-          clearTimeout(s.timer);
-          s.timer = setTimeout(() => apply({ type: "timerFired" }), ENV_AUTOSAVE_DELAY_MS);
-          break;
-        case "cancelSaveTimer":
-          clearTimeout(s.timer);
-          break;
-        case "sync": {
-          const { rev, goal, footprint } = effect;
-          const name = footprint.kind === "stored" ? footprint.name : null;
-          void syncEnv(goal, footprint).then((outcome) => {
-            if (s.detached || !s.alive) {
-              if (name) continueDetached(name, rev, outcome);
-              else if (outcome.ok) callbacks.current.onStored({ activated: outcome.activated });
-              return;
-            }
-            apply({ type: "syncSettled", rev, outcome });
-          });
-          break;
-        }
-        case "publish":
-          callbacks.current.onOptimistic?.(environmentOf(effect.goal), effect.previousName);
-          break;
-        case "stored":
-          callbacks.current.onStored({ activated: effect.activated });
-          break;
-        case "leave":
-          s.detached = true;
-          if (effect.cleanup) {
-            const { goal, footprint } = effect.cleanup;
-            const outcome = effect.outcome;
-            s.closing = true;
-            void syncEnv(goal, footprint).then((result) => {
-              if (result.ok) callbacks.current.onStored({ activated: result.activated });
-              else toast.error(messages.envs.editor.cleanupFailed);
-              callbacks.current.onLeave(outcome);
-            });
+function laneFor(
+  to: Subject,
+  envs: readonly EnvironmentIpc[],
+  summaries: readonly EnvSummary[],
+  hooks: LaneHooks,
+): EnvLane {
+  const now = Date.now();
+  const hit = to.kind === "stored" ? lanes.get(to.name) : undefined;
+  if (hit) {
+    hit.state = resumeEditor(hit.state);
+    hit.clock = attachClock(hit.state.save, now);
+    hit.hooks = hooks;
+    return hit;
+  }
+  const state = initEditor(
+    to.kind === "stored" ? openEnv(to.name, envs) : null,
+    summaries,
+  );
+  const lane: EnvLane = {
+    state,
+    clock: attachClock(state.save, now),
+    sink: null,
+    hooks,
+  };
+  if (to.kind === "stored") lanes.set(to.name, lane);
+  return lane;
+}
+
+function destinationOf(lane: EnvLane | null): Destination {
+  if (!lane) return { kind: "empty" };
+  const fp = lane.state.footprint;
+  return fp.kind === "stored"
+    ? { kind: "stored", name: fp.name }
+    : { kind: "new" };
+}
+
+const SESSION_INTENTS: Readonly<Record<SessionIntent["type"], true>> = {
+  setSort: true,
+  toggleNameSort: true,
+  select: true,
+  createNew: true,
+  cancelCreate: true,
+  close: true,
+  requestDelete: true,
+  confirmDelete: true,
+  cancelDelete: true,
+};
+
+function isSessionIntent(intent: EditorIntent): intent is SessionIntent {
+  return Object.hasOwn(SESSION_INTENTS, intent.type);
+}
+
+interface ControllerDeps {
+  readonly props: () => UseEnvEditorProps;
+  readonly summaries: () => readonly EnvSummary[];
+  readonly render: () => void;
+  readonly focus: (target: FocusTarget) => void;
+}
+
+type Controller = ReturnType<typeof createController>;
+
+function createController(opened: string | null, deps: ControllerDeps) {
+  const hooks: LaneHooks = {
+    onStored: (event) => deps.props().onStored(event),
+    onReverted: (currentName, env) =>
+      deps.props().onReverted?.(currentName, env),
+  };
+  let core: SessionCore = initSession();
+  let lane: EnvLane | null = laneFor(
+    opened === null
+      ? { kind: "new" }
+      : { kind: "stored", name: storedName(opened) },
+    deps.props().envs,
+    deps.summaries(),
+    hooks,
+  );
+  let ended = false;
+  let mounted = false;
+  let closing = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  const sink: LaneSink = {
+    ctx: () => ({ sort: core.sort }),
+    run(effects) {
+      let focus: FocusTarget | null = null;
+      for (const effect of effects) {
+        switch (effect.type) {
+          case "armSaveTimer":
+            clearTimeout(timer);
+            timer = setTimeout(() => {
+              if (lane) step(lane, { type: "timerFired" });
+            }, ENV_AUTOSAVE_DELAY_MS);
             break;
-          }
-          callbacks.current.onLeave(effect.outcome);
-          break;
-        case "focus":
-          focus = effect.target;
-          break;
+          case "cancelSaveTimer":
+            clearTimeout(timer);
+            break;
+          case "publish":
+            deps
+              .props()
+              .onOptimistic?.(environmentOf(effect.goal), effect.previousName);
+            break;
+          case "leave":
+            left(effect.outcome, effect.cleanup);
+            break;
+          case "focus":
+            focus = effect.target;
+            break;
+        }
       }
-    }
-    if (focus) {
-      flushSync(rerender);
-      focusField(focus);
-    }
-  }, []);
+      if (focus === null) deps.render();
+      else {
+        flushSync(deps.render);
+        deps.focus(focus);
+      }
+    },
+  };
 
-  useEffect(() => {
-    const s = shell.current;
-    s.alive = true;
-    return () => {
-      s.alive = false;
-      clearTimeout(s.timer);
-      const current = stateRef.current;
-      if (subject && current.footprint.kind === "stored" && !current.save.inFlight && !current.save.sendOnSettle) {
-        saveLanes.delete(subject);
-      }
+  function step(target: EnvLane, action: PaneAction): void {
+    advance(target, editorStep(target.state, action, sink.ctx()));
+  }
+
+  function left(outcome: LeaveOutcome, cleanup: Cleanup | null): void {
+    if (cleanup === null) {
+      session({ type: "left", outcome });
+      return;
+    }
+    closing = true;
+    void syncEnv(cleanup.goal, cleanup.footprint).then((result) => {
+      closing = false;
+      if (result.ok) hooks.onStored({ activated: result.activated });
+      else toast.error(messages.envs.editor.cleanupFailed);
+      session({ type: "left", outcome });
+    });
+  }
+
+  function session(e: SessionEvent): void {
+    if (ended) return;
+    const facts = {
+      attached: destinationOf(lane),
+      names: deps.summaries().map((env) => env.name),
+      idle: lane === null || isIdle(lane.state.save),
     };
-  }, [subject]);
+    const next = sessionStep(core, e, facts);
+    const changed = next.core !== core;
+    core = next.core;
+    for (const command of next.commands) run(command);
+    if (changed) deps.render();
+  }
 
-  useEffect(() => apply({ type: "envsChanged", envs: summaries }), [apply, summaries]);
+  function run(command: SessionCommand): void {
+    switch (command.run) {
+      case "pane":
+        if (lane) step(lane, command.action);
+        break;
+      case "delete":
+        remove();
+        break;
+      case "deleted":
+        deps.props().onDeleted({ name: command.name });
+        break;
+      case "attach":
+        attach(command.to);
+        flushSync(deps.render);
+        deps.focus(command.focus);
+        break;
+      case "focus":
+        deps.focus(command.target);
+        break;
+      case "end":
+        ended = true;
+        detach();
+        deps.props().onClosed();
+        break;
+    }
+  }
 
-  useEffect(() => {
-    if (!subject) return;
-    const lane = saveLanes.get(subject);
+  function remove(): void {
+    const target = lane;
+    const name = target ? storedNameOf(target.state.footprint) : null;
+    if (!target || name === null) return;
+    void deleteEnvironment(target.state.footprint).then((outcome) => {
+      if (outcome.ok && lanes.get(name) === target) lanes.delete(name);
+      session({ type: "deleteSettled", name, outcome });
+    });
+  }
+
+  function detach(): void {
+    clearTimeout(timer);
     if (!lane) return;
-    const notify = (next: EditorState) => {
-      stateRef.current = next;
-      rerender();
-    };
-    lane.notify = notify;
-    lane.onStored = (event) => callbacks.current.onStored(event);
-    lane.onReverted = () => callbacks.current.onReverted?.();
-    if (lane.state !== stateRef.current) notify(lane.state);
-    return () => {
-      if (lane.notify === notify) lane.notify = null;
-    };
-  }, [subject]);
+    lane.sink = null;
+    retire(lane);
+    emit();
+  }
 
-  const state = stateRef.current;
-  const view = useMemo(() => selectView(state), [state]);
-  const preview = useRef(view.previewVars);
-  preview.current = view.previewVars;
+  function attach(to: Destination): void {
+    detach();
+    if (to.kind === "empty") {
+      lane = null;
+      return;
+    }
+    const next = laneFor(to, deps.props().envs, deps.summaries(), hooks);
+    next.sink = sink;
+    lane = next;
+    emit();
+    envsChanged(deps.summaries());
+  }
+
+  function envsChanged(summaries: readonly EnvSummary[]): void {
+    if (lane && lane.state.envs !== summaries)
+      step(lane, { type: "envsChanged", envs: summaries });
+  }
+
+  return {
+    core: () => core,
+    lane: () => lane,
+    closing: () => closing,
+    dispatch(intent: EditorIntent): void {
+      if (ended || closing) return;
+      if (isSessionIntent(intent)) session(intent);
+      else if (lane) step(lane, intent);
+    },
+    paneAction(action: PaneAction): void {
+      if (!ended && lane) step(lane, action);
+    },
+    envsChanged,
+    mount(): void {
+      if (mounted) return;
+      mounted = true;
+      mountedSessions += 1;
+      if (ended || !lane) return;
+      lane.sink = sink;
+      const name = storedNameOf(lane.state.footprint);
+      if (name !== null) lanes.set(name, lane);
+      emit();
+    },
+    unmount(): void {
+      if (!mounted) return;
+      mounted = false;
+      mountedSessions -= 1;
+      clearTimeout(timer);
+      if (lane) lane.sink = null;
+      for (const each of [...lanes.values()]) retire(each);
+      emit();
+    },
+  };
+}
+
+function focusIn(
+  root: HTMLElement | null,
+  target: FocusTarget,
+): HTMLElement | null {
+  const attr = fieldAttr(target);
+  const nodes = root
+    ? Array.from(root.querySelectorAll<HTMLElement>("[data-field]"))
+    : [];
+  const el = nodes.find((node) => node.dataset.field === attr) ?? null;
+  el?.focus();
+  if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+    el.setSelectionRange(el.value.length, el.value.length);
+  }
+  return el;
+}
+
+const HIDDEN: QuietStatus = { kind: "hidden" };
+
+export function useEnvEditor(props: UseEnvEditorProps): EnvEditorHandle {
+  const latest = useRef(props);
+  latest.current = props;
+  const summaries = useMemo(() => summarize(props.envs), [props.envs]);
+  const summariesRef = useRef(summaries);
+  summariesRef.current = summaries;
+  const [, render] = useReducer((n: number) => n + 1, 0);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [ctl] = useState<Controller>(() =>
+    createController(props.opened, {
+      props: () => latest.current,
+      summaries: () => summariesRef.current,
+      render,
+      focus: (target) => void focusIn(contentRef.current, target),
+    }),
+  );
+
+  useEffect(() => {
+    ctl.mount();
+    return () => ctl.unmount();
+  }, [ctl]);
+
+  useEffect(() => ctl.envsChanged(summaries), [ctl, summaries]);
+
+  const failed = useSyncExternalStore(subscribe, failedOffScreen);
+  const core = ctl.core();
+  const lane = ctl.lane();
+  const now = Date.now();
+  const status = lane ? quietStatus(lane.state.save, lane.clock, now) : HIDDEN;
+  const wake = lane ? nextQuietWake(lane.state.save, lane.clock, now) : null;
+
+  useEffect(() => {
+    if (wake === null) return;
+    const id = setTimeout(render, Math.max(0, wake - Date.now()));
+    return () => clearTimeout(id);
+  }, [wake]);
+
+  const pane = lane
+    ? selectView(lane.state, { sort: core.sort, status })
+    : null;
+  const at = destinationOf(lane);
+  const list: EnvListView = {
+    rows: props.envs.map((env) => {
+      const name = storedName(env.name);
+      const selected = at.kind === "stored" && at.name === name;
+      return {
+        name,
+        paint:
+          selected && pane
+            ? pane.color.paint
+            : paintMarker(env.color ?? null, env.name).paint,
+        selected,
+        notSaved: failed.has(name),
+      };
+    }),
+    draft:
+      at.kind === "new" && pane
+        ? {
+            label:
+              pane.name.text.trim() || messages.envs.editor.newEnvironmentRow,
+            paint: pane.color.paint,
+          }
+        : null,
+    inert: core.confirm?.phase === "deleting" || ctl.closing(),
+  };
+  const confirm: ConfirmView | null =
+    core.confirm && lane && at.kind === "stored"
+      ? {
+          name: at.name,
+          variables: lane.state.draft.rows.length,
+          phase: core.confirm.phase,
+          ready: isIdle(lane.state.save),
+          error: core.confirm.error,
+        }
+      : null;
+
+  const preview = useRef<Readonly<Record<string, string>>>({});
+  preview.current = pane?.previewVars ?? {};
   const resolveRow = useCallback(
     (template: string) =>
-      ipc.varsResolve(template, { collection_id: null, collection_vars: null, env_vars: { ...preview.current } }),
+      ipc.varsResolve(template, {
+        collection_id: null,
+        collection_vars: null,
+        env_vars: { ...preview.current },
+      }),
     [],
   );
-  const resolveKey = useMemo(() => JSON.stringify(view.previewVars), [view.previewVars]);
+  const resolveKey = JSON.stringify(preview.current);
+
+  const dispatch = ctl.dispatch;
+  const onOpenChange = useCallback(
+    (open: boolean) => {
+      if (!open) ctl.dispatch({ type: "close" });
+    },
+    [ctl],
+  );
+
+  const contentProps = useMemo(
+    () => ({
+      onOpenAutoFocus: (e: Event) => {
+        e.preventDefault();
+        const attached = destinationOf(ctl.lane());
+        const target: FocusTarget =
+          attached.kind === "stored"
+            ? { kind: "search" }
+            : attached.kind === "new"
+              ? { kind: "name" }
+              : { kind: "newEnv" };
+        focusIn(contentRef.current, target);
+      },
+      onEscapeKeyDown: (e: globalThis.KeyboardEvent) => {
+        const current = ctl.lane();
+        if (!current) return;
+        const el = document.activeElement;
+        const focused =
+          el instanceof HTMLElement && contentRef.current?.contains(el)
+            ? (el.dataset.field ?? null)
+            : null;
+        const intent = escapeIntent(current.state, focused);
+        if (intent === null) return;
+        e.preventDefault();
+        ctl.dispatch(intent);
+      },
+      onKeyDown: (e: KeyboardEvent<HTMLElement>) => {
+        if (!isFindHotkey(e)) return;
+        e.preventDefault();
+        const search = focusIn(contentRef.current, { kind: "search" });
+        if (search instanceof HTMLInputElement) search.select();
+      },
+    }),
+    [ctl],
+  );
 
   const regionProps = useMemo(
     () => ({
       tabIndex: -1 as const,
-      onFocus: () => apply({ type: "regionFocus", inside: true }),
+      onFocus: () => ctl.paneAction({ type: "regionFocus", inside: true }),
       onBlur: (e: FocusEvent<HTMLElement>) => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) apply({ type: "regionFocus", inside: false });
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null))
+          ctl.paneAction({ type: "regionFocus", inside: false });
       },
     }),
-    [apply],
-  );
-
-  const onOpenAutoFocus = useCallback(
-    (e: Event) => {
-      e.preventDefault();
-      focusField(stateRef.current.footprint.kind === "new" ? { kind: "name" } : { kind: "search" });
-    },
-    [focusField],
-  );
-
-  const onKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLElement>) => {
-      if (!isFindHotkey(e)) return;
-      e.preventDefault();
-      const search = focusField({ kind: "search" });
-      if (search instanceof HTMLInputElement) search.select();
-    },
-    [focusField],
+    [ctl],
   );
 
   return {
-    view,
-    dispatch: apply,
-    regionProps,
+    paneKey: core.paneKey,
+    sort: core.sort,
+    list,
+    pane,
+    confirm,
+    dispatch,
+    onOpenChange,
+    contentProps,
     contentRef,
-    onOpenAutoFocus,
-    onKeyDown,
+    regionProps,
     resolveRow,
     resolveKey,
   };
 }
 
-function openEnv(subject: string | null, envs: readonly EnvironmentIpc[]): OpenEnv | null {
-  if (subject === null) return null;
-  const at = envs.findIndex((env) => env.name === subject);
+function environmentOf(goal: EnvGoal): EnvironmentIpc {
+  return {
+    name: goal.name,
+    color: goal.color,
+    variables: Object.fromEntries(goal.variables),
+  };
+}
+
+function openEnv(name: EnvName, envs: readonly EnvironmentIpc[]): OpenEnv {
+  const at = envs.findIndex((env) => env.name === name);
   const env = at < 0 ? null : envs[at];
-  const variables = Object.entries(env?.variables ?? {}).flatMap(([key, value]): Variable[] =>
-    typeof value === "string" ? [[key, value]] : [],
+  const variables = Object.entries(env?.variables ?? {}).flatMap(
+    ([key, value]): Variable[] =>
+      typeof value === "string" ? [[key, value]] : [],
   );
   return {
-    name: storedName(subject),
+    name,
     color: env?.color != null ? colorKey(env.color) : null,
     variables,
     index: at < 0 ? envs.length : at,
@@ -302,5 +703,5 @@ function openEnv(subject: string | null, envs: readonly EnvironmentIpc[]): OpenE
 }
 
 function summarize(envs: readonly EnvironmentIpc[]): EnvSummary[] {
-  return envs.map((env) => ({ name: storedName(env.name), color: colorKey(resolveColorKey(env)) }));
+  return envs.map((env) => ({ name: storedName(env.name) }));
 }

@@ -1,45 +1,84 @@
-/** Fixed 10-color palette for environment markers. `key` is what we persist in
- * Environment.color; `hex` is the rendered swatch. */
-export interface EnvColorDef {
-  key: string;
-  label: string;
-  hex: string;
-}
+export const ENV_PRESETS = [
+  { key: "gray", hex: "#9099A1" },
+  { key: "coral", hex: "#FF6B63" },
+  { key: "orange", hex: "#FF9F43" },
+  { key: "yellow", hex: "#F4D84B" },
+  { key: "green", hex: "#43B957" },
+  { key: "teal", hex: "#15B8AD" },
+  { key: "cyan", hex: "#41C8EC" },
+  { key: "blue", hex: "#3D87F5" },
+  { key: "indigo", hex: "#7954F6" },
+  { key: "purple", hex: "#B654EF" },
+  { key: "pink", hex: "#E75B9F" },
+  { key: "brown", hex: "#9B6B51" },
+] as const;
 
-export const ENV_COLORS: EnvColorDef[] = [
-  { key: "red", label: "Red", hex: "#ef4444" },
-  { key: "orange", label: "Orange", hex: "#f97316" },
-  { key: "yellow", label: "Yellow", hex: "#eab308" },
-  { key: "green", label: "Green", hex: "#22c55e" },
-  { key: "teal", label: "Teal", hex: "#14b8a6" },
-  { key: "blue", label: "Blue", hex: "#3b82f6" },
-  { key: "indigo", label: "Indigo", hex: "#6366f1" },
-  { key: "purple", label: "Purple", hex: "#a855f7" },
-  { key: "pink", label: "Pink", hex: "#ec4899" },
-  { key: "gray", label: "Gray", hex: "#9ca3af" },
+export type PresetKey = (typeof ENV_PRESETS)[number]["key"];
+
+const PRESET_HEX = Object.fromEntries(
+  ENV_PRESETS.map((p) => [p.key, p.hex]),
+) as Readonly<Record<PresetKey, string>>;
+
+const LEGACY_HEX = {
+  red: "#ef4444",
+  orange: "#f97316",
+  yellow: "#eab308",
+  green: "#22c55e",
+  teal: "#14b8a6",
+  blue: "#3b82f6",
+  indigo: "#6366f1",
+  purple: "#a855f7",
+  pink: "#ec4899",
+  gray: "#9ca3af",
+} as const;
+
+type LegacyKey = keyof typeof LEGACY_HEX;
+
+const DERIVE_RING: readonly LegacyKey[] = [
+  "red",
+  "orange",
+  "yellow",
+  "green",
+  "teal",
+  "blue",
+  "indigo",
+  "purple",
+  "pink",
+  "gray",
 ];
 
-const BY_KEY = new Map(ENV_COLORS.map((c) => [c.key, c]));
+const HEX_LITERAL = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
 
-/** Stable default color KEY for an env name. Keyword rules first
- * (prod/production→red, local/test→green, stg/staging→yellow), else a stable
- * hash into the palette so every env still gets a consistent, distinct color. */
-export function defaultColorKeyForName(name: string): string {
+function isPresetKey(raw: string): raw is PresetKey {
+  return Object.hasOwn(PRESET_HEX, raw);
+}
+
+function isLegacyKey(raw: string): raw is LegacyKey {
+  return Object.hasOwn(LEGACY_HEX, raw);
+}
+
+function defaultColorKeyForName(name: string): LegacyKey {
   const n = name.trim().toLowerCase();
   if (n.includes("prod")) return "red";
   if (n.includes("local") || n.includes("test")) return "green";
   if (n.includes("stg") || n.includes("stag")) return "yellow";
   let h = 0;
   for (let i = 0; i < n.length; i++) h = (h * 31 + n.charCodeAt(i)) >>> 0;
-  return ENV_COLORS[h % ENV_COLORS.length].key;
+  return DERIVE_RING[h % DERIVE_RING.length];
 }
 
-/** Resolve an env's effective color key: explicit color, else name default. */
-export function resolveColorKey(env: { name: string; color: string | null }): string {
-  return env.color ?? defaultColorKeyForName(env.name);
+export interface Marker {
+  readonly paint: string;
+  readonly ring: PresetKey | null;
 }
 
-/** Hex for a palette key (falls back to gray for unknown keys). */
-export function colorHex(key: string): string {
-  return BY_KEY.get(key)?.hex ?? "#9ca3af";
+export function paintMarker(stored: string | null, name: string): Marker {
+  if (stored === null) {
+    const key = defaultColorKeyForName(name);
+    return { paint: LEGACY_HEX[key], ring: isPresetKey(key) ? key : null };
+  }
+  if (isPresetKey(stored)) return { paint: PRESET_HEX[stored], ring: stored };
+  if (isLegacyKey(stored)) return { paint: LEGACY_HEX[stored], ring: null };
+  if (HEX_LITERAL.test(stored)) return { paint: stored, ring: null };
+  return { paint: LEGACY_HEX.gray, ring: null };
 }

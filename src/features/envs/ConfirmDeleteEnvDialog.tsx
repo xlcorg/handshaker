@@ -1,5 +1,3 @@
-import { useState } from "react";
-
 import {
   AlertDialog,
   AlertDialogAction,
@@ -10,75 +8,65 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { buttonVariants } from "@/components/ui/button";
-import { ipc } from "@/ipc/client";
+import { messages } from "@/lib/messages";
+
+import type { ConfirmView } from "./useEnvEditor";
+
+const m = messages.envs.editor;
 
 export interface ConfirmDeleteEnvDialogProps {
-  /** When `null`, the dialog is closed. Set to a name to open. */
-  target: string | null;
-  /** Current active env — used to decide whether to pre-switch on delete. */
-  activeEnv: string | null;
-  onOpenChange: (open: boolean) => void;
-  /** Called on successful delete; parent should refetch the env list. */
-  onDeleted: (deletedName: string, activeChangedToNull: boolean) => void;
+  readonly view: ConfirmView | null;
+  readonly onConfirm: () => void;
+  readonly onCancel: () => void;
 }
 
 export function ConfirmDeleteEnvDialog({
-  target,
-  activeEnv,
-  onOpenChange,
-  onDeleted,
+  view,
+  onConfirm,
+  onCancel,
 }: ConfirmDeleteEnvDialogProps) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleDelete() {
-    if (target === null) return;
-    setBusy(true);
-    setError(null);
-    try {
-      let activeChangedToNull = false;
-      // 1. If deleting the active env, switch active to None first.
-      if (activeEnv === target) {
-        await ipc.envActiveSet(null);
-        activeChangedToNull = true;
-      }
-      // 2. Delete the target env.
-      await ipc.envDelete(target);
-
-      onDeleted(target, activeChangedToNull);
-      onOpenChange(false);
-    } catch (e) {
-      const t = e as { type?: string; message?: string };
-      setError(t.message ?? t.type ?? "delete failed");
-    } finally {
-      setBusy(false);
-    }
-  }
-
+  const deleting = view?.phase === "deleting";
   return (
-    <AlertDialog open={target !== null} onOpenChange={onOpenChange}>
-      <AlertDialogContent>
+    <AlertDialog
+      open={view !== null}
+      onOpenChange={(open) => {
+        if (!open) onCancel();
+      }}
+    >
+      <AlertDialogContent
+        onCloseAutoFocus={(e) => {
+          if (document.activeElement !== document.body) e.preventDefault();
+        }}
+      >
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete env?</AlertDialogTitle>
+          <AlertDialogTitle>
+            {m.confirmDeleteTitle(view?.name ?? "")}
+          </AlertDialogTitle>
           <AlertDialogDescription>
-            Are you sure you want to delete <code className="font-mono">{target ?? ""}</code>? Its
-            variables will be lost.
+            {m.confirmDeleteBody(view?.variables ?? 0)}
           </AlertDialogDescription>
         </AlertDialogHeader>
-        {error && (
-          <div className="border-l-2 border-destructive bg-destructive/5 px-3 py-1.5 text-xs text-destructive">
-            {error}
-          </div>
+        {view?.error && (
+          <p
+            role="alert"
+            className="text-sm text-destructive"
+            title={view.error.detail}
+          >
+            {view.error.message}
+          </p>
         )}
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+          <AlertDialogCancel disabled={deleting}>{m.cancel}</AlertDialogCancel>
           <AlertDialogAction
-            onClick={handleDelete}
-            disabled={busy}
-            className={buttonVariants({ variant: "destructive" })}
+            variant="outline"
+            disabled={deleting || !view?.ready}
+            onClick={(e) => {
+              e.preventDefault();
+              onConfirm();
+            }}
+            className="border-destructive/60 text-destructive hover:bg-destructive/10 hover:text-destructive"
           >
-            {busy ? "Deleting…" : "Delete"}
+            {deleting ? m.deleting : m.confirmDeleteAction}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

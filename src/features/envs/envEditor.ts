@@ -1,11 +1,10 @@
-import { ENV_COLORS, defaultColorKeyForName } from "./colors";
+import { paintMarker, type Marker, type PresetKey } from "./colors";
 import {
   colorKey,
   draftFromStored,
   goalFromStored,
   mintRowId,
   parseDraft,
-  type ColorKey,
   type DraftIssues,
   type DraftRow,
   type EnvDraft,
@@ -17,196 +16,372 @@ import {
   type RowId,
   type RowIssue,
 } from "./envDraft";
-import { afterSync, footprintNames, type Footprint, type SyncOutcome } from "./envSync";
+import {
+  afterSync,
+  footprintNames,
+  type Footprint,
+  type SyncOutcome,
+} from "./envSync";
 import {
   createQueue,
-  queueStatus,
   stepQueue,
   type QueueEvent,
+  type QuietStatus,
   type Rev,
-  type SaveFailure,
   type SaveQueue,
-  type SaveStatus,
   type Urgency,
 } from "./saveQueue";
 import {
   holdLayout,
   initialView,
-  neighborOf,
+  nameSortIndicator,
+  neighborIn,
   releaseLayout,
   setQuery,
-  setSort,
   showAnyway,
   viewRows,
+  type NameSortIndicator,
   type SortMode,
   type Span,
   type ViewSource,
   type ViewState,
 } from "./varView";
 
+export type Subject =
+  | { readonly kind: "stored"; readonly name: EnvName }
+  | { readonly kind: "new" };
+
+export type Destination = Subject | { readonly kind: "empty" };
+
 export type LeaveTarget =
   | { readonly to: "close" }
-  | { readonly to: "switch"; readonly name: EnvName }
-  | { readonly to: "delete" };
+  | { readonly to: "select"; readonly subject: Destination };
 
 export type LeaveOutcome =
   | { readonly kind: "closed" }
-  | { readonly kind: "switched"; readonly to: EnvName }
-  | { readonly kind: "deleteRequested"; readonly name: EnvName };
+  | { readonly kind: "selected"; readonly subject: Destination }
+  | { readonly kind: "created"; readonly name: EnvName };
 
-export type FieldTarget = { readonly kind: "name" } | { readonly kind: "key"; readonly rowId: RowId };
+export type CellRef = { readonly kind: "key" | "value"; readonly rowId: RowId };
+
+export type FieldTarget = { readonly kind: "name" } | CellRef;
 
 export interface FieldDraft {
   readonly target: FieldTarget;
   readonly text: string;
 }
 
+export interface AddDraft {
+  readonly id: RowId;
+  readonly key: string;
+  readonly value: string;
+}
+
 export type FocusTarget =
   | { readonly kind: "name" }
   | { readonly kind: "search" }
-  | { readonly kind: "key"; readonly rowId: RowId }
-  | { readonly kind: "value"; readonly rowId: RowId }
-  | { readonly kind: "add" };
+  | { readonly kind: "add" }
+  | { readonly kind: "newEnv" }
+  | CellRef
+  | { readonly kind: "env"; readonly name: EnvName };
 
 export function fieldAttr(target: FocusTarget): string {
-  return target.kind === "key" || target.kind === "value" ? `${target.kind}:${target.rowId}` : target.kind;
+  switch (target.kind) {
+    case "key":
+    case "value":
+      return `${target.kind}:${target.rowId}`;
+    case "env":
+      return `env:${target.name}`;
+    default:
+      return target.kind;
+  }
 }
-
-export const PALETTE = ENV_COLORS.map((c) => ({ key: colorKey(c.key), label: c.label, hex: c.hex }));
 
 export interface EditorState {
   readonly footprint: Footprint;
   readonly draft: EnvDraft;
-  readonly field: FieldDraft | null;
-  readonly pending: RowId | null;
-  readonly view: ViewState;
   readonly save: SaveQueue<EnvGoal>;
   readonly envs: readonly EnvSummary[];
+  readonly seq: number;
+  readonly field: FieldDraft | null;
+  readonly adding: AddDraft | null;
+  readonly view: ViewState;
   readonly undo: { readonly row: DraftRow; readonly index: number } | null;
   readonly leaving: LeaveTarget | null;
-  readonly seq: number;
 }
 
-export type EditorIntent =
+export interface PaneContext {
+  readonly sort: SortMode;
+}
+
+export type PaneIntent =
+  | { readonly type: "openName" }
   | { readonly type: "typeName"; readonly text: string }
-  | { readonly type: "commitName" }
-  | { readonly type: "pickColor"; readonly color: ColorKey }
-  | { readonly type: "typeKey"; readonly rowId: RowId; readonly text: string }
-  | { readonly type: "commitKey"; readonly rowId: RowId; readonly via: "enter" | "blur" }
-  | { readonly type: "editValue"; readonly rowId: RowId; readonly text: string }
+  | { readonly type: "commitName"; readonly via: "enter" | "blur" }
+  | { readonly type: "pickColor"; readonly color: PresetKey }
+  | { readonly type: "openCell"; readonly cell: CellRef }
+  | { readonly type: "typeCell"; readonly cell: CellRef; readonly text: string }
+  | {
+      readonly type: "commitCell";
+      readonly cell: CellRef;
+      readonly via: "enter" | "blur";
+    }
+  | { readonly type: "cancelField" }
   | { readonly type: "addRow" }
+  | {
+      readonly type: "typeDraft";
+      readonly part: "key" | "value";
+      readonly text: string;
+    }
+  | { readonly type: "commitDraft" }
+  | { readonly type: "cancelDraft" }
   | { readonly type: "deleteRow"; readonly rowId: RowId }
   | { readonly type: "undoDelete" }
+  | { readonly type: "dismissUndo" }
   | { readonly type: "setQuery"; readonly text: string }
   | { readonly type: "clearSearch" }
-  | { readonly type: "setSort"; readonly sort: SortMode }
-  | { readonly type: "leave"; readonly target: LeaveTarget }
   | { readonly type: "create" }
   | { readonly type: "retry" }
   | { readonly type: "discard" }
   | { readonly type: "keepEditing" };
 
-export type SystemAction =
+export type PaneAction =
+  | PaneIntent
+  | { readonly type: "leave"; readonly target: LeaveTarget }
+  | { readonly type: "prepareDelete" }
   | { readonly type: "regionFocus"; readonly inside: boolean }
   | { readonly type: "timerFired" }
-  | { readonly type: "syncSettled"; readonly rev: Rev; readonly outcome: SyncOutcome }
   | { readonly type: "envsChanged"; readonly envs: readonly EnvSummary[] };
-
-export type EditorAction = EditorIntent | SystemAction;
 
 export interface Cleanup {
   readonly goal: EnvGoal | null;
   readonly footprint: Footprint;
 }
 
-export type EditorEffect =
+export type LaneEffect =
+  | {
+      readonly type: "sync";
+      readonly rev: Rev;
+      readonly goal: EnvGoal;
+      readonly footprint: Footprint;
+    }
+  | { readonly type: "stored"; readonly activated: EnvName | null };
+
+export type PaneEffect =
   | { readonly type: "armSaveTimer" }
   | { readonly type: "cancelSaveTimer" }
-  | { readonly type: "sync"; readonly rev: Rev; readonly goal: EnvGoal; readonly footprint: Footprint }
-  | { readonly type: "stored"; readonly activated: EnvName | null }
-  | { readonly type: "publish"; readonly goal: EnvGoal; readonly previousName: EnvName }
-  | { readonly type: "leave"; readonly outcome: LeaveOutcome; readonly cleanup: Cleanup | null }
+  | {
+      readonly type: "publish";
+      readonly goal: EnvGoal;
+      readonly previousName: EnvName;
+    }
+  | {
+      readonly type: "leave";
+      readonly outcome: LeaveOutcome;
+      readonly cleanup: Cleanup | null;
+    }
   | { readonly type: "focus"; readonly target: FocusTarget };
 
-export function initEditor(env: OpenEnv | null, envs: readonly EnvSummary[]): EditorState {
+export type EditorEffect = LaneEffect | PaneEffect;
+
+export interface Step {
+  readonly state: EditorState;
+  readonly effects: readonly EditorEffect[];
+}
+
+export function initEditor(
+  env: OpenEnv | null,
+  envs: readonly EnvSummary[],
+): EditorState {
   const { draft, seq } = draftFromStored(env, 0);
   return {
     footprint: env
       ? { kind: "stored", name: env.name, index: env.index, strays: [] }
       : { kind: "new", strays: [] },
     draft,
-    field: env ? null : { target: { kind: "name" }, text: "" },
-    pending: null,
-    view: initialView,
     save: createQueue(env ? goalFromStored(env) : null),
     envs,
+    seq,
+    field: env ? null : { target: { kind: "name" }, text: "" },
+    adding: null,
+    view: initialView,
     undo: null,
     leaving: null,
-    seq,
+  };
+}
+
+export function resumeEditor(s: EditorState): EditorState {
+  return {
+    ...s,
+    field: null,
+    adding: null,
+    view: initialView,
+    undo: null,
+    leaving: null,
   };
 }
 
 export function editorStep(
   state: EditorState,
-  action: EditorAction,
-): { readonly state: EditorState; readonly effects: readonly EditorEffect[] } {
+  action: PaneAction,
+  ctx: PaneContext,
+): Step {
   const fx: EditorEffect[] = [];
-  return { state: reduce(state, action, fx), effects: fx };
+  return { state: reduce(state, action, ctx, fx), effects: fx };
 }
 
-function reduce(s: EditorState, a: EditorAction, fx: EditorEffect[]): EditorState {
+export function settleStep(
+  state: EditorState,
+  rev: Rev,
+  outcome: SyncOutcome,
+): Step {
+  const fx: EditorEffect[] = [];
+  return { state: settle(state, rev, outcome, fx), effects: fx };
+}
+
+/** Esc routing for DialogContent.onEscapeKeyDown, which runs before any field's own keydown. Null lets the dialog close. */
+export function escapeIntent(
+  s: EditorState,
+  focused: string | null,
+): PaneIntent | null {
+  if (focused === null) return null;
+  const target = s.field?.target;
+  if (target && target.kind !== "name" && focused === fieldAttr(target))
+    return { type: "cancelField" };
+  if (
+    target?.kind === "name" &&
+    s.footprint.kind === "stored" &&
+    focused === fieldAttr(target)
+  ) {
+    return { type: "cancelField" };
+  }
+  const adding = s.adding;
+  if (
+    adding &&
+    (focused === fieldAttr({ kind: "key", rowId: adding.id }) ||
+      focused === fieldAttr({ kind: "value", rowId: adding.id }))
+  ) {
+    return { type: "cancelDraft" };
+  }
+  return null;
+}
+
+function reduce(
+  s: EditorState,
+  a: PaneAction,
+  ctx: PaneContext,
+  fx: EditorEffect[],
+): EditorState {
   switch (a.type) {
+    case "openName": {
+      const next = commitOpenField(s, fx);
+      fx.push({ type: "focus", target: { kind: "name" } });
+      return {
+        ...next,
+        field: { target: { kind: "name" }, text: next.draft.name },
+      };
+    }
     case "typeName":
       return { ...s, field: { target: { kind: "name" }, text: a.text } };
-    case "commitName":
-      return commitName(s, fx);
+    case "commitName": {
+      const next = commitName(s, fx);
+      if (
+        a.via === "enter" &&
+        s.footprint.kind === "stored" &&
+        next.field === null
+      ) {
+        fx.push({ type: "focus", target: { kind: "name" } });
+      }
+      return next;
+    }
     case "pickColor":
-      return a.color === s.draft.color ? s : stageSave({ ...s, draft: { ...s.draft, color: a.color } }, "now", fx);
-    case "typeKey":
-      if (a.rowId !== s.pending && !s.draft.rows.some((row) => row.id === a.rowId)) return s;
-      return { ...s, field: { target: { kind: "key", rowId: a.rowId }, text: a.text } };
-    case "commitKey":
-      return commitKey(s, a.rowId, a.via, fx);
-    case "editValue":
-      return editValue(s, a.rowId, a.text, fx);
+      return a.color === s.draft.color
+        ? s
+        : stageSave(
+            { ...s, draft: { ...s.draft, color: colorKey(a.color) } },
+            "now",
+            fx,
+          );
+    case "openCell":
+      return openCell(s, a.cell, ctx, fx);
+    case "typeCell":
+      return sameTarget(s.field?.target, a.cell)
+        ? { ...s, field: { target: a.cell, text: a.text } }
+        : s;
+    case "commitCell": {
+      if (!sameTarget(s.field?.target, a.cell)) return s;
+      if (a.via === "enter") fx.push({ type: "focus", target: a.cell });
+      return commitCell(s, a.cell, fx);
+    }
+    case "cancelField": {
+      const target = s.field?.target;
+      if (!target) return s;
+      fx.push({ type: "focus", target });
+      return { ...s, field: null };
+    }
     case "addRow":
-      return addRow(s, fx);
+      return addRow(s, ctx, fx);
+    case "typeDraft":
+      return s.adding ? { ...s, adding: { ...s.adding, [a.part]: a.text } } : s;
+    case "commitDraft": {
+      const adding = s.adding;
+      if (!adding) return s;
+      if (s.draft.rows.some((row) => row.key === adding.key)) {
+        fx.push({ type: "focus", target: { kind: "key", rowId: adding.id } });
+        return s;
+      }
+      fx.push({ type: "focus", target: { kind: "add" } });
+      return commitAdding(s, fx);
+    }
+    case "cancelDraft":
+      if (!s.adding) return s;
+      fx.push({ type: "focus", target: { kind: "add" } });
+      return { ...s, adding: null };
     case "deleteRow":
-      return deleteRow(s, a.rowId, fx);
+      return deleteRow(s, a.rowId, ctx, fx);
     case "undoDelete":
       return undoDelete(s, fx);
+    case "dismissUndo":
+      return s.undo ? { ...s, undo: null } : s;
     case "setQuery":
-      return withView(s, setQuery(s.view, a.text));
+      return withView(s, releaseLayout(setQuery(s.view, a.text)));
     case "clearSearch":
       fx.push({ type: "focus", target: { kind: "search" } });
       return withView(s, releaseLayout(setQuery(s.view, "")));
-    case "setSort":
-      return withView(s, setSort(s.view, a.sort));
     case "regionFocus":
-      return withView(s, a.inside ? holdLayout(s.view, viewSource(s)) : releaseLayout(s.view));
+      return withView(
+        s,
+        a.inside
+          ? holdLayout(s.view, viewSource(s), ctx.sort)
+          : releaseLayout(s.view),
+      );
     case "leave":
-      return requestLeave(commitOpenField(s, fx), a.target, fx);
+      return requestLeave(s, a.target, fx);
+    case "prepareDelete":
+      return flush(commitPending(s, fx), fx);
     case "create":
-      return create(s, fx);
+      return create(s, ctx, fx);
     case "retry":
       return queue(s, { type: "flush" }, fx);
     case "discard":
       return s.leaving && !s.save.inFlight ? leaveNow(s, s.leaving, fx) : s;
     case "keepEditing":
-      if (!s.leaving) return s;
-      if (queueStatus(s.save).kind === "invalid") focusFirstIssue(s, fx);
-      return { ...s, leaving: null };
+      return s.leaving ? { ...s, leaving: null } : s;
     case "timerFired":
       return queue(s, { type: "timerFired" }, fx);
-    case "syncSettled":
-      return settle(s, a.rev, a.outcome, fx);
     case "envsChanged": {
       if (a.envs === s.envs) return s;
       const next = { ...s, envs: a.envs };
-      const flipped = parseDraft(s.draft, taken(s)).ok !== parseDraft(next.draft, taken(next)).ok;
+      const flipped =
+        parseDraft(s.draft, taken(s)).ok !==
+        parseDraft(next.draft, taken(next)).ok;
       return flipped ? stageSave(next, "debounce", fx) : next;
     }
   }
+}
+
+function sameTarget(a: FieldTarget | undefined, b: CellRef): boolean {
+  return a !== undefined && a.kind === b.kind && a.rowId === b.rowId;
 }
 
 function withView(s: EditorState, view: ViewState): EditorState {
@@ -215,99 +390,199 @@ function withView(s: EditorState, view: ViewState): EditorState {
 
 function taken(s: EditorState): ReadonlySet<string> {
   const ours = new Set<string>(footprintNames(s.footprint));
-  return new Set(s.envs.map((env) => env.name).filter((name) => !ours.has(name)));
+  return new Set(
+    s.envs.map((env) => env.name).filter((name) => !ours.has(name)),
+  );
 }
 
-function queue(s: EditorState, event: QueueEvent<EnvGoal>, fx: EditorEffect[]): EditorState {
+function isValid(s: EditorState): boolean {
+  return parseDraft(s.draft, taken(s)).ok;
+}
+
+function queue(
+  s: EditorState,
+  event: QueueEvent<EnvGoal>,
+  fx: EditorEffect[],
+): EditorState {
   const step = stepQueue(s.save, event);
   for (const e of step.effects) {
-    if (e.type === "send") fx.push({ type: "sync", rev: e.rev, goal: e.goal, footprint: s.footprint });
-    else fx.push({ type: e.type === "armTimer" ? "armSaveTimer" : "cancelSaveTimer" });
+    if (e.type === "send")
+      fx.push({
+        type: "sync",
+        rev: e.rev,
+        goal: e.goal,
+        footprint: s.footprint,
+      });
+    else
+      fx.push({
+        type: e.type === "armTimer" ? "armSaveTimer" : "cancelSaveTimer",
+      });
   }
   return { ...s, save: step.queue };
 }
 
-function stageSave(s: EditorState, urgency: Urgency, fx: EditorEffect[]): EditorState {
+function stageSave(
+  s: EditorState,
+  urgency: Urgency,
+  fx: EditorEffect[],
+): EditorState {
   const parsed = parseDraft(s.draft, taken(s));
-  const u: Urgency = s.footprint.kind === "new" ? "hold" : s.leaving ? "now" : urgency;
-  return queue(s, parsed.ok ? { type: "edited", goal: parsed.goal, urgency: u } : { type: "invalid" }, fx);
+  const u: Urgency = s.footprint.kind === "new" ? "hold" : urgency;
+  return queue(
+    s,
+    parsed.ok
+      ? { type: "edited", goal: parsed.goal, urgency: u }
+      : { type: "invalid" },
+    fx,
+  );
 }
 
-function typedKey(s: EditorState, rowId: RowId): string | null {
-  const field = s.field;
-  return field?.target.kind === "key" && field.target.rowId === rowId ? field.text : null;
+function flush(s: EditorState, fx: EditorEffect[]): EditorState {
+  return queue(s, { type: "flush" }, fx);
 }
 
-function focusKey(rowId: RowId): EditorEffect {
-  return { type: "focus", target: { kind: "key", rowId } };
-}
-
-function patchRow(draft: EnvDraft, rowId: RowId, patch: Partial<Omit<DraftRow, "id">>): EnvDraft {
-  return { ...draft, rows: draft.rows.map((row) => (row.id === rowId ? { ...row, ...patch } : row)) };
+function patchRow(
+  draft: EnvDraft,
+  rowId: RowId,
+  patch: Partial<Omit<DraftRow, "id">>,
+): EnvDraft {
+  return {
+    ...draft,
+    rows: draft.rows.map((row) =>
+      row.id === rowId ? { ...row, ...patch } : row,
+    ),
+  };
 }
 
 function commitName(s: EditorState, fx: EditorEffect[]): EditorState {
   if (s.field?.target.kind !== "name") return s;
   const name = s.field.text.trim();
-  const next = { ...s, field: null };
-  return name === s.draft.name ? next : stageSave({ ...next, draft: { ...s.draft, name } }, "now", fx);
+  if (name === s.draft.name) return { ...s, field: null };
+  const draft = { ...s.draft, name };
+  if (s.footprint.kind === "stored" && nameIssueOf(draft, s) !== null) return s;
+  return stageSave({ ...s, field: null, draft }, "now", fx);
 }
 
-function commitKey(s: EditorState, rowId: RowId, via: "enter" | "blur", fx: EditorEffect[]): EditorState {
-  const typed = typedKey(s, rowId);
-  const base = typed === null ? s : { ...s, field: null };
-  if (rowId === s.pending) {
-    const key = typed ?? "";
-    if (key === "") {
-      if (via === "enter") fx.push({ type: "focus", target: { kind: "add" } });
-      return { ...base, pending: null };
-    }
-    if (via === "enter") fx.push({ type: "focus", target: { kind: "value", rowId } });
-    const draft = { ...s.draft, rows: [...s.draft.rows, { id: rowId, key, value: "" }] };
-    return stageSave({ ...base, pending: null, draft, view: showAnyway(s.view, rowId) }, "now", fx);
-  }
-  const row = s.draft.rows.find((r) => r.id === rowId);
-  if (!row) return base;
-  if (via === "enter") fx.push({ type: "focus", target: { kind: "value", rowId } });
-  if (typed === null || typed === row.key) return base;
-  return stageSave({ ...base, draft: patchRow(s.draft, rowId, { key: typed }) }, "now", fx);
+function nameIssueOf(draft: EnvDraft, s: EditorState): NameIssue | null {
+  const parsed = parseDraft(draft, taken(s));
+  return parsed.ok ? null : parsed.issues.name;
+}
+
+function commitCell(
+  s: EditorState,
+  cell: CellRef,
+  fx: EditorEffect[],
+): EditorState {
+  const text = s.field?.text ?? "";
+  const next = { ...s, field: null };
+  const row = s.draft.rows.find((r) => r.id === cell.rowId);
+  if (!row || row[cell.kind] === text) return next;
+  return stageSave(
+    { ...next, draft: patchRow(s.draft, cell.rowId, { [cell.kind]: text }) },
+    "now",
+    fx,
+  );
 }
 
 function commitOpenField(s: EditorState, fx: EditorEffect[]): EditorState {
   const target = s.field?.target;
-  const committed =
-    target?.kind === "name"
-      ? commitName(s, fx)
-      : target?.kind === "key"
-        ? commitKey(s, target.rowId, "blur", fx)
-        : s;
-  return committed.pending ? commitKey(committed, committed.pending, "blur", fx) : committed;
-}
-
-function editValue(s: EditorState, rowId: RowId, value: string, fx: EditorEffect[]): EditorState {
-  const row = s.draft.rows.find((r) => r.id === rowId);
-  if (!row || row.value === value) return s;
-  return stageSave({ ...s, draft: patchRow(s.draft, rowId, { value }) }, "debounce", fx);
-}
-
-function addRow(s: EditorState, fx: EditorEffect[]): EditorState {
-  if (s.pending) {
-    fx.push(focusKey(s.pending));
-    return s;
+  if (!target) return s;
+  if (target.kind === "name") {
+    const committed = commitName(s, fx);
+    return committed.field ? { ...committed, field: null } : committed;
   }
-  const { id, seq } = mintRowId(s.seq);
-  fx.push(focusKey(id));
-  return { ...s, seq, pending: id, view: holdLayout(s.view, viewSource(s)) };
+  return commitCell(s, target, fx);
 }
 
-function deleteRow(s: EditorState, rowId: RowId, fx: EditorEffect[]): EditorState {
+function commitAdding(s: EditorState, fx: EditorEffect[]): EditorState {
+  const adding = s.adding;
+  if (!adding) return s;
+  if (adding.key === "") return { ...s, adding: null };
+  const draft = {
+    ...s.draft,
+    rows: [
+      ...s.draft.rows,
+      { id: adding.id, key: adding.key, value: adding.value },
+    ],
+  };
+  return stageSave(
+    { ...s, adding: null, draft, view: showAnyway(s.view, adding.id) },
+    "now",
+    fx,
+  );
+}
+
+function commitPending(s: EditorState, fx: EditorEffect[]): EditorState {
+  return commitAdding(commitOpenField(s, fx), fx);
+}
+
+function openCell(
+  s: EditorState,
+  cell: CellRef,
+  ctx: PaneContext,
+  fx: EditorEffect[],
+): EditorState {
+  if (sameTarget(s.field?.target, cell)) return s;
+  const next = commitOpenField(s, fx);
+  const row = next.draft.rows.find((r) => r.id === cell.rowId);
+  if (!row) return next;
+  fx.push({ type: "focus", target: cell });
+  return {
+    ...next,
+    field: { target: cell, text: row[cell.kind] },
+    view: holdLayout(next.view, viewSource(next), ctx.sort),
+  };
+}
+
+function addRow(
+  s: EditorState,
+  ctx: PaneContext,
+  fx: EditorEffect[],
+): EditorState {
+  const next = commitOpenField(s, fx);
+  if (next.adding) {
+    fx.push({ type: "focus", target: { kind: "key", rowId: next.adding.id } });
+    return next;
+  }
+  const { id, seq } = mintRowId(next.seq);
+  fx.push({ type: "focus", target: { kind: "key", rowId: id } });
+  return {
+    ...next,
+    seq,
+    adding: { id, key: "", value: "" },
+    view: holdLayout(next.view, viewSource(next), ctx.sort),
+  };
+}
+
+function deleteRow(
+  s: EditorState,
+  rowId: RowId,
+  ctx: PaneContext,
+  fx: EditorEffect[],
+): EditorState {
   const index = s.draft.rows.findIndex((row) => row.id === rowId);
   if (index < 0) return s;
-  const neighbor = neighborOf(viewRows(viewSource(s), s.view), rowId);
-  fx.push(neighbor ? focusKey(neighbor) : { type: "focus", target: { kind: "add" } });
-  const field = typedKey(s, rowId) === null ? s.field : null;
-  const draft = { ...s.draft, rows: s.draft.rows.filter((row) => row.id !== rowId) };
-  return stageSave({ ...s, field, draft, undo: { row: s.draft.rows[index], index } }, "now", fx);
+  const ids = viewRows(viewSource(s), s.view, ctx.sort)
+    .entries.filter((entry) => !entry.draft)
+    .map((entry) => entry.row.id);
+  const neighbor = neighborIn(ids, rowId);
+  fx.push({
+    type: "focus",
+    target: neighbor ? { kind: "key", rowId: neighbor } : { kind: "add" },
+  });
+  const field =
+    s.field?.target.kind !== "name" && s.field?.target.rowId === rowId
+      ? null
+      : s.field;
+  const draft = {
+    ...s.draft,
+    rows: s.draft.rows.filter((row) => row.id !== rowId),
+  };
+  return stageSave(
+    { ...s, field, draft, undo: { row: s.draft.rows[index], index } },
+    "now",
+    fx,
+  );
 }
 
 function undoDelete(s: EditorState, fx: EditorEffect[]): EditorState {
@@ -315,15 +590,28 @@ function undoDelete(s: EditorState, fx: EditorEffect[]): EditorState {
   const { row, index } = s.undo;
   const rows = [...s.draft.rows];
   rows.splice(Math.min(index, rows.length), 0, row);
-  fx.push(focusKey(row.id));
-  return stageSave({ ...s, undo: null, draft: { ...s.draft, rows }, view: showAnyway(s.view, row.id) }, "now", fx);
+  fx.push({ type: "focus", target: { kind: "key", rowId: row.id } });
+  return stageSave(
+    {
+      ...s,
+      undo: null,
+      draft: { ...s.draft, rows },
+      view: showAnyway(s.view, row.id),
+    },
+    "now",
+    fx,
+  );
 }
 
-function create(s: EditorState, fx: EditorEffect[]): EditorState {
+function create(
+  s: EditorState,
+  ctx: PaneContext,
+  fx: EditorEffect[],
+): EditorState {
   if (s.footprint.kind !== "new" || s.save.inFlight) return s;
-  const next = { ...commitOpenField(s, fx), leaving: null };
-  if (!parseDraft(next.draft, taken(next)).ok) {
-    focusFirstIssue(next, fx);
+  const next = { ...commitPending(s, fx), leaving: null };
+  if (!isValid(next)) {
+    focusFirstIssue(next, ctx, fx);
     return next;
   }
   return queue(next, { type: "flush" }, fx);
@@ -333,31 +621,46 @@ function isBlank(draft: EnvDraft): boolean {
   return draft.name === "" && draft.color === null && draft.rows.length === 0;
 }
 
-function requestLeave(s: EditorState, target: LeaveTarget, fx: EditorEffect[]): EditorState {
+function requestLeave(
+  s: EditorState,
+  target: LeaveTarget,
+  fx: EditorEffect[],
+): EditorState {
   if (s.footprint.kind === "new") {
     if (s.save.inFlight) return s;
-    return isBlank(s.draft) ? leaveNow(s, target, fx) : { ...s, leaving: target };
+    const committed = commitPending(s, fx);
+    return isBlank(committed.draft)
+      ? leaveNow(committed, target, fx)
+      : { ...committed, leaving: target };
   }
-  const sound = soundDraft(s, fx);
-  const status = queueStatus(sound.save).kind;
-  const flushed =
-    status === "clean" || status === "saved" || status === "invalid" ? sound : queue(sound, { type: "flush" }, fx);
+  const flushed = flush(soundDraft(s, fx), fx);
   const head = flushed.save.head;
-  if (head.state === "writable" && head.rev !== flushed.save.acked.rev && flushed.footprint.kind === "stored") {
-    fx.push({ type: "publish", goal: head.goal, previousName: flushed.footprint.name });
+  if (
+    head.state === "writable" &&
+    head.rev !== flushed.save.acked.rev &&
+    flushed.footprint.kind === "stored"
+  ) {
+    fx.push({
+      type: "publish",
+      goal: head.goal,
+      previousName: flushed.footprint.name,
+    });
   }
   return leaveNow(flushed, target, fx);
 }
 
 function soundDraft(s: EditorState, fx: EditorEffect[]): EditorState {
   const scratch: EditorEffect[] = [];
-  const committed = commitOpenField(s, scratch);
-  if (parseDraft(committed.draft, taken(committed)).ok) {
+  const committed = commitPending(s, scratch);
+  if (isValid(committed)) {
     fx.push(...scratch);
     return committed;
   }
-  const rowId = s.field?.target.kind === "key" ? s.field.target.rowId : null;
-  return salvage({ ...s, field: null, pending: rowId !== null && s.pending === rowId ? null : s.pending }, fx);
+  const kept =
+    s.field?.target.kind === "value"
+      ? commitOpenField(s, fx)
+      : { ...s, field: null };
+  return salvage({ ...kept, adding: null }, fx);
 }
 
 function salvage(s: EditorState, fx: EditorEffect[]): EditorState {
@@ -365,7 +668,11 @@ function salvage(s: EditorState, fx: EditorEffect[]): EditorState {
   if (parsed.ok) return s;
   const acked = s.save.acked.goal;
   if (!acked) return s;
-  const good = new Map(s.draft.rows.filter((row) => !parsed.issues.rows.has(row.id)).map((row) => [row.key, row]));
+  const good = new Map(
+    s.draft.rows
+      .filter((row) => !parsed.issues.rows.has(row.id))
+      .map((row) => [row.key, row]),
+  );
   const ackedKeys = new Set(acked.variables.map(([key]) => key));
   let seq = s.seq;
   const rows: DraftRow[] = [];
@@ -381,8 +688,12 @@ function salvage(s: EditorState, fx: EditorEffect[]): EditorState {
   for (const row of good.values()) {
     if (!ackedKeys.has(row.key)) rows.push(row);
   }
-  const draft: EnvDraft = { name: parsed.issues.name ? acked.name : s.draft.name, color: s.draft.color, rows };
-  const next = { ...s, draft, field: null, pending: null, seq, undo: null };
+  const draft: EnvDraft = {
+    name: parsed.issues.name ? acked.name : s.draft.name,
+    color: s.draft.color,
+    rows,
+  };
+  const next = { ...s, draft, field: null, adding: null, seq, undo: null };
   const again = parseDraft(draft, taken(next));
   if (!again.ok) return { ...next, save: s.save };
   if (sameVariables(again.goal, acked)) return { ...next, save: s.save };
@@ -390,7 +701,11 @@ function salvage(s: EditorState, fx: EditorEffect[]): EditorState {
 }
 
 function sameVariables(goal: EnvGoal, acked: EnvGoal): boolean {
-  if (goal.name !== acked.name || goal.color !== acked.color || goal.variables.length !== acked.variables.length) {
+  if (
+    goal.name !== acked.name ||
+    goal.color !== acked.color ||
+    goal.variables.length !== acked.variables.length
+  ) {
     return false;
   }
   return goal.variables.every(([key, value], index) => {
@@ -399,150 +714,249 @@ function sameVariables(goal: EnvGoal, acked: EnvGoal): boolean {
   });
 }
 
-function leaveNow(s: EditorState, target: LeaveTarget, fx: EditorEffect[]): EditorState {
+function leaveNow(
+  s: EditorState,
+  target: LeaveTarget,
+  fx: EditorEffect[],
+): EditorState {
   const fp = s.footprint;
-  const cleanup = fp.strays.length > 0 ? { goal: s.save.acked.goal, footprint: fp } : null;
+  const cleanup =
+    fp.strays.length > 0 ? { goal: s.save.acked.goal, footprint: fp } : null;
   const outcome: LeaveOutcome =
-    target.to === "switch"
-      ? { kind: "switched", to: target.name }
-      : target.to === "delete" && fp.kind === "stored"
-        ? { kind: "deleteRequested", name: fp.name }
-        : { kind: "closed" };
+    target.to === "select"
+      ? { kind: "selected", subject: target.subject }
+      : { kind: "closed" };
   fx.push({ type: "leave", outcome, cleanup });
   return { ...s, leaving: null };
 }
 
-function focusFirstIssue(s: EditorState, fx: EditorEffect[]): void {
+function focusFirstIssue(
+  s: EditorState,
+  ctx: PaneContext,
+  fx: EditorEffect[],
+): void {
   const parsed = parseDraft(s.draft, taken(s));
   if (parsed.ok) return;
   if (parsed.issues.name) {
     fx.push({ type: "focus", target: { kind: "name" } });
     return;
   }
-  const first = viewRows(viewSource(s), s.view).entries.find((entry) => parsed.issues.rows.has(entry.row.id));
-  if (first) fx.push(focusKey(first.row.id));
+  const first = viewRows(viewSource(s), s.view, ctx.sort).entries.find(
+    (entry) => parsed.issues.rows.has(entry.row.id),
+  );
+  if (first)
+    fx.push({ type: "focus", target: { kind: "key", rowId: first.row.id } });
 }
 
-function settle(s: EditorState, rev: Rev, outcome: SyncOutcome, fx: EditorEffect[]): EditorState {
+function settle(
+  s: EditorState,
+  rev: Rev,
+  outcome: SyncOutcome,
+  fx: EditorEffect[],
+): EditorState {
   const flight = s.save.inFlight;
   if (!flight || flight.rev !== rev) return s;
   const wasNew = s.footprint.kind === "new";
   const footprint = afterSync(s.footprint, flight.goal, outcome);
   const next = queue(
     { ...s, footprint },
-    outcome.ok ? { type: "settled", rev, ok: true } : { type: "settled", rev, ok: false, error: outcome.error },
+    outcome.ok
+      ? { type: "settled", rev, ok: true }
+      : { type: "settled", rev, ok: false, error: outcome.error },
     fx,
   );
   if (!outcome.ok) return next;
   fx.push({ type: "stored", activated: outcome.activated });
-  if (wasNew) return requestLeave(next, { to: "close" }, fx);
-  return next.leaving && queueStatus(next.save).kind === "saved" ? leaveNow(next, next.leaving, fx) : next;
+  if (!wasNew) return next;
+  const created = flush(next, fx);
+  fx.push({
+    type: "leave",
+    outcome: { kind: "created", name: flight.goal.name },
+    cleanup: null,
+  });
+  return { ...created, leaving: null };
 }
 
 interface Projection {
   readonly name: string;
   readonly rows: readonly DraftRow[];
-  readonly pending: DraftRow | null;
+  readonly adding: DraftRow | null;
   readonly issues: DraftIssues;
 }
 
 const NO_ISSUES: DraftIssues = { name: null, rows: new Map() };
+
+function typedKey(s: EditorState, rowId: RowId): string | null {
+  const target = s.field?.target;
+  return target?.kind === "key" && target.rowId === rowId
+    ? (s.field?.text ?? null)
+    : null;
+}
 
 function project(s: EditorState): Projection {
   const rows = s.draft.rows.map((row) => {
     const typed = typedKey(s, row.id);
     return typed === null ? row : { ...row, key: typed };
   });
-  const pending = s.pending ? { id: s.pending, key: typedKey(s, s.pending) ?? "", value: "" } : null;
+  const adding = s.adding
+    ? { id: s.adding.id, key: s.adding.key, value: s.adding.value }
+    : null;
   const target = s.field?.target;
-  const name = target?.kind === "name" && s.field ? s.field.text.trim() : s.draft.name;
-  const parsed = parseDraft({ name, color: s.draft.color, rows: pending ? [...rows, pending] : rows }, taken(s));
-  if (parsed.ok) return { name, rows, pending, issues: NO_ISSUES };
+  const name =
+    target?.kind === "name" && s.field ? s.field.text.trim() : s.draft.name;
+  const parsed = parseDraft(
+    { name, color: s.draft.color, rows: adding ? [...rows, adding] : rows },
+    taken(s),
+  );
+  if (parsed.ok) return { name, rows, adding, issues: NO_ISSUES };
   const typing = target?.kind === "key" ? target.rowId : null;
   const rowIssues = new Map(
-    [...parsed.issues.rows].filter(([id, issue]) => issue !== "empty" || (id !== typing && id !== s.pending)),
+    [...parsed.issues.rows].filter(
+      ([id, issue]) =>
+        issue !== "empty" || (id !== typing && id !== adding?.id),
+    ),
   );
-  const nameIssue = target?.kind === "name" && parsed.issues.name === "empty" ? null : parsed.issues.name;
-  return { name, rows, pending, issues: { name: nameIssue, rows: rowIssues } };
+  const typingNewName = target?.kind === "name" && s.footprint.kind === "new";
+  const nameIssue =
+    typingNewName && parsed.issues.name === "empty" ? null : parsed.issues.name;
+  return { name, rows, adding, issues: { name: nameIssue, rows: rowIssues } };
 }
 
 function sourceOf(p: Projection): ViewSource<DraftRow> {
-  return { rows: p.rows, pending: p.pending, mustShow: new Set(p.issues.rows.keys()) };
+  return {
+    rows: p.rows,
+    draft: p.adding,
+    mustShow: new Set(p.issues.rows.keys()),
+  };
 }
 
 function viewSource(s: EditorState): ViewSource<DraftRow> {
   return sourceOf(project(s));
 }
 
+export type CellView =
+  | {
+      readonly mode: "display";
+      readonly text: string;
+      readonly match: Span | null;
+    }
+  | { readonly mode: "edit"; readonly text: string };
+
 export interface VisibleRow {
   readonly id: RowId;
-  readonly keyText: string;
-  readonly value: string;
-  readonly match: Span | null;
+  readonly key: CellView;
+  readonly value: CellView;
   readonly issue: RowIssue | null;
-  readonly pending: boolean;
 }
 
-export type LeavePrompt =
-  | { readonly reason: "failed"; readonly error: SaveFailure }
-  | { readonly reason: "invalid"; readonly busy: boolean }
-  | { readonly reason: "discardNew" };
+export interface DraftRowView {
+  readonly id: RowId;
+  readonly key: string;
+  readonly value: string;
+  readonly issue: RowIssue | null;
+}
+
+export interface TableView {
+  readonly nameSort: NameSortIndicator;
+  readonly rows: readonly VisibleRow[];
+  readonly draft: DraftRowView | null;
+}
+
+export type LeavePrompt = { readonly reason: "discardNew" };
 
 export interface EditorView {
   readonly mode: "create" | "edit";
-  readonly subject: EnvSummary | null;
-  readonly switchTargets: readonly EnvSummary[];
-  readonly name: { readonly text: string; readonly issue: NameIssue | null };
-  readonly color: ColorKey;
+  readonly name: {
+    readonly text: string;
+    readonly editing: boolean;
+    readonly issue: NameIssue | null;
+  };
+  readonly color: Marker;
+  readonly variableCount: number;
   readonly search: {
     readonly query: string;
-    readonly sort: SortMode;
-    readonly shown: number;
-    readonly total: number;
-    readonly noMatches: boolean;
+    readonly filter: { readonly shown: number; readonly total: number } | null;
   };
-  readonly rows: readonly VisibleRow[];
-  readonly status: SaveStatus;
-  readonly undo: { readonly key: string } | null;
+  readonly table: TableView;
+  readonly body: "rows" | "emptyEnv" | "noMatches";
+  readonly status: QuietStatus;
+  readonly creating: boolean;
+  readonly undo: { readonly id: RowId; readonly key: string } | null;
   readonly prompt: LeavePrompt | null;
   readonly previewVars: Readonly<Record<string, string>>;
 }
 
-function promptOf(s: EditorState, status: SaveStatus): LeavePrompt | null {
-  if (!s.leaving) return null;
-  if (s.footprint.kind === "new") return { reason: "discardNew" };
-  if (status.kind === "failed") return { reason: "failed", error: status.error };
-  if (status.kind === "invalid") return { reason: "invalid", busy: s.save.inFlight !== null };
-  return null;
+export interface ViewContext extends PaneContext {
+  readonly status: QuietStatus;
 }
 
-export function selectView(s: EditorState): EditorView {
+function cellView(
+  s: EditorState,
+  cell: CellRef,
+  text: string,
+  match: Span | null,
+): CellView {
+  return sameTarget(s.field?.target, cell)
+    ? { mode: "edit", text: s.field?.text ?? "" }
+    : { mode: "display", text, match };
+}
+
+export function selectView(s: EditorState, ctx: ViewContext): EditorView {
   const p = project(s);
-  const v = viewRows(sourceOf(p), s.view);
-  const status = queueStatus(s.save);
-  const fp = s.footprint;
-  const ours = new Set<string>(footprintNames(fp));
+  const v = viewRows(sourceOf(p), s.view, ctx.sort);
+  const create = s.footprint.kind === "new";
+  const editingName = s.field?.target.kind === "name";
+  const draftEntry = v.entries.find((entry) => entry.draft);
   return {
-    mode: fp.kind === "new" ? "create" : "edit",
-    subject:
-      fp.kind === "stored"
-        ? { name: fp.name, color: s.save.acked.goal?.color ?? colorKey(defaultColorKeyForName(fp.name)) }
+    mode: create ? "create" : "edit",
+    name: {
+      text: editingName && s.field ? s.field.text : s.draft.name,
+      editing: create || editingName,
+      issue: p.issues.name,
+    },
+    color: paintMarker(s.draft.color, p.name),
+    variableCount: s.draft.rows.length,
+    search: {
+      query: s.view.query,
+      filter: v.filtering ? { shown: v.shown, total: v.total } : null,
+    },
+    table: {
+      nameSort: nameSortIndicator(ctx.sort),
+      rows: v.entries
+        .filter((entry) => !entry.draft)
+        .map(({ row, match }) => ({
+          id: row.id,
+          key: cellView(s, { kind: "key", rowId: row.id }, row.key, match),
+          value: cellView(s, { kind: "value", rowId: row.id }, row.value, null),
+          issue: p.issues.rows.get(row.id) ?? null,
+        })),
+      draft: draftEntry
+        ? {
+            id: draftEntry.row.id,
+            key: draftEntry.row.key,
+            value: draftEntry.row.value,
+            issue: p.issues.rows.get(draftEntry.row.id) ?? null,
+          }
         : null,
-    switchTargets: s.envs.filter((env) => !ours.has(env.name)),
-    name: { text: s.field?.target.kind === "name" ? s.field.text : s.draft.name, issue: p.issues.name },
-    color: s.draft.color ?? colorKey(defaultColorKeyForName(p.name)),
-    search: { query: s.view.query, sort: s.view.sort, shown: v.shown, total: v.total, noMatches: v.noMatches },
-    rows: v.entries.map(({ row, match, pending }) => ({
-      id: row.id,
-      keyText: row.key,
-      value: row.value,
-      match,
-      issue: p.issues.rows.get(row.id) ?? null,
-      pending,
-    })),
-    status,
-    undo: s.undo ? { key: s.undo.row.key } : null,
-    prompt: promptOf(s, status),
-    previewVars: Object.fromEntries(s.draft.rows.filter((row) => row.key !== "").map((row) => [row.key, row.value])),
+    },
+    body: v.noMatches
+      ? "noMatches"
+      : v.total === 0 && !draftEntry
+        ? "emptyEnv"
+        : "rows",
+    status:
+      create &&
+      ctx.status.kind === "notSaved" &&
+      ctx.status.reason === "invalid"
+        ? { kind: "hidden" }
+        : ctx.status,
+    creating: create && s.save.inFlight !== null,
+    undo: s.undo ? { id: s.undo.row.id, key: s.undo.row.key } : null,
+    prompt: s.leaving ? { reason: "discardNew" } : null,
+    previewVars: Object.fromEntries(
+      s.draft.rows
+        .filter((row) => row.key !== "")
+        .map((row) => [row.key, row.value]),
+    ),
   };
 }

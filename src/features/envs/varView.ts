@@ -1,8 +1,34 @@
 import type { RowId } from "./envDraft";
 
-export const SORT_MODES = ["key-asc", "key-desc", "added-newest", "added-oldest"] as const;
+export const SORT_MODES = [
+  "name-asc",
+  "name-desc",
+  "oldest",
+  "newest",
+] as const;
 export type SortMode = (typeof SORT_MODES)[number];
-export const DEFAULT_SORT: SortMode = "key-asc";
+export const DEFAULT_SORT: SortMode = "oldest";
+
+export function toggleNameSort(sort: SortMode): SortMode {
+  return sort === "name-asc" ? "name-desc" : "name-asc";
+}
+
+export interface NameSortIndicator {
+  readonly arrow: "up" | "down" | null;
+  readonly ariaSort: "ascending" | "descending" | "none";
+}
+
+export function nameSortIndicator(sort: SortMode): NameSortIndicator {
+  switch (sort) {
+    case "name-asc":
+      return { arrow: "up", ariaSort: "ascending" };
+    case "name-desc":
+      return { arrow: "down", ariaSort: "descending" };
+    case "oldest":
+    case "newest":
+      return { arrow: null, ariaSort: "none" };
+  }
+}
 
 export interface Span {
   readonly start: number;
@@ -10,13 +36,13 @@ export interface Span {
 }
 
 export interface LayoutHold {
+  readonly sort: SortMode;
   readonly shown: readonly RowId[];
   readonly hidden: ReadonlySet<RowId>;
 }
 
 export interface ViewState {
   readonly query: string;
-  readonly sort: SortMode;
   readonly hold: LayoutHold | null;
   readonly shownAnyway: ReadonlySet<RowId>;
 }
@@ -25,37 +51,44 @@ type Keyed = { readonly id: RowId; readonly key: string };
 
 export interface ViewSource<R extends Keyed> {
   readonly rows: readonly R[];
-  readonly pending: R | null;
+  readonly draft: R | null;
   readonly mustShow: ReadonlySet<RowId>;
 }
 
 export interface ViewEntry<R> {
   readonly row: R;
   readonly match: Span | null;
-  readonly pending: boolean;
+  readonly draft: boolean;
 }
 
 export interface VarView<R> {
   readonly entries: readonly ViewEntry<R>[];
   readonly shown: number;
   readonly total: number;
+  readonly filtering: boolean;
   readonly noMatches: boolean;
 }
 
 export const initialView: ViewState = {
   query: "",
-  sort: DEFAULT_SORT,
   hold: null,
   shownAnyway: new Set(),
 };
 
-const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+const collator = new Intl.Collator(undefined, {
+  numeric: true,
+  sensitivity: "base",
+});
 
 function normalize(query: string): string {
   return query.trim().toLowerCase();
 }
 
-function arrange<R extends Keyed>(src: ViewSource<R>, view: ViewState): R[] {
+function arrange<R extends Keyed>(
+  src: ViewSource<R>,
+  view: ViewState,
+  sort: SortMode,
+): R[] {
   const q = normalize(view.query);
   const kept = src.rows.filter(
     (row) =>
@@ -64,14 +97,14 @@ function arrange<R extends Keyed>(src: ViewSource<R>, view: ViewState): R[] {
       view.shownAnyway.has(row.id) ||
       src.mustShow.has(row.id),
   );
-  switch (view.sort) {
-    case "key-asc":
+  switch (sort) {
+    case "name-asc":
       return kept.sort((a, b) => collator.compare(a.key, b.key));
-    case "key-desc":
+    case "name-desc":
       return kept.sort((a, b) => collator.compare(b.key, a.key));
-    case "added-oldest":
+    case "oldest":
       return kept;
-    case "added-newest":
+    case "newest":
       return kept.reverse();
   }
 }
@@ -85,21 +118,28 @@ function heldRows<R extends Keyed>(rows: readonly R[], hold: LayoutHold): R[] {
   ];
 }
 
-export function viewRows<R extends Keyed>(src: ViewSource<R>, view: ViewState): VarView<R> {
-  const visible = view.hold ? heldRows(src.rows, view.hold) : arrange(src, view);
+export function viewRows<R extends Keyed>(
+  src: ViewSource<R>,
+  view: ViewState,
+  sort: SortMode,
+): VarView<R> {
+  const hold = view.hold?.sort === sort ? view.hold : null;
+  const visible = hold ? heldRows(src.rows, hold) : arrange(src, view, sort);
   const entries: ViewEntry<R>[] = visible.map((row) => ({
     row,
     match: matchSpan(row.key, view.query),
-    pending: false,
+    draft: false,
   }));
-  if (src.pending) {
-    entries.push({ row: src.pending, match: matchSpan(src.pending.key, view.query), pending: true });
+  if (src.draft) {
+    entries.push({ row: src.draft, match: null, draft: true });
   }
+  const filtering = normalize(view.query) !== "";
   return {
     entries,
     shown: visible.length,
     total: src.rows.length,
-    noMatches: normalize(view.query) !== "" && visible.length === 0,
+    filtering,
+    noMatches: filtering && visible.length === 0,
   };
 }
 
@@ -115,20 +155,23 @@ export function matchSpan(key: string, query: string): Span | null {
 
 export function setQuery(view: ViewState, query: string): ViewState {
   if (query === view.query) return view;
-  const shownAnyway = normalize(query) === "" ? initialView.shownAnyway : view.shownAnyway;
+  const shownAnyway =
+    normalize(query) === "" ? initialView.shownAnyway : view.shownAnyway;
   return { ...view, query, shownAnyway };
 }
 
-export function setSort(view: ViewState, sort: SortMode): ViewState {
-  return sort === view.sort ? view : { ...view, sort };
-}
-
-export function holdLayout<R extends Keyed>(view: ViewState, src: ViewSource<R>): ViewState {
-  if (view.hold) return view;
-  const shown = arrange(src, view).map((row) => row.id);
+export function holdLayout<R extends Keyed>(
+  view: ViewState,
+  src: ViewSource<R>,
+  sort: SortMode,
+): ViewState {
+  if (view.hold?.sort === sort) return view;
+  const shown = arrange(src, view, sort).map((row) => row.id);
   const visible = new Set(shown);
-  const hidden = new Set(src.rows.filter((row) => !visible.has(row.id)).map((row) => row.id));
-  return { ...view, hold: { shown, hidden } };
+  const hidden = new Set(
+    src.rows.filter((row) => !visible.has(row.id)).map((row) => row.id),
+  );
+  return { ...view, hold: { sort, shown, hidden } };
 }
 
 export function releaseLayout(view: ViewState): ViewState {
@@ -140,9 +183,8 @@ export function showAnyway(view: ViewState, id: RowId): ViewState {
   return { ...view, shownAnyway: new Set(view.shownAnyway).add(id) };
 }
 
-export function neighborOf<R extends Keyed>(v: VarView<R>, removed: RowId): RowId | null {
-  const ids = v.entries.filter((entry) => !entry.pending).map((entry) => entry.row.id);
-  const at = ids.indexOf(removed);
+export function neighborIn<T>(ordered: readonly T[], removed: T): T | null {
+  const at = ordered.indexOf(removed);
   if (at < 0) return null;
-  return ids[at + 1] ?? ids[at - 1] ?? null;
+  return ordered[at + 1] ?? ordered[at - 1] ?? null;
 }

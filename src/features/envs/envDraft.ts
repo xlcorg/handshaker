@@ -18,7 +18,6 @@ export interface OpenEnv {
 
 export interface EnvSummary {
   readonly name: EnvName;
-  readonly color: ColorKey;
 }
 
 export function storedName(name: string): EnvName {
@@ -62,7 +61,10 @@ export type ParsedDraft =
   | { readonly ok: true; readonly goal: EnvGoal }
   | { readonly ok: false; readonly issues: DraftIssues };
 
-export function parseDraft(draft: EnvDraft, taken: ReadonlySet<string>): ParsedDraft {
+export function parseDraft(
+  draft: EnvDraft,
+  taken: ReadonlySet<string>,
+): ParsedDraft {
   const name: NameIssue | null =
     draft.name === "" ? "empty" : taken.has(draft.name) ? "taken" : null;
   const rows = new Map<RowId, RowIssue>();
@@ -79,16 +81,34 @@ export function parseDraft(draft: EnvDraft, taken: ReadonlySet<string>): ParsedD
   for (const ids of byKey.values()) {
     if (ids.length > 1) for (const id of ids) rows.set(id, "duplicate");
   }
-  if (name !== null || rows.size > 0) return { ok: false, issues: { name, rows } };
-  const variables: readonly Variable[] = draft.rows.map((row) => [row.key, row.value]);
-  return { ok: true, goal: { name: draft.name as EnvName, color: draft.color, variables } as EnvGoal };
+  if (name !== null || rows.size > 0)
+    return { ok: false, issues: { name, rows } };
+  const variables: readonly Variable[] = draft.rows.map((row) => [
+    row.key,
+    row.value,
+  ]);
+  return {
+    ok: true,
+    goal: {
+      name: draft.name as EnvName,
+      color: draft.color,
+      variables,
+    } as EnvGoal,
+  };
 }
 
 export function goalFromStored(env: OpenEnv): EnvGoal {
-  return { name: env.name, color: env.color, variables: env.variables } as EnvGoal;
+  return {
+    name: env.name,
+    color: env.color,
+    variables: env.variables,
+  } as EnvGoal;
 }
 
-export function mintRowId(seq: number): { readonly id: RowId; readonly seq: number } {
+export function mintRowId(seq: number): {
+  readonly id: RowId;
+  readonly seq: number;
+} {
   return { id: `r${seq}` as RowId, seq: seq + 1 };
 }
 
@@ -102,5 +122,8 @@ export function draftFromStored(
     next = minted.seq;
     return { id: minted.id, key, value };
   });
-  return { draft: { name: env?.name ?? "", color: env?.color ?? null, rows }, seq: next };
+  return {
+    draft: { name: env?.name ?? "", color: env?.color ?? null, rows },
+    seq: next,
+  };
 }
