@@ -509,11 +509,43 @@ function focusIn(
     ? Array.from(root.querySelectorAll<HTMLElement>("[data-field]"))
     : [];
   const el = nodes.find((node) => node.dataset.field === attr) ?? null;
-  el?.focus();
+  el?.focus({ preventScroll: true });
   if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
     el.setSelectionRange(el.value.length, el.value.length);
   }
+  revealFully(el);
   return el;
+}
+
+export function revealDelta(
+  bottom: number,
+  portBottom: number,
+  padding: number,
+): number {
+  return Math.max(0, bottom + padding - portBottom);
+}
+
+function revealFully(el: HTMLElement | null): void {
+  const row = el?.closest("tr");
+  if (!row) return;
+  row.scrollIntoView({ block: "nearest", inline: "nearest" });
+  const scroller = scrollParent(row);
+  if (!scroller) return;
+  const padding = Number.parseFloat(getComputedStyle(scroller).paddingBottom);
+  const hidden = revealDelta(
+    row.getBoundingClientRect().bottom,
+    scroller.getBoundingClientRect().bottom,
+    Number.isFinite(padding) ? padding : 0,
+  );
+  if (hidden > 0) scroller.scrollTop += hidden;
+}
+
+function scrollParent(el: HTMLElement): HTMLElement | null {
+  for (let node = el.parentElement; node; node = node.parentElement) {
+    const overflow = getComputedStyle(node).overflowY;
+    if (overflow === "auto" || overflow === "scroll") return node;
+  }
+  return null;
 }
 
 const HIDDEN: QuietStatus = { kind: "hidden" };

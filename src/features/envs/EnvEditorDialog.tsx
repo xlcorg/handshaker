@@ -216,12 +216,18 @@ function EnvList({
   );
 }
 
-function CloseButton({ dispatch }: { dispatch: Dispatch }) {
+function CloseButton({
+  dispatch,
+  className,
+}: {
+  dispatch: Dispatch;
+  className?: string;
+}) {
   return (
     <Button
       variant="ghost"
       size="icon-sm"
-      className="size-7 shrink-0"
+      className={cn("size-7 shrink-0", className)}
       aria-label={m.closeAria}
       onClick={() => dispatch({ type: "close" })}
     >
@@ -370,11 +376,8 @@ function PaneHeader({
       <span className="shrink-0 text-[13px] text-muted-foreground">
         {m.variableCount(view.variableCount)}
       </span>
-      <div className="ml-auto flex shrink-0 items-center gap-1">
-        <div
-          role="status"
-          className="flex items-center gap-1.5 text-[13px] text-muted-foreground"
-        >
+      <div className="flex shrink-0 items-center gap-1.5 text-[13px] text-muted-foreground">
+        <div role="status" className="flex items-center gap-1.5">
           <StatusText status={view.status} />
         </div>
         {failed && (
@@ -387,7 +390,7 @@ function PaneHeader({
           </Button>
         )}
       </div>
-      <CloseButton dispatch={dispatch} />
+      <CloseButton dispatch={dispatch} className="ml-auto" />
     </div>
   );
 }
