@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { ResolutionReportIpc } from "@/ipc/bindings";
+import type { ResolveKey } from "@/features/workflow/resolveKey";
 
 const DEBOUNCE_MS = 300;
 
@@ -20,7 +21,7 @@ export function hasVars(s: string): boolean {
 export function useVarResolve(
   value: string,
   resolver: ((t: string) => Promise<ResolutionReportIpc>) | undefined,
-  resolveKey?: string,
+  resolveKey: ResolveKey,
 ): ResolutionReportIpc | null {
   const [report, setReport] = useState<ResolutionReportIpc | null>(null);
   const resolverRef = useRef(resolver);
@@ -56,7 +57,7 @@ export function useVarResolve(
 export function useTokenResolveStates(
   names: string[],
   resolver: ((t: string) => Promise<ResolutionReportIpc>) | undefined,
-  resolveKey?: string,
+  resolveKey: ResolveKey,
 ): Record<string, VarTokenState> {
   const [states, setStates] = useState<Record<string, VarTokenState>>({});
   const resolverRef = useRef(resolver);

@@ -5,7 +5,10 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { COTabs } from "./COTabs";
 import { TlsBlock } from "./TlsBlock";
 import { VariablesBlock } from "./VariablesBlock";
+import { resolveKey } from "@/features/workflow/resolveKey";
 import { EnvVarField } from "./EnvVarField";
+
+const k = resolveKey({ collectionId: "k", envName: null, envRevision: 0 });
 
 // Some ports use the `Tooltip` wrapper, which needs a TooltipProvider ancestor (supplied
 // globally in `main.tsx`). Wrap renders here so the shared component stays untouched.
@@ -56,7 +59,7 @@ describe("overview sub-components (ports)", () => {
         rows={[{ id: "v0", k: "uri", v: "{{root}}" }]}
         onChange={vi.fn()}
         resolveRow={resolver}
-        resolveKey="k"
+        resolveKey={k}
       />,
     );
     // The token is highlighted in place (no separate resolve line) and the resolved

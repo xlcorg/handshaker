@@ -10,8 +10,11 @@ vi.mock("@/ipc/client", () => ({
 }));
 
 import { ipc } from "@/ipc/client";
+import { resolveKey } from "@/features/workflow/resolveKey";
 import { QuickLinksStrip } from "./QuickLinksStrip";
 import type { LinkRow } from "./linkTarget";
+
+const k = resolveKey({ collectionId: "k", envName: null, envRevision: 0 });
 
 function r(ui: ReactElement) {
   return render(<TooltipProvider>{ui}</TooltipProvider>);
@@ -33,7 +36,7 @@ beforeEach(() => vi.clearAllMocks());
 describe("QuickLinksStrip — chips", () => {
   it("a ready chip opens the RESOLVED url via the opener seam", async () => {
     const resolve = resolver("https://grafana.example/d/abc");
-    r(<QuickLinksStrip rows={rows} onChange={vi.fn()} resolveUrl={resolve} resolveKey="k" />);
+    r(<QuickLinksStrip rows={rows} onChange={vi.fn()} resolveUrl={resolve} resolveKey={k} />);
     const chip = screen.getByText("Grafana").closest("button") as HTMLButtonElement;
     await waitFor(() => expect(chip).toHaveAttribute("aria-disabled", "false"));
     fireEvent.click(chip);
@@ -42,7 +45,7 @@ describe("QuickLinksStrip — chips", () => {
 
   it("a ready chip reads as a hyperlink: no icon, hover-underline, pointer cursor", async () => {
     const resolve = resolver("https://grafana.example/d/abc");
-    r(<QuickLinksStrip rows={rows} onChange={vi.fn()} resolveUrl={resolve} resolveKey="k" />);
+    r(<QuickLinksStrip rows={rows} onChange={vi.fn()} resolveUrl={resolve} resolveKey={k} />);
     const chip = screen.getByText("Grafana").closest("button") as HTMLButtonElement;
     await waitFor(() => expect(chip).toHaveAttribute("aria-disabled", "false"));
     // No external-link icon and no chip border on the hyperlink look.
@@ -54,7 +57,7 @@ describe("QuickLinksStrip — chips", () => {
 
   it("a broken chip is red and inert with no underline", async () => {
     const resolve = resolver("https://{{host}}/d/abc", ["host"]);
-    r(<QuickLinksStrip rows={rows} onChange={vi.fn()} resolveUrl={resolve} resolveKey="k" />);
+    r(<QuickLinksStrip rows={rows} onChange={vi.fn()} resolveUrl={resolve} resolveKey={k} />);
     const chip = screen.getByText("Grafana").closest("button") as HTMLButtonElement;
     await waitFor(() => expect(chip.getAttribute("title")).toContain("host"));
     expect(chip.className).toContain("vh-error-text");
@@ -64,7 +67,7 @@ describe("QuickLinksStrip — chips", () => {
 
   it("a broken chip is inert and its title names the missing vars", async () => {
     const resolve = resolver("https://{{host}}/d/abc", ["host"]);
-    r(<QuickLinksStrip rows={rows} onChange={vi.fn()} resolveUrl={resolve} resolveKey="k" />);
+    r(<QuickLinksStrip rows={rows} onChange={vi.fn()} resolveUrl={resolve} resolveKey={k} />);
     const chip = screen.getByText("Grafana").closest("button") as HTMLButtonElement;
     await waitFor(() => expect(chip.getAttribute("title")).toContain("host"));
     expect(chip).toHaveAttribute("aria-disabled", "true");
@@ -74,7 +77,7 @@ describe("QuickLinksStrip — chips", () => {
 
   it("a still-resolving chip is inert", () => {
     const resolve = vi.fn(() => new Promise<never>(() => {}));
-    r(<QuickLinksStrip rows={rows} onChange={vi.fn()} resolveUrl={resolve} resolveKey="k" />);
+    r(<QuickLinksStrip rows={rows} onChange={vi.fn()} resolveUrl={resolve} resolveKey={k} />);
     const chip = screen.getByText("Grafana").closest("button") as HTMLButtonElement;
     expect(chip).toHaveAttribute("aria-disabled", "true");
     fireEvent.click(chip);
@@ -87,7 +90,7 @@ describe("QuickLinksStrip — chips", () => {
         rows={[{ id: "l1", name: "  ", url: "https://logs.example/app" }]}
         onChange={vi.fn()}
         resolveUrl={resolver("unused")}
-        resolveKey="k"
+        resolveKey={k}
       />,
     );
     expect(screen.getByText("logs.example")).toBeInTheDocument();
@@ -100,7 +103,7 @@ describe("QuickLinksStrip — chips", () => {
         rows={[{ id: "l1", name: "Grafana", url: "grafana.corp/d/abc" }]}
         onChange={vi.fn()}
         resolveUrl={resolve}
-        resolveKey="k"
+        resolveKey={k}
       />,
     );
     const chip = screen.getByText("Grafana").closest("button") as HTMLButtonElement;
@@ -116,7 +119,7 @@ describe("QuickLinksStrip — chips", () => {
         rows={[{ id: "l1", name: "Grafana", url: "{{host}}/dash" }]}
         onChange={vi.fn()}
         resolveUrl={resolve}
-        resolveKey="k"
+        resolveKey={k}
       />,
     );
     const chip = screen.getByText("Grafana").closest("button") as HTMLButtonElement;
@@ -131,7 +134,7 @@ describe("QuickLinksStrip — chips", () => {
         rows={[{ id: "l1", name: "", url: "grafana.corp/d/abc" }]}
         onChange={vi.fn()}
         resolveUrl={resolver("unused")}
-        resolveKey="k"
+        resolveKey={k}
       />,
     );
     expect(screen.getByText("grafana.corp")).toBeInTheDocument();
@@ -146,7 +149,7 @@ describe("QuickLinksStrip — chips", () => {
         ]}
         onChange={vi.fn()}
         resolveUrl={resolver("unused")}
-        resolveKey="k"
+        resolveKey={k}
       />,
     );
     expect(screen.getByText("Grafana")).toBeInTheDocument();
@@ -159,7 +162,7 @@ describe("QuickLinksStrip — chips", () => {
         rows={[{ id: "l1", name: "Grafana", url: "  " }]}
         onChange={vi.fn()}
         resolveUrl={resolver("unused")}
-        resolveKey="k"
+        resolveKey={k}
       />,
     );
     expect(screen.getByText("Add link")).toBeInTheDocument();
@@ -167,20 +170,20 @@ describe("QuickLinksStrip — chips", () => {
   });
 
   it("shows a single ghost 'Add link' chip when there are no links", () => {
-    r(<QuickLinksStrip rows={[]} onChange={vi.fn()} resolveUrl={resolver("x")} resolveKey="k" />);
+    r(<QuickLinksStrip rows={[]} onChange={vi.fn()} resolveUrl={resolver("x")} resolveKey={k} />);
     expect(screen.getByText("Add link")).toBeInTheDocument();
     expect(screen.queryByLabelText("Edit links")).toBeNull();
   });
 
   it("the ghost chip opens the edit dialog", () => {
-    r(<QuickLinksStrip rows={[]} onChange={vi.fn()} resolveUrl={resolver("x")} resolveKey="k" />);
+    r(<QuickLinksStrip rows={[]} onChange={vi.fn()} resolveUrl={resolver("x")} resolveKey={k} />);
     fireEvent.click(screen.getByText("Add link"));
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 
   it("the pencil opens the dialog and edits round-trip through onChange", () => {
     const onChange = vi.fn();
-    r(<QuickLinksStrip rows={rows} onChange={onChange} resolveUrl={resolver("x")} resolveKey="k" />);
+    r(<QuickLinksStrip rows={rows} onChange={onChange} resolveUrl={resolver("x")} resolveKey={k} />);
     fireEvent.click(screen.getByLabelText("Edit links"));
     const dialog = screen.getByRole("dialog");
     fireEvent.change(within(dialog).getByLabelText("link name"), { target: { value: "Dash" } });

@@ -15,6 +15,7 @@ import { VarHighlightInput } from "@/features/vars/VarHighlightInput";
 import type { VarCandidate } from "@/features/vars/candidates";
 import { cn } from "@/lib/cn";
 import { messages } from "@/lib/messages";
+import type { ResolveKey } from "@/features/workflow/resolveKey";
 import { HTTP_METHOD_META, HTTP_METHODS } from "./model";
 
 export interface HttpAddressBarProps {
@@ -27,7 +28,7 @@ export interface HttpAddressBarProps {
   onSend: () => void;
   onCancel: () => void;
   resolveUrl?: (t: string) => Promise<ResolutionReportIpc>;
-  resolveKey?: string;
+  resolveKey?: ResolveKey;
   variables?: VarCandidate[];
 }
 

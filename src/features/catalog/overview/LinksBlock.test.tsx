@@ -13,8 +13,13 @@ vi.mock("@/ipc/client", () => ({
 import { toast } from "sonner";
 
 import { ipc } from "@/ipc/client";
+import { resolveKey } from "@/features/workflow/resolveKey";
 import { LinksBlock } from "./LinksBlock";
 import type { LinkRow } from "./linkTarget";
+
+const k = resolveKey({ collectionId: "k", envName: null, envRevision: 0 });
+const dev = resolveKey({ collectionId: null, envName: "dev", envRevision: 0 });
+const prod = resolveKey({ collectionId: null, envName: "prod", envRevision: 0 });
 
 function r(ui: ReactElement) {
   return render(<TooltipProvider>{ui}</TooltipProvider>);
@@ -41,7 +46,7 @@ describe("LinksBlock — drag reorder", () => {
 
   it("dragging a grip onto another row fires onChange with the full new order", () => {
     const onChange = vi.fn();
-    r(<LinksBlock rows={three} onChange={onChange} resolveUrl={resolver("x")} resolveKey="k" />);
+    r(<LinksBlock rows={three} onChange={onChange} resolveUrl={resolver("x")} resolveKey={k} />);
 
     // jsdom getBoundingClientRect has zero height, so every dragOver resolves to zone "before".
     fireEvent.dragStart(screen.getAllByLabelText("Reorder link")[2]); // drag c
@@ -53,7 +58,7 @@ describe("LinksBlock — drag reorder", () => {
 
   it("a no-op drop (same resulting order) does not fire onChange", () => {
     const onChange = vi.fn();
-    r(<LinksBlock rows={three} onChange={onChange} resolveUrl={resolver("x")} resolveKey="k" />);
+    r(<LinksBlock rows={three} onChange={onChange} resolveUrl={resolver("x")} resolveKey={k} />);
 
     fireEvent.dragStart(screen.getAllByLabelText("Reorder link")[0]); // drag a
     fireEvent.dragOver(rowOf(1), { clientY: 5 }); // before b ⇒ a stays where it is
@@ -66,7 +71,7 @@ describe("LinksBlock — drag reorder", () => {
 describe("LinksBlock — resolve + open", () => {
   it("opens the RESOLVED url via the opener seam", async () => {
     const resolve = resolver("https://grafana.example/d/abc");
-    r(<LinksBlock rows={rows} onChange={vi.fn()} resolveUrl={resolve} resolveKey="k" />);
+    r(<LinksBlock rows={rows} onChange={vi.fn()} resolveUrl={resolve} resolveKey={k} />);
 
     const open = await screen.findByLabelText("Open link");
     await waitFor(() => expect(open).toHaveAttribute("aria-disabled", "false"));
@@ -81,7 +86,7 @@ describe("LinksBlock — resolve + open", () => {
         rows={[{ id: "l1", name: "Logs", url: "https://logs.example" }]}
         onChange={vi.fn()}
         resolveUrl={resolve}
-        resolveKey="k"
+        resolveKey={k}
       />,
     );
     fireEvent.click(screen.getByLabelText("Open link"));
@@ -91,7 +96,7 @@ describe("LinksBlock — resolve + open", () => {
 
   it("marks an unresolved link, blocks the click and names the missing vars", async () => {
     const resolve = resolver("https://{{host}}/d/abc", ["host"]);
-    r(<LinksBlock rows={rows} onChange={vi.fn()} resolveUrl={resolve} resolveKey="k" />);
+    r(<LinksBlock rows={rows} onChange={vi.fn()} resolveUrl={resolve} resolveKey={k} />);
 
     const open = await screen.findByLabelText("Open link");
     await waitFor(() => expect(open.getAttribute("title")).toContain("host"));
@@ -102,7 +107,7 @@ describe("LinksBlock — resolve + open", () => {
 
   it("treats a resolve cycle as unresolved", async () => {
     const resolve = resolver("{{a}}", [], ["a", "b", "a"]);
-    r(<LinksBlock rows={rows} onChange={vi.fn()} resolveUrl={resolve} resolveKey="k" />);
+    r(<LinksBlock rows={rows} onChange={vi.fn()} resolveUrl={resolve} resolveKey={k} />);
 
     const open = await screen.findByLabelText("Open link");
     await waitFor(() => expect(open.getAttribute("title")).toContain("a → b → a"));
@@ -112,7 +117,7 @@ describe("LinksBlock — resolve + open", () => {
   it("re-resolves when the resolveKey changes (environment switch)", async () => {
     const resolve = resolver("https://dev.example/d/abc");
     const { rerender } = r(
-      <LinksBlock rows={rows} onChange={vi.fn()} resolveUrl={resolve} resolveKey="dev" />,
+      <LinksBlock rows={rows} onChange={vi.fn()} resolveUrl={resolve} resolveKey={dev} />,
     );
     // The URL field (VarHighlightInput) also resolves, so the row resolves more than once
     // per key — assert the key change triggers a fresh resolve, not an exact call count.
@@ -121,7 +126,7 @@ describe("LinksBlock — resolve + open", () => {
 
     rerender(
       <TooltipProvider>
-        <LinksBlock rows={rows} onChange={vi.fn()} resolveUrl={resolve} resolveKey="prod" />
+        <LinksBlock rows={rows} onChange={vi.fn()} resolveUrl={resolve} resolveKey={prod} />
       </TooltipProvider>,
     );
     await waitFor(() => expect(resolve.mock.calls.length).toBeGreaterThan(before));
@@ -134,7 +139,7 @@ describe("LinksBlock — resolve + open", () => {
         rows={[{ id: "l1", name: "Grafana", url: "grafana://board" }]}
         onChange={vi.fn()}
         resolveUrl={resolver("unused")}
-        resolveKey="k"
+        resolveKey={k}
       />,
     );
     fireEvent.click(screen.getByLabelText("Open link"));
@@ -147,7 +152,7 @@ describe("LinksBlock — resolve + open", () => {
         rows={[{ id: "l1", name: "Grafana", url: "grafana.corp/d/abc" }]}
         onChange={vi.fn()}
         resolveUrl={resolver("unused")}
-        resolveKey="k"
+        resolveKey={k}
       />,
     );
     fireEvent.click(screen.getByLabelText("Open link"));
@@ -160,7 +165,7 @@ describe("LinksBlock — resolve + open", () => {
         rows={[{ id: "l1", name: "Grafana", url: "   " }]}
         onChange={vi.fn()}
         resolveUrl={resolver("unused")}
-        resolveKey="k"
+        resolveKey={k}
       />,
     );
     const open = screen.getByLabelText("Open link");
@@ -172,7 +177,7 @@ describe("LinksBlock — resolve + open", () => {
 
   it("blocks the click while a templated url has not resolved yet", () => {
     const resolve = vi.fn(() => new Promise<never>(() => {}));
-    r(<LinksBlock rows={rows} onChange={vi.fn()} resolveUrl={resolve} resolveKey="k" />);
+    r(<LinksBlock rows={rows} onChange={vi.fn()} resolveUrl={resolve} resolveKey={k} />);
     fireEvent.click(screen.getByLabelText("Open link"));
     expect(ipc.openExternal).not.toHaveBeenCalled();
   });
@@ -181,7 +186,7 @@ describe("LinksBlock — resolve + open", () => {
 describe("LinksBlock — URL field variable treatment", () => {
   it("highlights the {{var}} token in the URL and previews the resolved value", async () => {
     const resolve = resolver("https://grafana.example/d/abc");
-    r(<LinksBlock rows={rows} onChange={vi.fn()} resolveUrl={resolve} resolveKey="k" />);
+    r(<LinksBlock rows={rows} onChange={vi.fn()} resolveUrl={resolve} resolveKey={k} />);
 
     // Token segment painted as resolved (green), literal segments left plain.
     await waitFor(() => expect(screen.getByText("{{host}}").className).toContain("vh-resolved"));
@@ -191,7 +196,7 @@ describe("LinksBlock — URL field variable treatment", () => {
 
   it("marks the token as an error when the URL does not resolve", async () => {
     const resolve = resolver("https://{{host}}/d/abc", ["host"]);
-    r(<LinksBlock rows={rows} onChange={vi.fn()} resolveUrl={resolve} resolveKey="k" />);
+    r(<LinksBlock rows={rows} onChange={vi.fn()} resolveUrl={resolve} resolveKey={k} />);
 
     await waitFor(() => expect(screen.getByText("{{host}}").className).toContain("vh-error"));
   });
@@ -203,7 +208,7 @@ describe("LinksBlock — URL field variable treatment", () => {
     function Host() {
       const [rs, setRs] = useState<LinkRow[]>([{ id: "l1", name: "", url: "" }]);
       return (
-        <LinksBlock rows={rs} onChange={setRs} resolveUrl={resolve} resolveKey="k" variables={variables} />
+        <LinksBlock rows={rs} onChange={setRs} resolveUrl={resolve} resolveKey={k} variables={variables} />
       );
     }
     r(<Host />);

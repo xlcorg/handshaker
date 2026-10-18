@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import type { HttpTemplateIpc } from "@/ipc/bindings";
 import { useCatalog } from "@/features/catalog/CatalogProvider";
 import { useEnvRevision } from "@/features/envs/envRevision";
+import { resolveKey } from "@/features/workflow/resolveKey";
 import { useActiveEnvVars } from "@/features/envs/useActiveEnvVars";
 import { buildVarCandidates } from "@/features/vars/candidates";
 import { varsResolverFor } from "@/features/workflow/actions";
@@ -31,7 +32,11 @@ export function HttpPanel({ draft, origin, originVars }: HttpPanelProps) {
   const envName = useActiveWorkflow().envName;
   const { bumpUsage } = useCatalog();
   const envRevision = useEnvRevision();
-  const resolveKey = `${draft.collectionId ?? ""}|${envName ?? ""}|${envRevision}`;
+  const key = resolveKey({
+    collectionId: draft.collectionId,
+    envName,
+    envRevision,
+  });
   const resolver = varsResolverFor(draft.collectionId);
   const activeEnvVars = useActiveEnvVars();
   const variables = useMemo(
@@ -41,7 +46,7 @@ export function HttpPanel({ draft, origin, originVars }: HttpPanelProps) {
   const effectiveAuth = useEffectiveAuth(
     draft.template.auth,
     { collection_id: draft.collectionId, env_name: envName },
-    resolveKey,
+    key,
   );
 
   const edit = (patch: Partial<HttpTemplateIpc>) =>
@@ -68,7 +73,7 @@ export function HttpPanel({ draft, origin, originVars }: HttpPanelProps) {
         onSend={send}
         onCancel={() => void cancelHttpCall(draft)}
         resolveUrl={resolver}
-        resolveKey={resolveKey}
+        resolveKey={key}
         variables={variables}
       />
       <FocusSplit
@@ -80,7 +85,7 @@ export function HttpPanel({ draft, origin, originVars }: HttpPanelProps) {
             onSubmit={submit}
             varCandidates={variables}
             resolver={resolver}
-            resolveKey={resolveKey}
+            resolveKey={key}
           />
         }
         response={

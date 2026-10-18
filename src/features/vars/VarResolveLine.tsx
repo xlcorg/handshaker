@@ -2,6 +2,7 @@ import { cn } from "@/lib/cn";
 import { usePrefs } from "@/lib/use-prefs";
 import type { ResolutionReportIpc } from "@/ipc/bindings";
 
+import { idleResolveKey, type ResolveKey } from "@/features/workflow/resolveKey";
 import { hasVars, useVarResolve } from "./useVarResolve";
 
 export { hasVars } from "./useVarResolve";
@@ -11,8 +12,8 @@ export interface VarResolveLineProps {
   value: string;
   /** Performs the resolve — callers bake the ctx (collection/env overlays) in. */
   resolver: (t: string) => Promise<ResolutionReportIpc>;
-  /** Stringified extra resolve inputs (sibling rows, active env); change ⇒ re-resolve. */
-  resolveKey?: string;
+  /** Extra resolve inputs (sibling rows, active env); change ⇒ re-resolve. */
+  resolveKey?: ResolveKey;
   className?: string;
 }
 
@@ -21,7 +22,7 @@ export interface VarResolveLineProps {
  *  Renders nothing while the value has no `{{…}}` or before the first resolve. */
 export function VarResolveLine({ value, resolver, resolveKey, className }: VarResolveLineProps) {
   const [prefs] = usePrefs();
-  const report = useVarResolve(value, resolver, resolveKey);
+  const report = useVarResolve(value, resolver, resolveKey ?? idleResolveKey);
 
   if (!hasVars(value) || report === null) return null;
 

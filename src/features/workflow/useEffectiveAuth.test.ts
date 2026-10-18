@@ -7,7 +7,11 @@ vi.mock("@/ipc/client", () => ({
 }));
 
 import * as ipc from "@/ipc/client";
+import { resolveKey } from "./resolveKey";
 import { useEffectiveAuth } from "./useEffectiveAuth";
+
+const rev1 = resolveKey({ collectionId: null, envName: "prod", envRevision: 1 });
+const rev2 = resolveKey({ collectionId: null, envName: "prod", envRevision: 2 });
 
 const NONE: SavedAuthConfigIpc = { kind: "none" };
 const ENV_VAR: SavedAuthConfigIpc = {
@@ -31,7 +35,7 @@ describe("useEffectiveAuth", () => {
       }),
     );
     const { result } = renderHook(() =>
-      useEffectiveAuth(NONE, { collection_id: null, env_name: "prod" }, "rev-1"),
+      useEffectiveAuth(NONE, { collection_id: null, env_name: "prod" }, rev1),
     );
     expect(result.current).toEqual(NONE);
 
@@ -41,7 +45,7 @@ describe("useEffectiveAuth", () => {
 
   it("calls authEffective with the step auth and ctx", async () => {
     vi.mocked(ipc.authEffective).mockResolvedValue(ENV_VAR);
-    renderHook(() => useEffectiveAuth(NONE, { collection_id: "c1", env_name: "prod" }, "rev-1"));
+    renderHook(() => useEffectiveAuth(NONE, { collection_id: "c1", env_name: "prod" }, rev1));
     await waitFor(() =>
       expect(ipc.authEffective).toHaveBeenCalledWith(NONE, { collection_id: "c1", env_name: "prod" }),
     );
@@ -53,13 +57,13 @@ describe("useEffectiveAuth", () => {
     vi.mocked(ipc.authEffective).mockResolvedValueOnce(FIRST).mockResolvedValueOnce(SECOND);
 
     const { result, rerender } = renderHook(
-      ({ rev }: { rev: string }) => useEffectiveAuth(NONE, { collection_id: null, env_name: "prod" }, rev),
-      { initialProps: { rev: "rev-1" } },
+      ({ rev }: { rev: typeof rev1 }) => useEffectiveAuth(NONE, { collection_id: null, env_name: "prod" }, rev),
+      { initialProps: { rev: rev1 } },
     );
     await waitFor(() => expect(result.current).toEqual(FIRST));
     expect(ipc.authEffective).toHaveBeenCalledTimes(1);
 
-    rerender({ rev: "rev-2" });
+    rerender({ rev: rev2 });
     await waitFor(() => expect(result.current).toEqual(SECOND));
     expect(ipc.authEffective).toHaveBeenCalledTimes(2);
   });
@@ -73,11 +77,11 @@ describe("useEffectiveAuth", () => {
 
     const SECOND: SavedAuthConfigIpc = { ...ENV_VAR, env_var: "TOK2" };
     const { result, rerender } = renderHook(
-      ({ rev }: { rev: string }) => useEffectiveAuth(NONE, { collection_id: null, env_name: "prod" }, rev),
-      { initialProps: { rev: "rev-1" } },
+      ({ rev }: { rev: typeof rev1 }) => useEffectiveAuth(NONE, { collection_id: null, env_name: "prod" }, rev),
+      { initialProps: { rev: rev1 } },
     );
 
-    rerender({ rev: "rev-2" }); // fires the second fetch before the first settles
+    rerender({ rev: rev2 }); // fires the second fetch before the first settles
     resolveSecond(SECOND);
     await waitFor(() => expect(result.current).toEqual(SECOND));
 

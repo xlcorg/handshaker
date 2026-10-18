@@ -3,6 +3,7 @@ import { ArrowDown, ArrowUp, Check, Trash2, XIcon } from "lucide-react";
 
 import { cn } from "@/lib/cn";
 import { messages } from "@/lib/messages";
+import { resolveKey } from "@/features/workflow/resolveKey";
 import { VarResolveLine, hasVars } from "@/features/vars/VarResolveLine";
 import type { ResolutionReportIpc } from "@/ipc/bindings";
 import { Button } from "@/components/ui/button";
@@ -196,7 +197,7 @@ function VariableRow({
   row,
   dispatch,
   resolveRow,
-  resolveKey,
+  resolveKey: fingerprint,
 }: {
   row: VisibleRow;
   dispatch: Dispatch;
@@ -255,7 +256,18 @@ function VariableRow({
             <VarResolveLine
               value={row.value.text}
               resolver={preview}
-              resolveKey={resolveKey}
+              // The preview fingerprint is the unsaved env map, not an active-env
+              // key. Brand it so the highlight hook accepts it. `unsavedVars` stays
+              // on the collection overview.
+              resolveKey={
+                fingerprint === undefined
+                  ? undefined
+                  : resolveKey({
+                      collectionId: null,
+                      envName: fingerprint,
+                      envRevision: 0,
+                    })
+              }
             />
           </TableCell>
         </TableRow>

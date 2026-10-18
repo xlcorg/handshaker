@@ -19,6 +19,7 @@ import type { DraftOrigin } from "./store";
 import { useSendHotkey } from "./useSendHotkey";
 import { FocusSplit } from "./FocusSplit";
 import { useEnvRevision } from "@/features/envs/envRevision";
+import { resolveKey } from "./resolveKey";
 import { useActiveEnvVars } from "@/features/envs/useActiveEnvVars";
 import { buildVarCandidates } from "@/features/vars/candidates";
 import { useMemo, useState } from "react";
@@ -60,7 +61,11 @@ export function CallPanel({ step, onPatch, onQuickAddMethod, originVars, originS
   // Re-resolve the address preview when the active env's identity or contents change
   // (the preview resolves against the active env via the backend — see envRevision).
   const envRevision = useEnvRevision();
-  const addressResolveKey = `${step.collectionId ?? ""}|${activeWf.envName ?? ""}|${envRevision}`;
+  const addressResolveKey = resolveKey({
+    collectionId: step.collectionId,
+    envName: activeWf.envName,
+    envRevision,
+  });
   const activeEnvVars = useActiveEnvVars();
   const varCandidates = useMemo(
     () => buildVarCandidates(activeEnvVars, originVars),

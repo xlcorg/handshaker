@@ -5,6 +5,7 @@ import { resolveAddressSafe } from "./actions";
 import { newId } from "@/lib/ids";
 import { readPrefs } from "@/lib/use-prefs";
 import { isCancelError } from "./netDiagnostics";
+import type { ResolveKey } from "./resolveKey";
 
 const DEBOUNCE_MS = 400;
 
@@ -28,17 +29,18 @@ function reflectErr(e: unknown): string {
  *  in-flight run early — both reuse the invoke registry (`grpcCancel` + the backend's
  *  `race_cancel_timeout`).
  *
- *  `resolveKey` is the active-env signal (env name + revision + collection — see
- *  `CallPanel.addressResolveKey`). The address is a `{{var}}` template resolved live inside
- *  `run`, so switching/editing the active env changes the resolved host WITHOUT changing the
- *  raw `address`. Folding that key into the debounce effect re-reflects on env change instead
- *  of freezing on the first env's contract until a manual refresh. */
+ *  `resolveKey` is the active-env signal (`resolveKey()` — collection, env name, revision).
+ *  The address is a `{{var}}` template resolved live inside `run`, so switching/editing the
+ *  active env changes the resolved host WITHOUT changing the raw `address`. Folding that
+ *  key into the debounce effect re-reflects on env change instead of freezing on the first
+ *  env's contract until a manual refresh. There is no default: a missing key must not
+ *  typecheck. */
 export function useDraftReflection(
   address: string,
   tls: boolean,
-  enabled = true,
-  collectionId: string | null = null,
-  resolveKey = "",
+  enabled: boolean,
+  collectionId: string | null,
+  resolveKey: ResolveKey,
   skipVerify = false,
 ): DraftReflection {
   const [catalog, setCatalog] = useState<ServiceCatalogIpc | null>(null);

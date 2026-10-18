@@ -6,6 +6,7 @@ import { newId } from "@/lib/ids";
 import { VarHighlightInput } from "@/features/vars/VarHighlightInput";
 import type { ResolutionReportIpc } from "@/ipc/bindings";
 import type { VarCandidate } from "@/features/vars/candidates";
+import type { ResolveKey } from "@/features/workflow/resolveKey";
 import { VAR_FIELD_FRAME, VAR_FIELD_METRICS } from "./varField";
 
 export interface VarRow {
@@ -19,7 +20,7 @@ interface VariablesBlockProps {
   onChange: (nextRows: VarRow[]) => void;
   /** Optional per-row resolve preview; the caller bakes the ctx into the resolver. */
   resolveRow?: (value: string) => Promise<ResolutionReportIpc>;
-  resolveKey?: string;
+  resolveKey?: ResolveKey;
   /** Variable candidates for `{{`-autocomplete inside the value field. */
   variables?: VarCandidate[];
 }

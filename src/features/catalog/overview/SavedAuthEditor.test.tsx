@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
-import { SavedAuthEditor } from "./SavedAuthEditor";
 import type { SavedAuthConfigIpc } from "@/ipc/bindings";
+import { resolveKey } from "@/features/workflow/resolveKey";
 import { messages } from "@/lib/messages";
+import { SavedAuthEditor } from "./SavedAuthEditor";
 
 const m = messages.catalog.overview.auth;
 
@@ -18,6 +19,8 @@ vi.mock("@/ipc/client", () => ({
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ writeText: vi.fn().mockResolvedValue(undefined) }));
 import { ipc } from "@/ipc/client";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+
+const k = resolveKey({ collectionId: "k", envName: null, envRevision: 0 });
 
 const oauth2: SavedAuthConfigIpc = {
   kind: "oauth2_client_credentials",
@@ -245,7 +248,7 @@ describe("SavedAuthEditor (oauth2 var highlighting)", () => {
 
   it("exposes the four oauth2 fields as var-highlight comboboxes", async () => {
     await renderEditor(
-      <SavedAuthEditor value={oauth2} onChange={() => {}} resolver={resolver} resolveKey="k" variables={candidates} />,
+      <SavedAuthEditor value={oauth2} onChange={() => {}} resolver={resolver} resolveKey={k} variables={candidates} />,
     );
     expect(screen.getByRole("combobox", { name: m.tokenUrl })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: m.clientId })).toBeInTheDocument();
@@ -256,7 +259,7 @@ describe("SavedAuthEditor (oauth2 var highlighting)", () => {
   it("colors a resolvable var green and an unknown one red (matches Send)", async () => {
     const cfg: SavedAuthConfigIpc = { ...oauth2, token_url: "{{known}}", client_id: "{{missing}}" };
     await renderEditor(
-      <SavedAuthEditor value={cfg} onChange={() => {}} resolver={resolver} resolveKey="k" variables={candidates} />,
+      <SavedAuthEditor value={cfg} onChange={() => {}} resolver={resolver} resolveKey={k} variables={candidates} />,
     );
     await waitFor(() => {
       expect(document.querySelector(".vh-resolved")).toHaveTextContent("{{known}}");

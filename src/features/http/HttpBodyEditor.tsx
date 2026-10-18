@@ -8,6 +8,7 @@ import { BodyView } from "@/features/bodyview/BodyView";
 import { MetadataEditor } from "@/features/workflow/MetadataEditor";
 import type { VarCandidate } from "@/features/vars/candidates";
 import { cn } from "@/lib/cn";
+import type { ResolveKey } from "@/features/workflow/resolveKey";
 import { messages } from "@/lib/messages";
 
 type BodyKind = HttpBodyIpc["kind"];
@@ -19,7 +20,7 @@ export interface HttpBodyEditorProps {
   onSubmit?: () => void;
   varCandidates?: VarCandidate[];
   resolver?: (t: string) => Promise<ResolutionReportIpc>;
-  resolveKey?: string;
+  resolveKey?: ResolveKey;
 }
 
 export function HttpBodyEditor({

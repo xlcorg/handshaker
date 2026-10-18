@@ -1,6 +1,7 @@
 import { toast } from "sonner";
 import { ipc } from "@/ipc/client";
 import type { ResolutionReportIpc } from "@/ipc/bindings";
+import type { ResolveKey } from "@/features/workflow/resolveKey";
 import { hasVars, useVarResolve } from "@/features/vars/useVarResolve";
 import { messages } from "@/lib/messages";
 
@@ -17,8 +18,8 @@ export interface LinkRow {
 export interface LinkResolve {
   /** Resolves a URL template — the caller bakes the ctx (collection vars + active env) in. */
   resolveUrl: (t: string) => Promise<ResolutionReportIpc>;
-  /** Stringified extra resolve inputs (collection vars, active env); change ⇒ re-resolve. */
-  resolveKey: string;
+  /** Extra resolve inputs (collection vars, active env); change ⇒ re-resolve. */
+  resolveKey: ResolveKey;
 }
 
 /** Resolve state of one link's URL — the three states the open action can be in.
@@ -68,7 +69,7 @@ function classifyResolved(resolved: string): LinkTarget {
 export function useLinkTarget(
   url: string,
   resolveUrl: (t: string) => Promise<ResolutionReportIpc>,
-  resolveKey: string,
+  resolveKey: ResolveKey,
 ): LinkTarget {
   const report = useVarResolve(url, resolveUrl, resolveKey);
   return linkTarget(url, report);

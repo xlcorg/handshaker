@@ -8,6 +8,7 @@ import { UnderlineTabs } from "@/components/ui/underline-tabs";
 import { MetadataEditor } from "@/features/workflow/MetadataEditor";
 import { AuthReadOnly } from "@/features/workflow/RequestTabs";
 import type { VarCandidate } from "@/features/vars/candidates";
+import type { ResolveKey } from "@/features/workflow/resolveKey";
 import { messages } from "@/lib/messages";
 import { HttpBodyEditor } from "./HttpBodyEditor";
 
@@ -21,7 +22,7 @@ export interface HttpRequestTabsProps {
   onSubmit?: () => void;
   varCandidates?: VarCandidate[];
   resolver?: (t: string) => Promise<ResolutionReportIpc>;
-  resolveKey?: string;
+  resolveKey?: ResolveKey;
 }
 
 export function HttpRequestTabs({

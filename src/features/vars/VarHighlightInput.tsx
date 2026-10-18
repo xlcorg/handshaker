@@ -5,6 +5,7 @@ import { Tooltip, TooltipProvider } from "@/components/ui/tooltip";
 import { usePrefs } from "@/lib/use-prefs";
 import type { ResolutionReportIpc } from "@/ipc/bindings";
 
+import { idleResolveKey, type ResolveKey } from "@/features/workflow/resolveKey";
 import { useTokenResolveStates, useVarResolve } from "./useVarResolve";
 import { VarSuggestDropdown, optionId } from "./VarSuggestDropdown";
 import { openVarToken, filterCandidates, applyVarPick, MAX_VAR_SUGGESTIONS } from "./varContext";
@@ -45,7 +46,7 @@ export interface VarHighlightInputProps {
   /** Resolves the whole template for highlighting + the resolved-value display. Omit to disable. */
   resolver?: (t: string) => Promise<ResolutionReportIpc>;
   /** Extra resolve inputs (active env, env revision); change ⇒ re-resolve. */
-  resolveKey?: string;
+  resolveKey?: ResolveKey;
   placeholder?: string;
   ariaLabel?: string;
   /** Font/box metrics applied identically to the transparent input and the backdrop so
@@ -69,8 +70,9 @@ export function VarHighlightInput({
   metrics = DEFAULT_METRICS, className, variables,
 }: VarHighlightInputProps) {
   const [prefs] = usePrefs();
+  const key = resolveKey ?? idleResolveKey;
   // Whole-template report drives the field-level resolved-value chip + tooltip + `ok`.
-  const report = useVarResolve(value, resolver, resolveKey);
+  const report = useVarResolve(value, resolver, key);
   const segments = useMemo(() => parseSegments(value), [value]);
   // Per-token coloring resolves each surface token on its own — the whole-template
   // report's unresolved_vars are LEAF names, so a chained-but-defined token (uri-root →
@@ -79,7 +81,7 @@ export function VarHighlightInput({
     () => [...new Set(segments.flatMap((s) => (s.varName == null ? [] : [s.varName])))],
     [segments],
   );
-  const tokenStates = useTokenResolveStates(tokenNames, resolver, resolveKey);
+  const tokenStates = useTokenResolveStates(tokenNames, resolver, key);
 
   const ok = report != null && report.cycle_chain == null && report.unresolved_vars.length === 0;
   const resolvedValue = ok ? report.resolved : "";

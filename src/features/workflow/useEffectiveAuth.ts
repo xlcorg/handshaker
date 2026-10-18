@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { SavedAuthConfigIpc } from "@/ipc/bindings";
 import { authEffective } from "@/ipc/client";
+import type { ResolveKey } from "./resolveKey";
 
 const NONE: SavedAuthConfigIpc = { kind: "none" };
 
@@ -11,14 +12,14 @@ export interface EffectiveAuthCtx {
 
 /** Effective auth ("which auth wins") for the Auth tab / history snapshot — asks core's
  *  `pick_auth_config` via the `auth_effective` command instead of re-deriving the pick in
- *  TS. Re-fetches on `revisionKey` (address-resolve key: env name + revision + collection —
- *  see `CallPanel.addressResolveKey`) as well as `stepAuth`/`ctx` identity changes. Defaults
- *  to `{ kind: "none" }` until the first fetch resolves; guards against a stale response
- *  landing after a newer request already started (last-fetch-wins). */
+ *  TS. Re-fetches on `revisionKey` (a `ResolveKey`: env name + revision + collection) as
+ *  well as `stepAuth`/`ctx` identity changes. The key is required. The returned config
+ *  defaults to `{ kind: "none" }` until the first fetch resolves; a stale response that
+ *  lands after a newer request already started is ignored (last-fetch-wins). */
 export function useEffectiveAuth(
   stepAuth: SavedAuthConfigIpc,
   ctx: EffectiveAuthCtx,
-  revisionKey: string,
+  revisionKey: ResolveKey,
 ): SavedAuthConfigIpc {
   const [auth, setAuth] = useState<SavedAuthConfigIpc>(NONE);
 

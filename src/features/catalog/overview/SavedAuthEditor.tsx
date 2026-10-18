@@ -16,6 +16,7 @@ import { useEnvRevision } from "@/features/envs/envRevision";
 import { VarHighlightInput } from "@/features/vars/VarHighlightInput";
 import type { VarCandidate } from "@/features/vars/candidates";
 import { VAR_FIELD_FRAME, VAR_FIELD_METRICS } from "./varField";
+import type { ResolveKey } from "@/features/workflow/resolveKey";
 import { messages } from "@/lib/messages";
 
 const m = messages.catalog.overview.auth;
@@ -36,7 +37,7 @@ export interface SavedAuthEditorProps {
    */
   resolver?: (t: string) => Promise<ResolutionReportIpc>;
   /** Extra resolve inputs (active env, unsaved collection vars, env revision); change ⇒ re-resolve. */
-  resolveKey?: string;
+  resolveKey?: ResolveKey;
   /** Variable candidates for `{{`-autocomplete inside the OAuth2 fields. */
   variables?: VarCandidate[];
 }

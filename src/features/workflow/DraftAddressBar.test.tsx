@@ -2,9 +2,12 @@ import { describe, it, expect, vi } from "vitest";
 import type { ReactElement } from "react";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { messages } from "@/lib/messages";
+import { resolveKey } from "./resolveKey";
 import { DraftAddressBar } from "./DraftAddressBar";
 import { newStep } from "./model";
-import { messages } from "@/lib/messages";
+
+const k = resolveKey({ collectionId: "k", envName: null, envRevision: 0 });
 
 const base = newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "GetX" });
 const cat = { services: [{ full_name: "p.v1.S", methods: [
@@ -133,7 +136,7 @@ describe("DraftAddressBar", () => {
     }));
     r(
       <DraftAddressBar
-        {...props({ step: { ...base, address: "{{host}}" }, resolveAddress, resolveKey: "k" })}
+        {...props({ step: { ...base, address: "{{host}}" }, resolveAddress, resolveKey: k })}
       />,
     );
     await waitFor(() => expect(screen.getByText("{{host}}").className).toContain("vh-resolved"));
@@ -150,7 +153,7 @@ describe("DraftAddressBar", () => {
     }));
     r(
       <DraftAddressBar
-        {...props({ step: { ...base, address: "{{host}}" }, resolveAddress, resolveKey: "k" })}
+        {...props({ step: { ...base, address: "{{host}}" }, resolveAddress, resolveKey: k })}
       />,
     );
     await waitFor(() => expect(screen.getByText("{{host}}").className).toContain("vh-error"));

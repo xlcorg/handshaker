@@ -4,6 +4,7 @@ import { VarHighlightInput } from "@/features/vars/VarHighlightInput";
 import type { VarCandidate } from "@/features/vars/candidates";
 import type { ResolutionReportIpc } from "@/ipc/bindings";
 import type { MetadataRow } from "./model";
+import type { ResolveKey } from "./resolveKey";
 
 export interface MetadataEditorProps {
   rows: MetadataRow[];
@@ -11,7 +12,7 @@ export interface MetadataEditorProps {
   /** Resolves a value template for inline {{var}} highlighting; omit to disable. */
   resolver?: (t: string) => Promise<ResolutionReportIpc>;
   /** Extra resolve inputs (active env, env revision); change ⇒ re-resolve. */
-  resolveKey?: string;
+  resolveKey?: ResolveKey;
   /** Variable candidates for value-field {{-autocomplete. Only values are template-resolved
    *  (keys are header names sent verbatim — resolved core-side in `grpc_send`), so only the
    *  value field gets the dropdown + highlighting. */

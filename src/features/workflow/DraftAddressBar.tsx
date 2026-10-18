@@ -10,6 +10,7 @@ import type { Step } from "./model";
 import { effectiveTls, nextTlsState } from "./tls";
 import { messages } from "@/lib/messages";
 import { CallControls, type TwoWayControls } from "./CallControls";
+import type { ResolveKey } from "./resolveKey";
 
 export type { TwoWayControls } from "./CallControls";
 
@@ -43,7 +44,7 @@ export interface DraftAddressBarProps {
    *  tooltip; the caller bakes in the collection/env ctx. Omit to disable highlighting. */
   resolveAddress?: (t: string) => Promise<ResolutionReportIpc>;
   /** Extra resolve inputs (active env, env revision); change ⇒ re-resolve. */
-  resolveKey?: string;
+  resolveKey?: ResolveKey;
   variables?: VarCandidate[];
 }
 

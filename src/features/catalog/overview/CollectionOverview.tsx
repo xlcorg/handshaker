@@ -26,6 +26,7 @@ import { useLinksPlacement } from "../uiState";
 import { TlsBlock } from "./TlsBlock";
 import { SavedAuthEditor } from "./SavedAuthEditor";
 import { usageLabel } from "./usage";
+import { resolveKey } from "@/features/workflow/resolveKey";
 import { useActiveWorkflow } from "@/features/workflow/store";
 import { useEnvRevision } from "@/features/envs/envRevision";
 import { useActiveEnvVars } from "@/features/envs/useActiveEnvVars";
@@ -149,7 +150,12 @@ export function CollectionOverview({ collection, onChanged, onSelectRequest, onC
       ipc.varsResolve(t, { collection_id: null, collection_vars: varsRecord, env_vars: null }),
     [varsRecord],
   );
-  const resolveKey = `${JSON.stringify(varsRecord)}|${activeWf.envName ?? ""}|${envRevision}`;
+  const previewKey = resolveKey({
+    collectionId: collection.id,
+    envName: activeWf.envName,
+    envRevision,
+    unsavedVars: varsRecord,
+  });
 
   // Stamp for relative "last used" labels. Recomputed each render; the list re-renders
   // when the in-memory tree changes (e.g. a Send optimistically bumps usage), so the
@@ -178,7 +184,7 @@ export function CollectionOverview({ collection, onChanged, onSelectRequest, onC
             rows={linkRows}
             onChange={onLinksChange}
             resolveUrl={resolveRow}
-            resolveKey={resolveKey}
+            resolveKey={previewKey}
             variables={varCandidates}
           />
         )}
@@ -198,7 +204,7 @@ export function CollectionOverview({ collection, onChanged, onSelectRequest, onC
           rows={linkRows}
           onChange={onLinksChange}
           resolveUrl={resolveRow}
-          resolveKey={resolveKey}
+          resolveKey={previewKey}
           variables={varCandidates}
         />
       )}
@@ -297,7 +303,7 @@ export function CollectionOverview({ collection, onChanged, onSelectRequest, onC
                 onChange={persistAuth}
                 seedKey={collection.id}
                 resolver={resolveRow}
-                resolveKey={resolveKey}
+                resolveKey={previewKey}
                 variables={varCandidates}
               />
             </COBlock>
@@ -316,7 +322,7 @@ export function CollectionOverview({ collection, onChanged, onSelectRequest, onC
                   persistVars(next);
                 }}
                 resolveRow={resolveRow}
-                resolveKey={resolveKey}
+                resolveKey={previewKey}
                 variables={varCandidates}
               />
             </COBlock>

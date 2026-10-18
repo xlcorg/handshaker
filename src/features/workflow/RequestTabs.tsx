@@ -10,6 +10,7 @@ import { usePrefs } from "@/lib/use-prefs";
 import { MetadataEditor } from "./MetadataEditor";
 import type { MetadataRow, Step } from "./model";
 import { messages } from "@/lib/messages";
+import type { ResolveKey } from "./resolveKey";
 
 type Tab = "request" | "metadata" | "auth";
 
@@ -29,7 +30,7 @@ export interface RequestTabsProps {
   /** Resolves a metadata value template for inline {{var}} highlighting; omit to disable. */
   metadataResolver?: (t: string) => Promise<ResolutionReportIpc>;
   /** Extra resolve inputs for metadata highlighting (active env, env revision). */
-  metadataResolveKey?: string;
+  metadataResolveKey?: ResolveKey;
 }
 
 export function RequestTabs({ step, serviceAuth, onBody, onMetadata, onSubmit, onResetTemplate, schema, varCandidates, metadataResolver, metadataResolveKey }: RequestTabsProps) {

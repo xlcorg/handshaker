@@ -1,7 +1,11 @@
 import { act, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import { resolveKey } from "@/features/workflow/resolveKey";
 import { VarResolveLine, hasVars } from "./VarResolveLine";
+
+const k1 = resolveKey({ collectionId: "k1", envName: null, envRevision: 0 });
+const k2 = resolveKey({ collectionId: "k2", envName: null, envRevision: 0 });
 
 const report = (over: Partial<{ resolved: string; unresolved_vars: string[]; cycle_chain: string[] | null }> = {}) => ({
   resolved: "ok", unresolved_vars: [], cycle_chain: null, dynamic_vars: [], ...over,
@@ -62,10 +66,10 @@ describe("VarResolveLine", () => {
     vi.useFakeTimers();
     const resolver = vi.fn(async () => report());
     const { rerender } = render(
-      <VarResolveLine value="{{x}}" resolver={resolver} resolveKey="k1" />,
+      <VarResolveLine value="{{x}}" resolver={resolver} resolveKey={k1} />,
     );
     await flushDebounce();
-    rerender(<VarResolveLine value="{{x}}" resolver={resolver} resolveKey="k2" />);
+    rerender(<VarResolveLine value="{{x}}" resolver={resolver} resolveKey={k2} />);
     await flushDebounce();
     expect(resolver).toHaveBeenCalledTimes(2);
     vi.useRealTimers();
