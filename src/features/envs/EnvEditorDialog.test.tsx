@@ -22,7 +22,11 @@ import { messages } from "@/lib/messages";
 
 import { EnvEditorDialog } from "./EnvEditorDialog";
 import { resetEnvSyncLane } from "./envSync";
-import { ENV_AUTOSAVE_DELAY_MS, resetEnvSaveLanes } from "./useEnvEditor";
+import {
+  ENV_AUTOSAVE_DELAY_MS,
+  resetEnvSaveLanes,
+  revealDelta,
+} from "./useEnvEditor";
 
 const m = messages.envs.editor;
 
@@ -310,6 +314,13 @@ describe("list selection", () => {
   });
 });
 
+describe("revealDelta", () => {
+  it("scrolls enough to clear the row and the scroller padding", () => {
+    expect(revealDelta(780, 770, 8)).toBe(18);
+    expect(revealDelta(700, 770, 8)).toBe(0);
+  });
+});
+
 describe("add variable row", () => {
   it("opens last under a name sort, focused, and an empty commit writes nothing", async () => {
     installStore([
@@ -493,6 +504,19 @@ describe("cells", () => {
 });
 
 describe("save status", () => {
+  it("sits after the variable count, with close last in the header", () => {
+    renderEditor("prod");
+    const count = screen.getByText(m.variableCount(2));
+    const status = screen.getByRole("status");
+    const close = screen.getByRole("button", { name: m.closeAria });
+    expect(count.compareDocumentPosition(status)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(status.compareDocumentPosition(close)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  });
+
   it("is absent on open, shows Saved after a fast ack without Saving, and hides it 2s later", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
@@ -533,6 +557,16 @@ describe("save status", () => {
     expect(banner).toHaveTextContent(m.saveFailedKept);
     expect(banner).toHaveAttribute("title", "disk full");
     expect(statusText()).toBe(m.statusNotSaved);
+    const status = screen.getByRole("status");
+    const retry = screen.getByRole("button", { name: m.retry });
+    expect(status.compareDocumentPosition(retry)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(
+      retry.compareDocumentPosition(
+        screen.getByRole("button", { name: m.closeAria }),
+      ),
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(
       screen.getByRole("button", { name: "api:4439" }),
     ).toBeInTheDocument();
