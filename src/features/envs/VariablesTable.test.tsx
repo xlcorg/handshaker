@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { act, render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { messages } from "@/lib/messages";
@@ -224,5 +224,228 @@ describe("VariablesTable", () => {
       await screen.findByText(/→ resolves: https:\/\/api\.example\.com/),
     ).toBeInTheDocument();
     expect(resolveRow).toHaveBeenCalledWith("{{notes-api-root}}");
+  });
+
+  const long =
+    "super-long-secret-value-that-should-remain-fully-visible-abcdefghijklmnopqrstuvwxyz0123456789";
+
+  function classes(el: Element): string[] {
+    return (el.getAttribute("class") ?? "").split(/\s+/);
+  }
+
+  async function settle() {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  }
+
+  function collapsedLine(): HTMLElement {
+    const line = document.querySelector("[data-collapsed-value]");
+    if (!(line instanceof HTMLElement)) throw new Error("no collapsed value");
+    return line;
+  }
+
+  it("shows one ellipsized line for an unfocused new-variable value", () => {
+    const state = step(
+      editorWith({}),
+      { type: "addRow" },
+      { type: "typeDraft", part: "key", text: "API_TOKEN" },
+      { type: "typeDraft", part: "value", text: long },
+    );
+    render(<VariablesTable table={tableOf(state)} dispatch={() => {}} />);
+    const editor = screen.getByRole("textbox", { name: m.valueHeader });
+    const line = collapsedLine();
+    expect(editor).toHaveValue(long);
+    expect(editor).not.toHaveAttribute("wrap", "off");
+    expect(editor.style.height).toBe("");
+    expect(classes(editor)).toContain("h-7");
+    expect(classes(editor)).toContain("overflow-hidden");
+    expect(editor.className).not.toContain("overflow-x-auto");
+    expect(editor.className).not.toContain("overflow-y-auto");
+    expect(line.textContent).toBe(long);
+    expect(classes(line)).toContain("line-clamp-1");
+    expect(line.className).not.toContain("whitespace-pre-wrap");
+  });
+
+  it("wraps a focused new-variable value and collapses it again on blur", async () => {
+    const proto = HTMLTextAreaElement.prototype;
+    const scroll = Object.getOwnPropertyDescriptor(proto, "scrollHeight");
+    const offset = Object.getOwnPropertyDescriptor(proto, "offsetHeight");
+    const client = Object.getOwnPropertyDescriptor(proto, "clientHeight");
+    Object.defineProperty(proto, "scrollHeight", {
+      configurable: true,
+      get: () => 80,
+    });
+    Object.defineProperty(proto, "offsetHeight", {
+      configurable: true,
+      get: () => 30,
+    });
+    Object.defineProperty(proto, "clientHeight", {
+      configurable: true,
+      get: () => 28,
+    });
+    try {
+      const state = step(
+        editorWith({}),
+        { type: "addRow" },
+        { type: "typeDraft", part: "value", text: long },
+      );
+      render(<VariablesTable table={tableOf(state)} dispatch={() => {}} />);
+      const editor = screen.getByRole("textbox", { name: m.valueHeader });
+      expect(editor.style.height).toBe("");
+      act(() => {
+        editor.focus();
+      });
+      expect(document.querySelector("[data-collapsed-value]")).toBeNull();
+      expect(editor).toHaveValue(long);
+      expect(editor.className).toContain("whitespace-pre-wrap");
+      expect(editor.className).toContain("break-all");
+      expect(editor.style.height).toBe("82px");
+      expect(editor.className).toContain("overflow-hidden");
+      expect(editor.className).not.toContain("overflow-y-auto");
+      act(() => {
+        editor.blur();
+      });
+      await settle();
+      const line = collapsedLine();
+      expect(line.textContent).toBe(long);
+      expect(classes(line)).toContain("line-clamp-1");
+      expect(line.className).not.toContain("whitespace-pre-wrap");
+      expect(editor.style.height).toBe("");
+    } finally {
+      if (scroll) Object.defineProperty(proto, "scrollHeight", scroll);
+      if (offset) Object.defineProperty(proto, "offsetHeight", offset);
+      if (client) Object.defineProperty(proto, "clientHeight", client);
+    }
+  });
+
+  it("scrolls a focused value taller than the cap vertically only", () => {
+    const proto = HTMLTextAreaElement.prototype;
+    const scroll = Object.getOwnPropertyDescriptor(proto, "scrollHeight");
+    const offset = Object.getOwnPropertyDescriptor(proto, "offsetHeight");
+    const client = Object.getOwnPropertyDescriptor(proto, "clientHeight");
+    Object.defineProperty(proto, "scrollHeight", {
+      configurable: true,
+      get: () => 400,
+    });
+    Object.defineProperty(proto, "offsetHeight", {
+      configurable: true,
+      get: () => 30,
+    });
+    Object.defineProperty(proto, "clientHeight", {
+      configurable: true,
+      get: () => 28,
+    });
+    try {
+      const state = step(
+        editorWith({}),
+        { type: "addRow" },
+        { type: "typeDraft", part: "value", text: "x".repeat(400) },
+      );
+      render(<VariablesTable table={tableOf(state)} dispatch={() => {}} />);
+      const editor = screen.getByRole("textbox", { name: m.valueHeader });
+      expect(editor.style.height).toBe("");
+      act(() => {
+        editor.focus();
+      });
+      expect(editor).toHaveValue("x".repeat(400));
+      expect(editor.style.height).toBe("168px");
+      expect(editor.className).toContain("overflow-y-auto");
+      expect(editor.className).toContain("overflow-x-hidden");
+      expect(editor.className).not.toContain("overflow-x-auto");
+    } finally {
+      if (scroll) Object.defineProperty(proto, "scrollHeight", scroll);
+      if (offset) Object.defineProperty(proto, "offsetHeight", offset);
+      if (client) Object.defineProperty(proto, "clientHeight", client);
+    }
+  });
+
+  it("shows a saved long value as one ellipsized line, wraps it while focused, and collapses on blur", async () => {
+    render(
+      <VariablesTable
+        table={tableOf(editorWith({ API_TOKEN: long }))}
+        dispatch={() => {}}
+      />,
+    );
+    const button = screen.getByRole("button", { name: long });
+    const closed = collapsedLine();
+    expect(closed.textContent).toBe(long);
+    expect(classes(closed)).toContain("line-clamp-1");
+    expect(closed.className).not.toContain("whitespace-pre-wrap");
+    expect(classes(button)).toContain("h-7");
+    expect(classes(button)).not.toContain("min-h-7");
+    act(() => {
+      button.focus();
+    });
+    expect(document.querySelector("[data-collapsed-value]")).toBeNull();
+    const open = button.querySelector("span");
+    expect(open?.textContent).toBe(long);
+    expect(open?.className).toContain("whitespace-pre-wrap");
+    expect(open?.className).not.toContain("line-clamp-1");
+    expect(classes(button)).toContain("min-h-7");
+    act(() => {
+      button.blur();
+    });
+    await settle();
+    const again = collapsedLine();
+    expect(again.textContent).toBe(long);
+    expect(classes(again)).toContain("line-clamp-1");
+    expect(again.className).not.toContain("whitespace-pre-wrap");
+    expect(classes(button)).toContain("h-7");
+  });
+
+  it("collapses a saved row that reused the focused draft id", async () => {
+    const draft = step(
+      editorWith({}),
+      { type: "addRow" },
+      { type: "typeDraft", part: "key", text: "TOKEN" },
+      { type: "typeDraft", part: "value", text: long },
+    );
+    const { rerender } = render(
+      <VariablesTable table={tableOf(draft)} dispatch={() => {}} />,
+    );
+    act(() => {
+      screen.getByRole("textbox", { name: m.valueHeader }).focus();
+    });
+    expect(document.querySelector("[data-value-expanded='true']")).not.toBeNull();
+    rerender(
+      <VariablesTable
+        table={tableOf(step(draft, { type: "commitDraft" }))}
+        dispatch={() => {}}
+      />,
+    );
+    const line = collapsedLine();
+    expect(line.textContent).toBe(long);
+    expect(classes(line)).toContain("line-clamp-1");
+    expect(line.className).not.toContain("whitespace-pre-wrap");
+    expect(document.querySelector("[data-value-expanded='true']")).toBeNull();
+  });
+
+  it("keeps the row expanded until the pointer is released", async () => {
+    render(
+      <VariablesTable
+        table={tableOf(editorWith({ API_TOKEN: long, OTHER: "short" }))}
+        dispatch={() => {}}
+      />,
+    );
+    const button = screen.getByRole("button", { name: long });
+    act(() => {
+      button.focus();
+    });
+    expect(button.querySelector("span")?.className).toContain(
+      "whitespace-pre-wrap",
+    );
+    act(() => {
+      fireEvent.pointerDown(window);
+      button.blur();
+    });
+    expect(button.querySelector("span")?.className).toContain(
+      "whitespace-pre-wrap",
+    );
+    act(() => {
+      fireEvent.pointerUp(window);
+    });
+    await settle();
+    expect(classes(collapsedLine())).toContain("line-clamp-1");
   });
 });
