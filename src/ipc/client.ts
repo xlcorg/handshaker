@@ -16,8 +16,8 @@ import type {
   AuthCredentialsIpc,
   OAuth2TokenInfoIpc,
   UiStateIpc,
-  ContractArtifactIpc,
   ContractQueryIpc,
+  MethodBundleIpc,
   Base64InspectIpc,
   ImportSummaryIpc,
   ImportResultIpc,
@@ -58,7 +58,7 @@ export async function grpcContractRead(
   query: ContractQueryIpc,
   requestId = newId(),
   timeoutMs = 30_000,
-): Promise<ContractArtifactIpc> {
+): Promise<MethodBundleIpc> {
   const r = await commands.grpcContractRead(
     addressTemplate,
     tlsOverride,

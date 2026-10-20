@@ -75,17 +75,12 @@ function catalogWith(
 }
 
 function serveCatalog(catalog: ServiceCatalogIpc) {
-  api.grpcContractRead.mockImplementation(
-    async (_a: unknown, _t: unknown, _c: unknown, query: { op?: string }) => {
-      if (query?.op === "skeleton") return { kind: "skeleton", json: "{}" };
-      if (query?.op === "schema")
-        return {
-          kind: "schema",
-          schema: { root: "t.M", messages: [], enums: [] },
-        };
-      return { kind: "catalog", catalog };
-    },
-  );
+  api.grpcContractRead.mockImplementation(async () => ({
+    catalog,
+    input_schema: { root: "t.M", messages: [], enums: [] },
+    output_schema: { root: "t.M", messages: [], enums: [] },
+    skeleton: "{}",
+  }));
 }
 
 const endOk: StreamEventIpc = {

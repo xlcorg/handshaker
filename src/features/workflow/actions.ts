@@ -2,8 +2,6 @@ import * as ipc from "@/ipc/client";
 import type {
   SavedAuthConfigIpc,
   ResolutionReportIpc,
-  MessageSchemaIpc,
-  MessageSideIpc,
   VarsResolveCtxIpc,
   SendCtxIpc,
   CallOptionsIpc,
@@ -84,54 +82,22 @@ function probeCtx(target: CallTargetInit) {
   };
 }
 
-/** Fetch a request-body skeleton for a method; never throws — falls back to "{}". */
+/** Read the request-body skeleton off the method bundle; never throws — falls back to "{}". */
 export async function buildRequestSkeletonSafe(
   target: CallTargetInit,
   service: string,
   method: string,
 ): Promise<string> {
   try {
-    const artifact = await ipc.grpcContractRead(
+    const bundle = await ipc.grpcContractRead(
       target.address,
       target.tls,
       probeCtx(target),
-      {
-        op: "skeleton",
-        service,
-        method,
-      },
+      { service, method, refresh: false },
     );
-    return artifact.kind === "skeleton" ? artifact.json : "{}";
+    return bundle.skeleton ?? "{}";
   } catch {
     return "{}";
-  }
-}
-
-/** Fetch the flat field-schema for a method's input or output message; never throws — returns
- *  null on any failure (no reflection / server down / unknown method). A null schema
- *  degrades gracefully: request autocomplete, the ghost skeleton, and the contract
- *  view are all suppressed, but the editor remains functional. */
-export async function fetchMessageSchemaSafe(
-  target: CallTargetInit,
-  service: string,
-  method: string,
-  side: MessageSideIpc = "input",
-): Promise<MessageSchemaIpc | null> {
-  try {
-    const artifact = await ipc.grpcContractRead(
-      target.address,
-      target.tls,
-      probeCtx(target),
-      {
-        op: "schema",
-        service,
-        method,
-        side,
-      },
-    );
-    return artifact.kind === "schema" ? artifact.schema : null;
-  } catch {
-    return null;
   }
 }
 

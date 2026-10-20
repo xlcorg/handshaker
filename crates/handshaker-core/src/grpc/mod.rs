@@ -24,9 +24,7 @@ pub use catalog::{build_catalog, MethodEntry, ServiceCatalog, ServiceEntry};
 pub use connection::{GrpcConnection, GrpcTarget};
 pub use contract::activate;
 pub use contract_cache::{CachedContract, ContractCache, ContractKey, InMemoryContractCache};
-pub use contract_read::{
-    ContractAnswer, ContractArtifact, ContractProbe, ContractQuery, ContractRead,
-};
+pub use contract_read::{ContractAnswer, ContractProbe, ContractQuery, ContractRead, MethodBundle};
 pub use error_class::{classify_connect_error, ConnectKind};
 pub use file_contract_cache::FileContractCache;
 // `build_pool` is deliberately not re-exported: outside `descriptor` everything goes

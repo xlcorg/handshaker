@@ -10,17 +10,12 @@ vi.mock("@/features/invoke/BodyEditor", () => ({
 vi.mock("@/ipc/client", () => ({
   authResolve: vi.fn().mockResolvedValue(null),
   authEffective: vi.fn().mockResolvedValue({ kind: "none" }),
-  grpcContractRead: vi.fn(
-    async (_a: unknown, _t: unknown, _c: unknown, query: { op?: string }) => {
-      if (query?.op === "skeleton") return { kind: "skeleton", json: "{}" };
-      if (query?.op === "schema")
-        return {
-          kind: "schema",
-          schema: { root: "t.M", messages: [], enums: [] },
-        };
-      return { kind: "catalog", catalog: { services: [] } };
-    },
-  ),
+  grpcContractRead: vi.fn(async () => ({
+    catalog: { services: [] },
+    input_schema: { root: "t.M", messages: [], enums: [] },
+    output_schema: { root: "t.M", messages: [], enums: [] },
+    skeleton: "{}",
+  })),
   varsResolve: vi.fn(),
   grpcSend: vi.fn(),
   grpcCancel: vi.fn(),

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import * as ipc from "@/ipc/client";
 import type {
   MessageSchemaIpc,
-  MessageSideIpc,
   SendCtxIpc,
   ServiceCatalogIpc,
 } from "@/ipc/bindings";
@@ -26,11 +25,6 @@ export interface ContractReadState {
 function reflectErr(e: unknown): string {
   const t = e as { message?: string };
   return t?.message ?? "No reflection available at this address";
-}
-
-function isMissingContract(e: unknown): boolean {
-  const t = (e as { type?: string })?.type;
-  return t === "ServiceNotFound" || t === "MethodNotFound";
 }
 
 export function useContractRead(args: {
@@ -87,52 +81,18 @@ export function useContractRead(args: {
       setLoading(true);
       setError(null);
       try {
-        const catalogArtifact = await ipc.grpcContractRead(
+        const bundle = await ipc.grpcContractRead(
           addr,
           tlsOverride,
           ctx,
-          force ? { op: "refresh" } : { op: "catalog" },
+          { service, method, refresh: force },
           requestId,
           timeoutMs,
         );
         if (!live()) return;
-        if (catalogArtifact.kind !== "catalog") {
-          setCatalog(null);
-          setInputSchema(null);
-          setOutputSchema(null);
-          setError("No reflection available at this address");
-          return;
-        }
-        setCatalog(catalogArtifact.catalog);
-        if (service.trim().length === 0 || method.trim().length === 0) {
-          setInputSchema(null);
-          setOutputSchema(null);
-          return;
-        }
-        const input = await readSchema(
-          addr,
-          tlsOverride,
-          ctx,
-          service,
-          method,
-          "input",
-          timeoutMs,
-          inFlight,
-        );
-        if (!live()) return;
-        const output = await readSchema(
-          addr,
-          tlsOverride,
-          ctx,
-          service,
-          method,
-          "output",
-          timeoutMs,
-          inFlight,
-        );
-        if (!live()) return;
-        setInputSchema(input);
-        setOutputSchema(output);
+        setCatalog(bundle.catalog);
+        setInputSchema(bundle.input_schema);
+        setOutputSchema(bundle.output_schema);
       } catch (e) {
         if (!live() || isCancelError(e)) return;
         setCatalog(null);
@@ -186,32 +146,4 @@ export function useContractRead(args: {
     refresh,
     cancel,
   };
-}
-
-async function readSchema(
-  address: string,
-  tlsOverride: boolean | null,
-  ctx: SendCtxIpc,
-  service: string,
-  method: string,
-  side: MessageSideIpc,
-  timeoutMs: number,
-  inFlight: { current: string | null },
-): Promise<MessageSchemaIpc | null> {
-  const requestId = newId();
-  inFlight.current = requestId;
-  try {
-    const artifact = await ipc.grpcContractRead(
-      address,
-      tlsOverride,
-      ctx,
-      { op: "schema", service, method, side },
-      requestId,
-      timeoutMs,
-    );
-    return artifact.kind === "schema" ? artifact.schema : null;
-  } catch (e) {
-    if (isMissingContract(e)) return null;
-    throw e;
-  }
 }

@@ -26,6 +26,18 @@ const stagingKey = resolveKey({
 const cat = { services: [{ full_name: "p.v1.S", methods: [] }] };
 const schema = { root: "t.M", messages: [], enums: [] };
 
+function bundleFor(query: { service?: string; method?: string }) {
+  const named =
+    (query.service ?? "").trim().length > 0 &&
+    (query.method ?? "").trim().length > 0;
+  return {
+    catalog: cat,
+    input_schema: named ? schema : null,
+    output_schema: named ? schema : null,
+    skeleton: named ? "{}" : null,
+  };
+}
+
 function args(over: Partial<Parameters<typeof useContractRead>[0]> = {}) {
   return {
     addressTemplate: "h:443",
@@ -43,10 +55,7 @@ function args(over: Partial<Parameters<typeof useContractRead>[0]> = {}) {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(ipc.grpcContractRead).mockImplementation(
-    async (_a, _t, _c, query) => {
-      if (query.op === "schema") return { kind: "schema", schema } as never;
-      return { kind: "catalog", catalog: cat } as never;
-    },
+    async (_a, _t, _c, query) => bundleFor(query) as never,
   );
   vi.mocked(ipc.grpcCancel).mockResolvedValue(undefined as never);
 });
@@ -69,11 +78,12 @@ describe("useContractRead", () => {
       await vi.advanceTimersByTimeAsync(400);
     });
     expect(ipc.varsResolve).not.toHaveBeenCalled();
+    expect(ipc.grpcContractRead).toHaveBeenCalledTimes(1);
     expect(ipc.grpcContractRead).toHaveBeenCalledWith(
       "{{host}}:443",
       true,
       { collection_id: "c", env_name: "prod" },
-      { op: "catalog" },
+      { service: "p.v1.S", method: "M", refresh: false },
       expect.any(String),
       expect.any(Number),
     );
@@ -92,13 +102,13 @@ describe("useContractRead", () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(400);
     });
-    expect(ipc.grpcContractRead).toHaveBeenCalledTimes(3);
+    expect(ipc.grpcContractRead).toHaveBeenCalledTimes(1);
 
     rerender({ envKey: stagingKey });
     await act(async () => {
       await vi.advanceTimersByTimeAsync(400);
     });
-    expect(ipc.grpcContractRead).toHaveBeenCalledTimes(6);
+    expect(ipc.grpcContractRead).toHaveBeenCalledTimes(2);
   });
 
   it("does not read when the address is empty", async () => {
@@ -138,8 +148,17 @@ describe("useContractRead", () => {
       result.current.refresh();
     });
     await waitFor(() => expect(result.current.catalog).toEqual(cat));
-    const ops = vi.mocked(ipc.grpcContractRead).mock.calls.map((c) => c[3].op);
-    expect(ops).toEqual(["refresh", "schema", "schema"]);
+    expect(ipc.grpcContractRead).toHaveBeenCalledTimes(1);
+    expect(ipc.grpcContractRead).toHaveBeenCalledWith(
+      "h:443",
+      true,
+      { collection_id: null, env_name: null },
+      { service: "p.v1.S", method: "M", refresh: true },
+      expect.any(String),
+      expect.any(Number),
+    );
+    expect(result.current.inputSchema).toEqual(schema);
+    expect(result.current.outputSchema).toEqual(schema);
   });
 
   it("sets error and clears the catalog when the read rejects", async () => {
@@ -155,12 +174,12 @@ describe("useContractRead", () => {
   });
 
   it("turns a missing method into a null schema", async () => {
-    vi.mocked(ipc.grpcContractRead).mockImplementation(
-      async (_a, _t, _c, query) => {
-        if (query.op === "schema") throw { type: "MethodNotFound" };
-        return { kind: "catalog", catalog: cat } as never;
-      },
-    );
+    vi.mocked(ipc.grpcContractRead).mockResolvedValue({
+      catalog: cat,
+      input_schema: null,
+      output_schema: null,
+      skeleton: null,
+    } as never);
     const { result } = renderHook(() => useContractRead(args()));
     await act(async () => {
       result.current.refresh();

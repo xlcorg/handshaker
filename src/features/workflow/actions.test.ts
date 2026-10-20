@@ -22,7 +22,6 @@ import {
   applyMethodSelection,
   isPristineBody,
   resetBodyToTemplate,
-  fetchMessageSchemaSafe,
 } from "./actions";
 import { varsCtxFor, varsResolverFor } from "./actions";
 import type { Step } from "./model";
@@ -384,12 +383,20 @@ describe("cancelStep", () => {
   });
 });
 
+function bundleWithSkeleton(skeleton: string | null) {
+  return {
+    catalog: { services: [] },
+    input_schema: null,
+    output_schema: null,
+    skeleton,
+  };
+}
+
 describe("buildRequestSkeletonSafe", () => {
   it("returns the backend skeleton on success", async () => {
-    vi.mocked(ipc.grpcContractRead).mockResolvedValue({
-      kind: "skeleton",
-      json: '{"id":""}',
-    } as never);
+    vi.mocked(ipc.grpcContractRead).mockResolvedValue(
+      bundleWithSkeleton('{"id":""}') as never,
+    );
     const out = await buildRequestSkeletonSafe(
       { address: "h:443", tls: true },
       "p.S",
@@ -400,7 +407,7 @@ describe("buildRequestSkeletonSafe", () => {
       "h:443",
       true,
       { collection_id: null, env_name: null },
-      { op: "skeleton", service: "p.S", method: "M" },
+      { service: "p.S", method: "M", refresh: false },
     );
     expect(ipc.varsResolve).not.toHaveBeenCalled();
   });
@@ -412,11 +419,19 @@ describe("buildRequestSkeletonSafe", () => {
     ).toBe("{}");
   });
 
+  it("falls back to '{}' when the bundle has no skeleton", async () => {
+    vi.mocked(ipc.grpcContractRead).mockResolvedValue(
+      bundleWithSkeleton(null) as never,
+    );
+    expect(
+      await buildRequestSkeletonSafe({ address: "h", tls: false }, "p.S", "M"),
+    ).toBe("{}");
+  });
+
   it("sends the address template and the raw tls override", async () => {
-    vi.mocked(ipc.grpcContractRead).mockResolvedValue({
-      kind: "skeleton",
-      json: "{}",
-    } as never);
+    vi.mocked(ipc.grpcContractRead).mockResolvedValue(
+      bundleWithSkeleton("{}") as never,
+    );
     await buildRequestSkeletonSafe(
       {
         address: "{{host}}:443",
@@ -432,17 +447,16 @@ describe("buildRequestSkeletonSafe", () => {
       "{{host}}:443",
       null,
       { collection_id: "c", env_name: "prod" },
-      { op: "skeleton", service: "p.S", method: "M" },
+      { service: "p.S", method: "M", refresh: false },
     );
   });
 });
 
 describe("applyMethodSelection", () => {
   it("resets a pristine body to the empty template (the contract renders as ghost)", async () => {
-    vi.mocked(ipc.grpcContractRead).mockResolvedValueOnce({
-      kind: "skeleton",
-      json: '{"a":""}',
-    } as never);
+    vi.mocked(ipc.grpcContractRead).mockResolvedValueOnce(
+      bundleWithSkeleton('{"a":""}') as never,
+    );
     const patch = vi.fn();
     await applyMethodSelection(
       patch,
@@ -459,15 +473,20 @@ describe("applyMethodSelection", () => {
       streamId: null,
     });
     expect(patch).toHaveBeenNthCalledWith(2, { requestJson: "{\n}" });
-    // no autofill: the new method's skeleton is only built on demand (Reset-to-template)
+    // The old method's skeleton comes off the same bundle query. No skeleton op.
     expect(ipc.grpcContractRead).toHaveBeenCalledTimes(1);
+    expect(ipc.grpcContractRead).toHaveBeenCalledWith(
+      "h:443",
+      true,
+      { collection_id: null, env_name: null },
+      { service: "p.S", method: "Old", refresh: false },
+    );
   });
 
   it("resets a body that equals the old skeleton modulo whitespace", async () => {
-    vi.mocked(ipc.grpcContractRead).mockResolvedValueOnce({
-      kind: "skeleton",
-      json: '{"a":""}',
-    } as never);
+    vi.mocked(ipc.grpcContractRead).mockResolvedValueOnce(
+      bundleWithSkeleton('{"a":""}') as never,
+    );
     const patch = vi.fn();
     await applyMethodSelection(
       patch,
@@ -479,10 +498,9 @@ describe("applyMethodSelection", () => {
   });
 
   it("preserves an edited body (patches service/method only)", async () => {
-    vi.mocked(ipc.grpcContractRead).mockResolvedValueOnce({
-      kind: "skeleton",
-      json: '{"a":""}',
-    } as never); // old skeleton
+    vi.mocked(ipc.grpcContractRead).mockResolvedValueOnce(
+      bundleWithSkeleton('{"a":""}') as never,
+    );
     const patch = vi.fn();
     await applyMethodSelection(
       patch,
@@ -573,10 +591,9 @@ describe("isPristineBody", () => {
 
 describe("resetBodyToTemplate", () => {
   it("patches requestJson with a fresh skeleton for the current method", async () => {
-    vi.mocked(ipc.grpcContractRead).mockResolvedValue({
-      kind: "skeleton",
-      json: '{"a":""}',
-    } as never);
+    vi.mocked(ipc.grpcContractRead).mockResolvedValue(
+      bundleWithSkeleton('{"a":""}') as never,
+    );
     const patch = vi.fn();
     await resetBodyToTemplate(
       patch,
@@ -584,11 +601,12 @@ describe("resetBodyToTemplate", () => {
       "p.S",
       "M",
     );
+    expect(ipc.grpcContractRead).toHaveBeenCalledTimes(1);
     expect(ipc.grpcContractRead).toHaveBeenCalledWith(
       "h:443",
       true,
       { collection_id: null, env_name: null },
-      { op: "skeleton", service: "p.S", method: "M" },
+      { service: "p.S", method: "M", refresh: false },
     );
     expect(patch).toHaveBeenCalledWith({ requestJson: '{"a":""}' });
   });
@@ -598,60 +616,6 @@ describe("resetBodyToTemplate", () => {
     const patch = vi.fn();
     await resetBodyToTemplate(patch, { address: "h", tls: false }, "S", "M");
     expect(patch).toHaveBeenCalledWith({ requestJson: "{}" });
-  });
-});
-
-describe("fetchMessageSchemaSafe", () => {
-  const mockSchema = { root: "t.M", messages: [], enums: [] };
-
-  beforeEach(() => {
-    vi.mocked(ipc.grpcContractRead).mockResolvedValue({
-      kind: "schema",
-      schema: mockSchema,
-    } as never);
-  });
-
-  it("returns schema on success (defaults to input side)", async () => {
-    const result = await fetchMessageSchemaSafe(
-      { address: "h:443", tls: true },
-      "S",
-      "M",
-    );
-    expect(result).toEqual(mockSchema);
-    expect(ipc.grpcContractRead).toHaveBeenCalledWith(
-      "h:443",
-      true,
-      { collection_id: null, env_name: null },
-      { op: "schema", service: "S", method: "M", side: "input" },
-    );
-    expect(ipc.varsResolve).not.toHaveBeenCalled();
-  });
-
-  it("forwards the requested side to the IPC call", async () => {
-    await fetchMessageSchemaSafe(
-      { address: "h", tls: false },
-      "S",
-      "M",
-      "output",
-    );
-    expect(ipc.grpcContractRead).toHaveBeenCalledWith(
-      "h",
-      false,
-      { collection_id: null, env_name: null },
-      { op: "schema", service: "S", method: "M", side: "output" },
-    );
-  });
-
-  it("returns null on IPC failure (best-effort)", async () => {
-    vi.mocked(ipc.grpcContractRead).mockRejectedValue(
-      new Error("reflection unavailable"),
-    );
-    const result = await fetchMessageSchemaSafe(
-      { address: "h", tls: false },
-      "S",
-      "M",
-    );
-    expect(result).toBeNull();
   });
 });
 
