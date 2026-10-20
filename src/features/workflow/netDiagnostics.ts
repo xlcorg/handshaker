@@ -40,8 +40,6 @@ export interface ClientFault {
   mismatch?: KindMismatch;
 }
 
-/** A `kind_mismatch` fault with its verdict attached — what a refused Send / Open hands
- *  back to the call orchestrator (`useCall`) for the one-shot re-route. */
 export type KindMismatchFault = ClientFault & { kind: "kind_mismatch"; mismatch: KindMismatch };
 
 export function isKindMismatch(fault: ClientFault): fault is KindMismatchFault {

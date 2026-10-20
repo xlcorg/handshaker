@@ -13,7 +13,7 @@ import type { StreamEventIpc } from "@/ipc/bindings";
 import { workflowStore } from "@/features/workflow/store";
 import { newStep } from "@/features/workflow/model";
 import { removeStep } from "@/features/workflow/reducers";
-import { runCall } from "@/features/workflow/callLifecycle";
+import { recordedDispatch } from "@/features/workflow/callLifecycle";
 import { narrow } from "@/test/narrow";
 import { streamStore } from "./streamStore";
 import { installStreamReleaseRule } from "./releaseRule";
@@ -78,8 +78,10 @@ describe("stream release rule", () => {
     });
     const step = newStep({ address: "h", service: "S", method: "M" });
     workflowStore.setDraft(step);
-    await runCall({
-      step, envName: null, kind: "server", onPatch: (p) => workflowStore.updateGrpcDraft(step.id, p),
+    await recordedDispatch({
+      draft: step,
+      envName: null,
+      kind: "server",
       recording: { origin: null, bumpUsage: () => Promise.resolve() },
     });
     const id = narrow(workflowStore.getState().draft, "grpc").streamId!;

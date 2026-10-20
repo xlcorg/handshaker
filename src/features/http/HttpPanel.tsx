@@ -6,7 +6,7 @@ import { resolveKey } from "@/features/workflow/resolveKey";
 import { useActiveEnvVars } from "@/features/envs/useActiveEnvVars";
 import { buildVarCandidates } from "@/features/vars/candidates";
 import { varsResolverFor } from "@/features/workflow/actions";
-import { cancelHttpCall, runHttpCall } from "@/features/workflow/callLifecycle";
+import { cancelHttpCall, recordedDispatch } from "@/features/workflow/callLifecycle";
 import { FocusSplit } from "@/features/workflow/FocusSplit";
 import {
   useActiveWorkflow,
@@ -52,10 +52,10 @@ export function HttpPanel({ draft, origin, originVars }: HttpPanelProps) {
   const edit = (patch: Partial<HttpTemplateIpc>) =>
     workflowStore.editHttpTemplate(draft.id, patch);
   const send = () =>
-    void runHttpCall({
+    void recordedDispatch({
       draft,
       envName,
-      onRun: (run) => workflowStore.setHttpRun(draft.id, run),
+      kind: null,
       recording: { origin, bumpUsage },
     });
   const canSend = canSendHttp(draft);

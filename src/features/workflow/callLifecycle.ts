@@ -1,10 +1,10 @@
 import * as ipc from "@/ipc/client";
-import type { SendReportIpc, StreamEventIpc } from "@/ipc/bindings";
+import type { CallRecordIpc, SendReportIpc, StreamEventIpc } from "@/ipc/bindings";
 import { callOptionsOf, cancelStep, sendCtxOf, sendHttp, sendStep, type SendResult } from "./actions";
 import { grpcTemplateOf } from "@/features/catalog/mapping";
 import type { HttpRun, HttpStep } from "@/features/http/model";
 import { workflowStore, type DraftOrigin } from "./store";
-import type { Step } from "./model";
+import type { Draft, Step } from "./model";
 import {
   faultFromIpcError,
   faultFromUnknown,
@@ -26,16 +26,10 @@ export interface Recording {
   bumpUsage: BumpUsage;
 }
 
-export interface CallArgs {
-  /** The step as it is sent. The executed snapshot and the call record freeze this value,
-   *  not a later one. */
-  step: Step;
+export interface RecordedDispatch {
+  draft: Draft;
   envName: string | null;
-  /** The controls kind (CallPanel) or a recorded kind. `null` takes the unary path. */
   kind: MethodKind | null;
-  /** Patch the step this call belongs to, addressed by its id, so a call never patches a
-   *  step that replaced its own. */
-  onPatch: (patch: Partial<Step>) => void;
   recording: Recording | null;
 }
 
@@ -45,72 +39,74 @@ interface Gate {
 const gates = new Map<string, Gate>();
 
 interface LiveCall {
-  args: CallArgs;
+  step: Step;
+  recording: Recording | null;
   opened: boolean;
 }
 const liveCalls = new Map<string, LiveCall>();
 
-type Settle =
-  | { by: "event"; patch: Partial<Step> }
-  | { by: "cancel" }
-  | { by: "release" };
+type Settle = { by: "event"; patch: Partial<Step> } | { by: "cancel" } | { by: "release" };
 
-export async function runCall(args: CallArgs): Promise<void> {
-  const id = args.step.id;
-  if (args.step.status === "sending" || gates.has(id)) return;
+export async function recordedDispatch({ draft, envName, kind, recording }: RecordedDispatch): Promise<void> {
+  if (draft.protocol === "http") return runHttp(draft, envName, recording);
+  return runGrpc(draft, envName, kind, recording);
+}
+
+async function runGrpc(
+  step: Step,
+  envName: string | null,
+  kind: MethodKind | null,
+  recording: Recording | null,
+): Promise<void> {
+  const id = step.id;
+  if (step.status === "sending" || gates.has(id)) return;
   const gate: Gate = { cancelled: false };
   gates.set(id, gate);
   try {
-    const attempt = (k: MethodKind | null) => (isStreaming(k) ? openStream(args, k as MethodKind) : runUnary(args));
-    const refused = await attempt(args.kind);
+    const attempt = (k: MethodKind | null) =>
+      isStreaming(k) ? openStream(step, envName, k as MethodKind, recording) : runUnary(step, envName, recording);
+    const refused = await attempt(kind);
     if (!refused) return;
     if (gate.cancelled) {
-      args.onPatch({ status: "draft", outcome: null, error: null, requestId: null, streamId: null });
+      patchStep(id, { status: "draft", outcome: null, error: null, requestId: null, streamId: null });
       return;
     }
     const again = await attempt(refused.mismatch.actual);
-    if (again) args.onPatch({ status: "error", outcome: null, error: again, requestId: null, streamId: null });
+    if (again) patchStep(id, { status: "error", outcome: null, error: again, requestId: null, streamId: null });
   } finally {
     gates.delete(id);
   }
 }
 
-export interface HttpCallArgs {
-  /** The draft as it is sent. The executed snapshot and the call record freeze this value. */
-  draft: HttpStep;
-  envName: string | null;
-  /** Set the run of the draft this call belongs to, addressed by its id. */
-  onRun: (run: HttpRun) => void;
-  recording: Recording | null;
-}
-
-export async function runHttpCall({ draft, envName, onRun, recording }: HttpCallArgs): Promise<void> {
+async function runHttp(draft: HttpStep, envName: string | null, recording: Recording | null): Promise<void> {
   if (draft.run.status === "sending" || gates.has(draft.id)) return;
   gates.set(draft.id, { cancelled: false });
   try {
     const startedAt = Date.now();
     const requestId = newId();
-    onRun({ status: "sending", requestId });
+    patchRun(draft.id, { status: "sending", requestId });
     const res = await sendHttp(draft, envName, requestId);
-    if (res.kind === "cancelled") return onRun({ status: "draft" });
+    if (res.kind === "cancelled") {
+      patchRun(draft.id, { status: "draft" });
+      return;
+    }
     const run: HttpRun =
       res.kind === "ok"
         ? { status: "done", response: res.report.response, authUsed: res.report.auth_used }
         : { status: "error", error: res.fault };
-    onRun(run);
-    if (!recording) return;
-    if (res.kind === "ok") {
-      workflowStore.commitExecutedStep({ ...draft, id: newId(), run });
-      void bumpOriginUsage(recording);
+    patchRun(draft.id, run);
+    if (recording) {
+      finishRecorded(
+        recording,
+        res.kind === "ok" ? { ...draft, id: newId(), run } : null,
+        buildHttpRecord(
+          { id: requestId, draft, startedAt, origin: recording.origin },
+          res.kind === "ok"
+            ? { type: "response", response: res.report.response }
+            : { type: "fault", fault: res.fault, elapsedMs: Date.now() - startedAt },
+        ),
+      );
     }
-    void historyStore.record(
-      buildHttpRecord(
-        { id: requestId, draft, startedAt, origin: recording.origin },
-        res.kind === "ok"
-          ? { type: "response", response: res.report.response }
-          : { type: "fault", fault: res.fault, elapsedMs: Date.now() - startedAt },
-      ),
-    );
   } finally {
     gates.delete(draft.id);
   }
@@ -120,7 +116,7 @@ export async function cancelHttpCall(draft: HttpStep): Promise<void> {
   if (draft.run.status === "sending") await cancelStep(draft.run.requestId);
 }
 
-export async function cancelCall({ step }: Pick<CallArgs, "step">): Promise<void> {
+export async function cancelCall({ step }: { step: Step }): Promise<void> {
   const gate = gates.get(step.id);
   if (gate) gate.cancelled = true;
   const id = step.requestId;
@@ -129,7 +125,7 @@ export async function cancelCall({ step }: Pick<CallArgs, "step">): Promise<void
   if (step.streamId === id && streamStore.cancel(id)) settleStream(id, { by: "cancel" });
 }
 
-export async function sendStreamMessage({ step, envName }: Pick<CallArgs, "step" | "envName">): Promise<void> {
+export async function sendStreamMessage({ step, envName }: { step: Step; envName: string | null }): Promise<void> {
   const id = step.requestId;
   if (!id || step.streamId !== id) return;
   const entry = streamStore.get(id);
@@ -142,7 +138,7 @@ export async function sendStreamMessage({ step, envName }: Pick<CallArgs, "step"
   }
 }
 
-export async function halfCloseStream({ step }: Pick<CallArgs, "step">): Promise<void> {
+export async function halfCloseStream({ step }: { step: Step }): Promise<void> {
   const id = step.requestId;
   if (!id || step.streamId !== id) return;
   const entry = streamStore.get(id);
@@ -155,29 +151,28 @@ export async function halfCloseStream({ step }: Pick<CallArgs, "step">): Promise
   }
 }
 
-/** Called by the release rule before it frees `id`. A live call is frozen and settled
- *  without a patch, because the step it belonged to is gone. After Open it is recorded as
- *  cancelled. Any other id is a no-op. */
 export function abandonStream(id: string): void {
   if (!liveCalls.has(id)) return;
   if (streamStore.cancel(id)) settleStream(id, { by: "release" });
   else liveCalls.delete(id);
 }
 
-async function runUnary({ step, envName, onPatch, recording }: CallArgs): Promise<KindMismatchFault | null> {
+async function runUnary(
+  step: Step,
+  envName: string | null,
+  recording: Recording | null,
+): Promise<KindMismatchFault | null> {
   const startedAt = Date.now();
   const requestId = newId();
-  onPatch({ status: "sending", error: null, requestId, streamId: null });
+  patchStep(step.id, { status: "sending", error: null, requestId, streamId: null });
   const res = await sendStep(step, { envName }, { requestId });
   if (res.kind === "error" && isKindMismatch(res.fault)) return res.fault;
   const patch = { ...stepPatch(res), requestId: null };
-  onPatch(patch);
+  patchStep(step.id, patch);
   if (!recording || res.kind === "cancelled") return null;
-  if (res.kind === "ok") {
-    workflowStore.commitExecutedStep(executedSnapshot(step, res.report, patch));
-    void bumpOriginUsage(recording);
-  }
-  void historyStore.record(
+  finishRecorded(
+    recording,
+    res.kind === "ok" ? executedSnapshot(step, res.report, patch) : null,
     buildRecord(
       { id: requestId, step, startedAt, origin: recording.origin },
       res.kind === "ok"
@@ -188,13 +183,17 @@ async function runUnary({ step, envName, onPatch, recording }: CallArgs): Promis
   return null;
 }
 
-async function openStream(args: CallArgs, kind: MethodKind): Promise<KindMismatchFault | null> {
-  const { step, envName, onPatch, recording } = args;
+async function openStream(
+  step: Step,
+  envName: string | null,
+  kind: MethodKind,
+  recording: Recording | null,
+): Promise<KindMismatchFault | null> {
   const startedAt = Date.now();
   const id = newId();
   streamStore.open(id, kind, startedAt);
-  liveCalls.set(id, { args, opened: false });
-  onPatch({ status: "sending", error: null, outcome: null, requestId: id, streamId: id });
+  liveCalls.set(id, { step, recording, opened: false });
+  patchStep(step.id, { status: "sending", error: null, outcome: null, requestId: id, streamId: id });
   const onEvent = (ev: StreamEventIpc) => {
     if (ev.type === "Opened") markOpened(id);
     if (ev.type === "End" || ev.type === "Fault") {
@@ -221,9 +220,11 @@ async function openStream(args: CallArgs, kind: MethodKind): Promise<KindMismatc
     streamStore.drop(id);
     const fault = faultFromUnknown(e);
     if (isKindMismatch(fault)) return fault;
-    onPatch({ status: "error", outcome: null, error: fault, requestId: null, streamId: null });
+    patchStep(step.id, { status: "error", outcome: null, error: fault, requestId: null, streamId: null });
     if (recording) {
-      void historyStore.record(
+      finishRecorded(
+        recording,
+        null,
         buildRecord(
           { id, step, startedAt, origin: recording.origin },
           { type: "stream_refused", kind: streamKindOf(kind), fault, elapsedMs: Date.now() - startedAt },
@@ -243,22 +244,51 @@ function settleStream(id: string, how: Settle): void {
   const live = liveCalls.get(id);
   if (!live) return;
   liveCalls.delete(id);
-  const { args, opened } = live;
-  const patch = how.by === "release" ? null : { ...settlePatch(how), requestId: null };
-  if (patch) args.onPatch(patch);
-  if (!opened || !args.recording) return;
-  const entry = streamStore.get(id);
-  if (patch) {
-    workflowStore.commitExecutedStep(streamSnapshot(args.step, entry, id, patch));
-    void bumpOriginUsage(args.recording);
+  const { step, recording, opened } = live;
+  if (how.by === "release") {
+    if (!opened || !recording) return;
+    const entry = streamStore.get(id);
+    if (!entry) return;
+    finishRecorded(
+      recording,
+      null,
+      buildRecord(
+        { id, step, startedAt: entry.openedAt, origin: recording.origin },
+        { type: "stream", entry, elapsedMs: entry.elapsedMs ?? Date.now() - entry.openedAt },
+      ),
+    );
+    return;
   }
-  if (!entry) return;
-  void historyStore.record(
-    buildRecord(
-      { id, step: args.step, startedAt: entry.openedAt, origin: args.recording.origin },
-      { type: "stream", entry, elapsedMs: entry.elapsedMs ?? Date.now() - entry.openedAt },
-    ),
+  const patch = { ...settlePatch(how), requestId: null };
+  patchStep(step.id, patch);
+  if (!opened || !recording) return;
+  const entry = streamStore.get(id);
+  finishRecorded(
+    recording,
+    streamSnapshot(step, entry, id, patch),
+    entry
+      ? buildRecord(
+          { id, step, startedAt: entry.openedAt, origin: recording.origin },
+          { type: "stream", entry, elapsedMs: entry.elapsedMs ?? Date.now() - entry.openedAt },
+        )
+      : null,
   );
+}
+
+function finishRecorded(recording: Recording, snapshot: Draft | null, record: CallRecordIpc | null): void {
+  if (snapshot) {
+    workflowStore.commitExecutedStep(snapshot);
+    void bumpOriginUsage(recording);
+  }
+  if (record) void historyStore.record(record);
+}
+
+function patchStep(id: string, patch: Partial<Step>): void {
+  workflowStore.updateGrpcDraft(id, patch);
+}
+
+function patchRun(id: string, run: HttpRun): void {
+  workflowStore.setHttpRun(id, run);
 }
 
 function settlePatch(how: Exclude<Settle, { by: "release" }>): Partial<Step> {
@@ -274,11 +304,7 @@ function stepPatch(res: SendResult): Partial<Step> {
   return { status: "error", outcome: null, error: res.fault };
 }
 
-function executedSnapshot(
-  step: Step,
-  used: Pick<SendReportIpc, "auth_used" | "tls_used">,
-  patch: Partial<Step>,
-): Step {
+function executedSnapshot(step: Step, used: Pick<SendReportIpc, "auth_used" | "tls_used">, patch: Partial<Step>): Step {
   return { ...step, auth: used.auth_used, tls: used.tls_used, ...patch, id: newId(), requestId: null };
 }
 
