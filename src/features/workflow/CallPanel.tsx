@@ -1,8 +1,10 @@
-import { ResponsePanel, type ContractInfo } from "@/features/response/ResponsePanel";
+import {
+  ResponsePanel,
+  type ContractInfo,
+} from "@/features/response/ResponsePanel";
 import type { RespState } from "@/features/response/RespMeta";
 import { DraftAddressBar, type TwoWayControls } from "./DraftAddressBar";
-import { useDraftReflection } from "./useDraftReflection";
-import { useMessageSchema } from "./useMessageSchema";
+import { useContractRead } from "./useContractRead";
 import { useEffectiveAuth } from "./useEffectiveAuth";
 import { RequestTabs } from "./RequestTabs";
 import {
@@ -12,8 +14,11 @@ import {
 } from "./actions";
 import { useCall } from "./useCall";
 import { StreamView } from "@/features/stream/StreamView";
-import { isLivePhase, useStreamEntry, type StreamEntry } from "@/features/stream/streamStore";
-import { effectiveTls } from "./tls";
+import {
+  isLivePhase,
+  useStreamEntry,
+  type StreamEntry,
+} from "@/features/stream/streamStore";
 import { workflowStore } from "./store";
 import type { DraftOrigin } from "./store";
 import { useSendHotkey } from "./useSendHotkey";
@@ -22,7 +27,7 @@ import { useEnvRevision } from "@/features/envs/envRevision";
 import { resolveKey } from "./resolveKey";
 import { useActiveEnvVars } from "@/features/envs/useActiveEnvVars";
 import { buildVarCandidates } from "@/features/vars/candidates";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { MetadataRow, Step } from "./model";
 import { isTwoWay, kindOf } from "@/lib/method-kind";
 import { controlsKind, executedKind } from "./controlsKind";
@@ -35,9 +40,6 @@ interface CallPanelProps {
   onQuickAddMethod?: (service: string, method: string) => void;
   /** Variables of the draft's origin collection — feeds {{var}} autocomplete. */
   originVars?: Partial<Record<string, string>>;
-  /** `skip_tls_verify` of the draft's origin collection — dials reflection/skeleton/schema
-   *  the same as Send. Unbound draft (no origin) ⇒ false. */
-  originSkipVerify?: boolean;
   /** `default_tls` of the draft's origin collection — what a null (inherit) TLS override
    *  resolves to at Send/probe time. Unbound draft (no origin) ⇒ false. */
   originDefaultTls?: boolean;
@@ -52,11 +54,15 @@ interface CallPanelProps {
   origin?: DraftOrigin | null;
 }
 
-export function CallPanel({ step, onPatch, onQuickAddMethod, originVars, originSkipVerify, originDefaultTls, onMethodSelected, origin }: CallPanelProps) {
-  const skipVerify = originSkipVerify ?? false;
-  // Concrete TLS for probes/Send display: the step's override, or the collection default
-  // when inheriting (null). Send itself forwards the raw override; core inherits identically.
-  const effTls = effectiveTls(step.tls, originDefaultTls ?? false);
+export function CallPanel({
+  step,
+  onPatch,
+  onQuickAddMethod,
+  originVars,
+  originDefaultTls,
+  onMethodSelected,
+  origin,
+}: CallPanelProps) {
   const activeWf = useActiveWorkflow();
   // Re-resolve the address preview when the active env's identity or contents change
   // (the preview resolves against the active env via the backend — see envRevision).
@@ -77,7 +83,12 @@ export function CallPanel({ step, onPatch, onQuickAddMethod, originVars, originS
   const onResetBody = () =>
     void resetBodyToTemplate(
       onPatch,
-      { address: step.address, tls: effTls, collectionId: step.collectionId, skipVerify },
+      {
+        address: step.address,
+        tls: step.tls,
+        collectionId: step.collectionId,
+        envName: activeWf.envName,
+      },
       step.service,
       step.method,
     );
@@ -97,24 +108,17 @@ export function CallPanel({ step, onPatch, onQuickAddMethod, originVars, originS
   // a `{{var}}` template resolved against it, so an env switch/edit must re-reflect even though
   // `step.address` is unchanged. Without it the contract froze on the first env until a manual
   // refresh — the "doesn't pick up on env change" bug.
-  const reflection = useDraftReflection(
-    step.address,
-    effTls,
-    true,
-    step.collectionId,
-    addressResolveKey,
-    skipVerify,
-  );
-
-  // Manual "Refresh server reflection": re-reflect the backend pool AND force the schema
-  // hooks to refetch. The schema feeds the Contract tab + body hints from a cache that's
-  // otherwise keyed only by the (unchanged) target, so without bumping this revision it
-  // would freeze on its first result — the "one-time action" bug.
-  const [schemaRevision, setSchemaRevision] = useState(0);
-  const refreshContract = () => {
-    reflection.refresh();
-    setSchemaRevision((r) => r + 1);
-  };
+  const reflection = useContractRead({
+    addressTemplate: step.address,
+    tlsOverride: step.tls,
+    collectionId: step.collectionId,
+    envName: activeWf.envName,
+    service: step.service,
+    method: step.method,
+    resolveKey: addressResolveKey,
+    enabled: true,
+  });
+  const refreshContract = reflection.refresh;
 
   // Catalog kind — derived exactly once, live, from the reflected catalog (never stored
   // on the step). `null` while the catalog is pending/failed or lacks the method. This
@@ -127,7 +131,10 @@ export function CallPanel({ step, onPatch, onQuickAddMethod, originVars, originS
 
   // The step's Stream store entry (one subscription for the controls and the pane).
   const entry = useStreamEntry(step.streamId);
-  const liveEntry = entry !== null && step.requestId === entry.id && isLivePhase(entry.phase) ? entry : null;
+  const liveEntry =
+    entry !== null && step.requestId === entry.id && isLivePhase(entry.phase)
+      ? entry
+      : null;
 
   // Controls kind — live call → catalog → last executed → null (`controlsKind`, the one
   // place the rule lives). Feeds the address-bar badge + controls and the path `useCall`
@@ -139,7 +146,14 @@ export function CallPanel({ step, onPatch, onQuickAddMethod, originVars, originS
     executedKind: executedKind(step, entry),
   });
 
-  const call = useCall({ step, envName: activeWf.envName, kind, onPatch, record: true, origin });
+  const call = useCall({
+    step,
+    envName: activeWf.envName,
+    kind,
+    onPatch,
+    record: true,
+    origin,
+  });
   const { send, cancel } = call;
 
   // A live two-way entry — decided by the call's own kind, not the catalog — turns the
@@ -166,16 +180,8 @@ export function CallPanel({ step, onPatch, onQuickAddMethod, originVars, originS
     void send();
   });
 
-  const schemaTarget = {
-    address: step.address,
-    tls: effTls,
-    service: step.service,
-    method: step.method,
-    collectionId: step.collectionId,
-    skipVerify,
-  };
-  const schema = useMessageSchema(schemaTarget, "input", schemaRevision, addressResolveKey);
-  const outputSchema = useMessageSchema(schemaTarget, "output", schemaRevision, addressResolveKey);
+  const schema = reflection.inputSchema;
+  const outputSchema = reflection.outputSchema;
 
   const header = (
     <DraftAddressBar
@@ -190,18 +196,27 @@ export function CallPanel({ step, onPatch, onQuickAddMethod, originVars, originS
       onRefresh={refreshContract}
       onReflectCancel={reflection.cancel}
       onSelectMethod={(m) => {
-          // Snapshot the pre-switch method BEFORE applyMethodSelection patches the draft,
-          // so the owner can decide whether the saved name still tracked it.
-          const prev = { service: step.service, method: step.method };
-          void applyMethodSelection(
-            onPatch,
-            { address: step.address, tls: effTls, collectionId: step.collectionId, skipVerify },
-            { requestJson: step.requestJson, service: step.service, method: step.method },
-            m,
-            workflowStore.activeWorkflow().steps,
-          );
-          onMethodSelected?.(prev, { service: m.service, method: m.method });
-        }}
+        // Snapshot the pre-switch method BEFORE applyMethodSelection patches the draft,
+        // so the owner can decide whether the saved name still tracked it.
+        const prev = { service: step.service, method: step.method };
+        void applyMethodSelection(
+          onPatch,
+          {
+            address: step.address,
+            tls: step.tls,
+            collectionId: step.collectionId,
+            envName: activeWf.envName,
+          },
+          {
+            requestJson: step.requestJson,
+            service: step.service,
+            method: step.method,
+          },
+          m,
+          workflowStore.activeWorkflow().steps,
+        );
+        onMethodSelected?.(prev, { service: m.service, method: m.method });
+      }}
       onSend={send}
       onCancel={cancel}
       twoWay={twoWay}
@@ -236,7 +251,12 @@ export function CallPanel({ step, onPatch, onQuickAddMethod, originVars, originS
               step={step}
               entry={entry}
               // The Contract tab prints the *contract* — the catalog kind, never the controls kind.
-              contract={{ input: schema, output: outputSchema, method: step.method, kind: catalogKind }}
+              contract={{
+                input: schema,
+                output: outputSchema,
+                method: step.method,
+                kind: catalogKind,
+              }}
             />
           </div>
         }
@@ -261,7 +281,8 @@ function ResponseSlot({
   // the spec's "client fault before stream start keeps the existing face". A rejected
   // Send message is NOT such a fault: it stays on the live entry (`sendFault`) and the
   // stream pane shows it as a strip.
-  if (step.streamId !== null && entry?.phase !== "faulted") return <StreamView entry={entry} contract={contract} />;
+  if (step.streamId !== null && entry?.phase !== "faulted")
+    return <StreamView entry={entry} contract={contract} />;
   const respState: RespState =
     step.status === "sending"
       ? "sending"
@@ -274,6 +295,11 @@ function ResponseSlot({
           : "idle";
 
   return (
-    <ResponsePanel state={respState} outcome={step.outcome} error={step.error} contract={contract} />
+    <ResponsePanel
+      state={respState}
+      outcome={step.outcome}
+      error={step.error}
+      contract={contract}
+    />
   );
 }

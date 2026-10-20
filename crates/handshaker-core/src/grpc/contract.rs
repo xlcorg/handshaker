@@ -1,5 +1,6 @@
-//! Top-level orchestration: open channel → (cache hit?) → run reflection → build
-//! pools → build catalog → cache. On a cache hit, reflection is skipped entirely.
+//! Contract load. A probe reads the cache and dials only on a miss. Send opens
+//! one channel after the same lookup and reflects on that channel when the
+//! cache misses.
 
 use std::sync::Arc;
 
@@ -9,51 +10,62 @@ use crate::grpc::connection::{GrpcConnection, GrpcTarget};
 use crate::grpc::contract_cache::{CachedContract, ContractCache, ContractKey};
 use crate::grpc::descriptor::build_pool_set;
 use crate::grpc::reflection::list_and_fetch_files;
-use crate::grpc::transport::GrpcTransport;
+use crate::grpc::transport::{GrpcTransport, TonicChannel};
 
-/// Open a channel to `target`. If `cache` already holds the contract for
-/// `(address, tls)`, build the connection from the cached pools/catalog and skip
-/// reflection. Otherwise reflect, build, and populate the cache.
-///
-/// The catalog is always projected from the very `PoolSet` the connection carries, so the
-/// services it advertises are exactly the ones `PoolSet::for_service` can resolve.
-///
-/// The channel is always opened fresh (it is per-connection, never cached).
 pub async fn activate(
     target: GrpcTarget,
     transport: Arc<dyn GrpcTransport>,
     cache: &dyn ContractCache,
 ) -> Result<GrpcConnection, CoreError> {
     let key = ContractKey::from_target(&target);
-    let channel = transport.channel(&target).await?;
-
     if let Some(cached) = cache.get(&key) {
-        return Ok(GrpcConnection {
-            target,
-            transport,
-            channel,
-            pools: cached.pools,
-            catalog: cached.catalog,
-        });
+        let channel = transport.channel(&target).await?;
+        return Ok(connection(target, transport, channel, cached));
     }
+    let channel = transport.channel(&target).await?;
+    let cached = reflect(channel.clone()).await?;
+    cache.put(key, cached.clone());
+    Ok(connection(target, transport, channel, cached))
+}
 
-    // clone — TonicChannel is cheap to Clone (Arc internally); reflection consumes
-    // its copy, the original stays in GrpcConnection for subsequent invokes.
-    let (_services_listed, files) = list_and_fetch_files(channel.clone()).await?;
+pub(crate) async fn load_contract(
+    target: &GrpcTarget,
+    transport: &dyn GrpcTransport,
+    cache: &dyn ContractCache,
+) -> Result<(CachedContract, bool), CoreError> {
+    let key = ContractKey::from_target(target);
+    if let Some(cached) = cache.get(&key) {
+        return Ok((cached, false));
+    }
+    let channel = transport.channel(target).await?;
+    let cached = reflect(channel).await?;
+    cache.put(key, cached.clone());
+    Ok((cached, true))
+}
+
+async fn reflect(channel: TonicChannel) -> Result<CachedContract, CoreError> {
+    let (_services_listed, files) = list_and_fetch_files(channel).await?;
     let pools = build_pool_set(&files)?;
     let catalog = build_catalog(&pools);
+    Ok(CachedContract {
+        files: Arc::new(files),
+        pools,
+        catalog,
+        fetched_at: std::time::SystemTime::now(),
+    })
+}
 
-    cache.put(
-        key,
-        CachedContract {
-            // Wrapped after `build_pool_set` has read the corpus: the cache hands out a
-            // clone of this entry on every send, so the corpus must not be deep-cloned.
-            files: Arc::new(files),
-            pools: pools.clone(),
-            catalog: catalog.clone(),
-            fetched_at: std::time::SystemTime::now(),
-        },
-    );
-
-    Ok(GrpcConnection { target, transport, channel, pools, catalog })
+fn connection(
+    target: GrpcTarget,
+    transport: Arc<dyn GrpcTransport>,
+    channel: TonicChannel,
+    cached: CachedContract,
+) -> GrpcConnection {
+    GrpcConnection {
+        target,
+        transport,
+        channel,
+        pools: cached.pools,
+        catalog: cached.catalog,
+    }
 }

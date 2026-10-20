@@ -2,17 +2,28 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { setPref } from "@/lib/use-prefs";
 
 vi.mock("@/ipc/client", () => ({
-  grpcBuildRequestSkeleton: vi.fn(),
+  grpcContractRead: vi.fn(),
   grpcSend: vi.fn(),
   grpcCancel: vi.fn(),
   varsResolve: vi.fn(),
   authResolve: vi.fn(),
-  grpcMessageSchema: vi.fn(),
 }));
 
 import * as ipc from "@/ipc/client";
-import { createStepFromMethod, sendStep, cancelStep, sendCtxOf, callOptionsOf } from "./actions";
-import { buildRequestSkeletonSafe, applyMethodSelection, isPristineBody, resetBodyToTemplate, fetchMessageSchemaSafe } from "./actions";
+import {
+  createStepFromMethod,
+  sendStep,
+  cancelStep,
+  sendCtxOf,
+  callOptionsOf,
+} from "./actions";
+import {
+  buildRequestSkeletonSafe,
+  applyMethodSelection,
+  isPristineBody,
+  resetBodyToTemplate,
+  fetchMessageSchemaSafe,
+} from "./actions";
 import { varsCtxFor, varsResolverFor } from "./actions";
 import type { Step } from "./model";
 import type { InvokeOutcomeIpc } from "@/ipc/bindings";
@@ -34,7 +45,7 @@ describe("createStepFromMethod", () => {
       "order.v1.OrderService",
       "GetOrderState",
     );
-    expect(ipc.grpcBuildRequestSkeleton).not.toHaveBeenCalled();
+    expect(ipc.grpcContractRead).not.toHaveBeenCalled();
     expect(step.requestJson).toBe("{\n}");
     expect(step.status).toBe("draft");
     expect(step.service).toBe("order.v1.OrderService");
@@ -42,21 +53,32 @@ describe("createStepFromMethod", () => {
 
   it("seeds metadata (deep copy) from service defaultMetadata and records inline auth", async () => {
     const defaults = [{ key: "x-tenant", value: "{{tenant}}", enabled: true }];
-    const auth = { kind: "env_var" as const, env_var: "TOK", header_name: "authorization", prefix: "Bearer " };
+    const auth = {
+      kind: "env_var" as const,
+      env_var: "TOK",
+      header_name: "authorization",
+      prefix: "Bearer ",
+    };
     const step = await createStepFromMethod(
-      { address: "h:443", tls: true }, "S", "M",
+      { address: "h:443", tls: true },
+      "S",
+      "M",
       { auth, defaultMetadata: defaults },
     );
     expect(step.auth).toEqual(auth);
     expect(step.metadata).toEqual(defaults);
-    expect(step.metadata).not.toBe(defaults);       // deep copy: array identity differs
+    expect(step.metadata).not.toBe(defaults); // deep copy: array identity differs
     expect(step.metadata[0]).not.toBe(defaults[0]); // and row identity differs
   });
 });
 
 describe("varsCtxFor / varsResolverFor", () => {
   it("builds a collection ctx only when an id is present", () => {
-    expect(varsCtxFor("c1")).toEqual({ collection_id: "c1", collection_vars: null, env_vars: null });
+    expect(varsCtxFor("c1")).toEqual({
+      collection_id: "c1",
+      collection_vars: null,
+      env_vars: null,
+    });
     expect(varsCtxFor(null)).toBeNull();
     expect(varsCtxFor(undefined)).toBeNull();
   });
@@ -64,7 +86,9 @@ describe("varsCtxFor / varsResolverFor", () => {
   it("varsResolverFor passes the ctx to ipc.varsResolve", async () => {
     await varsResolverFor("c1")("{{x}}");
     expect(ipc.varsResolve).toHaveBeenCalledWith("{{x}}", {
-      collection_id: "c1", collection_vars: null, env_vars: null,
+      collection_id: "c1",
+      collection_vars: null,
+      env_vars: null,
     });
   });
 });
@@ -94,7 +118,11 @@ describe("sendStep", () => {
       auth_used: { kind: "none" },
       tls_used: false,
     });
-    const res = await sendStep(baseStep, { envName: "prod" }, { requestId: "rid" });
+    const res = await sendStep(
+      baseStep,
+      { envName: "prod" },
+      { requestId: "rid" },
+    );
     expect(res.kind).toBe("ok");
     if (res.kind === "ok") expect(res.report.outcome.status_code).toBe(0);
     expect(ipc.grpcSend).toHaveBeenCalledWith(
@@ -116,8 +144,12 @@ describe("sendStep", () => {
   it("forwards a null tls (inherit) as tls_override: null for core to resolve", async () => {
     vi.mocked(ipc.grpcSend).mockResolvedValue({
       outcome: {
-        status_code: 0, status_message: "OK", response_json: "{}",
-        trailing_metadata: {}, status_details: [], elapsed_ms: 1,
+        status_code: 0,
+        status_message: "OK",
+        response_json: "{}",
+        trailing_metadata: {},
+        status_details: [],
+        elapsed_ms: 1,
       },
       auth_used: { kind: "none" },
       tls_used: false,
@@ -134,8 +166,12 @@ describe("sendStep", () => {
   it("forwards metadata rows as authored; core skips disabled and keyless rows", async () => {
     vi.mocked(ipc.grpcSend).mockResolvedValue({
       outcome: {
-        status_code: 0, status_message: "OK", response_json: "{}",
-        trailing_metadata: {}, status_details: [], elapsed_ms: 1,
+        status_code: 0,
+        status_message: "OK",
+        response_json: "{}",
+        trailing_metadata: {},
+        status_details: [],
+        elapsed_ms: 1,
       },
       auth_used: { kind: "none" },
       tls_used: false,
@@ -174,7 +210,10 @@ describe("sendStep", () => {
     const res = await sendStep(baseStep, { envName: null });
     expect(res).toEqual({
       kind: "error",
-      fault: { kind: "other", message: "Unresolved variables: {{host}}, {{uid}}" },
+      fault: {
+        kind: "other",
+        message: "Unresolved variables: {{host}}, {{uid}}",
+      },
     });
   });
 
@@ -185,7 +224,10 @@ describe("sendStep", () => {
       cycle: ["a", "b", "a"],
     });
     const res = await sendStep(baseStep, { envName: null });
-    expect(res).toEqual({ kind: "error", fault: { kind: "other", message: "Variable cycle: a → b → a" } });
+    expect(res).toEqual({
+      kind: "error",
+      fault: { kind: "other", message: "Variable cycle: a → b → a" },
+    });
   });
 
   it("maps a Cancelled throw to kind 'cancelled'", async () => {
@@ -195,23 +237,35 @@ describe("sendStep", () => {
   });
 
   it("returns error kind with the IpcError message on client failure", async () => {
-    vi.mocked(ipc.grpcSend).mockRejectedValue({ type: "Transport", kind: "Refused", message: "connection refused" });
+    vi.mocked(ipc.grpcSend).mockRejectedValue({
+      type: "Transport",
+      kind: "Refused",
+      message: "connection refused",
+    });
     const res = await sendStep(baseStep, { envName: null });
-    expect(res).toEqual({ kind: "error", fault: { kind: "refused", message: "connection refused" } });
+    expect(res).toEqual({
+      kind: "error",
+      fault: { kind: "refused", message: "connection refused" },
+    });
   });
 
   it("falls back to the IpcError type for messageless variants", async () => {
     vi.mocked(ipc.grpcSend).mockRejectedValue({ type: "NotConnected" });
     const res = await sendStep(baseStep, { envName: null });
     expect(res.kind).toBe("error");
-    if (res.kind === "error") expect(res.fault).toEqual({ kind: "other", message: "NotConnected" });
+    if (res.kind === "error")
+      expect(res.fault).toEqual({ kind: "other", message: "NotConnected" });
   });
 
   it("sends a null collection_id when the step is unbound", async () => {
     vi.mocked(ipc.grpcSend).mockResolvedValue({
       outcome: {
-        status_code: 0, status_message: "OK", response_json: "{}",
-        trailing_metadata: {}, status_details: [], elapsed_ms: 1,
+        status_code: 0,
+        status_message: "OK",
+        response_json: "{}",
+        trailing_metadata: {},
+        status_details: [],
+        elapsed_ms: 1,
       },
       auth_used: { kind: "none" },
       tls_used: false,
@@ -227,12 +281,25 @@ describe("sendStep", () => {
 });
 
 describe("sendStep cancel/timeout wiring", () => {
-  const step = { address: "h:443", tls: true, service: "S", method: "M", requestJson: "{}", metadata: [], auth: { kind: "none" as const } };
+  const step = {
+    address: "h:443",
+    tls: true,
+    service: "S",
+    method: "M",
+    requestJson: "{}",
+    metadata: [],
+    auth: { kind: "none" as const },
+  };
 
   beforeEach(() => {
     vi.mocked(ipc.grpcSend).mockResolvedValue({
       outcome: {
-        status_code: 0, status_message: "OK", response_json: "{}", trailing_metadata: {}, status_details: [], elapsed_ms: 1,
+        status_code: 0,
+        status_message: "OK",
+        response_json: "{}",
+        trailing_metadata: {},
+        status_details: [],
+        elapsed_ms: 1,
       },
       auth_used: { kind: "none" },
       tls_used: false,
@@ -240,7 +307,11 @@ describe("sendStep cancel/timeout wiring", () => {
   });
 
   it("passes a request_id and a timeout_ms to grpcSend", async () => {
-    await sendStep(step, { envName: null }, { requestId: "req-1", timeoutMs: 12345 });
+    await sendStep(
+      step,
+      { envName: null },
+      { requestId: "req-1", timeoutMs: 12345 },
+    );
     expect(ipc.grpcSend).toHaveBeenCalledWith(
       expect.anything(),
       expect.anything(),
@@ -251,7 +322,11 @@ describe("sendStep cancel/timeout wiring", () => {
 
   it("passes the maxMessageBytes pref to grpcSend", async () => {
     setPref("maxMessageBytes", 0); // Unlimited
-    await sendStep(step, { envName: null }, { requestId: "req-mb", timeoutMs: 1000 });
+    await sendStep(
+      step,
+      { envName: null },
+      { requestId: "req-mb", timeoutMs: 1000 },
+    );
     expect(ipc.grpcSend).toHaveBeenLastCalledWith(
       expect.anything(),
       expect.anything(),
@@ -263,7 +338,11 @@ describe("sendStep cancel/timeout wiring", () => {
 
   it("returns kind 'cancelled' when the backend reports a cancellation", async () => {
     vi.mocked(ipc.grpcSend).mockRejectedValue({ type: "Cancelled" });
-    const res = await sendStep(step, { envName: null }, { requestId: "req-2", timeoutMs: 1000 });
+    const res = await sendStep(
+      step,
+      { envName: null },
+      { requestId: "req-2", timeoutMs: 1000 },
+    );
     expect(res.kind).toBe("cancelled");
     expect(ipc.grpcCancel).not.toHaveBeenCalled();
   });
@@ -276,7 +355,11 @@ describe("sendStep cancel/timeout wiring", () => {
       kind: "Other",
       message: "I/O operation has been canceled by the host",
     });
-    const res = await sendStep(step, { envName: null }, { requestId: "req-3", timeoutMs: 1000 });
+    const res = await sendStep(
+      step,
+      { envName: null },
+      { requestId: "req-3", timeoutMs: 1000 },
+    );
     expect(res.kind).toBe("error");
     if (res.kind === "error") expect(res.fault.message).toContain("canceled");
   });
@@ -303,51 +386,63 @@ describe("cancelStep", () => {
 
 describe("buildRequestSkeletonSafe", () => {
   it("returns the backend skeleton on success", async () => {
-    vi.mocked(ipc.grpcBuildRequestSkeleton).mockResolvedValue('{"id":""}');
-    const out = await buildRequestSkeletonSafe({ address: "h:443", tls: true }, "p.S", "M");
-    expect(out).toBe('{"id":""}');
-    expect(ipc.grpcBuildRequestSkeleton).toHaveBeenCalledWith(
-      { address: "h:443", tls: true, skip_verify: false }, "p.S", "M",
+    vi.mocked(ipc.grpcContractRead).mockResolvedValue({
+      kind: "skeleton",
+      json: '{"id":""}',
+    } as never);
+    const out = await buildRequestSkeletonSafe(
+      { address: "h:443", tls: true },
+      "p.S",
+      "M",
     );
+    expect(out).toBe('{"id":""}');
+    expect(ipc.grpcContractRead).toHaveBeenCalledWith(
+      "h:443",
+      true,
+      { collection_id: null, env_name: null },
+      { op: "skeleton", service: "p.S", method: "M" },
+    );
+    expect(ipc.varsResolve).not.toHaveBeenCalled();
   });
 
   it("falls back to '{}' when reflection/skeleton fails", async () => {
-    vi.mocked(ipc.grpcBuildRequestSkeleton).mockRejectedValue(new Error("nope"));
-    expect(await buildRequestSkeletonSafe({ address: "h", tls: false }, "p.S", "M")).toBe("{}");
+    vi.mocked(ipc.grpcContractRead).mockRejectedValue(new Error("nope"));
+    expect(
+      await buildRequestSkeletonSafe({ address: "h", tls: false }, "p.S", "M"),
+    ).toBe("{}");
   });
 
-  it("resolves {{var}} in the address before building the skeleton (mirrors Send)", async () => {
-    vi.mocked(ipc.varsResolve).mockImplementation(async (tpl: string) => ({
-      resolved: tpl.replace("{{host}}", "api.internal"),
-      unresolved_vars: [], cycle_chain: null, dynamic_vars: [],
-    }));
-    vi.mocked(ipc.grpcBuildRequestSkeleton).mockResolvedValue("{}");
-    await buildRequestSkeletonSafe({ address: "{{host}}:443", tls: true }, "p.S", "M");
-    expect(ipc.grpcBuildRequestSkeleton).toHaveBeenCalledWith(
-      { address: "api.internal:443", tls: true, skip_verify: false }, "p.S", "M",
+  it("sends the address template and the raw tls override", async () => {
+    vi.mocked(ipc.grpcContractRead).mockResolvedValue({
+      kind: "skeleton",
+      json: "{}",
+    } as never);
+    await buildRequestSkeletonSafe(
+      {
+        address: "{{host}}:443",
+        tls: null,
+        collectionId: "c",
+        envName: "prod",
+      },
+      "p.S",
+      "M",
     );
-  });
-
-  it("threads skipVerify:true into skip_verify", async () => {
-    vi.mocked(ipc.grpcBuildRequestSkeleton).mockResolvedValue("{}");
-    await buildRequestSkeletonSafe({ address: "h:443", tls: true, skipVerify: true }, "p.S", "M");
-    expect(ipc.grpcBuildRequestSkeleton).toHaveBeenCalledWith(
-      { address: "h:443", tls: true, skip_verify: true }, "p.S", "M",
-    );
-  });
-
-  it("defaults skip_verify to false when skipVerify is omitted", async () => {
-    vi.mocked(ipc.grpcBuildRequestSkeleton).mockResolvedValue("{}");
-    await buildRequestSkeletonSafe({ address: "h:443", tls: true }, "p.S", "M");
-    expect(ipc.grpcBuildRequestSkeleton).toHaveBeenCalledWith(
-      { address: "h:443", tls: true, skip_verify: false }, "p.S", "M",
+    expect(ipc.varsResolve).not.toHaveBeenCalled();
+    expect(ipc.grpcContractRead).toHaveBeenCalledWith(
+      "{{host}}:443",
+      null,
+      { collection_id: "c", env_name: "prod" },
+      { op: "skeleton", service: "p.S", method: "M" },
     );
   });
 });
 
 describe("applyMethodSelection", () => {
   it("resets a pristine body to the empty template (the contract renders as ghost)", async () => {
-    vi.mocked(ipc.grpcBuildRequestSkeleton).mockResolvedValueOnce('{"a":""}'); // old method skeleton (pristine check)
+    vi.mocked(ipc.grpcContractRead).mockResolvedValueOnce({
+      kind: "skeleton",
+      json: '{"a":""}',
+    } as never);
     const patch = vi.fn();
     await applyMethodSelection(
       patch,
@@ -355,14 +450,24 @@ describe("applyMethodSelection", () => {
       { requestJson: "{}", service: "p.S", method: "Old" }, // pristine
       { service: "p.S", method: "New" },
     );
-    expect(patch).toHaveBeenNthCalledWith(1, { service: "p.S", method: "New", status: "draft", outcome: null, error: null, streamId: null });
+    expect(patch).toHaveBeenNthCalledWith(1, {
+      service: "p.S",
+      method: "New",
+      status: "draft",
+      outcome: null,
+      error: null,
+      streamId: null,
+    });
     expect(patch).toHaveBeenNthCalledWith(2, { requestJson: "{\n}" });
     // no autofill: the new method's skeleton is only built on demand (Reset-to-template)
-    expect(ipc.grpcBuildRequestSkeleton).toHaveBeenCalledTimes(1);
+    expect(ipc.grpcContractRead).toHaveBeenCalledTimes(1);
   });
 
   it("resets a body that equals the old skeleton modulo whitespace", async () => {
-    vi.mocked(ipc.grpcBuildRequestSkeleton).mockResolvedValueOnce('{"a":""}');
+    vi.mocked(ipc.grpcContractRead).mockResolvedValueOnce({
+      kind: "skeleton",
+      json: '{"a":""}',
+    } as never);
     const patch = vi.fn();
     await applyMethodSelection(
       patch,
@@ -374,7 +479,10 @@ describe("applyMethodSelection", () => {
   });
 
   it("preserves an edited body (patches service/method only)", async () => {
-    vi.mocked(ipc.grpcBuildRequestSkeleton).mockResolvedValueOnce('{"a":""}'); // old skeleton
+    vi.mocked(ipc.grpcContractRead).mockResolvedValueOnce({
+      kind: "skeleton",
+      json: '{"a":""}',
+    } as never); // old skeleton
     const patch = vi.fn();
     await applyMethodSelection(
       patch,
@@ -383,16 +491,29 @@ describe("applyMethodSelection", () => {
       { service: "p.S", method: "New" },
     );
     expect(patch).toHaveBeenCalledTimes(1);
-    expect(patch).toHaveBeenCalledWith({ service: "p.S", method: "New", status: "draft", outcome: null, error: null, streamId: null });
+    expect(patch).toHaveBeenCalledWith({
+      service: "p.S",
+      method: "New",
+      status: "draft",
+      outcome: null,
+      error: null,
+      streamId: null,
+    });
   });
 
   it("seeds the response fields from history for the newly selected method", async () => {
     const outcome = { status_code: 0 } as unknown as InvokeOutcomeIpc;
-    const history: Step[] = [{
-      ...(await createStepFromMethod({ address: "h:1", tls: false }, "p.S", "Other")),
-      status: "ok" as const,
-      outcome,
-    }];
+    const history: Step[] = [
+      {
+        ...(await createStepFromMethod(
+          { address: "h:1", tls: false },
+          "p.S",
+          "Other",
+        )),
+        status: "ok" as const,
+        outcome,
+      },
+    ];
     const patches: Partial<Step>[] = [];
     await applyMethodSelection(
       (p) => patches.push(p),
@@ -452,19 +573,28 @@ describe("isPristineBody", () => {
 
 describe("resetBodyToTemplate", () => {
   it("patches requestJson with a fresh skeleton for the current method", async () => {
-    vi.mocked(ipc.grpcBuildRequestSkeleton).mockResolvedValue('{"a":""}');
+    vi.mocked(ipc.grpcContractRead).mockResolvedValue({
+      kind: "skeleton",
+      json: '{"a":""}',
+    } as never);
     const patch = vi.fn();
-    await resetBodyToTemplate(patch, { address: "h:443", tls: true }, "p.S", "M");
-    expect(ipc.grpcBuildRequestSkeleton).toHaveBeenCalledWith(
-      { address: "h:443", tls: true, skip_verify: false },
+    await resetBodyToTemplate(
+      patch,
+      { address: "h:443", tls: true },
       "p.S",
       "M",
+    );
+    expect(ipc.grpcContractRead).toHaveBeenCalledWith(
+      "h:443",
+      true,
+      { collection_id: null, env_name: null },
+      { op: "skeleton", service: "p.S", method: "M" },
     );
     expect(patch).toHaveBeenCalledWith({ requestJson: '{"a":""}' });
   });
 
   it("falls back to {} when the skeleton build fails", async () => {
-    vi.mocked(ipc.grpcBuildRequestSkeleton).mockRejectedValue(new Error("boom"));
+    vi.mocked(ipc.grpcContractRead).mockRejectedValue(new Error("boom"));
     const patch = vi.fn();
     await resetBodyToTemplate(patch, { address: "h", tls: false }, "S", "M");
     expect(patch).toHaveBeenCalledWith({ requestJson: "{}" });
@@ -475,54 +605,53 @@ describe("fetchMessageSchemaSafe", () => {
   const mockSchema = { root: "t.M", messages: [], enums: [] };
 
   beforeEach(() => {
-    vi.mocked(ipc.grpcMessageSchema).mockResolvedValue(mockSchema);
+    vi.mocked(ipc.grpcContractRead).mockResolvedValue({
+      kind: "schema",
+      schema: mockSchema,
+    } as never);
   });
 
   it("returns schema on success (defaults to input side)", async () => {
-    const result = await fetchMessageSchemaSafe({ address: "h:443", tls: true }, "S", "M");
-    expect(result).toEqual(mockSchema);
-    expect(ipc.grpcMessageSchema).toHaveBeenCalledWith(
-      { address: "h:443", tls: true, skip_verify: false },
+    const result = await fetchMessageSchemaSafe(
+      { address: "h:443", tls: true },
       "S",
       "M",
-      "input",
     );
+    expect(result).toEqual(mockSchema);
+    expect(ipc.grpcContractRead).toHaveBeenCalledWith(
+      "h:443",
+      true,
+      { collection_id: null, env_name: null },
+      { op: "schema", service: "S", method: "M", side: "input" },
+    );
+    expect(ipc.varsResolve).not.toHaveBeenCalled();
   });
 
   it("forwards the requested side to the IPC call", async () => {
-    await fetchMessageSchemaSafe({ address: "h", tls: false }, "S", "M", "output");
-    expect(ipc.grpcMessageSchema).toHaveBeenCalledWith(
-      expect.objectContaining({ tls: false }),
+    await fetchMessageSchemaSafe(
+      { address: "h", tls: false },
       "S",
       "M",
       "output",
     );
+    expect(ipc.grpcContractRead).toHaveBeenCalledWith(
+      "h",
+      false,
+      { collection_id: null, env_name: null },
+      { op: "schema", service: "S", method: "M", side: "output" },
+    );
   });
 
   it("returns null on IPC failure (best-effort)", async () => {
-    vi.mocked(ipc.grpcMessageSchema).mockRejectedValue(new Error("reflection unavailable"));
-    const result = await fetchMessageSchemaSafe({ address: "h", tls: false }, "S", "M");
+    vi.mocked(ipc.grpcContractRead).mockRejectedValue(
+      new Error("reflection unavailable"),
+    );
+    const result = await fetchMessageSchemaSafe(
+      { address: "h", tls: false },
+      "S",
+      "M",
+    );
     expect(result).toBeNull();
-  });
-
-  it("threads skipVerify:true into skip_verify", async () => {
-    await fetchMessageSchemaSafe({ address: "h:443", tls: true, skipVerify: true }, "S", "M");
-    expect(ipc.grpcMessageSchema).toHaveBeenCalledWith(
-      { address: "h:443", tls: true, skip_verify: true },
-      "S",
-      "M",
-      "input",
-    );
-  });
-
-  it("defaults skip_verify to false when skipVerify is omitted", async () => {
-    await fetchMessageSchemaSafe({ address: "h:443", tls: true }, "S", "M");
-    expect(ipc.grpcMessageSchema).toHaveBeenCalledWith(
-      { address: "h:443", tls: true, skip_verify: false },
-      "S",
-      "M",
-      "input",
-    );
   });
 });
 
@@ -543,12 +672,21 @@ describe("send helpers shared by the unary and streaming paths", () => {
   };
 
   it("sendCtxOf carries the collection and env; an unbound step has no collection", () => {
-    expect(sendCtxOf(step, "prod")).toEqual({ collection_id: "c1", env_name: "prod" });
-    expect(sendCtxOf({ collectionId: null }, null)).toEqual({ collection_id: null, env_name: null });
+    expect(sendCtxOf(step, "prod")).toEqual({
+      collection_id: "c1",
+      env_name: "prod",
+    });
+    expect(sendCtxOf({ collectionId: null }, null)).toEqual({
+      collection_id: null,
+      env_name: null,
+    });
   });
 
   it("callOptionsOf prefers explicit overrides over the prefs", () => {
-    expect(callOptionsOf({ timeoutMs: 7, maxMessageBytes: 9 })).toEqual({ timeout_ms: 7, max_message_bytes: 9 });
+    expect(callOptionsOf({ timeoutMs: 7, maxMessageBytes: 9 })).toEqual({
+      timeout_ms: 7,
+      max_message_bytes: 9,
+    });
     const fromPrefs = callOptionsOf();
     expect(fromPrefs.timeout_ms).toEqual(expect.any(Number));
     expect(fromPrefs.max_message_bytes).toEqual(expect.any(Number));

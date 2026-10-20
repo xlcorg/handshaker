@@ -2,19 +2,25 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { act, render, screen, fireEvent } from "@testing-library/react";
 
 vi.mock("@/features/invoke/BodyEditor", () => ({
-  BodyEditor: ({ value }: { value: string }) => <div data-testid="body-editor">{value}</div>,
+  BodyEditor: ({ value }: { value: string }) => (
+    <div data-testid="body-editor">{value}</div>
+  ),
 }));
 const api = vi.hoisted(() => ({
   authResolve: vi.fn().mockResolvedValue(null),
   authEffective: vi.fn().mockResolvedValue({ kind: "none" }),
   authInvalidate: vi.fn().mockResolvedValue(undefined),
-  grpcDescribe: vi.fn().mockResolvedValue({ services: [] }),
-  grpcRefreshContract: vi.fn().mockResolvedValue({ services: [] }),
-  grpcBuildRequestSkeleton: vi.fn().mockResolvedValue("{}"),
-  grpcMessageSchema: vi.fn().mockResolvedValue(null),
+  grpcContractRead: vi.fn(),
   varsResolve: vi.fn(),
   grpcSend: vi.fn().mockResolvedValue({
-    outcome: { status_code: 0, status_message: "", response_json: "{}", trailing_metadata: {}, status_details: [], elapsed_ms: 1 },
+    outcome: {
+      status_code: 0,
+      status_message: "",
+      response_json: "{}",
+      trailing_metadata: {},
+      status_details: [],
+      elapsed_ms: 1,
+    },
     auth_used: { kind: "none" },
     tls_used: false,
   }),
@@ -36,29 +42,80 @@ import { workflowStore } from "./store";
 import { streamStore } from "@/features/stream/streamStore";
 import { messages } from "@/lib/messages";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import type { MethodKindIpc, ServiceCatalogIpc, StreamEventIpc } from "@/ipc/bindings";
+import type {
+  MethodKindIpc,
+  ServiceCatalogIpc,
+  StreamEventIpc,
+} from "@/ipc/bindings";
 
 const m = messages.workflow.addressBar;
 
-function catalogWith(method: string, client_streaming: boolean, server_streaming: boolean): ServiceCatalogIpc {
-  return { services: [{ full_name: "p.v1.S", methods: [{
-    name: method, path: `/p.v1.S/${method}`, input_message: "Req", output_message: "Resp",
-    client_streaming, server_streaming,
-  }] }] };
+function catalogWith(
+  method: string,
+  client_streaming: boolean,
+  server_streaming: boolean,
+): ServiceCatalogIpc {
+  return {
+    services: [
+      {
+        full_name: "p.v1.S",
+        methods: [
+          {
+            name: method,
+            path: `/p.v1.S/${method}`,
+            input_message: "Req",
+            output_message: "Resp",
+            client_streaming,
+            server_streaming,
+          },
+        ],
+      },
+    ],
+  };
+}
+
+function serveCatalog(catalog: ServiceCatalogIpc) {
+  api.grpcContractRead.mockImplementation(
+    async (_a: unknown, _t: unknown, _c: unknown, query: { op?: string }) => {
+      if (query?.op === "skeleton") return { kind: "skeleton", json: "{}" };
+      if (query?.op === "schema")
+        return {
+          kind: "schema",
+          schema: { root: "t.M", messages: [], enums: [] },
+        };
+      return { kind: "catalog", catalog };
+    },
+  );
 }
 
 const endOk: StreamEventIpc = {
-  type: "End", status_code: 0, status_message: "", status_details: [], trailing_metadata: {}, elapsed_ms: 5, message_count: 1, total_bytes: 2,
+  type: "End",
+  status_code: 0,
+  status_message: "",
+  status_details: [],
+  trailing_metadata: {},
+  elapsed_ms: 5,
+  message_count: 1,
+  total_bytes: 2,
 };
-const opened = (kind: MethodKindIpc): StreamEventIpc =>
-  ({ type: "Opened", kind, auth_used: { kind: "none" }, tls_used: true, bytes_fields: [] });
+const opened = (kind: MethodKindIpc): StreamEventIpc => ({
+  type: "Opened",
+  kind,
+  auth_used: { kind: "none" },
+  tls_used: true,
+  bytes_fields: [],
+});
 
 /** A history snapshot of an ended Stream call opened with `kind` (no catalog anywhere). */
 function streamSnapshot(kind: MethodKindIpc, id = "old"): Step {
   streamStore.open(id, kind, Date.now());
   streamStore.push(id, opened(kind));
   streamStore.push(id, endOk);
-  return { ...newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "M" }), status: "ok", streamId: id };
+  return {
+    ...newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "M" }),
+    status: "ok",
+    streamId: id,
+  };
 }
 
 async function renderPanel(ui: React.ReactElement) {
@@ -71,7 +128,11 @@ beforeEach(() => {
   vi.clearAllMocks();
   // `clearAllMocks` keeps implementations — a per-test `streamOpen` script must not leak.
   api.streamOpen.mockReset().mockResolvedValue(undefined);
-  vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => { cb(0); return 1; });
+  serveCatalog({ services: [] });
+  vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+    cb(0);
+    return 1;
+  });
   workflowStore.reset();
   streamStore.reset();
 });
@@ -85,33 +146,54 @@ describe("controls-kind precedence", () => {
     const step = streamSnapshot("client");
     await renderPanel(<CallPanel step={step} onPatch={vi.fn()} />);
     expect(screen.getByRole("button", { name: m.open })).toBeInTheDocument();
-    expect(screen.getByText(messages.methodKind.badge.client)).toBeInTheDocument();
+    expect(
+      screen.getByText(messages.methodKind.badge.client),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: m.open }));
     await act(async () => {});
     expect(api.streamOpen.mock.calls[0][3]).toBe("client");
   });
 
   it("while a client call is live, a catalog that now says server-streaming does not flip the controls", async () => {
-    api.grpcDescribe.mockResolvedValue(catalogWith("M", false, true));
+    serveCatalog(catalogWith("M", false, true));
     streamStore.open("rid", "client", Date.now());
     streamStore.push("rid", opened("client"));
-    const live: Step = { ...newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "M" }),
-      status: "sending", requestId: "rid", streamId: "rid" };
+    const live: Step = {
+      ...newStep({
+        address: "h:443",
+        tls: true,
+        service: "p.v1.S",
+        method: "M",
+      }),
+      status: "sending",
+      requestId: "rid",
+      streamId: "rid",
+    };
     vi.useFakeTimers();
     await renderPanel(<CallPanel step={live} onPatch={vi.fn()} />);
-    await act(async () => { await vi.advanceTimersByTimeAsync(1500); });
-    expect(api.grpcDescribe).toHaveBeenCalled();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(api.grpcContractRead).toHaveBeenCalled();
     // Live wins: the badge and the segmented controls stay client's.
-    expect(screen.getByText(messages.methodKind.badge.client)).toBeInTheDocument();
+    expect(
+      screen.getByText(messages.methodKind.badge.client),
+    ).toBeInTheDocument();
     expect(screen.queryByText(messages.methodKind.badge.server)).toBeNull();
-    expect(screen.getByRole("button", { name: /send message/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /send message/i }),
+    ).toBeInTheDocument();
   });
 
   it("after the call ends the catalog kind wins again over the executed kind", async () => {
-    api.grpcDescribe.mockResolvedValue(catalogWith("M", false, true));
+    serveCatalog(catalogWith("M", false, true));
     const step = streamSnapshot("client");
     await renderPanel(<CallPanel step={step} onPatch={vi.fn()} />);
-    await screen.findByText(messages.methodKind.badge.server, {}, { timeout: 3000 });
+    await screen.findByText(
+      messages.methodKind.badge.server,
+      {},
+      { timeout: 3000 },
+    );
     expect(screen.getByRole("button", { name: m.send })).toBeInTheDocument();
     expect(screen.queryByText(messages.methodKind.badge.client)).toBeNull();
   });

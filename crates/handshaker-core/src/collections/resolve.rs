@@ -235,6 +235,19 @@ async fn resolve_request_scoped(
     })
 }
 
+pub(crate) fn resolve_probe_target(
+    address_template: &str,
+    tls_override: Option<bool>,
+    collection: Option<&Collection>,
+    active_env: Option<&Environment>,
+) -> Result<GrpcTarget, CoreError> {
+    let mut r = Resolution::begin(collection, active_env);
+    let address = r.take(address_template);
+    let mut s = r.settle()?;
+    let tls = tls_override.unwrap_or(s.default_tls());
+    GrpcTarget::new(s.text(address), tls, s.skip_verify())
+}
+
 /// Body-only resolve for a **Send message** on an open stream call: the body template
 /// against the env/collection vars of *this* moment, through the same accumulator as
 /// [`resolve_request`] (every unresolved `{{var}}` reported at once, same

@@ -1,31 +1,51 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { act, render, screen, fireEvent, waitFor } from "@testing-library/react";
+import {
+  act,
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+} from "@testing-library/react";
 
 vi.mock("@/features/invoke/BodyEditor", () => ({
-  BodyEditor: ({ value }: { value: string }) => <div data-testid="body-editor">{value}</div>,
+  BodyEditor: ({ value }: { value: string }) => (
+    <div data-testid="body-editor">{value}</div>
+  ),
 }));
 vi.mock("@/ipc/client", () => ({
   authResolve: vi.fn().mockResolvedValue(null),
   authEffective: vi.fn().mockResolvedValue({ kind: "none" }),
   authInvalidate: vi.fn().mockResolvedValue(undefined),
-  grpcDescribe: vi.fn().mockResolvedValue({ services: [] }),
-  grpcRefreshContract: vi.fn().mockResolvedValue({ services: [] }),
-  grpcBuildRequestSkeleton: vi.fn().mockResolvedValue("{}"),
+  grpcContractRead: vi.fn(
+    async (
+      _a: unknown,
+      _t: unknown,
+      _c: unknown,
+      query: { op?: string; side?: string },
+    ) => {
+      if (query?.op === "skeleton") return { kind: "skeleton", json: "{}" };
+      if (query?.op === "schema")
+        return {
+          kind: "schema",
+          schema: { root: "t.M", messages: [], enums: [] },
+        };
+      return { kind: "catalog", catalog: { services: [] } };
+    },
+  ),
   varsResolve: vi.fn(),
   grpcSend: vi.fn().mockResolvedValue({
     outcome: {
-      status_code: 0, status_message: "", response_json: "{}",
-      trailing_metadata: {}, status_details: [], elapsed_ms: 1,
+      status_code: 0,
+      status_message: "",
+      response_json: "{}",
+      trailing_metadata: {},
+      status_details: [],
+      elapsed_ms: 1,
     },
     auth_used: { kind: "none" },
     tls_used: false,
   }),
   grpcCancel: vi.fn(),
-  // No reflection in tests: both schema sides resolve null. NB: useMessageSchema
-  // caches results (nulls too) process-wide per address|tls|service|method|side,
-  // so a test that wants real schemas must use a target none of the null-returning
-  // tests has touched.
-  grpcMessageSchema: vi.fn().mockResolvedValue(null),
 }));
 
 const bumpUsage = vi.fn(() => Promise.resolve());
@@ -38,18 +58,50 @@ import { newStep } from "./model";
 import { workflowStore } from "./store";
 import { messages } from "@/lib/messages";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { grpcMessageSchema, grpcRefreshContract, grpcDescribe, authEffective, varsResolve, grpcSend } from "@/ipc/client";
-import type { MessageSchemaIpc, SendReportIpc, ResolutionReportIpc, ServiceCatalogIpc } from "@/ipc/bindings";
+import {
+  grpcContractRead,
+  authEffective,
+  varsResolve,
+  grpcSend,
+} from "@/ipc/client";
+import type {
+  MessageSchemaIpc,
+  SendReportIpc,
+  ResolutionReportIpc,
+  ServiceCatalogIpc,
+} from "@/ipc/bindings";
 
 /** A one-method catalog for `p.v1.S/<method>` with the given streaming flags. */
-function catalogWith(method: string, client_streaming: boolean, server_streaming: boolean): ServiceCatalogIpc {
-  return { services: [{ full_name: "p.v1.S", methods: [{
-    name: method, path: `/p.v1.S/${method}`, input_message: "Req", output_message: "Resp",
-    client_streaming, server_streaming,
-  }] }] };
+function catalogWith(
+  method: string,
+  client_streaming: boolean,
+  server_streaming: boolean,
+): ServiceCatalogIpc {
+  return {
+    services: [
+      {
+        full_name: "p.v1.S",
+        methods: [
+          {
+            name: method,
+            path: `/p.v1.S/${method}`,
+            input_message: "Req",
+            output_message: "Resp",
+            client_streaming,
+            server_streaming,
+          },
+        ],
+      },
+    ],
+  };
 }
 
-const draft = newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "GetX" });
+const draft = newStep({
+  address: "h:443",
+  tls: true,
+  service: "p.v1.S",
+  method: "GetX",
+});
 
 /** Renders inside the tooltip provider and flushes the mount-time async effects
  *  (useEffectiveAuth's `auth_effective`, useMessageSchema's fetches) inside act,
@@ -63,6 +115,15 @@ async function renderPanel(ui: React.ReactElement) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(grpcContractRead).mockImplementation(async (_a, _t, _c, query) => {
+    if (query?.op === "skeleton") return { kind: "skeleton", json: "{}" };
+    if (query?.op === "schema")
+      return {
+        kind: "schema",
+        schema: { root: "t.M", messages: [], enums: [] },
+      };
+    return { kind: "catalog", catalog: { services: [] } };
+  });
   workflowStore.reset();
 });
 
@@ -85,7 +146,9 @@ describe("CallPanel", () => {
     await renderPanel(<CallPanel step={draft} onPatch={onPatch} />);
     fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
     // onSend's first effect is to mark the step as sending.
-    expect(onPatch).toHaveBeenCalledWith(expect.objectContaining({ status: "sending" }));
+    expect(onPatch).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "sending" }),
+    );
     // The send itself is async — let it settle inside act.
     await act(async () => {});
   });
@@ -94,7 +157,9 @@ describe("CallPanel", () => {
     const onPatch = vi.fn();
     await renderPanel(<CallPanel step={draft} onPatch={onPatch} />);
     fireEvent.keyDown(window, { code: "KeyR", key: "r", ctrlKey: true });
-    expect(onPatch).toHaveBeenCalledWith(expect.objectContaining({ status: "sending" }));
+    expect(onPatch).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "sending" }),
+    );
     // The send itself is async — let it settle inside act.
     await act(async () => {});
   });
@@ -120,24 +185,53 @@ describe("CallPanel contract tab", () => {
   it("threads the request and response schemas to the correct contract sides", async () => {
     const schemaWithField = (root: string, name: string): MessageSchemaIpc => ({
       root,
-      messages: [{
-        full_name: root,
-        fields: [{
-          json_name: name, proto_name: name, type_label: "string", value_kind: "scalar",
-          repeated: false, message_type: null, enum_type: null, oneof_group: null,
-          number: 1, optional: false,
-        }],
-      }],
+      messages: [
+        {
+          full_name: root,
+          fields: [
+            {
+              json_name: name,
+              proto_name: name,
+              type_label: "string",
+              value_kind: "scalar",
+              repeated: false,
+              message_type: null,
+              enum_type: null,
+              oneof_group: null,
+              number: 1,
+              optional: false,
+            },
+          ],
+        },
+      ],
       enums: [],
     });
-    vi.mocked(grpcMessageSchema).mockImplementation((_t, _s, _m, side) =>
-      Promise.resolve(schemaWithField(side === "input" ? "t.Req" : "t.Resp", side === "input" ? "req_field" : "resp_field")),
+    vi.mocked(grpcContractRead).mockImplementation(
+      async (_a, _t, _c, query) => {
+        if (query.op === "schema") {
+          const side = query.side;
+          return {
+            kind: "schema",
+            schema: schemaWithField(
+              side === "input" ? "t.Req" : "t.Resp",
+              side === "input" ? "req_field" : "resp_field",
+            ),
+          } as never;
+        }
+        if (query.op === "skeleton")
+          return { kind: "skeleton", json: "{}" } as never;
+        return {
+          kind: "catalog",
+          catalog: catalogWith("GetSides", false, false),
+        } as never;
+      },
     );
-    // Distinct method → fresh useMessageSchema cache keys (the tests above already
-    // cached null for `draft`'s keys, which would shadow this side-aware mock).
-    const sideDraft = newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "GetSides" });
-    // The rpc line needs a known kind — the catalog says GetSides is unary.
-    vi.mocked(grpcDescribe).mockResolvedValue(catalogWith("GetSides", false, false));
+    const sideDraft = newStep({
+      address: "h:443",
+      tls: true,
+      service: "p.v1.S",
+      method: "GetSides",
+    });
     await renderPanel(<CallPanel step={sideDraft} onPatch={() => {}} />);
     // The panel defaults to Body; open the Contract tab explicitly. Schemas
     // resolve async — the tab then lists both sides at once.
@@ -162,20 +256,61 @@ describe("CallPanel contract tab", () => {
 
 describe("CallPanel method kind (derived live from the catalog)", () => {
   it("shows no badge until the catalog arrives, then the streaming badge — without user action", async () => {
-    vi.mocked(grpcDescribe).mockResolvedValue(catalogWith("GetX", false, true));
+    vi.mocked(grpcContractRead).mockImplementation(
+      async (_a, _t, _c, query) => {
+        if (query.op === "schema")
+          return {
+            kind: "schema",
+            schema: { root: "t.M", messages: [], enums: [] },
+          } as never;
+        if (query.op === "skeleton")
+          return { kind: "skeleton", json: "{}" } as never;
+        return {
+          kind: "catalog",
+          catalog: catalogWith("GetX", false, true),
+        } as never;
+      },
+    );
     await renderPanel(<CallPanel step={draft} onPatch={() => {}} />);
     // Reflection is debounced: before the catalog lands the kind is unknown → no badge.
     expect(screen.queryByText(messages.methodKind.badge.server)).toBeNull();
-    expect(await screen.findByText(messages.methodKind.badge.server, {}, { timeout: 3000 })).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        messages.methodKind.badge.server,
+        {},
+        { timeout: 3000 },
+      ),
+    ).toBeInTheDocument();
   });
 
   it("feeds the same kind to the Contract tab: `stream` on the streaming side", async () => {
-    const schemaOf = (root: string): MessageSchemaIpc => ({ root, messages: [{ full_name: root, fields: [] }], enums: [] });
-    vi.mocked(grpcMessageSchema).mockImplementation((_t, _s, _m, side) =>
-      Promise.resolve(schemaOf(side === "input" ? "t.Req" : "t.Resp")),
+    const schemaOf = (root: string): MessageSchemaIpc => ({
+      root,
+      messages: [{ full_name: root, fields: [] }],
+      enums: [],
+    });
+    vi.mocked(grpcContractRead).mockImplementation(
+      async (_a, _t, _c, query) => {
+        if (query.op === "schema") {
+          return {
+            kind: "schema",
+            schema: schemaOf(query.side === "input" ? "t.Req" : "t.Resp"),
+          } as never;
+        }
+        if (query.op === "skeleton")
+          return { kind: "skeleton", json: "{}" } as never;
+        return {
+          kind: "catalog",
+          catalog: catalogWith("Watch", true, true),
+        } as never;
+      },
     );
-    vi.mocked(grpcDescribe).mockResolvedValue(catalogWith("Watch", true, true));
-    const watch = newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "Watch" });
+    const watch = newStep({
+      address: "h:443",
+      tls: true,
+      service: "p.v1.S",
+      method: "Watch",
+    });
     await renderPanel(<CallPanel step={watch} onPatch={() => {}} />);
     fireEvent.click(screen.getByRole("tab", { name: "Contract" }));
     await waitFor(
@@ -184,7 +319,9 @@ describe("CallPanel method kind (derived live from the catalog)", () => {
           .getAllByText("Watch")
           .map((el) => el.closest("div.whitespace-pre"))
           .find((d) => d !== null);
-        expect(rpcLine?.textContent).toBe("rpc Watch(stream Req) returns (stream Resp);");
+        expect(rpcLine?.textContent).toBe(
+          "rpc Watch(stream Req) returns (stream Resp);",
+        );
       },
       { timeout: 3000 },
     );
@@ -195,25 +332,50 @@ describe("CallPanel reflection refresh", () => {
   it("refetches the contract schema when 'Refresh server reflection' is clicked", async () => {
     // A fresh target so the process-wide useMessageSchema cache (and its null entries
     // from other tests) doesn't shadow this fetch.
-    const wireSchema: MessageSchemaIpc = { root: "t.Wire", messages: [], enums: [] };
-    vi.mocked(grpcMessageSchema).mockResolvedValue(wireSchema);
-    const wireDraft = newStep({ address: "wire-host:443", tls: true, service: "p.v1.S", method: "WireRefresh" });
+    const wireSchema: MessageSchemaIpc = {
+      root: "t.Wire",
+      messages: [],
+      enums: [],
+    };
+    vi.mocked(grpcContractRead).mockImplementation(
+      async (_a, _t, _c, query) => {
+        if (query.op === "schema")
+          return { kind: "schema", schema: wireSchema } as never;
+        if (query.op === "skeleton")
+          return { kind: "skeleton", json: "{}" } as never;
+        return { kind: "catalog", catalog: { services: [] } } as never;
+      },
+    );
+    const wireDraft = newStep({
+      address: "wire-host:443",
+      tls: true,
+      service: "p.v1.S",
+      method: "WireRefresh",
+    });
     await renderPanel(<CallPanel step={wireDraft} onPatch={() => {}} />);
-    // Initial input+output schema fetch for this fresh target lands.
-    await waitFor(() => expect(grpcMessageSchema).toHaveBeenCalled());
-    const before = vi.mocked(grpcMessageSchema).mock.calls.length;
+    await waitFor(() => expect(grpcContractRead).toHaveBeenCalled());
+    const schemaCalls = () =>
+      vi.mocked(grpcContractRead).mock.calls.filter((c) => c[3].op === "schema")
+        .length;
+    const before = schemaCalls();
 
     // Open the MethodPicker dropdown (Radix opens on Enter, not plain click), then fire
     // the reflection refresh that lives in its footer.
-    fireEvent.keyDown(screen.getByRole("button", { name: /WireRefresh/ }), { key: "Enter" });
+    fireEvent.keyDown(screen.getByRole("button", { name: /WireRefresh/ }), {
+      key: "Enter",
+    });
     fireEvent.click(await screen.findByLabelText("Refresh server reflection"));
 
     // Refresh must re-reflect the backend AND refetch the schema. The bug: it only did the
     // former, so the contract tab + body hints froze on the first result ("one-time action").
-    await waitFor(() => expect(grpcRefreshContract).toHaveBeenCalled());
     await waitFor(() =>
-      expect(vi.mocked(grpcMessageSchema).mock.calls.length).toBeGreaterThan(before),
+      expect(
+        vi
+          .mocked(grpcContractRead)
+          .mock.calls.some((c) => c[3].op === "refresh"),
+      ).toBe(true),
     );
+    await waitFor(() => expect(schemaCalls()).toBeGreaterThan(before));
   });
 });
 
@@ -241,18 +403,31 @@ describe("CallPanel collection-auth inheritance (auth_effective)", () => {
     tls_used: false,
   };
   const passthrough = (t: string): Promise<ResolutionReportIpc> =>
-    Promise.resolve({ resolved: t, unresolved_vars: [], cycle_chain: null, dynamic_vars: [] });
+    Promise.resolve({
+      resolved: t,
+      unresolved_vars: [],
+      cycle_chain: null,
+      dynamic_vars: [],
+    });
 
   it("sends the raw (unresolved) step auth — grpc_send picks/materializes collection inheritance; the executed history snapshot records the report's actual auth_used", async () => {
     vi.mocked(varsResolve).mockImplementation(passthrough);
     // `auth_effective` drives the Auth tab display only (see below) — the history
     // snapshot now records the Send report's `auth_used` fact, not a second fetch.
     vi.mocked(authEffective).mockResolvedValue(collectionOauth);
-    const reportWithOauth: SendReportIpc = { ...okReport, auth_used: collectionOauth };
+    const reportWithOauth: SendReportIpc = {
+      ...okReport,
+      auth_used: collectionOauth,
+    };
     vi.mocked(grpcSend).mockResolvedValueOnce(reportWithOauth);
 
     // step auth defaults to none — inheritance is core-side now, not frontend-side.
-    const inheritDraft = newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "GetInherit" });
+    const inheritDraft = newStep({
+      address: "h:443",
+      tls: true,
+      service: "p.v1.S",
+      method: "GetInherit",
+    });
     await renderPanel(<CallPanel step={inheritDraft} onPatch={() => {}} />);
     // Wait for the async effective-auth fetch to resolve (Auth tab display).
     await waitFor(() => expect(authEffective).toHaveBeenCalled());
@@ -262,19 +437,28 @@ describe("CallPanel collection-auth inheritance (auth_effective)", () => {
     const draftArg = vi.mocked(grpcSend).mock.calls[0][0];
     expect(draftArg.auth).toEqual({ kind: "none" }); // raw step auth, core does the pick
     // The executed history snapshot records the report's auth_used, so re-send works standalone.
-    await waitFor(() => expect(workflowStore.activeWorkflow().steps).toHaveLength(1));
+    await waitFor(() =>
+      expect(workflowStore.activeWorkflow().steps).toHaveLength(1),
+    );
     expect(workflowStore.activeWorkflow().steps[0]).toMatchObject({
-      protocol: "grpc", auth: expect.objectContaining({ kind: "oauth2_client_credentials" }),
+      protocol: "grpc",
+      auth: expect.objectContaining({ kind: "oauth2_client_credentials" }),
     });
   });
 
   it("shows the inherited collection config in the Auth tab", async () => {
     vi.mocked(authEffective).mockResolvedValue(collectionOauth);
-    const inheritDraft = newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "GetAuthTab" });
+    const inheritDraft = newStep({
+      address: "h:443",
+      tls: true,
+      service: "p.v1.S",
+      method: "GetAuthTab",
+    });
     await renderPanel(<CallPanel step={inheritDraft} onPatch={() => {}} />);
     fireEvent.click(screen.getByRole("tab", { name: "Auth" }));
-    await waitFor(() => expect(screen.getByText(/oauth2_client_credentials/)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText(/oauth2_client_credentials/)).toBeInTheDocument(),
+    );
     expect(screen.getByText(/https:\/\/idp\/token/)).toBeInTheDocument();
   });
 });
-

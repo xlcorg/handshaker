@@ -24,9 +24,8 @@ use commands::collection::{
 use commands::env::{env_active_get, env_active_set, env_delete, env_list, env_reorder, env_upsert};
 use commands::events::ContractUpdated;
 use commands::grpc::{
-    grpc_build_request_skeleton, grpc_cancel, grpc_describe, grpc_message_schema,
-    grpc_refresh_contract, grpc_send, stream_assemble, stream_half_close, stream_message, stream_open,
-    stream_release, stream_save_messages, stream_send,
+    grpc_cancel, grpc_contract_read, grpc_send, stream_assemble, stream_half_close, stream_message,
+    stream_open, stream_release, stream_save_messages, stream_send,
 };
 use commands::history::{history_clear, history_get, history_list, history_record};
 use commands::http::http_send;
@@ -46,10 +45,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
         .commands(collect_commands![
             app_version,
             startup_recovery_take,
-            grpc_describe,
-            grpc_refresh_contract,
-            grpc_build_request_skeleton,
-            grpc_message_schema,
+            grpc_contract_read,
             grpc_send,
             grpc_cancel,
             http_send,

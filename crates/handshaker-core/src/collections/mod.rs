@@ -25,7 +25,9 @@ pub mod tree;
 pub use file_store::FileCollectionStore;
 pub use ids::{CollectionId, ItemId};
 pub use in_memory::InMemoryCollectionStore;
-pub(crate) use resolve::{resolve_body, resolve_request, resolve_request_without_body, CallAuth};
+pub(crate) use resolve::{
+    resolve_body, resolve_probe_target, resolve_request, resolve_request_without_body, CallAuth,
+};
 pub use store::CollectionStore;
 pub use template::{GrpcTemplate, HttpTemplate, RequestTemplate};
 

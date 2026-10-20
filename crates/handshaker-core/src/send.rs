@@ -772,6 +772,28 @@ pub(crate) mod tests {
     }
 
     #[tokio::test]
+    async fn send_miss_dials_exactly_once() {
+        let transport = FakeTransport::with_outcome(Ok(ok_outcome()));
+        let sender = Sender::new(
+            transport.clone(),
+            no_http(),
+            static_tokens("t"),
+            Arc::new(InMemoryContractCache::new()),
+            Arc::new(NoBuiltins),
+        );
+        let err = sender
+            .send(&fixture_request(false), None, None, unlimited_opts())
+            .await
+            .expect_err("empty cache reflects through the one channel");
+        assert!(
+            matches!(err, CoreError::Reflection(_) | CoreError::Transport(_)),
+            "{err:?}"
+        );
+        assert_eq!(transport.channel_calls.load(std::sync::atomic::Ordering::Relaxed), 1);
+        assert_eq!(transport.unary_calls.load(std::sync::atomic::Ordering::Relaxed), 0);
+    }
+
+    #[tokio::test]
     async fn builtins_expand_fresh_per_occurrence_in_body_and_metadata_values() {
         let mut request = fixture_request(false);
         request.body_template = r#"{"id":"{{$guid}}-{{$guid}}"}"#.into();

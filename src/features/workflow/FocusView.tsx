@@ -2,7 +2,12 @@ import { CopyPlus, Save } from "lucide-react";
 import { toast } from "sonner";
 import { CallPanel } from "./CallPanel";
 import { HttpPanel } from "@/features/http/HttpPanel";
-import { useDraft, useDraftDirty, useDraftOrigin, workflowStore } from "./store";
+import {
+  useDraft,
+  useDraftDirty,
+  useDraftOrigin,
+  workflowStore,
+} from "./store";
 import { draftBreadcrumb } from "./draftHeader";
 import { useCatalog } from "@/features/catalog/CatalogProvider";
 import { openSavedRequest } from "@/features/catalog/actions";
@@ -21,7 +26,10 @@ export interface FocusViewProps {
   onQuickAddMethod?: (service: string, method: string) => void;
 }
 
-export function FocusView({ onRequestSave, onQuickAddMethod }: FocusViewProps = {}) {
+export function FocusView({
+  onRequestSave,
+  onQuickAddMethod,
+}: FocusViewProps = {}) {
   const draft = useDraft();
   const origin = useDraftOrigin();
   const dirty = useDraftDirty();
@@ -33,7 +41,9 @@ export function FocusView({ onRequestSave, onQuickAddMethod }: FocusViewProps = 
     const item = await duplicateItem(origin.collectionId, origin.requestId);
     if (!item || item.type !== "request") return;
     openSavedRequest(origin.collectionId, item);
-    void patchUiState({ active_request: { collection_id: origin.collectionId, item_id: item.id } });
+    void patchUiState({
+      active_request: { collection_id: origin.collectionId, item_id: item.id },
+    });
     toast.success(messages.workflow.focus.duplicatedAs(item.name));
   }
 
@@ -50,12 +60,17 @@ export function FocusView({ onRequestSave, onQuickAddMethod }: FocusViewProps = 
     if (!saved || !isAutoName(saved.name, prev.service, prev.method)) return;
     const newName = suggestSaveTarget(next.service, next.method).requestName;
     if (newName === saved.name) return; // no-op if the auto-name is unchanged
-    void renameItem(origin.collectionId, origin.requestId, newName).catch(() => {});
+    void renameItem(origin.collectionId, origin.requestId, newName).catch(
+      () => {},
+    );
   };
 
-  const originVars = origin ? tree.find((c) => c.id === origin.collectionId)?.variables : undefined;
-  const originSkipVerify = origin ? tree.find((c) => c.id === origin.collectionId)?.skip_tls_verify : undefined;
-  const originDefaultTls = origin ? tree.find((c) => c.id === origin.collectionId)?.default_tls : undefined;
+  const originVars = origin
+    ? tree.find((c) => c.id === origin.collectionId)?.variables
+    : undefined;
+  const originDefaultTls = origin
+    ? tree.find((c) => c.id === origin.collectionId)?.default_tls
+    : undefined;
 
   const segments = draft ? draftBreadcrumb(draft, origin, tree) : [];
   const prefix = segments.slice(0, -1);
@@ -126,14 +141,15 @@ export function FocusView({ onRequestSave, onQuickAddMethod }: FocusViewProps = 
         ) : draft ? (
           <CallPanel
             step={draft}
-            onPatch={(patch: Partial<Step>) => workflowStore.updateGrpcDraft(draft.id, patch)}
+            onPatch={(patch: Partial<Step>) =>
+              workflowStore.updateGrpcDraft(draft.id, patch)
+            }
             // Quick-add «+» saves into the open request's collection (origin). An unbound
             // draft has no target collection, so the «+» is hidden rather than silently
             // landing the method in some arbitrary collection.
             onQuickAddMethod={origin ? onQuickAddMethod : undefined}
             onMethodSelected={origin ? handleMethodSelected : undefined}
             originVars={originVars}
-            originSkipVerify={originSkipVerify}
             originDefaultTls={originDefaultTls}
             origin={origin}
           />

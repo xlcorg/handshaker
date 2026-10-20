@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { idleResolveKey, resolveKey } from "./resolveKey";
-import { useDraftReflection } from "./useDraftReflection";
+import { useContractRead } from "./useContractRead";
 
 describe("resolveKey", () => {
   it("builds the call and HTTP shape", () => {
@@ -46,6 +46,15 @@ describe("resolveKey", () => {
 
 /** Compile-time lock for the hole `0fbe103` left: `""` is not a `ResolveKey`. */
 export function emptyStringIsNotAResolveKey(): void {
-  // @ts-expect-error "" is not a ResolveKey — omission must not typecheck
-  useDraftReflection("localhost:443", true, true, null, "");
+  useContractRead({
+    addressTemplate: "localhost:443",
+    tlsOverride: true,
+    collectionId: null,
+    envName: null,
+    service: "",
+    method: "",
+    // @ts-expect-error "" is not a ResolveKey — omission must not typecheck
+    resolveKey: "",
+    enabled: true,
+  });
 }
