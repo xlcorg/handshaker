@@ -12,7 +12,8 @@ import {
   resetBodyToTemplate,
   varsResolverFor,
 } from "./actions";
-import { useCall } from "./useCall";
+import { useCatalog } from "@/features/catalog/CatalogProvider";
+import { cancelCall, halfCloseStream, recordedDispatch, sendStreamMessage } from "./callLifecycle";
 import { StreamView } from "@/features/stream/StreamView";
 import {
   isLivePhase,
@@ -136,34 +137,28 @@ export function CallPanel({
       ? entry
       : null;
 
-  // Controls kind — live call → catalog → last executed → null (`controlsKind`, the one
-  // place the rule lives). Feeds the address-bar badge + controls and the path `useCall`
-  // drives, so a reflection refresh cannot flip the controls mid-call. `null` ⇒ no badge,
-  // unary controls; the UI never claims unary.
   const kind = controlsKind({
     liveKind: liveEntry?.kind ?? null,
     catalogKind,
     executedKind: executedKind(step, entry),
   });
 
-  const call = useCall({
-    step,
-    envName: activeWf.envName,
-    kind,
-    onPatch,
-    record: true,
-    origin,
-  });
-  const { send, cancel } = call;
+  const { bumpUsage } = useCatalog();
+  const send = () =>
+    void recordedDispatch({
+      draft: step,
+      envName: activeWf.envName,
+      kind,
+      recording: { origin: origin ?? null, bumpUsage },
+    });
+  const cancel = () => void cancelCall({ step });
 
-  // A live two-way entry — decided by the call's own kind, not the catalog — turns the
-  // busy slot into the segmented Send message / Half-close / Cancel controls.
   const twoWay: TwoWayControls | undefined =
     liveEntry !== null && isTwoWay(liveEntry.kind)
       ? {
           canSend: liveEntry.phase === "open" && !liveEntry.halfClosed,
-          onSendMessage: () => void call.sendMessage(),
-          onHalfClose: () => void call.halfClose(),
+          onSendMessage: () => void sendStreamMessage({ step, envName: activeWf.envName }),
+          onHalfClose: () => void halfCloseStream({ step }),
         }
       : undefined;
 

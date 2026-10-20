@@ -142,24 +142,20 @@ describe("CallPanel", () => {
   });
 
   it("Ctrl+Enter sends the draft (sets status: sending)", async () => {
-    const onPatch = vi.fn();
-    await renderPanel(<CallPanel step={draft} onPatch={onPatch} />);
+    workflowStore.setDraft(draft);
+    await renderPanel(<CallPanel step={draft} onPatch={() => {}} />);
     fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
-    // onSend's first effect is to mark the step as sending.
-    expect(onPatch).toHaveBeenCalledWith(
-      expect.objectContaining({ status: "sending" }),
-    );
+    // The first effect of send is to mark the step as sending.
+    expect(workflowStore.getState().draft).toMatchObject({ status: "sending" });
     // The send itself is async — let it settle inside act.
     await act(async () => {});
   });
 
   it("Ctrl+R also sends the draft (physical-key, layout-independent)", async () => {
-    const onPatch = vi.fn();
-    await renderPanel(<CallPanel step={draft} onPatch={onPatch} />);
+    workflowStore.setDraft(draft);
+    await renderPanel(<CallPanel step={draft} onPatch={() => {}} />);
     fireEvent.keyDown(window, { code: "KeyR", key: "r", ctrlKey: true });
-    expect(onPatch).toHaveBeenCalledWith(
-      expect.objectContaining({ status: "sending" }),
-    );
+    expect(workflowStore.getState().draft).toMatchObject({ status: "sending" });
     // The send itself is async — let it settle inside act.
     await act(async () => {});
   });

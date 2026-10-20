@@ -37,7 +37,7 @@ vi.mock("@/features/catalog/CatalogProvider", () => ({
 }));
 
 import { CallPanel } from "./CallPanel";
-import { runCall } from "./callLifecycle";
+import { recordedDispatch } from "./callLifecycle";
 import { newStep } from "./model";
 import { workflowStore } from "./store";
 import { streamStore } from "@/features/stream/streamStore";
@@ -106,7 +106,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("CallPanel picks the call hook by the derived kind", () => {
+describe("CallPanel picks the call by the derived kind", () => {
   it("server-streaming: Send opens a Stream call (streamOpen with kind 'server'), never grpcSend", async () => {
     serveCatalog(catalogWith("Watch", false, true));
     const step = newStep({
@@ -115,9 +115,8 @@ describe("CallPanel picks the call hook by the derived kind", () => {
       service: "p.v1.S",
       method: "Watch",
     });
-    const onPatch = vi.fn();
-    await renderPanel(<CallPanel step={step} onPatch={onPatch} />);
-    // Wait for the (debounced) catalog — the kind is derived from it.
+    workflowStore.setDraft(step);
+    await renderPanel(<CallPanel step={step} onPatch={() => {}} />);
     await screen.findByText(
       messages.methodKind.badge.server,
       {},
@@ -131,32 +130,26 @@ describe("CallPanel picks the call hook by the derived kind", () => {
     expect(api.grpcSend).not.toHaveBeenCalled();
     const [, , rid, kind] = api.streamOpen.mock.calls[0];
     expect(kind).toBe("server");
-    expect(onPatch).toHaveBeenCalledWith(
-      expect.objectContaining({
-        status: "sending",
-        requestId: rid,
-        streamId: rid,
-      }),
-    );
+    expect(workflowStore.getState().draft).toMatchObject({
+      status: "sending",
+      requestId: rid,
+      streamId: rid,
+    });
   });
 
   it("unknown kind (no catalog): Send takes the unary path", async () => {
-    const step = newStep({
-      address: "h:443",
-      tls: true,
-      service: "p.v1.S",
-      method: "GetX",
-    });
-    const onPatch = vi.fn();
-    await renderPanel(<CallPanel step={step} onPatch={onPatch} />);
+    const step = { ...newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "GetX" }), streamId: "stale" };
+    workflowStore.setDraft(step);
+    await renderPanel(<CallPanel step={step} onPatch={() => {}} />);
     fireEvent.click(screen.getByRole("button", { name: /send/i }));
     await act(async () => {});
     expect(api.grpcSend).toHaveBeenCalledTimes(1);
     expect(api.streamOpen).not.toHaveBeenCalled();
-    // A unary Send never leaves a stale stream reference behind.
-    expect(onPatch).toHaveBeenCalledWith(
-      expect.objectContaining({ status: "sending", streamId: null }),
-    );
+    expect(workflowStore.getState().draft).toMatchObject({
+      status: "ok",
+      streamId: null,
+      requestId: null,
+    });
   });
 
   it("unknown kind, server-streaming method: the refused unary Send re-routes once to a Stream call — no error face", async () => {
@@ -182,26 +175,28 @@ describe("CallPanel picks the call hook by the derived kind", () => {
       service: "p.v1.S",
       method: "Watch",
     });
-    const onPatch = vi.fn();
-    await renderPanel(<CallPanel step={step} onPatch={onPatch} />);
+    workflowStore.setDraft(step);
+    const statuses: string[] = [];
+    const unsub = workflowStore.subscribe(() => {
+      const current = workflowStore.getState().draft;
+      if (current?.protocol === "grpc" && current.id === step.id) statuses.push(current.status);
+    });
+    await renderPanel(<CallPanel step={step} onPatch={() => {}} />);
 
     fireEvent.click(screen.getByRole("button", { name: /send/i }));
     await act(async () => {});
+    unsub();
 
     expect(api.grpcSend).toHaveBeenCalledTimes(1);
     expect(api.streamOpen).toHaveBeenCalledTimes(1);
     expect(api.streamOpen.mock.calls[0][3]).toBe("server");
     const rid = api.streamOpen.mock.calls[0][2];
-    expect(onPatch).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        status: "sending",
-        requestId: rid,
-        streamId: rid,
-      }),
-    );
-    expect(onPatch).not.toHaveBeenCalledWith(
-      expect.objectContaining({ status: "error" }),
-    );
+    expect(statuses).not.toContain("error");
+    expect(workflowStore.getState().draft).toMatchObject({
+      status: "sending",
+      requestId: rid,
+      streamId: rid,
+    });
   });
 
   it("live stream: Send morphs into Cancel after the busy delay; Cancel → grpcCancel + status cancelled", async () => {
@@ -211,18 +206,13 @@ describe("CallPanel picks the call hook by the derived kind", () => {
       service: "p.v1.S",
       method: "Watch",
     });
-    const onPatch = vi.fn();
-    await runCall({
-      step: idle,
-      envName: null,
-      kind: "server",
-      onPatch,
-      recording: null,
-    });
-    const rid = api.streamOpen.mock.calls[0][2] as string;
-    const live = { ...idle, ...onPatch.mock.calls[0][0] };
+    workflowStore.setDraft(idle);
+    await recordedDispatch({ draft: idle, envName: null, kind: "server", recording: null });
+    const live = workflowStore.getState().draft;
+    if (!live || live.protocol !== "grpc") throw new Error("expected the opened draft");
+    const rid = live.requestId!;
     vi.useFakeTimers();
-    await renderPanel(<CallPanel step={live} onPatch={onPatch} />);
+    await renderPanel(<CallPanel step={live} onPatch={() => {}} />);
     expect(screen.getByRole("button", { name: /send/i })).toBeInTheDocument();
     act(() => {
       vi.advanceTimersByTime(250);
@@ -234,9 +224,7 @@ describe("CallPanel picks the call hook by the derived kind", () => {
 
     expect(api.grpcCancel).toHaveBeenCalledWith(rid);
     expect(streamStore.get(rid)?.phase).toBe("cancelled");
-    expect(onPatch).toHaveBeenCalledWith(
-      expect.objectContaining({ status: "cancelled", requestId: null }),
-    );
+    expect(workflowStore.getState().draft).toMatchObject({ status: "cancelled", requestId: null });
   });
 });
 
@@ -291,8 +279,8 @@ describe("CallPanel send hotkeys around a server stream", () => {
       requestId: null,
       streamId: "old",
     };
-    const onPatch = vi.fn();
-    await renderPanel(<CallPanel step={ended} onPatch={onPatch} />);
+    workflowStore.setDraft(ended);
+    await renderPanel(<CallPanel step={ended} onPatch={() => {}} />);
     await screen.findByText(
       messages.methodKind.badge.server,
       {},
@@ -306,9 +294,7 @@ describe("CallPanel send hotkeys around a server stream", () => {
     expect(api.grpcCancel).not.toHaveBeenCalled();
     const [, , rid] = api.streamOpen.mock.calls[0];
     expect(rid).not.toBe("old");
-    expect(onPatch).toHaveBeenCalledWith(
-      expect.objectContaining({ status: "sending", streamId: rid }),
-    );
+    expect(workflowStore.getState().draft).toMatchObject({ status: "sending", streamId: rid });
   });
 
   it("after Cancel, Ctrl+R Sends again", async () => {
@@ -319,8 +305,8 @@ describe("CallPanel send hotkeys around a server stream", () => {
       requestId: null,
       streamId: null,
     };
-    const onPatch = vi.fn();
-    await renderPanel(<CallPanel step={cancelled} onPatch={onPatch} />);
+    workflowStore.setDraft(cancelled);
+    await renderPanel(<CallPanel step={cancelled} onPatch={() => {}} />);
     await screen.findByText(
       messages.methodKind.badge.server,
       {},
@@ -331,9 +317,7 @@ describe("CallPanel send hotkeys around a server stream", () => {
     await act(async () => {});
 
     expect(api.streamOpen).toHaveBeenCalledTimes(1);
-    expect(onPatch).toHaveBeenCalledWith(
-      expect.objectContaining({ status: "sending" }),
-    );
+    expect(workflowStore.getState().draft).toMatchObject({ status: "sending" });
   });
 });
 
@@ -440,8 +424,9 @@ describe("CallPanel two-way (client / bidi) calls", () => {
     "%s method: the primary button reads ▶ Open and opens a Stream call with that kind, sending nothing",
     async (kind) => {
       serveCatalog(catalogWith("Chat", true, kind === "bidi"));
-      const onPatch = vi.fn();
-      await renderPanel(<CallPanel step={bidiStep()} onPatch={onPatch} />);
+      const step = bidiStep();
+      workflowStore.setDraft(step);
+      await renderPanel(<CallPanel step={step} onPatch={() => {}} />);
       await screen.findByText(
         messages.methodKind.badge[kind],
         {},
@@ -457,9 +442,7 @@ describe("CallPanel two-way (client / bidi) calls", () => {
       expect(api.streamOpen.mock.calls[0][3]).toBe(kind);
       expect(api.streamSend).not.toHaveBeenCalled();
       expect(api.grpcSend).not.toHaveBeenCalled();
-      expect(onPatch).toHaveBeenCalledWith(
-        expect.objectContaining({ status: "sending" }),
-      );
+      expect(workflowStore.getState().draft).toMatchObject({ status: "sending" });
     },
   );
 
