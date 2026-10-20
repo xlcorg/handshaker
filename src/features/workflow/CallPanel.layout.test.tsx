@@ -3,14 +3,24 @@ import { act, render } from "@testing-library/react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 vi.mock("@/features/invoke/BodyEditor", () => ({
-  BodyEditor: ({ value }: { value: string }) => <div data-testid="body-editor">{value}</div>,
+  BodyEditor: ({ value }: { value: string }) => (
+    <div data-testid="body-editor">{value}</div>
+  ),
 }));
 vi.mock("@/ipc/client", () => ({
   authResolve: vi.fn().mockResolvedValue(null),
   authEffective: vi.fn().mockResolvedValue({ kind: "none" }),
-  grpcDescribe: vi.fn().mockResolvedValue({ services: [] }),
-  grpcRefreshContract: vi.fn().mockResolvedValue({ services: [] }),
-  grpcBuildRequestSkeleton: vi.fn().mockResolvedValue("{}"),
+  grpcContractRead: vi.fn(
+    async (_a: unknown, _t: unknown, _c: unknown, query: { op?: string }) => {
+      if (query?.op === "skeleton") return { kind: "skeleton", json: "{}" };
+      if (query?.op === "schema")
+        return {
+          kind: "schema",
+          schema: { root: "t.M", messages: [], enums: [] },
+        };
+      return { kind: "catalog", catalog: { services: [] } };
+    },
+  ),
   varsResolve: vi.fn(),
   grpcSend: vi.fn(),
   grpcCancel: vi.fn(),
@@ -18,7 +28,9 @@ vi.mock("@/ipc/client", () => ({
 
 // Mutable prefs the mock reads; flip `split` per test (vi.hoisted so the
 // factory can reference it despite hoisting).
-const h = vi.hoisted(() => ({ split: "vertical" as "horizontal" | "vertical" }));
+const h = vi.hoisted(() => ({
+  split: "vertical" as "horizontal" | "vertical",
+}));
 vi.mock("@/lib/use-prefs", () => ({
   usePrefs: () => [{ split: h.split, bodyPanel: 50 }, vi.fn()],
   readPrefs: () => ({ split: h.split, bodyPanel: 50 }),
@@ -30,7 +42,12 @@ vi.mock("@/features/catalog/CatalogProvider", () => ({
 import { CallPanel } from "./CallPanel";
 import { newStep } from "./model";
 
-const draft = newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "GetX" });
+const draft = newStep({
+  address: "h:443",
+  tls: true,
+  service: "p.v1.S",
+  method: "GetX",
+});
 
 /** Renders and flushes the mount-time async effects (useEffectiveAuth's
  *  `auth_effective` fetch) inside act, so their setState doesn't land — and
@@ -48,10 +65,18 @@ beforeEach(() => {
 
 describe("CallPanel body layout", () => {
   it("renders a resizable group with request + response panels and a handle", async () => {
-    const { container } = await renderCallPanel(<CallPanel step={draft} onPatch={() => {}} />);
-    expect(container.querySelector('[data-slot="resizable-panel-group"]')).not.toBeNull();
-    expect(container.querySelectorAll('[data-slot="resizable-panel"]').length).toBe(2);
-    expect(container.querySelector('[data-slot="resizable-handle"]')).not.toBeNull();
+    const { container } = await renderCallPanel(
+      <CallPanel step={draft} onPatch={() => {}} />,
+    );
+    expect(
+      container.querySelector('[data-slot="resizable-panel-group"]'),
+    ).not.toBeNull();
+    expect(
+      container.querySelectorAll('[data-slot="resizable-panel"]').length,
+    ).toBe(2);
+    expect(
+      container.querySelector('[data-slot="resizable-handle"]'),
+    ).not.toBeNull();
   });
 
   // react-resizable-panels v4 hard-codes `overflow: auto` on each panel's inner
@@ -60,7 +85,9 @@ describe("CallPanel body layout", () => {
   // scrollbar in both panels. The wrapper must clip its horizontal axis (content scrolls
   // internally via min-h-0 + scroll-thin regions).
   it("clips each panel's content horizontally so a narrowed panel can't show a native scrollbar", async () => {
-    const { container } = await renderCallPanel(<CallPanel step={draft} onPatch={() => {}} />);
+    const { container } = await renderCallPanel(
+      <CallPanel step={draft} onPatch={() => {}} />,
+    );
     const panels = container.querySelectorAll('[data-slot="resizable-panel"]');
     expect(panels.length).toBe(2);
     panels.forEach((p) => {
@@ -73,15 +100,23 @@ describe("CallPanel body layout", () => {
   // inline `flex-direction` style ("row" = horizontal, "column" = vertical) —
   // NOT via aria-orientation/data-orientation (verified against the installed fork).
   it("maps split='vertical' (Left/Right) to a row-direction (horizontal) group", async () => {
-    const { container } = await renderCallPanel(<CallPanel step={draft} onPatch={() => {}} />);
-    const group = container.querySelector('[data-slot="resizable-panel-group"]') as HTMLElement;
+    const { container } = await renderCallPanel(
+      <CallPanel step={draft} onPatch={() => {}} />,
+    );
+    const group = container.querySelector(
+      '[data-slot="resizable-panel-group"]',
+    ) as HTMLElement;
     expect(group.style.flexDirection).toBe("row");
   });
 
   it("maps split='horizontal' (Top/Bottom) to a column-direction (vertical) group", async () => {
     h.split = "horizontal";
-    const { container } = await renderCallPanel(<CallPanel step={draft} onPatch={() => {}} />);
-    const group = container.querySelector('[data-slot="resizable-panel-group"]') as HTMLElement;
+    const { container } = await renderCallPanel(
+      <CallPanel step={draft} onPatch={() => {}} />,
+    );
+    const group = container.querySelector(
+      '[data-slot="resizable-panel-group"]',
+    ) as HTMLElement;
     expect(group.style.flexDirection).toBe("column");
   });
 });

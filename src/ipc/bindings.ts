@@ -28,108 +28,22 @@ export const commands = {
       else return { status: "error", error: e as any };
     }
   },
-  /**
-   * Cache-first contract describe. On a cache hit, returns the cached catalog
-   * WITHOUT opening a channel (auto-reflect-on-blur fires often). On a miss,
-   * `activate()` reflects + populates the cache, then the connection is dropped.
-   *
-   * The reflecting path (miss only — a hit returns instantly with nothing to abort)
-   * runs under `race_cancel_timeout`, so it honors the caller's deadline and can be
-   * cancelled by `grpc_cancel(request_id)`, exactly like `grpc_send`.
-   */
-  async grpcDescribe(
-    target: GrpcTargetIpc,
+  async grpcContractRead(
+    addressTemplate: string,
+    tlsOverride: boolean | null,
+    ctx: SendCtxIpc,
+    query: ContractQueryIpc,
     requestId: string,
     timeoutMs: number,
-  ): Promise<Result<ServiceCatalogIpc, IpcError>> {
+  ): Promise<Result<ContractArtifactIpc, IpcError>> {
     try {
       return {
         status: "ok",
-        data: await TAURI_INVOKE("grpc_describe", {
-          target,
-          requestId,
-          timeoutMs,
-        }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  /**
-   * Manual refresh: invalidate the cache entry then re-reflect. Like `grpc_describe`,
-   * the re-reflection runs under `race_cancel_timeout` (deadline + `grpc_cancel`).
-   */
-  async grpcRefreshContract(
-    target: GrpcTargetIpc,
-    requestId: string,
-    timeoutMs: number,
-  ): Promise<Result<ServiceCatalogIpc, IpcError>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("grpc_refresh_contract", {
-          target,
-          requestId,
-          timeoutMs,
-        }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  /**
-   * Build a JSON skeleton from the cached pools. On a cache miss, activate first.
-   *
-   * The reflecting path (miss only) runs under `race_cancel_timeout`, so it honors the
-   * caller's deadline and can be cancelled by `grpc_cancel(request_id)` — otherwise a
-   * slow/unreachable endpoint would hang this command with no bound and no cancel path.
-   */
-  async grpcBuildRequestSkeleton(
-    target: GrpcTargetIpc,
-    service: string,
-    method: string,
-    requestId: string,
-    timeoutMs: number,
-  ): Promise<Result<string, IpcError>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("grpc_build_request_skeleton", {
-          target,
-          service,
-          method,
-          requestId,
-          timeoutMs,
-        }),
-      };
-    } catch (e) {
-      if (e instanceof Error) throw e;
-      else return { status: "error", error: e as any };
-    }
-  },
-  /**
-   * Build the flat field-schema for a method's input or output message — drives autocomplete
-   * and the contract view. Same cache discipline as `grpc_build_request_skeleton`: cache
-   * hit → build from the pool set; miss → `activate` first.
-   */
-  async grpcMessageSchema(
-    target: GrpcTargetIpc,
-    service: string,
-    method: string,
-    side: MessageSideIpc,
-    requestId: string,
-    timeoutMs: number,
-  ): Promise<Result<MessageSchemaIpc, IpcError>> {
-    try {
-      return {
-        status: "ok",
-        data: await TAURI_INVOKE("grpc_message_schema", {
-          target,
-          service,
-          method,
-          side,
+        data: await TAURI_INVOKE("grpc_contract_read", {
+          addressTemplate,
+          tlsOverride,
+          ctx,
+          query,
           requestId,
           timeoutMs,
         }),
@@ -1020,6 +934,15 @@ export type CollectionLinkIpc = {
  * Lightweight list entry (id + name only) for `collection_list`.
  */
 export type CollectionMetaIpc = { id: string; name: string };
+export type ContractArtifactIpc =
+  | { kind: "catalog"; catalog: ServiceCatalogIpc }
+  | { kind: "skeleton"; json: string }
+  | { kind: "schema"; schema: MessageSchemaIpc };
+export type ContractQueryIpc =
+  | { op: "catalog" }
+  | { op: "refresh" }
+  | { op: "skeleton"; service: string; method: string }
+  | { op: "schema"; service: string; method: string; side: MessageSideIpc };
 /**
  * Emitted whenever a target's contract has been (re)built (describe / refresh).
  */
@@ -1055,11 +978,6 @@ export type FolderIpc = {
   name: string;
   items: ItemIpc[];
   expanded: boolean;
-};
-export type GrpcTargetIpc = {
-  address: string;
-  tls: boolean;
-  skip_verify: boolean;
 };
 /**
  * A gRPC call as authored: the saved content, the Send and Open input, and the history

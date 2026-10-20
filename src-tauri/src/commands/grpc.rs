@@ -2,16 +2,13 @@
 //!
 //! Lazy connect-on-Send model (plan-06b): no held connection. The `ContractCache`
 //! holds pools/catalogs between calls; a `GrpcConnection` lives only for the duration
-//! of one `grpc_send` (or a `grpc_describe` cache miss) and is dropped after.
+//! of one `grpc_send` (or a `grpc_contract_read` cache miss) and is dropped after.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock, Weak};
 use std::time::Duration;
 
-use handshaker_core::grpc::{
-    activate, build_message_schema_from_pools, build_request_skeleton_from_pools, CallOptions,
-    ContractKey, GrpcTarget, TonicTransport,
-};
+use handshaker_core::grpc::{CallOptions, ContractProbe, GrpcTarget};
 use handshaker_core::stream::{AssembleResult, StreamCall, StreamEvents, StreamRegistry};
 use tauri::{AppHandle, State};
 use tauri_specta::Event;
@@ -21,9 +18,8 @@ use crate::commands::dialog::{local_stamp, save_bytes_via_dialog, save_via_dialo
 use crate::commands::events::ContractUpdated;
 use crate::ipc::collection::GrpcTemplateIpc;
 use crate::ipc::{
-    AssembleResultIpc, CallOptionsIpc, GrpcTargetIpc, InvokeOutcomeIpc, IpcError, MessageSchemaIpc, MessageSideIpc,
-    MethodKindIpc, OutboundMessageIpc, SendCtxIpc, SendReportIpc, ServiceCatalogIpc,
-    StreamEventIpc,
+    AssembleResultIpc, CallOptionsIpc, ContractArtifactIpc, ContractQueryIpc, InvokeOutcomeIpc, IpcError,
+    MethodKindIpc, OutboundMessageIpc, SendCtxIpc, SendReportIpc, StreamEventIpc,
 };
 use crate::state::AppState;
 
@@ -34,130 +30,32 @@ fn target_key(t: &GrpcTarget) -> String {
     format!("{}|tls={}", t.address, t.tls)
 }
 
-/// Cache-first contract describe. On a cache hit, returns the cached catalog
-/// WITHOUT opening a channel (auto-reflect-on-blur fires often). On a miss,
-/// `activate()` reflects + populates the cache, then the connection is dropped.
-///
-/// The reflecting path (miss only — a hit returns instantly with nothing to abort)
-/// runs under `race_cancel_timeout`, so it honors the caller's deadline and can be
-/// cancelled by `grpc_cancel(request_id)`, exactly like `grpc_send`.
 #[tauri::command]
 #[specta::specta]
-pub async fn grpc_describe(
+pub async fn grpc_contract_read(
     app: AppHandle,
     state: State<'_, AppState>,
-    target: GrpcTargetIpc,
+    address_template: String,
+    tls_override: Option<bool>,
+    ctx: SendCtxIpc,
+    query: ContractQueryIpc,
     request_id: String,
     timeout_ms: u32,
-) -> Result<ServiceCatalogIpc, IpcError> {
-    let target = target.into_core()?;
-    let key = ContractKey::from_target(&target);
-
-    if let Some(cached) = state.contract_cache.get(&key) {
-        return Ok(cached.catalog.into());
-    }
-
-    let cache = state.contract_cache.clone();
+) -> Result<ContractArtifactIpc, IpcError> {
+    let (collection, active_env) = ctx_refs(&state, &ctx);
+    let reader = state.contract_read.clone();
+    let query = query.into_core();
+    let probe = ContractProbe { address_template, tls_override };
     let work = async move {
-        let transport = Arc::new(TonicTransport::new());
-        let conn = activate(target, transport, cache.as_ref()).await?;
-        let catalog: ServiceCatalogIpc = conn.catalog.clone().into();
-        ContractUpdated { target_key: target_key(&conn.target) }
-            .emit(&app)
-            .ok();
-        Ok::<ServiceCatalogIpc, IpcError>(catalog)
-        // conn dropped here.
-    };
-    race_cancel_timeout(&state.in_flight, request_id, timeout_ms, work).await
-}
-
-/// Manual refresh: invalidate the cache entry then re-reflect. Like `grpc_describe`,
-/// the re-reflection runs under `race_cancel_timeout` (deadline + `grpc_cancel`).
-#[tauri::command]
-#[specta::specta]
-pub async fn grpc_refresh_contract(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    target: GrpcTargetIpc,
-    request_id: String,
-    timeout_ms: u32,
-) -> Result<ServiceCatalogIpc, IpcError> {
-    let target = target.into_core()?;
-    state
-        .contract_cache
-        .invalidate(&ContractKey::from_target(&target));
-    let cache = state.contract_cache.clone();
-    let work = async move {
-        let transport = Arc::new(TonicTransport::new());
-        let conn = activate(target, transport, cache.as_ref()).await?;
-        let catalog: ServiceCatalogIpc = conn.catalog.clone().into();
-        ContractUpdated { target_key: target_key(&conn.target) }
-            .emit(&app)
-            .ok();
-        Ok::<ServiceCatalogIpc, IpcError>(catalog)
-    };
-    race_cancel_timeout(&state.in_flight, request_id, timeout_ms, work).await
-}
-
-/// Build a JSON skeleton from the cached pools. On a cache miss, activate first.
-///
-/// The reflecting path (miss only) runs under `race_cancel_timeout`, so it honors the
-/// caller's deadline and can be cancelled by `grpc_cancel(request_id)` — otherwise a
-/// slow/unreachable endpoint would hang this command with no bound and no cancel path.
-#[tauri::command]
-#[specta::specta]
-pub async fn grpc_build_request_skeleton(
-    state: State<'_, AppState>,
-    target: GrpcTargetIpc,
-    service: String,
-    method: String,
-    request_id: String,
-    timeout_ms: u32,
-) -> Result<String, IpcError> {
-    let target = target.into_core()?;
-    let key = ContractKey::from_target(&target);
-
-    if let Some(cached) = state.contract_cache.get(&key) {
-        return Ok(build_request_skeleton_from_pools(&cached.pools, &service, &method)?);
-    }
-    let cache = state.contract_cache.clone();
-    let work = async move {
-        let transport = Arc::new(TonicTransport::new());
-        let conn = activate(target, transport, cache.as_ref()).await?;
-        Ok::<String, IpcError>(build_request_skeleton_from_pools(&conn.pools, &service, &method)?)
-    };
-    race_cancel_timeout(&state.in_flight, request_id, timeout_ms, work).await
-}
-
-/// Build the flat field-schema for a method's input or output message — drives autocomplete
-/// and the contract view. Same cache discipline as `grpc_build_request_skeleton`: cache
-/// hit → build from the pool set; miss → `activate` first.
-#[tauri::command]
-#[specta::specta]
-pub async fn grpc_message_schema(
-    state: State<'_, AppState>,
-    target: GrpcTargetIpc,
-    service: String,
-    method: String,
-    side: MessageSideIpc,
-    request_id: String,
-    timeout_ms: u32,
-) -> Result<MessageSchemaIpc, IpcError> {
-    let target = target.into_core()?;
-    let key = ContractKey::from_target(&target);
-
-    if let Some(cached) = state.contract_cache.get(&key) {
-        return Ok(
-            build_message_schema_from_pools(&cached.pools, &service, &method, side.into())?.into(),
-        );
-    }
-    let cache = state.contract_cache.clone();
-    let work = async move {
-        let transport = Arc::new(TonicTransport::new());
-        let conn = activate(target, transport, cache.as_ref()).await?;
-        Ok::<MessageSchemaIpc, IpcError>(
-            build_message_schema_from_pools(&conn.pools, &service, &method, side.into())?.into(),
-        )
+        let answer = reader
+            .read(&probe, collection.as_ref(), active_env.as_ref(), query)
+            .await?;
+        if answer.reflected {
+            ContractUpdated { target_key: target_key(&answer.target) }
+                .emit(&app)
+                .ok();
+        }
+        Ok(ContractArtifactIpc::from(answer.artifact))
     };
     race_cancel_timeout(&state.in_flight, request_id, timeout_ms, work).await
 }

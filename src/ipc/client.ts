@@ -4,8 +4,6 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { commands } from "./bindings";
 import { newId } from "@/lib/ids";
 import type {
-  GrpcTargetIpc,
-  ServiceCatalogIpc,
   CallOptionsIpc,
   EnvironmentIpc,
   ResolutionReportIpc,
@@ -18,8 +16,8 @@ import type {
   AuthCredentialsIpc,
   OAuth2TokenInfoIpc,
   UiStateIpc,
-  MessageSchemaIpc,
-  MessageSideIpc,
+  ContractArtifactIpc,
+  ContractQueryIpc,
   Base64InspectIpc,
   ImportSummaryIpc,
   ImportResultIpc,
@@ -53,54 +51,22 @@ export async function startupRecoveryTake(): Promise<string[]> {
   return r.data;
 }
 
-// Reflection carries the same (requestId, deadline) surface as invoke, so a slow/hung
-// describe times out and can be aborted via `grpcCancel(requestId)`. Defaults serve any
-// caller without a cancel/timeout surface: a fresh id keeps registry entries unique,
-// 30_000ms mirrors the deadline pref default.
-export async function grpcDescribe(
-  target: GrpcTargetIpc,
+export async function grpcContractRead(
+  addressTemplate: string,
+  tlsOverride: boolean | null,
+  ctx: SendCtxIpc,
+  query: ContractQueryIpc,
   requestId = newId(),
   timeoutMs = 30_000,
-): Promise<ServiceCatalogIpc> {
-  const r = await commands.grpcDescribe(target, requestId, timeoutMs);
-  if (r.status === "error") throw r.error;
-  return r.data;
-}
-
-export async function grpcRefreshContract(
-  target: GrpcTargetIpc,
-  requestId = newId(),
-  timeoutMs = 30_000,
-): Promise<ServiceCatalogIpc> {
-  const r = await commands.grpcRefreshContract(target, requestId, timeoutMs);
-  if (r.status === "error") throw r.error;
-  return r.data;
-}
-
-export async function grpcBuildRequestSkeleton(
-  target: GrpcTargetIpc,
-  service: string,
-  method: string,
-  // On a cache miss the backend dials the endpoint, so carry the same (requestId,
-  // deadline) surface as describe/invoke: a fresh id bounds the registry entry and
-  // 30_000ms caps an otherwise-unbounded reflection hang.
-  requestId = newId(),
-  timeoutMs = 30_000,
-): Promise<string> {
-  const r = await commands.grpcBuildRequestSkeleton(target, service, method, requestId, timeoutMs);
-  if (r.status === "error") throw r.error;
-  return r.data;
-}
-
-export async function grpcMessageSchema(
-  target: GrpcTargetIpc,
-  service: string,
-  method: string,
-  side: MessageSideIpc,
-  requestId = newId(),
-  timeoutMs = 30_000,
-): Promise<MessageSchemaIpc> {
-  const r = await commands.grpcMessageSchema(target, service, method, side, requestId, timeoutMs);
+): Promise<ContractArtifactIpc> {
+  const r = await commands.grpcContractRead(
+    addressTemplate,
+    tlsOverride,
+    ctx,
+    query,
+    requestId,
+    timeoutMs,
+  );
   if (r.status === "error") throw r.error;
   return r.data;
 }
@@ -155,7 +121,14 @@ export async function streamOpen(
   onEvent: StreamEventHandler,
 ): Promise<void> {
   const channel = new Channel<StreamEventIpc>(onEvent);
-  const r = await commands.streamOpen(request, ctx, requestId, kind, opts, channel);
+  const r = await commands.streamOpen(
+    request,
+    ctx,
+    requestId,
+    kind,
+    opts,
+    channel,
+  );
   if (r.status === "error") throw r.error;
 }
 
@@ -190,7 +163,10 @@ export async function streamHalfClose(requestId: string): Promise<void> {
  *  from the backend Stream store — the timeline calls this on expand for rows whose
  *  `Message.json` came as `null` (> 64 KiB). Rejects with `StreamMessageNotFound` for an
  *  unknown id / index (released store). */
-export async function streamMessage(requestId: string, index: number): Promise<string> {
+export async function streamMessage(
+  requestId: string,
+  index: number,
+): Promise<string> {
   const r = await commands.streamMessage(requestId, index);
   if (r.status === "error") throw r.error;
   return r.data;
@@ -207,7 +183,9 @@ export async function streamRelease(requestId: string): Promise<void> {
  *  through the native Save-As dialog (default `response-<localstamp>.json`). Resolves to
  *  the saved path, or `null` when the user cancelled the dialog. Rejects with
  *  `StreamNotFound` once the store was released. */
-export async function streamSaveMessages(requestId: string): Promise<string | null> {
+export async function streamSaveMessages(
+  requestId: string,
+): Promise<string | null> {
   const r = await commands.streamSaveMessages(requestId);
   if (r.status === "error") throw r.error;
   return r.data;
@@ -219,7 +197,10 @@ export async function streamSaveMessages(requestId: string): Promise<string | nu
  *  `stream-<stamp>.<ext>`). Resolves to `{ path, written, total, size_bytes }` — messages
  *  without the field are skipped — or `null` when the user cancelled. Rejects with
  *  `StreamNotFound` / `StreamFieldNotFound` before any dialog opens. */
-export async function streamAssemble(requestId: string, fieldPath: string): Promise<AssembleResultIpc | null> {
+export async function streamAssemble(
+  requestId: string,
+  fieldPath: string,
+): Promise<AssembleResultIpc | null> {
   const r = await commands.streamAssemble(requestId, fieldPath);
   if (r.status === "error") throw r.error;
   return r.data;
@@ -278,7 +259,9 @@ export async function collectionGet(id: string): Promise<CollectionIpc> {
   return r.data;
 }
 
-export async function collectionUpsert(collection: CollectionIpc): Promise<void> {
+export async function collectionUpsert(
+  collection: CollectionIpc,
+): Promise<void> {
   const r = await commands.collectionUpsert(collection);
   if (r.status === "error") throw r.error;
 }
@@ -288,23 +271,44 @@ export async function collectionDelete(id: string): Promise<void> {
   if (r.status === "error") throw r.error;
 }
 
-export async function collectionSetVariables(id: string, vars: Partial<{ [key in string]: string }>): Promise<void> {
+export async function collectionSetVariables(
+  id: string,
+  vars: Partial<{ [key in string]: string }>,
+): Promise<void> {
   const r = await commands.collectionSetVariables(id, vars);
   if (r.status === "error") throw r.error;
 }
 
-export async function collectionAddItem(collectionId: string, parentId: string | null, item: ItemIpc): Promise<void> {
+export async function collectionAddItem(
+  collectionId: string,
+  parentId: string | null,
+  item: ItemIpc,
+): Promise<void> {
   const r = await commands.collectionAddItem(collectionId, parentId, item);
   if (r.status === "error") throw r.error;
 }
 
-export async function collectionRenameItem(collectionId: string, itemId: string, name: string): Promise<void> {
+export async function collectionRenameItem(
+  collectionId: string,
+  itemId: string,
+  name: string,
+): Promise<void> {
   const r = await commands.collectionRenameItem(collectionId, itemId, name);
   if (r.status === "error") throw r.error;
 }
 
-export async function collectionMoveItem(collectionId: string, itemId: string, newParentId: string | null, position: number): Promise<void> {
-  const r = await commands.collectionMoveItem(collectionId, itemId, newParentId, position);
+export async function collectionMoveItem(
+  collectionId: string,
+  itemId: string,
+  newParentId: string | null,
+  position: number,
+): Promise<void> {
+  const r = await commands.collectionMoveItem(
+    collectionId,
+    itemId,
+    newParentId,
+    position,
+  );
   if (r.status === "error") throw r.error;
 }
 
@@ -315,46 +319,79 @@ export async function collectionMoveItemAcross(
   newParentId: string | null,
   position: number,
 ): Promise<void> {
-  const r = await commands.collectionMoveItemAcross(sourceCollectionId, itemId, targetCollectionId, newParentId, position);
+  const r = await commands.collectionMoveItemAcross(
+    sourceCollectionId,
+    itemId,
+    targetCollectionId,
+    newParentId,
+    position,
+  );
   if (r.status === "error") throw r.error;
 }
 
-export async function collectionDuplicateItem(collectionId: string, itemId: string): Promise<string> {
+export async function collectionDuplicateItem(
+  collectionId: string,
+  itemId: string,
+): Promise<string> {
   const r = await commands.collectionDuplicateItem(collectionId, itemId);
   if (r.status === "error") throw r.error;
   return r.data;
 }
 
-export async function collectionDeleteItem(collectionId: string, itemId: string): Promise<ItemSnapshotIpc | null> {
+export async function collectionDeleteItem(
+  collectionId: string,
+  itemId: string,
+): Promise<ItemSnapshotIpc | null> {
   const r = await commands.collectionDeleteItem(collectionId, itemId);
   if (r.status === "error") throw r.error;
   return r.data;
 }
 
-export async function collectionRestoreItem(collectionId: string, snapshot: ItemSnapshotIpc, parentId: string | null, position: number): Promise<void> {
-  const r = await commands.collectionRestoreItem(collectionId, snapshot, parentId, position);
+export async function collectionRestoreItem(
+  collectionId: string,
+  snapshot: ItemSnapshotIpc,
+  parentId: string | null,
+  position: number,
+): Promise<void> {
+  const r = await commands.collectionRestoreItem(
+    collectionId,
+    snapshot,
+    parentId,
+    position,
+  );
   if (r.status === "error") throw r.error;
 }
 
 /** Record one execution of a saved request: sets `last_used_at` and increments `use_count`
  *  (persisted backend-side). Drives the "Recent" / "Most used" collection sorts. */
-export async function collectionBumpUsage(collectionId: string, itemId: string, usedAt: number): Promise<void> {
+export async function collectionBumpUsage(
+  collectionId: string,
+  itemId: string,
+  usedAt: number,
+): Promise<void> {
   const r = await commands.collectionBumpUsage(collectionId, itemId, usedAt);
   if (r.status === "error") throw r.error;
 }
 
-export async function bundleExport(path: string, collectionId: string | null): Promise<void> {
+export async function bundleExport(
+  path: string,
+  collectionId: string | null,
+): Promise<void> {
   const r = await commands.bundleExport(path, collectionId);
   if (r.status === "error") throw r.error;
 }
 
-export async function bundleImportInspect(path: string): Promise<ImportSummaryIpc> {
+export async function bundleImportInspect(
+  path: string,
+): Promise<ImportSummaryIpc> {
   const r = await commands.bundleImportInspect(path);
   if (r.status === "error") throw r.error;
   return r.data;
 }
 
-export async function bundleImportApply(path: string): Promise<ImportResultIpc> {
+export async function bundleImportApply(
+  path: string,
+): Promise<ImportResultIpc> {
   const r = await commands.bundleImportApply(path);
   if (r.status === "error") throw r.error;
   return r.data;
@@ -376,7 +413,9 @@ export async function authOauth2FetchToken(
   return r.data;
 }
 
-export async function authInvalidate(config: SavedAuthConfigIpc): Promise<void> {
+export async function authInvalidate(
+  config: SavedAuthConfigIpc,
+): Promise<void> {
   const r = await commands.authInvalidate(config);
   if (r.status === "error") throw r.error;
 }
@@ -404,7 +443,11 @@ export async function collectionSetExpanded(
   itemId: string | null,
   expanded: boolean,
 ): Promise<void> {
-  const r = await commands.collectionSetExpanded(collectionId, itemId, expanded);
+  const r = await commands.collectionSetExpanded(
+    collectionId,
+    itemId,
+    expanded,
+  );
   if (r.status === "error") throw r.error;
 }
 
@@ -437,7 +480,10 @@ export async function base64SaveEncoded(input: string): Promise<string | null> {
   return r.data;
 }
 
-export async function fileSaveText(text: string, defaultName: string): Promise<string | null> {
+export async function fileSaveText(
+  text: string,
+  defaultName: string,
+): Promise<string | null> {
   const r = await commands.fileSaveText(text, defaultName);
   if (r.status === "error") throw r.error;
   return r.data;
@@ -457,7 +503,9 @@ export async function historyGet(id: string): Promise<CallRecordIpc | null> {
 }
 
 /** Persist one finished call and return the page after the append. */
-export async function historyRecord(record: CallRecordIpc): Promise<HistoryPageIpc> {
+export async function historyRecord(
+  record: CallRecordIpc,
+): Promise<HistoryPageIpc> {
   const r = await commands.historyRecord(record);
   if (r.status === "error") throw r.error;
   return r.data;
@@ -478,8 +526,7 @@ export async function openExternal(url: string): Promise<void> {
 export const ipc = {
   appVersion,
   startupRecoveryTake,
-  grpcDescribe,
-  grpcRefreshContract,
+  grpcContractRead,
   grpcSend,
   grpcCancel,
   httpSend,
@@ -490,8 +537,6 @@ export const ipc = {
   streamRelease,
   streamSaveMessages,
   streamAssemble,
-  grpcBuildRequestSkeleton,
-  grpcMessageSchema,
   envList,
   envActiveGet,
   envActiveSet,

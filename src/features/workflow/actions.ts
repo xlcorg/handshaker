@@ -1,11 +1,25 @@
 import * as ipc from "@/ipc/client";
-import type { SavedAuthConfigIpc, ResolutionReportIpc, MessageSchemaIpc, MessageSideIpc, VarsResolveCtxIpc, SendCtxIpc, CallOptionsIpc, SendReportIpc, HttpSendReportIpc } from "@/ipc/bindings";
+import type {
+  SavedAuthConfigIpc,
+  ResolutionReportIpc,
+  MessageSchemaIpc,
+  MessageSideIpc,
+  VarsResolveCtxIpc,
+  SendCtxIpc,
+  CallOptionsIpc,
+  SendReportIpc,
+  HttpSendReportIpc,
+} from "@/ipc/bindings";
 import type { HttpStep } from "@/features/http/model";
 import { newStep, type Draft, type MetadataRow, type Step } from "./model";
 import { lastExecutedFor, responseSeedPatch } from "./lastExecuted";
 import { newId } from "@/lib/ids";
 import { readPrefs } from "@/lib/use-prefs";
-import { faultFromUnknown, isCancelError, type ClientFault } from "./netDiagnostics";
+import {
+  faultFromUnknown,
+  isCancelError,
+  type ClientFault,
+} from "./netDiagnostics";
 import { grpcTemplateOf } from "@/features/catalog/mapping";
 
 /** A template resolver bound to a particular `{{var}}` source (collection/env ctx). */
@@ -13,22 +27,26 @@ export type Resolver = (template: string) => Promise<ResolutionReportIpc>;
 
 export interface CallTargetInit {
   address: string;
-  tls: boolean;
+  tls: boolean | null;
   /** Owning collection for {{var}} resolution; null/omitted ⇒ no collection vars. */
   collectionId?: string | null;
-  /** Origin collection's `skip_tls_verify`; omitted/false ⇒ verify certs (mirrors Send). */
-  skipVerify?: boolean;
+  /** Active environment name. Null ⇒ no environment. */
+  envName?: string | null;
 }
 
 /** Resolve ctx for a step bound to `collectionId`; null when unbound. */
-export function varsCtxFor(collectionId: string | null | undefined): VarsResolveCtxIpc | null {
+export function varsCtxFor(
+  collectionId: string | null | undefined,
+): VarsResolveCtxIpc | null {
   return collectionId
     ? { collection_id: collectionId, collection_vars: null, env_vars: null }
     : null;
 }
 
 /** A Resolver with the collection ctx baked in — inject into resolve/auth deps. */
-export function varsResolverFor(collectionId: string | null | undefined): Resolver {
+export function varsResolverFor(
+  collectionId: string | null | undefined,
+): Resolver {
   return (t) => ipc.varsResolve(t, varsCtxFor(collectionId));
 }
 
@@ -59,18 +77,11 @@ export function isPristineBody(body: string, skeleton: string): boolean {
   return cb === cs;
 }
 
-/** Best-effort `{{var}}` resolution for a connection address. Unresolved placeholders are
- *  left literal (the subsequent gRPC call surfaces the failure), mirroring the Send path so
- *  reflection/skeleton dial the same resolved host the eventual invoke will. */
-export async function resolveAddressSafe(
-  address: string,
-  collectionId: string | null = null,
-): Promise<string> {
-  try {
-    return (await ipc.varsResolve(address, varsCtxFor(collectionId))).resolved;
-  } catch {
-    return address;
-  }
+function probeCtx(target: CallTargetInit) {
+  return {
+    collection_id: target.collectionId ?? null,
+    env_name: target.envName ?? null,
+  };
 }
 
 /** Fetch a request-body skeleton for a method; never throws — falls back to "{}". */
@@ -80,12 +91,17 @@ export async function buildRequestSkeletonSafe(
   method: string,
 ): Promise<string> {
   try {
-    const address = await resolveAddressSafe(target.address, target.collectionId ?? null);
-    return await ipc.grpcBuildRequestSkeleton(
-      { address, tls: target.tls, skip_verify: target.skipVerify ?? false },
-      service,
-      method,
+    const artifact = await ipc.grpcContractRead(
+      target.address,
+      target.tls,
+      probeCtx(target),
+      {
+        op: "skeleton",
+        service,
+        method,
+      },
     );
+    return artifact.kind === "skeleton" ? artifact.json : "{}";
   } catch {
     return "{}";
   }
@@ -102,13 +118,18 @@ export async function fetchMessageSchemaSafe(
   side: MessageSideIpc = "input",
 ): Promise<MessageSchemaIpc | null> {
   try {
-    const address = await resolveAddressSafe(target.address, target.collectionId ?? null);
-    return await ipc.grpcMessageSchema(
-      { address, tls: target.tls, skip_verify: target.skipVerify ?? false },
-      service,
-      method,
-      side,
+    const artifact = await ipc.grpcContractRead(
+      target.address,
+      target.tls,
+      probeCtx(target),
+      {
+        op: "schema",
+        service,
+        method,
+        side,
+      },
     );
+    return artifact.kind === "schema" ? artifact.schema : null;
   } catch {
     return null;
   }
@@ -126,7 +147,11 @@ export async function applyMethodSelection(
   m: { service: string; method: string },
   history: readonly Draft[] = [],
 ): Promise<void> {
-  const oldSkeleton = await buildRequestSkeletonSafe(target, current.service, current.method);
+  const oldSkeleton = await buildRequestSkeletonSafe(
+    target,
+    current.service,
+    current.method,
+  );
   const pristine = isPristineBody(current.requestJson, oldSkeleton);
   const last = lastExecutedFor(history, {
     protocol: "grpc",
@@ -177,18 +202,24 @@ export type SendResult =
   | { kind: "error"; fault: ClientFault }
   | { kind: "cancelled" };
 
-type Oauth2Config = Extract<SavedAuthConfigIpc, { kind: "oauth2_client_credentials" }>;
+type Oauth2Config = Extract<
+  SavedAuthConfigIpc,
+  { kind: "oauth2_client_credentials" }
+>;
 
 /** Resolve `{{var}}` in every oauth2 template field. Returns the resolved config, or
  *  the list of unresolved variable names. */
 export async function resolveOauthConfig(
   auth: Oauth2Config,
   varsResolve: (t: string) => Promise<ResolutionReportIpc>,
-): Promise<{ ok: true; config: Oauth2Config } | { ok: false; message: string }> {
+): Promise<
+  { ok: true; config: Oauth2Config } | { ok: false; message: string }
+> {
   const unresolved: string[] = [];
   const take = async (t: string): Promise<string> => {
     const r = await varsResolve(t);
-    for (const v of r.unresolved_vars) if (!unresolved.includes(v)) unresolved.push(v);
+    for (const v of r.unresolved_vars)
+      if (!unresolved.includes(v)) unresolved.push(v);
     return r.resolved;
   };
   const token_url = await take(auth.token_url);
@@ -234,12 +265,18 @@ export interface SendableStep {
 }
 
 /** Resolve context of a step: its owning collection (null when unbound) + the active env. */
-export function sendCtxOf(step: Pick<SendableStep, "collectionId">, envName: string | null): SendCtxIpc {
+export function sendCtxOf(
+  step: Pick<SendableStep, "collectionId">,
+  envName: string | null,
+): SendCtxIpc {
   return { collection_id: step.collectionId ?? null, env_name: envName };
 }
 
 /** Per-call options: explicit overrides win, otherwise the user's prefs. */
-export function callOptionsOf(opts?: { timeoutMs?: number; maxMessageBytes?: number }): CallOptionsIpc {
+export function callOptionsOf(opts?: {
+  timeoutMs?: number;
+  maxMessageBytes?: number;
+}): CallOptionsIpc {
   const prefs = readPrefs();
   return {
     timeout_ms: opts?.timeoutMs ?? prefs.requestTimeoutMs,
@@ -254,7 +291,12 @@ export async function sendStep(
 ): Promise<SendResult> {
   const requestId = opts?.requestId ?? newId();
   try {
-    const report = await ipc.grpcSend(grpcTemplateOf(step), sendCtxOf(step, ctx.envName), requestId, callOptionsOf(opts));
+    const report = await ipc.grpcSend(
+      grpcTemplateOf(step),
+      sendCtxOf(step, ctx.envName),
+      requestId,
+      callOptionsOf(opts),
+    );
     return { kind: "ok", report };
   } catch (e) {
     if (isCancelError(e)) return { kind: "cancelled" };
@@ -269,9 +311,18 @@ export type HttpSendResult =
   | { kind: "cancelled" };
 
 /** The template goes as authored. Core resolves, filters rows and encodes the body. */
-export async function sendHttp(draft: HttpStep, envName: string | null, requestId: string): Promise<HttpSendResult> {
+export async function sendHttp(
+  draft: HttpStep,
+  envName: string | null,
+  requestId: string,
+): Promise<HttpSendResult> {
   try {
-    const report = await ipc.httpSend(draft.template, sendCtxOf(draft, envName), requestId, callOptionsOf());
+    const report = await ipc.httpSend(
+      draft.template,
+      sendCtxOf(draft, envName),
+      requestId,
+      callOptionsOf(),
+    );
     return { kind: "ok", report };
   } catch (e) {
     if (isCancelError(e)) return { kind: "cancelled" };
@@ -288,4 +339,3 @@ export async function cancelStep(requestId: string): Promise<void> {
     /* best-effort */
   }
 }
-
