@@ -18,7 +18,7 @@ use crate::commands::dialog::{local_stamp, save_bytes_via_dialog, save_via_dialo
 use crate::commands::events::ContractUpdated;
 use crate::ipc::collection::GrpcTemplateIpc;
 use crate::ipc::{
-    AssembleResultIpc, CallOptionsIpc, ContractArtifactIpc, ContractQueryIpc, InvokeOutcomeIpc, IpcError,
+    AssembleResultIpc, CallOptionsIpc, ContractQueryIpc, InvokeOutcomeIpc, IpcError, MethodBundleIpc,
     MethodKindIpc, OutboundMessageIpc, SendCtxIpc, SendReportIpc, StreamEventIpc,
 };
 use crate::state::AppState;
@@ -41,7 +41,7 @@ pub async fn grpc_contract_read(
     query: ContractQueryIpc,
     request_id: String,
     timeout_ms: u32,
-) -> Result<ContractArtifactIpc, IpcError> {
+) -> Result<MethodBundleIpc, IpcError> {
     let (collection, active_env) = ctx_refs(&state, &ctx);
     let reader = state.contract_read.clone();
     let query = query.into_core();
@@ -55,7 +55,7 @@ pub async fn grpc_contract_read(
                 .emit(&app)
                 .ok();
         }
-        Ok(ContractArtifactIpc::from(answer.artifact))
+        Ok(MethodBundleIpc::from(answer.bundle))
     };
     race_cancel_timeout(&state.in_flight, request_id, timeout_ms, work).await
 }

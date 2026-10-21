@@ -17,11 +17,11 @@ pub mod vars;
 
 pub use auth::AuthCredentialsIpc;
 pub use catalog::ServiceCatalogIpc;
-pub use contract::{ContractArtifactIpc, ContractQueryIpc};
+pub use contract::{ContractQueryIpc, MethodBundleIpc};
 pub use error::IpcError;
 pub use invoke::{
     CallOptionsIpc, InvokeOutcomeIpc, SendCtxIpc, SendReportIpc,
 };
-pub use schema::{MessageSchemaIpc, MessageSideIpc};
+pub use schema::MessageSchemaIpc;
 pub use stream::{AssembleResultIpc, MethodKindIpc, OutboundMessageIpc, StreamEventIpc};
 pub use target::GrpcTargetIpc;

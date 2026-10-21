@@ -16,22 +16,12 @@ vi.mock("@/ipc/client", () => ({
   authResolve: vi.fn().mockResolvedValue(null),
   authEffective: vi.fn().mockResolvedValue({ kind: "none" }),
   authInvalidate: vi.fn().mockResolvedValue(undefined),
-  grpcContractRead: vi.fn(
-    async (
-      _a: unknown,
-      _t: unknown,
-      _c: unknown,
-      query: { op?: string; side?: string },
-    ) => {
-      if (query?.op === "skeleton") return { kind: "skeleton", json: "{}" };
-      if (query?.op === "schema")
-        return {
-          kind: "schema",
-          schema: { root: "t.M", messages: [], enums: [] },
-        };
-      return { kind: "catalog", catalog: { services: [] } };
-    },
-  ),
+  grpcContractRead: vi.fn(async () => ({
+    catalog: { services: [] },
+    input_schema: { root: "t.M", messages: [], enums: [] },
+    output_schema: { root: "t.M", messages: [], enums: [] },
+    skeleton: "{}",
+  })),
   varsResolve: vi.fn(),
   grpcSend: vi.fn().mockResolvedValue({
     outcome: {
@@ -115,15 +105,12 @@ async function renderPanel(ui: React.ReactElement) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(grpcContractRead).mockImplementation(async (_a, _t, _c, query) => {
-    if (query?.op === "skeleton") return { kind: "skeleton", json: "{}" };
-    if (query?.op === "schema")
-      return {
-        kind: "schema",
-        schema: { root: "t.M", messages: [], enums: [] },
-      };
-    return { kind: "catalog", catalog: { services: [] } };
-  });
+  vi.mocked(grpcContractRead).mockImplementation(async () => ({
+    catalog: { services: [] },
+    input_schema: { root: "t.M", messages: [], enums: [] },
+    output_schema: { root: "t.M", messages: [], enums: [] },
+    skeleton: "{}",
+  }));
   workflowStore.reset();
 });
 
@@ -202,26 +189,12 @@ describe("CallPanel contract tab", () => {
       ],
       enums: [],
     });
-    vi.mocked(grpcContractRead).mockImplementation(
-      async (_a, _t, _c, query) => {
-        if (query.op === "schema") {
-          const side = query.side;
-          return {
-            kind: "schema",
-            schema: schemaWithField(
-              side === "input" ? "t.Req" : "t.Resp",
-              side === "input" ? "req_field" : "resp_field",
-            ),
-          } as never;
-        }
-        if (query.op === "skeleton")
-          return { kind: "skeleton", json: "{}" } as never;
-        return {
-          kind: "catalog",
-          catalog: catalogWith("GetSides", false, false),
-        } as never;
-      },
-    );
+    vi.mocked(grpcContractRead).mockImplementation(async () => ({
+      catalog: catalogWith("GetSides", false, false),
+      input_schema: schemaWithField("t.Req", "req_field"),
+      output_schema: schemaWithField("t.Resp", "resp_field"),
+      skeleton: "{}",
+    }));
     const sideDraft = newStep({
       address: "h:443",
       tls: true,
@@ -252,21 +225,12 @@ describe("CallPanel contract tab", () => {
 
 describe("CallPanel method kind (derived live from the catalog)", () => {
   it("shows no badge until the catalog arrives, then the streaming badge — without user action", async () => {
-    vi.mocked(grpcContractRead).mockImplementation(
-      async (_a, _t, _c, query) => {
-        if (query.op === "schema")
-          return {
-            kind: "schema",
-            schema: { root: "t.M", messages: [], enums: [] },
-          } as never;
-        if (query.op === "skeleton")
-          return { kind: "skeleton", json: "{}" } as never;
-        return {
-          kind: "catalog",
-          catalog: catalogWith("GetX", false, true),
-        } as never;
-      },
-    );
+    vi.mocked(grpcContractRead).mockImplementation(async () => ({
+      catalog: catalogWith("GetX", false, true),
+      input_schema: { root: "t.M", messages: [], enums: [] },
+      output_schema: { root: "t.M", messages: [], enums: [] },
+      skeleton: "{}",
+    }));
     await renderPanel(<CallPanel step={draft} onPatch={() => {}} />);
     // Reflection is debounced: before the catalog lands the kind is unknown → no badge.
     expect(screen.queryByText(messages.methodKind.badge.server)).toBeNull();
@@ -285,22 +249,12 @@ describe("CallPanel method kind (derived live from the catalog)", () => {
       messages: [{ full_name: root, fields: [] }],
       enums: [],
     });
-    vi.mocked(grpcContractRead).mockImplementation(
-      async (_a, _t, _c, query) => {
-        if (query.op === "schema") {
-          return {
-            kind: "schema",
-            schema: schemaOf(query.side === "input" ? "t.Req" : "t.Resp"),
-          } as never;
-        }
-        if (query.op === "skeleton")
-          return { kind: "skeleton", json: "{}" } as never;
-        return {
-          kind: "catalog",
-          catalog: catalogWith("Watch", true, true),
-        } as never;
-      },
-    );
+    vi.mocked(grpcContractRead).mockImplementation(async () => ({
+      catalog: catalogWith("Watch", true, true),
+      input_schema: schemaOf("t.Req"),
+      output_schema: schemaOf("t.Resp"),
+      skeleton: "{}",
+    }));
     const watch = newStep({
       address: "h:443",
       tls: true,
@@ -333,15 +287,12 @@ describe("CallPanel reflection refresh", () => {
       messages: [],
       enums: [],
     };
-    vi.mocked(grpcContractRead).mockImplementation(
-      async (_a, _t, _c, query) => {
-        if (query.op === "schema")
-          return { kind: "schema", schema: wireSchema } as never;
-        if (query.op === "skeleton")
-          return { kind: "skeleton", json: "{}" } as never;
-        return { kind: "catalog", catalog: { services: [] } } as never;
-      },
-    );
+    vi.mocked(grpcContractRead).mockImplementation(async () => ({
+      catalog: { services: [] },
+      input_schema: wireSchema,
+      output_schema: wireSchema,
+      skeleton: "{}",
+    }));
     const wireDraft = newStep({
       address: "wire-host:443",
       tls: true,
@@ -350,10 +301,8 @@ describe("CallPanel reflection refresh", () => {
     });
     await renderPanel(<CallPanel step={wireDraft} onPatch={() => {}} />);
     await waitFor(() => expect(grpcContractRead).toHaveBeenCalled());
-    const schemaCalls = () =>
-      vi.mocked(grpcContractRead).mock.calls.filter((c) => c[3].op === "schema")
-        .length;
-    const before = schemaCalls();
+    const reads = () => vi.mocked(grpcContractRead).mock.calls.length;
+    const before = reads();
 
     // Open the MethodPicker dropdown (Radix opens on Enter, not plain click), then fire
     // the reflection refresh that lives in its footer.
@@ -362,16 +311,15 @@ describe("CallPanel reflection refresh", () => {
     });
     fireEvent.click(await screen.findByLabelText("Refresh server reflection"));
 
-    // Refresh must re-reflect the backend AND refetch the schema. The bug: it only did the
-    // former, so the contract tab + body hints froze on the first result ("one-time action").
+    // Refresh is one bundle read (catalog, both schemas, skeleton) with the cache dropped.
     await waitFor(() =>
       expect(
         vi
           .mocked(grpcContractRead)
-          .mock.calls.some((c) => c[3].op === "refresh"),
+          .mock.calls.some((c) => c[3].refresh === true),
       ).toBe(true),
     );
-    await waitFor(() => expect(schemaCalls()).toBeGreaterThan(before));
+    await waitFor(() => expect(reads()).toBeGreaterThan(before));
   });
 });
 

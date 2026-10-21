@@ -6,7 +6,7 @@ use crate::error::CoreError;
 use crate::grpc::catalog::ServiceCatalog;
 use crate::grpc::connection::GrpcTarget;
 use crate::grpc::contract::load_contract;
-use crate::grpc::contract_cache::{ContractCache, ContractKey};
+use crate::grpc::contract_cache::{CachedContract, ContractCache, ContractKey};
 use crate::grpc::invoke::{
     build_message_schema_from_pools, build_request_skeleton_from_pools, MessageSchema, MessageSide,
 };
@@ -17,31 +17,29 @@ pub struct ContractProbe {
     pub tls_override: Option<bool>,
 }
 
-#[derive(Debug)]
-pub enum ContractQuery {
-    Catalog,
-    Refresh,
-    Skeleton {
-        service: String,
-        method: String,
-    },
-    Schema {
-        service: String,
-        method: String,
-        side: MessageSide,
-    },
+/// One contract read. The probe target is resolved once. `refresh` drops the
+/// cached contract before the load so a miss reflects again.
+#[derive(Debug, Clone)]
+pub struct ContractQuery {
+    pub service: String,
+    pub method: String,
+    pub refresh: bool,
 }
 
-#[derive(Debug)]
-pub enum ContractArtifact {
-    Catalog(ServiceCatalog),
-    Skeleton(String),
-    Schema(MessageSchema),
+/// Catalog plus the focused method's input schema, output schema, and request
+/// skeleton. The method pieces are absent when no method is named or the
+/// method is not in the catalog.
+#[derive(Debug, Clone)]
+pub struct MethodBundle {
+    pub catalog: ServiceCatalog,
+    pub input_schema: Option<MessageSchema>,
+    pub output_schema: Option<MessageSchema>,
+    pub skeleton: Option<String>,
 }
 
 #[derive(Debug)]
 pub struct ContractAnswer {
-    pub artifact: ContractArtifact,
+    pub bundle: MethodBundle,
     pub reflected: bool,
     pub target: GrpcTarget,
 }
@@ -70,34 +68,48 @@ impl ContractRead {
             active_env,
         )?;
         let key = ContractKey::from_target(&target);
-        if matches!(query, ContractQuery::Refresh) {
+        if query.refresh {
             self.cache.invalidate(&key);
         }
         let (cached, reflected) =
             load_contract(&target, self.transport.as_ref(), self.cache.as_ref()).await?;
-        let artifact = match query {
-            ContractQuery::Catalog | ContractQuery::Refresh => {
-                ContractArtifact::Catalog(cached.catalog)
-            }
-            ContractQuery::Skeleton { service, method } => ContractArtifact::Skeleton(
-                build_request_skeleton_from_pools(&cached.pools, &service, &method)?,
-            ),
-            ContractQuery::Schema {
-                service,
-                method,
-                side,
-            } => ContractArtifact::Schema(build_message_schema_from_pools(
-                &cached.pools,
-                &service,
-                &method,
-                side,
-            )?),
-        };
+        let bundle = bundle_for(&cached, &query.service, &query.method);
         Ok(ContractAnswer {
-            artifact,
+            bundle,
             reflected,
             target,
         })
+    }
+}
+
+fn bundle_for(cached: &CachedContract, service: &str, method: &str) -> MethodBundle {
+    let service = service.trim();
+    let method = method.trim();
+    if service.is_empty() || method.is_empty() {
+        return MethodBundle {
+            catalog: cached.catalog.clone(),
+            input_schema: None,
+            output_schema: None,
+            skeleton: None,
+        };
+    }
+    MethodBundle {
+        catalog: cached.catalog.clone(),
+        input_schema: build_message_schema_from_pools(
+            &cached.pools,
+            service,
+            method,
+            MessageSide::Input,
+        )
+        .ok(),
+        output_schema: build_message_schema_from_pools(
+            &cached.pools,
+            service,
+            method,
+            MessageSide::Output,
+        )
+        .ok(),
+        skeleton: build_request_skeleton_from_pools(&cached.pools, service, method).ok(),
     }
 }
 
@@ -123,10 +135,15 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn catalog_hit_opens_no_channel() {
-        let transport = Arc::new(FakeTransport::default());
-        let cache = Arc::new(InMemoryContractCache::new());
+    fn query(service: &str, method: &str) -> ContractQuery {
+        ContractQuery {
+            service: service.into(),
+            method: method.into(),
+            refresh: false,
+        }
+    }
+
+    fn seed(cache: &InMemoryContractCache) {
         cache.put(
             ContractKey {
                 address: "127.0.0.1:1".into(),
@@ -134,22 +151,81 @@ mod tests {
             },
             fixture_cached_contract(),
         );
+    }
+
+    #[tokio::test]
+    async fn catalog_hit_opens_no_channel() {
+        let transport = Arc::new(FakeTransport::default());
+        let cache = Arc::new(InMemoryContractCache::new());
+        seed(&cache);
         let answer = reader(transport.clone(), cache)
             .read(
                 &probe("127.0.0.1:1", Some(false)),
                 None,
                 None,
-                ContractQuery::Catalog,
+                query("test.Echo", "Send"),
             )
             .await
-            .expect("cached catalog");
-        match answer.artifact {
-            ContractArtifact::Catalog(catalog) => {
-                assert!(catalog.services.iter().any(|s| s.full_name == "test.Echo"));
-            }
-            other => panic!("expected catalog, got {other:?}"),
-        }
+            .expect("cached bundle");
+        assert!(answer
+            .bundle
+            .catalog
+            .services
+            .iter()
+            .any(|s| s.full_name == "test.Echo"));
+        let input = answer.bundle.input_schema.expect("input schema");
+        assert_eq!(input.root, "test.Ping");
+        let output = answer.bundle.output_schema.expect("output schema");
+        assert_eq!(output.root, "test.Pong");
+        let skeleton = answer.bundle.skeleton.expect("skeleton");
+        assert!(skeleton.contains("\"id\""), "{skeleton}");
         assert!(!answer.reflected);
+        assert_eq!(transport.channel_calls.load(Ordering::Relaxed), 0);
+    }
+
+    #[tokio::test]
+    async fn missing_method_returns_catalog_without_opening_a_channel() {
+        let transport = Arc::new(FakeTransport::default());
+        let cache = Arc::new(InMemoryContractCache::new());
+        seed(&cache);
+        let answer = reader(transport.clone(), cache)
+            .read(
+                &probe("127.0.0.1:1", Some(false)),
+                None,
+                None,
+                query("test.Echo", "Missing"),
+            )
+            .await
+            .expect("catalog still returns");
+        assert!(answer
+            .bundle
+            .catalog
+            .services
+            .iter()
+            .any(|s| s.full_name == "test.Echo"));
+        assert!(answer.bundle.input_schema.is_none());
+        assert!(answer.bundle.output_schema.is_none());
+        assert!(answer.bundle.skeleton.is_none());
+        assert_eq!(transport.channel_calls.load(Ordering::Relaxed), 0);
+    }
+
+    #[tokio::test]
+    async fn blank_method_omits_schemas_and_skeleton() {
+        let transport = Arc::new(FakeTransport::default());
+        let cache = Arc::new(InMemoryContractCache::new());
+        seed(&cache);
+        let answer = reader(transport.clone(), cache)
+            .read(
+                &probe("127.0.0.1:1", Some(false)),
+                None,
+                None,
+                query("", ""),
+            )
+            .await
+            .expect("catalog");
+        assert!(answer.bundle.input_schema.is_none());
+        assert!(answer.bundle.output_schema.is_none());
+        assert!(answer.bundle.skeleton.is_none());
         assert_eq!(transport.channel_calls.load(Ordering::Relaxed), 0);
     }
 
@@ -162,7 +238,7 @@ mod tests {
                 &probe("{{missing}}", Some(false)),
                 None,
                 None,
-                ContractQuery::Catalog,
+                query("", ""),
             )
             .await
             .expect_err("unresolved address");

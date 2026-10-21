@@ -35,7 +35,7 @@ export const commands = {
     query: ContractQueryIpc,
     requestId: string,
     timeoutMs: number,
-  ): Promise<Result<ContractArtifactIpc, IpcError>> {
+  ): Promise<Result<MethodBundleIpc, IpcError>> {
     try {
       return {
         status: "ok",
@@ -934,15 +934,14 @@ export type CollectionLinkIpc = {
  * Lightweight list entry (id + name only) for `collection_list`.
  */
 export type CollectionMetaIpc = { id: string; name: string };
-export type ContractArtifactIpc =
-  | { kind: "catalog"; catalog: ServiceCatalogIpc }
-  | { kind: "skeleton"; json: string }
-  | { kind: "schema"; schema: MessageSchemaIpc };
-export type ContractQueryIpc =
-  | { op: "catalog" }
-  | { op: "refresh" }
-  | { op: "skeleton"; service: string; method: string }
-  | { op: "schema"; service: string; method: string; side: MessageSideIpc };
+/**
+ * One contract-read query. The probe target is resolved once per call.
+ */
+export type ContractQueryIpc = {
+  service: string;
+  method: string;
+  refresh: boolean;
+};
 /**
  * Emitted whenever a target's contract has been (re)built (describe / refresh).
  */
@@ -1152,11 +1151,16 @@ export type MessageSchemaIpc = {
   messages: MessageNodeIpc[];
   enums: EnumNodeIpc[];
 };
-/**
- * Which side of the method the schema is built from.
- */
-export type MessageSideIpc = "input" | "output";
 export type MetadataRowIpc = { key: string; value: string; enabled: boolean };
+/**
+ * Catalog, both schemas, and the request skeleton for the named method.
+ */
+export type MethodBundleIpc = {
+  catalog: ServiceCatalogIpc;
+  input_schema: MessageSchemaIpc | null;
+  output_schema: MessageSchemaIpc | null;
+  skeleton: string | null;
+};
 export type MethodEntryIpc = {
   name: string;
   path: string;

@@ -2,7 +2,9 @@
 //!
 //! Keeps handshaker-core specta-free. Conversion is cheap (Vec/String moves, no I/O).
 
-use handshaker_core::grpc::{EnumNode, EnumValueNode, FieldNode, FieldValueKind, MessageNode, MessageSchema, MessageSide};
+use handshaker_core::grpc::{
+    EnumNode, EnumValueNode, FieldNode, FieldValueKind, MessageNode, MessageSchema,
+};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
@@ -92,7 +94,10 @@ impl From<FieldNode> for FieldNodeIpc {
 
 impl From<EnumValueNode> for EnumValueIpc {
     fn from(v: EnumValueNode) -> Self {
-        Self { name: v.name, number: v.number }
+        Self {
+            name: v.name,
+            number: v.number,
+        }
     }
 }
 
@@ -116,32 +121,9 @@ impl From<FieldValueKind> for FieldValueKindIpc {
     }
 }
 
-/// Which side of the method the schema is built from.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Type)]
-#[serde(rename_all = "snake_case")]
-pub enum MessageSideIpc {
-    Input,
-    Output,
-}
-
-impl From<MessageSideIpc> for MessageSide {
-    fn from(s: MessageSideIpc) -> Self {
-        match s {
-            MessageSideIpc::Input => MessageSide::Input,
-            MessageSideIpc::Output => MessageSide::Output,
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn side_converts_to_core() {
-        assert!(matches!(MessageSide::from(MessageSideIpc::Input), MessageSide::Input));
-        assert!(matches!(MessageSide::from(MessageSideIpc::Output), MessageSide::Output));
-    }
 
     #[test]
     fn from_core_maps_fields() {
@@ -164,13 +146,19 @@ mod tests {
             }],
             enums: vec![EnumNode {
                 full_name: "t.E".into(),
-                values: vec![EnumValueNode { name: "A".into(), number: 0 }],
+                values: vec![EnumValueNode {
+                    name: "A".into(),
+                    number: 0,
+                }],
             }],
         };
         let ipc: MessageSchemaIpc = core.into();
         assert_eq!(ipc.root, "t.M");
         assert_eq!(ipc.messages[0].fields[0].json_name, "aStr");
-        assert!(matches!(ipc.messages[0].fields[0].value_kind, FieldValueKindIpc::Scalar));
+        assert!(matches!(
+            ipc.messages[0].fields[0].value_kind,
+            FieldValueKindIpc::Scalar
+        ));
         assert_eq!(ipc.enums[0].values[0].name, "A");
     }
 }
