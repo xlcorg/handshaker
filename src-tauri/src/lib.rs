@@ -12,7 +12,7 @@ mod boot_trace;
 mod splash_metrics;
 mod state;
 
-use commands::auth::{auth_effective, auth_invalidate, auth_oauth2_fetch_token, auth_resolve};
+use commands::auth::{auth_effective, auth_invalidate, auth_oauth2_preview, auth_resolve};
 use commands::base64::{base64_inspect, base64_save, base64_save_encoded};
 use commands::dialog::file_save_text;
 use commands::collection::{
@@ -68,7 +68,7 @@ pub fn specta_builder() -> Builder<tauri::Wry> {
             base64_save_encoded,
             file_save_text,
             auth_resolve,
-            auth_oauth2_fetch_token,
+            auth_oauth2_preview,
             auth_invalidate,
             auth_effective,
             collection_list,

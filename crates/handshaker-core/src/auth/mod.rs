@@ -76,8 +76,9 @@ pub struct EnvVarAuthConfig {
     pub environments: Vec<String>,
 }
 
-/// OAuth2 client-credentials config. All string fields are `{{var}}` templates,
-/// resolved on the frontend before reaching the token provider.
+/// OAuth2 client-credentials config. String fields are `{{var}}` templates. Core
+/// resolves them before the token source sees them; the resolved client secret does
+/// not cross back to the frontend.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OAuth2ClientCredentialsConfig {
     pub token_url: String,

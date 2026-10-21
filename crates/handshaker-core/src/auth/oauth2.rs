@@ -291,12 +291,19 @@ impl Default for Oauth2TokenProvider {
     }
 }
 
-/// Seam: materialize an OAuth2 header from an already-resolved config. Two adapters:
-/// the real cached provider and a test fake (oauth resolve tests run without network).
+/// Seam for an already-resolved OAuth2 config. Two adapters: the real cached provider
+/// and a test fake (oauth resolve tests run without network). Send calls `header_for`
+/// (the cache). Get token calls `fetch_token` (a fresh raw token). A source that only
+/// serves Send inherits the `fetch_token` error.
 #[async_trait::async_trait]
 pub trait TokenSource: Send + Sync {
     async fn header_for(&self, cfg: &OAuth2ClientCredentialsConfig) -> Result<AuthCredentials, CoreError>;
     fn invalidate(&self, cfg: &OAuth2ClientCredentialsConfig);
+
+    async fn fetch_token(&self, cfg: &OAuth2ClientCredentialsConfig) -> Result<TokenResponse, CoreError> {
+        let _ = cfg;
+        Err(CoreError::NotImplemented("this token source does not fetch a raw token".into()))
+    }
 }
 
 #[async_trait::async_trait]
@@ -306,6 +313,9 @@ impl TokenSource for Oauth2TokenProvider {
     }
     fn invalidate(&self, cfg: &OAuth2ClientCredentialsConfig) {
         Oauth2TokenProvider::invalidate(self, cfg);
+    }
+    async fn fetch_token(&self, cfg: &OAuth2ClientCredentialsConfig) -> Result<TokenResponse, CoreError> {
+        self.force_fetch(cfg).await
     }
 }
 

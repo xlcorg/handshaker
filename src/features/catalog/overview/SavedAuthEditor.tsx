@@ -12,7 +12,7 @@ import type { ResolutionReportIpc, SavedAuthConfigIpc } from "@/ipc/bindings";
 import { ipc } from "@/ipc/client";
 import { EnvVarField } from "./EnvVarField";
 import { configToForm, formToConfig, type AuthForm } from "./authConfigMap";
-import { resolveOauthConfig } from "@/features/workflow/actions";
+import { faultFromUnknown } from "@/features/workflow/netDiagnostics";
 import { useEnvRevision } from "@/features/envs/envRevision";
 import { VarHighlightInput } from "@/features/vars/VarHighlightInput";
 import type { VarCandidate } from "@/features/vars/candidates";
@@ -117,20 +117,15 @@ export function SavedAuthEditor({ value, onChange, seedKey, resolver, resolveKey
     const cfg = formToConfig(form);
     if (cfg.kind !== "oauth2_client_credentials") return;
     setToken({ kind: "loading" });
-    const resolved = await resolveOauthConfig(cfg, ipc.varsResolve);
-    if (!resolved.ok) {
-      setToken({ kind: "error", message: resolved.message });
-      return;
-    }
     try {
-      const info = await ipc.authOauth2FetchToken(resolved.config);
+      const info = await ipc.authOauth2Preview(cfg);
       setToken({
         kind: "ok",
         message: m.tokenExpiry(Math.round(info.expires_in_secs / 60)),
         token: info.access_token,
       });
     } catch (e) {
-      setToken({ kind: "error", message: msg(e) });
+      setToken({ kind: "error", message: faultFromUnknown(e).message });
     }
   };
 

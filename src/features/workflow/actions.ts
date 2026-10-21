@@ -168,55 +168,6 @@ export type SendResult =
   | { kind: "error"; fault: ClientFault }
   | { kind: "cancelled" };
 
-type Oauth2Config = Extract<
-  SavedAuthConfigIpc,
-  { kind: "oauth2_client_credentials" }
->;
-
-/** Resolve `{{var}}` in every oauth2 template field. Returns the resolved config, or
- *  the list of unresolved variable names. */
-export async function resolveOauthConfig(
-  auth: Oauth2Config,
-  varsResolve: (t: string) => Promise<ResolutionReportIpc>,
-): Promise<
-  { ok: true; config: Oauth2Config } | { ok: false; message: string }
-> {
-  const unresolved: string[] = [];
-  const take = async (t: string): Promise<string> => {
-    const r = await varsResolve(t);
-    for (const v of r.unresolved_vars)
-      if (!unresolved.includes(v)) unresolved.push(v);
-    return r.resolved;
-  };
-  const token_url = await take(auth.token_url);
-  const client_id = await take(auth.client_id);
-  const client_secret = await take(auth.client_secret);
-  const scopes: string[] = [];
-  for (const s of auth.scopes) scopes.push(await take(s));
-  if (unresolved.length > 0) {
-    return {
-      ok: false,
-      message: `Unresolved variables: ${unresolved.map((v) => `{{${v}}}`).join(", ")}`,
-    };
-  }
-  return {
-    ok: true,
-    config: {
-      kind: "oauth2_client_credentials",
-      token_url,
-      client_id,
-      client_secret,
-      scopes,
-      header_name: auth.header_name,
-      prefix: auth.prefix,
-      environments: auth.environments,
-    },
-  };
-}
-
-/** Live Send: forward the raw draft (templates + the step's own auth) + resolve ctx
- *  to `grpc_send`, which owns the whole pipeline (vars → auth pick/materialize → TLS →
- *  invoke → 16-invalidation). No frontend resolution left to do — this is call+map. */
 /** The step fields a Send (unary or streaming) reads. `Step` satisfies it; tests
  *  and history snapshots may pass a plain object. */
 export interface SendableStep {
@@ -250,6 +201,9 @@ export function callOptionsOf(opts?: {
   };
 }
 
+/** Live Send: forward the raw draft (templates + the step's own auth) + resolve ctx
+ *  to `grpc_send`, which owns the whole pipeline (vars → auth pick/materialize → TLS →
+ *  invoke → 16-invalidation). No frontend resolution left to do — this is call+map. */
 export async function sendStep(
   step: SendableStep,
   ctx: { envName: string | null },

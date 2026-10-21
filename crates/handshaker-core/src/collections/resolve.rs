@@ -1,14 +1,15 @@
-//! One resolve session, two drivers. [`Resolution`] runs every `{{var}}` of a request
-//! through one accumulator and hands back [`Slot`]s; only a [`Settled`] session reads
-//! them or materializes auth. `resolve_request` drives it for gRPC, and
-//! `http::request::prepare` for HTTP. Auth resolves request → collection (folders carry
-//! none).
+//! One resolve session. [`Resolution`] runs every `{{var}}` of a request through one
+//! accumulator and hands back [`Slot`]s; only a [`Settled`] session reads them or
+//! materializes auth. `resolve_request` drives it for gRPC, `http::request::prepare`
+//! for HTTP, and [`preview_oauth_token`] for Get token (env scope only). Auth resolves
+//! request → collection (folders carry none).
 //!
 //! Pure except for the `std::env` read inside `EnvVar` auth and the `TokenSource`
 //! call for OAuth2 → fully testable via `StaticTokenSource`.
 
 use std::collections::HashMap;
 
+use crate::auth::oauth2::TokenResponse;
 use crate::auth::{
     materialize_env_var, pick_auth_config, AuthCredentials, OAuth2ClientCredentialsConfig, SavedAuthConfig,
     TokenSource,
@@ -75,15 +76,32 @@ impl<'a> Resolution<'a> {
         let picked =
             pick_auth_config(request_auth, collection_auth, self.active_env.map(|e| e.name.as_str())).cloned();
         let oauth = match &picked {
-            Some(SavedAuthConfig::OAuth2ClientCredentials(c)) => Some(OAuthSlots {
-                token_url: self.take(&c.token_url),
-                client_id: self.take(&c.client_id),
-                client_secret: self.take(&c.client_secret),
-                scopes: c.scopes.iter().map(|s| self.take(s)).collect(),
-            }),
+            Some(SavedAuthConfig::OAuth2ClientCredentials(c)) => Some(self.oauth_fields(c)),
             _ => None,
         };
         AuthPick { picked, oauth }
+    }
+
+    /// Env scope only. Collection vars are not a parameter: a name that exists only on
+    /// a collection stays unresolved. Get token passes the active environment's map.
+    fn env_only(env_vars: &HashMap<String, String>) -> Resolution<'static> {
+        Resolution {
+            vars: ResolveVars { env: env_vars.clone(), collection: HashMap::new() },
+            acc: ResolveAcc::default(),
+            texts: Vec::new(),
+            collection: None,
+            active_env: None,
+        }
+    }
+
+    /// The same slots [`Settled::materialize`] reads for an OAuth2 config.
+    fn oauth_fields(&mut self, config: &OAuth2ClientCredentialsConfig) -> OAuthSlots {
+        OAuthSlots {
+            token_url: self.take(&config.token_url),
+            client_id: self.take(&config.client_id),
+            client_secret: self.take(&config.client_secret),
+            scopes: config.scopes.iter().map(|s| self.take(s)).collect(),
+        }
     }
 
     /// `Err(ResolveFailed { unresolved, cycle })`, or the settled session.
@@ -136,21 +154,45 @@ impl Settled<'_> {
         let (header, oauth) = match (&picked, oauth) {
             (Some(SavedAuthConfig::EnvVar(c)), _) => (Some(materialize_env_var(c)?), None),
             (Some(SavedAuthConfig::OAuth2ClientCredentials(c)), Some(slots)) => {
-                let cfg = OAuth2ClientCredentialsConfig {
-                    token_url: self.text(slots.token_url),
-                    client_id: self.text(slots.client_id),
-                    client_secret: self.text(slots.client_secret),
-                    scopes: slots.scopes.into_iter().map(|s| self.text(s)).collect(),
-                    header_name: c.header_name.clone(),
-                    prefix: c.prefix.clone(),
-                    environments: c.environments.clone(),
-                };
+                let cfg = self.oauth_resolved(c, slots);
                 (Some(tokens.header_for(&cfg).await?), Some(cfg))
             }
             _ => (None, None),
         };
         Ok(CallAuth { header, oauth, picked })
     }
+
+    fn oauth_resolved(
+        &mut self,
+        template: &OAuth2ClientCredentialsConfig,
+        slots: OAuthSlots,
+    ) -> OAuth2ClientCredentialsConfig {
+        OAuth2ClientCredentialsConfig {
+            token_url: self.text(slots.token_url),
+            client_id: self.text(slots.client_id),
+            client_secret: self.text(slots.client_secret),
+            scopes: slots.scopes.into_iter().map(|s| self.text(s)).collect(),
+            header_name: template.header_name.clone(),
+            prefix: template.prefix.clone(),
+            environments: template.environments.clone(),
+        }
+    }
+}
+
+/// Get token. Resolves the OAuth2 templates against `env_vars` only — there is no
+/// collection argument — in one session, reading the same slots [`Settled::materialize`]
+/// reads, then asks `tokens` for a fresh token. The resolved client secret is an
+/// argument to that fetch and is not part of the returned token.
+pub async fn preview_oauth_token(
+    config: &OAuth2ClientCredentialsConfig,
+    env_vars: &HashMap<String, String>,
+    tokens: &dyn TokenSource,
+) -> Result<TokenResponse, CoreError> {
+    let mut session = Resolution::env_only(env_vars);
+    let slots = session.oauth_fields(config);
+    let mut settled = session.settle()?;
+    let resolved = settled.oauth_resolved(config, slots);
+    tokens.fetch_token(&resolved).await
 }
 
 /// The auth a call carries: the header to send, the resolved OAuth2 config whose cached
@@ -753,5 +795,100 @@ mod tests {
         let req = req_with_auth(SavedAuthConfig::None);
         let eff = resolve_request(&req, None, None, &FakeTokens).await.unwrap();
         assert_eq!(eff.auth.into_picked(), None);
+    }
+
+    fn oauth_cfg(token_url: &str, client_id: &str, client_secret: &str, scopes: &[&str]) -> OAuth2ClientCredentialsConfig {
+        OAuth2ClientCredentialsConfig {
+            token_url: token_url.into(),
+            client_id: client_id.into(),
+            client_secret: client_secret.into(),
+            scopes: scopes.iter().map(|s| (*s).to_string()).collect(),
+            header_name: "authorization".into(),
+            prefix: "Bearer ".into(),
+            environments: vec![],
+        }
+    }
+
+    fn env_map(pairs: &[(&str, &str)]) -> HashMap<String, String> {
+        pairs.iter().map(|(k, v)| ((*k).to_string(), (*v).to_string())).collect()
+    }
+
+    /// Records `fetch_token` and panics if the preview builds a header instead.
+    struct PreviewTokens {
+        calls: std::sync::Mutex<Vec<OAuth2ClientCredentialsConfig>>,
+    }
+
+    impl PreviewTokens {
+        fn new() -> Self {
+            Self { calls: std::sync::Mutex::new(Vec::new()) }
+        }
+    }
+
+    #[async_trait]
+    impl TokenSource for PreviewTokens {
+        async fn header_for(
+            &self,
+            _cfg: &OAuth2ClientCredentialsConfig,
+        ) -> Result<AuthCredentials, CoreError> {
+            panic!("oauth preview fetches a token; it does not build a header");
+        }
+        fn invalidate(&self, _cfg: &OAuth2ClientCredentialsConfig) {}
+        async fn fetch_token(
+            &self,
+            cfg: &OAuth2ClientCredentialsConfig,
+        ) -> Result<crate::auth::oauth2::TokenResponse, CoreError> {
+            self.calls.lock().unwrap().push(cfg.clone());
+            Ok(crate::auth::oauth2::TokenResponse {
+                access_token: "preview-token".into(),
+                expires_in: crate::auth::oauth2::ExpiresIn::from_token_json(&serde_json::json!({
+                    "expires_in": 90
+                }))
+                .unwrap(),
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn oauth_preview_env_var_resolves_collection_var_does_not_cycle_is_whole() {
+        let tokens = PreviewTokens::new();
+
+        // An env var resolves, and the fake token source is the only fetch. The
+        // resolved secret reaches that fetch and is not on the returned token.
+        let env = env_map(&[("id", "from-env"), ("sec", "S3CRET"), ("scope", "read")]);
+        let cfg = oauth_cfg("https://idp/token", "{{id}}", "{{sec}}", &["{{scope}}"]);
+        let preview = preview_oauth_token(&cfg, &env, &tokens).await.unwrap();
+        assert_eq!(preview.access_token, "preview-token");
+        assert_eq!(preview.expires_in.secs(), 90);
+        assert!(!format!("{preview:?}").contains("S3CRET"));
+        let calls = tokens.calls.lock().unwrap().clone();
+        assert_eq!(calls.len(), 1, "one fetch");
+        assert_eq!(calls[0].client_id, "from-env");
+        assert_eq!(calls[0].client_secret, "S3CRET");
+        assert_eq!(calls[0].scopes, vec!["read".to_string()]);
+        assert_eq!(calls[0].token_url, "https://idp/token");
+
+        // `coll_secret` is not in the env map, and preview has no collection argument.
+        let env = env_map(&[("id", "from-env")]);
+        let cfg = oauth_cfg("https://idp/token", "{{id}}", "{{coll_secret}}", &[]);
+        match preview_oauth_token(&cfg, &env, &tokens).await.unwrap_err() {
+            CoreError::ResolveFailed { unresolved, cycle } => {
+                assert_eq!(cycle, None);
+                assert_eq!(unresolved, vec!["coll_secret".to_string()]);
+            }
+            other => panic!("expected ResolveFailed, got {other:?}"),
+        }
+        assert_eq!(tokens.calls.lock().unwrap().len(), 1, "an unresolved collection var does not fetch");
+
+        // The cycle comes back as the chain, not a joined name list.
+        let env = env_map(&[("a", "{{b}}"), ("b", "{{a}}")]);
+        let cfg = oauth_cfg("{{a}}", "cid", "sec", &[]);
+        match preview_oauth_token(&cfg, &env, &tokens).await.unwrap_err() {
+            CoreError::ResolveFailed { cycle: Some(chain), unresolved } => {
+                assert_eq!(chain, vec!["a".to_string(), "b".to_string(), "a".to_string()]);
+                assert!(unresolved.is_empty());
+            }
+            other => panic!("expected the whole cycle, got {other:?}"),
+        }
+        assert_eq!(tokens.calls.lock().unwrap().len(), 1, "a cycle does not fetch");
     }
 }

@@ -11,7 +11,7 @@ vi.mock("@/ipc/client", () => ({
   ipc: {
     envList: vi.fn().mockResolvedValue([{ name: "prod", variables: {}, color: null }]),
     varsResolve: vi.fn(async (t: string) => ({ resolved: t, unresolved_vars: [], cycle_chain: null, dynamic_vars: [] })),
-    authOauth2FetchToken: vi
+    authOauth2Preview: vi
       .fn()
       .mockResolvedValue({ access_token: "eyJhbGciOiJSUzI1NiJ9.payload.signature", expires_in_secs: 840 }),
   },
@@ -207,11 +207,34 @@ describe("SavedAuthEditor (oauth2)", () => {
     expect(screen.getByDisplayValue("cid")).toBeTruthy();
   });
 
-  it("Get token resolves vars, calls the backend, and shows the lifetime", async () => {
+  it("Get token sends the templates in one call and shows the lifetime", async () => {
     await renderEditor(<SavedAuthEditor value={oauth2} onChange={() => {}} />);
     fireEvent.click(screen.getByRole("button", { name: m.getToken }));
-    await waitFor(() => expect(ipc.authOauth2FetchToken).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(ipc.authOauth2Preview).toHaveBeenCalledTimes(1));
+    expect(ipc.authOauth2Preview).toHaveBeenCalledWith(oauth2);
+    expect(ipc.varsResolve).not.toHaveBeenCalled();
     expect(await screen.findByText(m.tokenExpiry(14))).toBeTruthy(); // 840s ≈ 14 min
+  });
+
+  it("Get token shows a resolve failure whole", async () => {
+    vi.mocked(ipc.authOauth2Preview).mockRejectedValueOnce({
+      type: "UnresolvedVars",
+      unresolved: [],
+      cycle: ["a", "b", "a"],
+    });
+    await renderEditor(<SavedAuthEditor value={oauth2} onChange={() => {}} />);
+    fireEvent.click(screen.getByRole("button", { name: m.getToken }));
+    expect(await screen.findByText(messages.workflow.send.variableCycle(["a", "b", "a"]))).toBeTruthy();
+
+    vi.mocked(ipc.authOauth2Preview).mockRejectedValueOnce({
+      type: "UnresolvedVars",
+      unresolved: ["secret", "url"],
+      cycle: null,
+    });
+    fireEvent.click(screen.getByRole("button", { name: m.getToken }));
+    expect(
+      await screen.findByText(messages.workflow.send.unresolvedVariables(["secret", "url"])),
+    ).toBeTruthy();
   });
 
   it("Get token shows a truncated token and copies the full one to the clipboard", async () => {

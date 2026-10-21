@@ -56,8 +56,7 @@ pub struct AppState {
     /// In-flight gRPC requests: `request_id` → cancellation `Notify`.
     pub in_flight: InFlight,
     /// OAuth2 client-credentials token cache + HTTP client (session-lived).
-    /// `Arc`-shared: the same cache backs both the auth commands (which need the
-    /// concrete provider for `force_fetch`) and the `sender`'s token-source seam.
+    /// `Arc`-shared: Get token and the `sender` both use it as the `TokenSource`.
     pub oauth2_provider: Arc<Oauth2TokenProvider>,
     /// The core Send spine, constructed once per session with the real adapters
     /// (tonic transport, session token cache, contract cache, system builtins).

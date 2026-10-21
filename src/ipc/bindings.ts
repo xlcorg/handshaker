@@ -414,13 +414,18 @@ export const commands = {
       else return { status: "error", error: e as any };
     }
   },
-  async authOauth2FetchToken(
+  /**
+   * Get token. `config` is the OAuth2 templates. Core resolves them against the
+   * active environment only and returns the access token. The resolved client
+   * secret stays in core.
+   */
+  async authOauth2Preview(
     config: SavedAuthConfigIpc,
   ): Promise<Result<OAuth2TokenInfoIpc, IpcError>> {
     try {
       return {
         status: "ok",
-        data: await TAURI_INVOKE("auth_oauth2_fetch_token", { config }),
+        data: await TAURI_INVOKE("auth_oauth2_preview", { config }),
       };
     } catch (e) {
       if (e instanceof Error) throw e;
