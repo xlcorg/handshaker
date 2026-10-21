@@ -405,10 +405,12 @@ export async function authResolve(
   return r.data;
 }
 
-export async function authOauth2FetchToken(
+/** Get token. `config` is the OAuth2 templates. Core resolves them against the
+ *  active environment and returns the access token. */
+export async function authOauth2Preview(
   config: SavedAuthConfigIpc,
 ): Promise<OAuth2TokenInfoIpc> {
-  const r = await commands.authOauth2FetchToken(config);
+  const r = await commands.authOauth2Preview(config);
   if (r.status === "error") throw r.error;
   return r.data;
 }
@@ -561,7 +563,7 @@ export const ipc = {
   bundleImportInspect,
   bundleImportApply,
   authResolve,
-  authOauth2FetchToken,
+  authOauth2Preview,
   authInvalidate,
   authEffective,
   collectionSetNodeAuth,
