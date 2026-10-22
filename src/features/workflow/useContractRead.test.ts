@@ -211,4 +211,104 @@ describe("useContractRead", () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.error).toBeNull();
   });
+
+  it("drops the previous method's fields as soon as the method changes", async () => {
+    vi.useFakeTimers();
+    const schemaA = { root: "t.Ping", messages: [], enums: [] };
+    const schemaB = { root: "t.Note", messages: [], enums: [] };
+    const bundle = (input: typeof schemaA) =>
+      ({
+        catalog: cat,
+        input_schema: input,
+        output_schema: input,
+        skeleton: "{}",
+      }) as never;
+
+    let resolveA: (value: unknown) => void = () => {};
+    vi.mocked(ipc.grpcContractRead).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveA = resolve as (value: unknown) => void;
+        }),
+    );
+    const { result, rerender } = renderHook(
+      ({ method }: { method: string }) => useContractRead(args({ method })),
+      { initialProps: { method: "Send" } },
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(400);
+    });
+    await act(async () => {
+      resolveA(bundle(schemaA));
+    });
+    expect(result.current.inputSchema).toEqual(schemaA);
+
+    let resolveB: (value: unknown) => void = () => {};
+    vi.mocked(ipc.grpcContractRead).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveB = resolve as (value: unknown) => void;
+        }),
+    );
+    rerender({ method: "Annotate" });
+
+    expect(result.current.inputSchema).toBeNull();
+    expect(result.current.outputSchema).toBeNull();
+    expect(result.current.catalog).toEqual(cat);
+    expect(ipc.grpcContractRead).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      resolveB(bundle(schemaB));
+    });
+    expect(result.current.inputSchema).toEqual(schemaB);
+    expect(result.current.outputSchema).toEqual(schemaB);
+  });
+
+  it("ignores a contract read that finishes for the method you just left", async () => {
+    vi.useFakeTimers();
+    const schemaA = { root: "t.Ping", messages: [], enums: [] };
+    const schemaB = { root: "t.Note", messages: [], enums: [] };
+    const bundle = (input: typeof schemaA) =>
+      ({
+        catalog: cat,
+        input_schema: input,
+        output_schema: input,
+        skeleton: "{}",
+      }) as never;
+
+    let resolveA: (value: unknown) => void = () => {};
+    vi.mocked(ipc.grpcContractRead).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveA = resolve as (value: unknown) => void;
+        }),
+    );
+    const { result, rerender } = renderHook(
+      ({ method }: { method: string }) => useContractRead(args({ method })),
+      { initialProps: { method: "Send" } },
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(400);
+    });
+
+    let resolveB: (value: unknown) => void = () => {};
+    vi.mocked(ipc.grpcContractRead).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveB = resolve as (value: unknown) => void;
+        }),
+    );
+    rerender({ method: "Annotate" });
+
+    await act(async () => {
+      resolveA(bundle(schemaA));
+    });
+    expect(result.current.inputSchema).toBeNull();
+    expect(result.current.outputSchema).toBeNull();
+
+    await act(async () => {
+      resolveB(bundle(schemaB));
+    });
+    expect(result.current.inputSchema).toEqual(schemaB);
+  });
 });
