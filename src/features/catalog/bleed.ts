@@ -28,3 +28,6 @@ export function bleedStyle(depth: number): CSSProperties {
 export function actionRight(depth: number, padRight = 4): number {
   return padRight - depth * SUB_INSET_R;
 }
+
+export const selectedRowClass =
+  "font-medium before:bg-sidebar-accent after:pointer-events-none after:absolute after:inset-y-0 after:left-[var(--bl)] after:w-[2px] after:rounded-full after:bg-primary";

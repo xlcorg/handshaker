@@ -16,7 +16,7 @@ import {
   HTTP_METHOD_COLUMN_CH,
   HTTP_METHOD_MARK,
 } from "@/features/http/model";
-import { bleedStyle } from "./bleed";
+import { bleedStyle, selectedRowClass } from "./bleed";
 import { messages } from "@/lib/messages";
 
 const m = messages.catalog.rowMenu;
@@ -162,10 +162,7 @@ export function RequestRow({
                 treeMarkInsetClass,
                 "before:pointer-events-none before:absolute before:inset-y-0 before:left-[var(--bl)] before:right-[var(--br)] before:-z-10 before:rounded-md before:content-['']",
                 "hover:before:bg-sidebar-accent/50",
-                // Active (open) request: full-bleed accent + a left marker pinned to the
-                // sidebar edge, so it's clearly distinct from a mere hover.
-                active &&
-                  "font-medium before:bg-sidebar-accent after:pointer-events-none after:absolute after:inset-y-0 after:left-[var(--bl)] after:w-[2px] after:rounded-full after:bg-primary",
+                active && selectedRowClass,
                 focused && "ring-1 ring-inset ring-ring",
                 cb.dragId === req.id && "opacity-50",
               )}

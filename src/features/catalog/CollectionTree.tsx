@@ -48,6 +48,17 @@ export interface CollectionTreeProps {
 
 const AUTO_EXPAND_MS = 700;
 
+function firstOpenedChild(el: HTMLElement): HTMLElement | null {
+  const item = el.closest("li");
+  if (!item) return null;
+  for (const node of item.children) {
+    if (node.tagName === "UL" && node.firstElementChild instanceof HTMLElement) {
+      return node.firstElementChild;
+    }
+  }
+  return null;
+}
+
 type DeleteTarget =
   | { kind: "item"; collectionId: string; itemId: string }
   | { kind: "collection"; collectionId: string };
@@ -55,6 +66,7 @@ type DeleteTarget =
 export const CollectionTree = forwardRef<CollectionTreeHandle, CollectionTreeProps>(
   function CollectionTree(props, ref) {
   const { collections, filterActive, editingId } = props;
+  const revealId = props.activeCollectionId ?? props.activeItemId;
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [delTarget, setDelTarget] = useState<DeleteTarget | null>(null);
@@ -90,13 +102,11 @@ export const CollectionTree = forwardRef<CollectionTreeHandle, CollectionTreePro
     if (path) setOpen((prev) => new Set([...prev, ...path]));
   }, [editingId, collections]);
 
-  // Reveal the active request — e.g. one opened from the command palette — by opening its
-  // ancestor collection + folders. Mirrors the editingId reveal, but guarded so it fires
-  // once per activeItemId: a later collections reload (an autosave round-trip hands us a
-  // fresh array) must not re-expand a folder the user has since collapsed. Transient only
-  // (never calls onSetExpanded) — opening a request must not rewrite saved expand state.
+  // The open overview outranks the open request. A collection id opens itself.
+  // This fires once per id, so a later collections reload does not re-expand a
+  // container the user collapsed. It never calls onSetExpanded.
   useEffect(() => {
-    const id = props.activeItemId;
+    const id = revealId;
     if (!id) {
       revealedRef.current = null;
       return;
@@ -109,14 +119,16 @@ export const CollectionTree = forwardRef<CollectionTreeHandle, CollectionTreePro
       if (path.every((p) => prev.has(p))) return prev; // already open — skip the re-render
       return new Set([...prev, ...path]);
     });
-  }, [props.activeItemId, collections]);
+  }, [revealId, collections]);
 
   const visible = useMemo(() => flattenVisible(collections, effectiveOpen), [collections, effectiveOpen]);
 
-  // Once the reveal has rendered the active row, scroll it into view (an off-screen open
-  // from the palette should jump to the row). Guarded so it scrolls once per activeItemId.
+  // Scroll once the revealed row is on screen, once per id. A collection waits
+  // until its body has committed. scrollIntoView on the header stops at the
+  // header, so the scrollport then moves until the first child clears the
+  // bottom edge. The latch stays open until that body exists.
   useEffect(() => {
-    const id = props.activeItemId;
+    const id = revealId;
     if (!id) {
       scrolledRef.current = null;
       return;
@@ -125,9 +137,17 @@ export const CollectionTree = forwardRef<CollectionTreeHandle, CollectionTreePro
     if (!visible.some((n) => n.id === id)) return; // wait until the row is revealed
     const el = treeRef.current?.querySelector<HTMLElement>(`[data-node-id="${CSS.escape(id)}"]`);
     if (!el) return;
+    const child = firstOpenedChild(el);
+    if (id === props.activeCollectionId && !child) return;
     scrolledRef.current = id;
     el.scrollIntoView({ block: "nearest" });
-  }, [props.activeItemId, visible]);
+    const viewport = el.closest<HTMLElement>("[data-slot=scroll-area-viewport]");
+    if (!viewport || !child) return;
+    // Leave a gap under the opened row. A child whose bottom lands on the
+    // scrollport edge is on screen and still looks clipped.
+    const overflow = child.getBoundingClientRect().bottom + 16 - viewport.getBoundingClientRect().bottom;
+    if (overflow > 0) viewport.scrollTop += overflow;
+  }, [revealId, visible, props.activeCollectionId]);
 
   // Drop keyboard focus if the focused node is no longer visible (collapsed/filtered out).
   useEffect(() => {
