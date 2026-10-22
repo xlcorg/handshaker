@@ -162,8 +162,6 @@ export function RequestRow({
                 treeMarkInsetClass,
                 "before:pointer-events-none before:absolute before:inset-y-0 before:left-[var(--bl)] before:right-[var(--br)] before:-z-10 before:rounded-md before:content-['']",
                 "hover:before:bg-sidebar-accent/50",
-                // Active (open) request: full-bleed accent + a left marker pinned to the
-                // sidebar edge, so it's clearly distinct from a mere hover.
                 active && selectedRowClass,
                 focused && "ring-1 ring-inset ring-ring",
                 cb.dragId === req.id && "opacity-50",
