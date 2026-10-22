@@ -42,7 +42,6 @@ export interface SaveRequestDialogProps {
   /** gRPC service/method of the draft — drives the recommendation chip. */
   draftService: string;
   draftMethod: string;
-  /** The draft's target as typed. A `{{var}}` span stays unresolved and picks the opening collection. */
   draftAddress: string;
   onSave: (args: { collectionId: string; parentId: string | null; name: string }) => Promise<void>;
   onCreateCollection: (name: string) => Promise<string>;

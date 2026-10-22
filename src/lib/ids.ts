@@ -31,7 +31,6 @@ export function newId(): string {
 const UUID_V7 =
   /^([0-9a-f]{8})-([0-9a-f]{4})-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-/** Unix milliseconds from a canonical UUID v7, or null when `id` is not one. */
 export function uuidV7Millis(id: string): number | null {
   const match = UUID_V7.exec(id);
   if (!match) return null;

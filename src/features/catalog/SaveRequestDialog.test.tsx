@@ -343,7 +343,6 @@ describe("SaveRequestDialog — host pick and folder order", () => {
     render(<SaveRequestDialog {...props({ collections: [col("c-other", "Other")], draftAddress: "" })} />);
     commitNamed(/New collection/, "Fresh");
     commitNamed(/New folder in .*Fresh/, "First");
-    // First is selected, so the next New folder would nest. Click the collection to add a sibling.
     fireEvent.click(screen.getByText("Fresh", { selector: "span.truncate" }));
     commitNamed(/New folder in .*Fresh/, "Second");
 

@@ -35,12 +35,6 @@ function emptyCollection(id: string, name: string): CollectionIpc {
   };
 }
 
-/**
- * The tree the Save picker shows. Pending nodes are spliced in array order, so a
- * parent folder still precedes its children when submit walks `pendingFolders`.
- * Every `items` list is then newest-created first. Collection order is unchanged
- * and the input is not mutated.
- */
 export function pickerTree(
   collections: CollectionIpc[],
   pendingCollections: PendingCollection[],
@@ -62,11 +56,6 @@ export function pickerTree(
   return tree.map((c) => ({ ...c, items: newestFirst(c.items) }));
 }
 
-/**
- * Where the Save dialog's selection starts: the root of the collection whose name
- * is the leading tokens of the host in `draftAddress`, else the first collection's
- * root, else null. `draftAddress` stays unresolved. A `{{var}}` span is never a token.
- */
 export function defaultPickTarget(
   collections: CollectionIpc[],
   draftAddress: string,
@@ -82,7 +71,6 @@ export function defaultPickTarget(
 
 declare const tokensBrand: unique symbol;
 
-/** Built only by `tokensOf`, so a host and a collection name share one normalization. */
 type Tokens = readonly string[] & { readonly [tokensBrand]: true };
 
 const ENV_TOKENS: ReadonlySet<string> = new Set([
@@ -110,7 +98,6 @@ function tokensOf(text: string): Tokens {
 }
 
 function hostTokens(address: string): Tokens {
-  // A var name may contain "/", ":", or spaces. Replace the span before the host cut.
   let rest = address.replace(VAR_SPAN, " ");
   const schemeAt = rest.indexOf("://");
   if (schemeAt !== -1) {
@@ -172,7 +159,6 @@ function compareNewest(
   if (a.ms === null && b.ms !== null) return 1;
   if (a.ms !== null && b.ms !== null) {
     if (a.ms !== b.ms) return b.ms - a.ms;
-    // The random tail of a v7 is not creation order. The later sibling is the newer one.
     return b.index - a.index;
   }
   return a.index - b.index;
