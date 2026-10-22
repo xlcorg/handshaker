@@ -27,6 +27,16 @@ function reflectErr(e: unknown): string {
   return t?.message ?? "No reflection available at this address";
 }
 
+function methodKeyOf(service: string, method: string): string {
+  return `${service}\0${method}`;
+}
+
+type HeldSchemas = {
+  key: string;
+  input: MessageSchemaIpc | null;
+  output: MessageSchemaIpc | null;
+};
+
 export function useContractRead(args: {
   addressTemplate: string;
   tlsOverride: boolean | null;
@@ -47,26 +57,29 @@ export function useContractRead(args: {
     resolveKey,
     enabled,
   } = args;
+  const methodKey = methodKeyOf(service, method);
   const [catalog, setCatalog] = useState<ServiceCatalogIpc | null>(null);
-  const [inputSchema, setInputSchema] = useState<MessageSchemaIpc | null>(null);
-  const [outputSchema, setOutputSchema] = useState<MessageSchemaIpc | null>(
-    null,
-  );
+  const [held, setHeld] = useState<HeldSchemas | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inFlight = useRef<string | null>(null);
   const generation = useRef(0);
+  const activeKey = useRef(methodKey);
+  activeKey.current = methodKey;
+
+  const clearSchemas = () => setHeld(null);
 
   const run = useCallback(
     async (force: boolean) => {
       const my = ++generation.current;
-      const live = () => generation.current === my;
+      const myMethod = methodKeyOf(service, method);
+      const live = () =>
+        generation.current === my && activeKey.current === myMethod;
       const addr = addressTemplate.trim();
       if (!enabled || !addr) {
         if (!live()) return;
         setCatalog(null);
-        setInputSchema(null);
-        setOutputSchema(null);
+        clearSchemas();
         setError(null);
         setLoading(false);
         return;
@@ -91,13 +104,15 @@ export function useContractRead(args: {
         );
         if (!live()) return;
         setCatalog(bundle.catalog);
-        setInputSchema(bundle.input_schema);
-        setOutputSchema(bundle.output_schema);
+        setHeld({
+          key: myMethod,
+          input: bundle.input_schema,
+          output: bundle.output_schema,
+        });
       } catch (e) {
         if (!live() || isCancelError(e)) return;
         setCatalog(null);
-        setInputSchema(null);
-        setOutputSchema(null);
+        clearSchemas();
         setError(reflectErr(e));
       } finally {
         if (live()) {
@@ -117,25 +132,37 @@ export function useContractRead(args: {
     ],
   );
 
+  const runRef = useRef(run);
+  runRef.current = run;
+
+  const fetchedKey = useRef(methodKey);
   useEffect(() => {
     if (!enabled || !addressTemplate.trim()) {
       generation.current += 1;
       setCatalog(null);
-      setInputSchema(null);
-      setOutputSchema(null);
+      clearSchemas();
       setError(null);
       setLoading(false);
       return;
     }
-    const t = setTimeout(() => void run(false), DEBOUNCE_MS);
+    const methodChanged = fetchedKey.current !== methodKey;
+    fetchedKey.current = methodKey;
+    if (methodChanged) {
+      void runRef.current(false);
+      return;
+    }
+    const t = setTimeout(() => void runRef.current(false), DEBOUNCE_MS);
     return () => clearTimeout(t);
-  }, [run, enabled, addressTemplate, resolveKey]);
+  }, [methodKey, enabled, addressTemplate, resolveKey, tlsOverride]);
 
   const refresh = useCallback(() => void run(true), [run]);
   const cancel = useCallback(() => {
     const id = inFlight.current;
     if (id) void ipc.grpcCancel(id).catch(() => {});
   }, []);
+
+  const inputSchema = held?.key === methodKey ? held.input : null;
+  const outputSchema = held?.key === methodKey ? held.output : null;
 
   return {
     catalog,
