@@ -26,3 +26,13 @@ export function newId(): string {
     .slice(6, 8)
     .join("")}-${hex.slice(8, 10).join("")}-${hex.slice(10, 16).join("")}`;
 }
+
+// Version nibble 7, RFC variant 8/9/a/b. The first 12 hex digits are the unix-ms timestamp.
+const UUID_V7 =
+  /^([0-9a-f]{8})-([0-9a-f]{4})-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function uuidV7Millis(id: string): number | null {
+  const match = UUID_V7.exec(id);
+  if (!match) return null;
+  return parseInt(match[1] + match[2], 16);
+}

@@ -15,7 +15,7 @@ import type { SaveLocation } from "./grouping";
 import { suggestSaveTarget } from "./grouping";
 import { CollectionPicker, type PickTarget } from "./CollectionPicker";
 import { newId } from "@/lib/ids";
-import { augmentTree, type PendingFolder, type PendingCollection } from "./savePicker";
+import { defaultPickTarget, pickerTree, type PendingFolder, type PendingCollection } from "./savePicker";
 import { messages } from "@/lib/messages";
 
 const DEFAULT_NEW_COLLECTION_NAME = "New Collection";
@@ -42,6 +42,7 @@ export interface SaveRequestDialogProps {
   /** gRPC service/method of the draft — drives the recommendation chip. */
   draftService: string;
   draftMethod: string;
+  draftAddress: string;
   onSave: (args: { collectionId: string; parentId: string | null; name: string }) => Promise<void>;
   onCreateCollection: (name: string) => Promise<string>;
   /** Create a folder; returns its new id. */
@@ -53,7 +54,7 @@ export interface SaveRequestDialogProps {
 }
 
 export function SaveRequestDialog(props: SaveRequestDialogProps) {
-  const { open, onOpenChange, collections, defaultName, onSave, onCreateFolder, onCreateCollection, draftService, draftMethod, originBound, existingLocations } = props;
+  const { open, onOpenChange, collections, defaultName, onSave, onCreateFolder, onCreateCollection, draftService, draftMethod, draftAddress, originBound, existingLocations } = props;
   const [name, setName] = useState(defaultName);
   const [query, setQuery] = useState("");
   const [target, setTarget] = useState<PickTarget | null>(null);
@@ -72,14 +73,14 @@ export function SaveRequestDialog(props: SaveRequestDialogProps) {
       setPendingCollections([]);
       setAddingKind(null);
       setNewName("");
-      setTarget(collections.length > 0 ? { collectionId: collections[0].id, parentId: null } : null);
+      setTarget(defaultPickTarget(collections, draftAddress));
     }
     prevOpenRef.current = open;
-  }, [open, defaultName, collections]);
+  }, [open, defaultName, collections, draftAddress]);
 
   const reco = draftService && draftMethod ? suggestSaveTarget(draftService, draftMethod) : null;
-  const augmented = augmentTree(collections, pendingCollections, pendingFolders);
-  const selectedCollection = target ? augmented.find((c) => c.id === target.collectionId) ?? null : null;
+  const tree = pickerTree(collections, pendingCollections, pendingFolders);
+  const selectedCollection = target ? tree.find((c) => c.id === target.collectionId) ?? null : null;
 
   const selectedNodeName: string = (() => {
     if (!target) return "";
@@ -104,7 +105,7 @@ export function SaveRequestDialog(props: SaveRequestDialogProps) {
       setTarget({ collectionId: colTempId, parentId: folderTempId });
       return;
     }
-    const collection = augmented.find((c) => c.id === target.collectionId);
+    const collection = tree.find((c) => c.id === target.collectionId);
     if (!collection) return;
     // Reuse an existing root folder of the same name.
     const existing = collection.items.find(
@@ -263,7 +264,7 @@ export function SaveRequestDialog(props: SaveRequestDialogProps) {
               onChange={(e) => setQuery(e.target.value)}
             />
 
-            <CollectionPicker collections={augmented} query={query} value={target} onChange={setTarget} />
+            <CollectionPicker collections={tree} query={query} value={target} onChange={setTarget} />
 
             <div className="flex items-center gap-2">
               {addingKind !== null ? (

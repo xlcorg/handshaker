@@ -230,6 +230,10 @@ export function WorkflowApp() {
     draft?.protocol === "http"
       ? httpNameFromPathTail(draft.template)
       : draftMethod;
+  const draftAddress =
+    draft?.protocol === "http"
+      ? draft.template.url_template
+      : (grpcDraft?.address ?? "");
 
   const createFolder = async (
     collectionId: string,
@@ -419,6 +423,7 @@ export function WorkflowApp() {
           defaultName={defaultName}
           draftService={grpcDraft?.service ?? ""}
           draftMethod={draftMethod}
+          draftAddress={draftAddress}
           onSave={handleSave}
           onCreateCollection={cat.createCollection}
           onCreateFolder={createFolder}

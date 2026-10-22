@@ -1,7 +1,8 @@
-import { describe, it, expect, vi } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { SaveRequestDialog } from "./SaveRequestDialog";
 import type { CollectionIpc, ItemIpc } from "@/ipc/bindings";
+import { newId } from "@/lib/ids";
 import { messages } from "@/lib/messages";
 
 function folder(id: string, name: string, items: ItemIpc[] = []): ItemIpc {
@@ -29,8 +30,20 @@ function props(over = {}) {
     onCreateCollection: vi.fn().mockResolvedValue("c-new"),
     onCreateFolder: vi.fn().mockResolvedValue("f-new"),
     existingLocations: [],
+    draftAddress: "",
     ...over,
   };
+}
+
+function treeItemNames(): string[] {
+  return screen.getAllByRole("treeitem").map((row) => row.querySelector("span.truncate")?.textContent ?? "");
+}
+
+function commitNamed(buttonName: RegExp, value: string) {
+  fireEvent.click(screen.getByRole("button", { name: buttonName }));
+  fireEvent.change(screen.getByLabelText("New node name"), { target: { value } });
+  const field = screen.getByLabelText("New node name");
+  fireEvent.click(within(field.parentElement!).getByRole("button", { name: messages.catalog.saveDialog.add }));
 }
 
 describe("SaveRequestDialog — shell", () => {
@@ -266,5 +279,80 @@ describe("SaveRequestDialog — pending materialization order", () => {
       ["c1", null, "Outer"],
       ["c1", "real-outer", "Inner"],
     ]);
+  });
+});
+
+describe("SaveRequestDialog — host pick and folder order", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function hostProps(draftAddress: string) {
+    return props({
+      collections: [col("b1", "billing-api"), col("e1", "edo-api")],
+      draftAddress,
+    });
+  }
+
+  it("pre-selects the collection matching the draft host", async () => {
+    const p = hostProps("edo.api.stg.ru:82");
+    render(<SaveRequestDialog {...p} />);
+    expect(treeItemNames()).toEqual(["billing-api", "edo-api"]);
+    expect(screen.getByText("edo-api", { selector: "span.truncate" }).closest("[role=treeitem]")).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: /New folder in .*edo-api/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: messages.catalog.saveDialog.save }));
+    await waitFor(() =>
+      expect(p.onSave).toHaveBeenCalledWith({ collectionId: "e1", parentId: null, name: "Create" }),
+    );
+  });
+
+  it("matches an HTTP URL template too", async () => {
+    const p = hostProps("https://edo.api.stg.ru/v1/docs");
+    render(<SaveRequestDialog {...p} />);
+    fireEvent.click(screen.getByRole("button", { name: messages.catalog.saveDialog.save }));
+    await waitFor(() =>
+      expect(p.onSave).toHaveBeenCalledWith({ collectionId: "e1", parentId: null, name: "Create" }),
+    );
+  });
+
+  it("the user can still pick another collection", async () => {
+    const p = hostProps("edo.api.stg.ru:82");
+    render(<SaveRequestDialog {...p} />);
+    fireEvent.click(screen.getByText("billing-api", { selector: "span.truncate" }));
+    fireEvent.click(screen.getByRole("button", { name: messages.catalog.saveDialog.save }));
+    await waitFor(() =>
+      expect(p.onSave).toHaveBeenCalledWith({ collectionId: "b1", parentId: null, name: "Create" }),
+    );
+  });
+
+  it("lists folders newest first", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const older = folder(newId(), "Older");
+    vi.setSystemTime(2_000);
+    const newer = folder(newId(), "Newer");
+    vi.useRealTimers();
+    render(<SaveRequestDialog {...props({ collections: [col("c1", "Apis", [older, newer])], draftAddress: "" })} />);
+    expect(treeItemNames()).toEqual(["Apis", "Newer", "Older"]);
+  });
+
+  it("lists a later folder above an earlier one in a new collection and selects it", () => {
+    render(<SaveRequestDialog {...props({ collections: [col("c-other", "Other")], draftAddress: "" })} />);
+    commitNamed(/New collection/, "Fresh");
+    commitNamed(/New folder in .*Fresh/, "First");
+    fireEvent.click(screen.getByText("Fresh", { selector: "span.truncate" }));
+    commitNamed(/New folder in .*Fresh/, "Second");
+
+    const names = treeItemNames();
+    expect(names.indexOf("Fresh")).toBeGreaterThan(names.indexOf("Other"));
+    expect(names.indexOf("Second")).toBeGreaterThan(-1);
+    expect(names.indexOf("Second")).toBeLessThan(names.indexOf("First"));
+    expect(screen.getByText("Second", { selector: "span.truncate" }).closest("[role=treeitem]")).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
   });
 });
