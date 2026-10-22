@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, createEvent, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { createRef } from "react";
+import { createRef, useState } from "react";
 import type { CollectionIpc, ItemIpc } from "@/ipc/bindings";
 import { CollectionTree, type CollectionTreeProps, type CollectionTreeHandle } from "./CollectionTree";
 import { SidebarProvider } from "@/components/ui/sidebar";
@@ -456,6 +456,144 @@ describe("CollectionTree reveals the active request", () => {
       </SidebarProvider>,
     );
     expect(screen.queryByText("deep")).toBeNull(); // stays collapsed — no re-reveal
+  });
+});
+
+describe("CollectionTree reveals the open collection", () => {
+  function spyScroll() {
+    const scrolled: Element[] = [];
+    const spy = vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(function (this: Element) {
+      scrolled.push(this);
+    });
+    return { scrolled, restore: () => spy.mockRestore() };
+  }
+
+  it("opens direct children of the open collection, marks that row, and scrolls it", () => {
+    const onSetExpanded = vi.fn();
+    const scrolled: Element[] = [];
+    let childPresentAtScroll = false;
+    const spy = vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(function (this: Element) {
+      scrolled.push(this);
+      if (this.getAttribute("data-node-id") === "c1") {
+        childPresentAtScroll = this.closest("li")?.querySelector("ul")?.textContent?.includes("r-direct") ?? false;
+      }
+    });
+    try {
+      setup({
+        collections: [col("c1", [req("r-direct"), folder("f1", [req("r-nested")])])],
+        activeCollectionId: "c1",
+        onSetExpanded,
+      });
+      expect(screen.getByText("r-direct")).toBeTruthy();
+      expect(screen.queryByText("r-nested")).toBeNull();
+      const row = document.querySelector('[data-node-id="c1"]');
+      expect(row?.getAttribute("data-active")).toBe("true");
+      expect(childPresentAtScroll).toBe(true);
+      expect(row?.className).toContain("before:bg-sidebar-accent");
+      expect(row?.className).toContain("after:bg-primary");
+      expect(scrolled).toContain(row);
+      expect(onSetExpanded).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("scrolls the collection row when a request in another collection is also active", () => {
+    const { scrolled, restore } = spyScroll();
+    try {
+      const other = { ...col("c-other", [req("r-other")]), expanded: true };
+      setup({
+        collections: [col("c1", [req("r-direct")]), other],
+        activeCollectionId: "c1",
+        activeItemId: "r-other",
+      });
+      const collectionRow = document.querySelector('[data-node-id="c1"]');
+      const requestRow = document.querySelector('[data-node-id="r-other"]');
+      expect(requestRow?.getAttribute("data-active")).toBe("true");
+      expect(scrolled).toContain(collectionRow);
+      expect(scrolled).not.toContain(requestRow);
+    } finally {
+      restore();
+    }
+  });
+
+  it("a later collections reload does not re-expand a collection the user collapsed", () => {
+    const props = () =>
+      makeProps({
+        collections: [col("c1", [req("r-direct")])],
+        activeCollectionId: "c1",
+      });
+    const { rerender } = renderWithSidebar(<CollectionTree {...props()} />);
+    expect(screen.getByText("r-direct")).toBeTruthy();
+
+    fireEvent.click(screen.getByLabelText("toggle-collection"));
+    expect(screen.queryByText("r-direct")).toBeNull();
+
+    rerender(
+      <SidebarProvider>
+        <CollectionTree {...props()} />
+      </SidebarProvider>,
+    );
+    expect(screen.queryByText("r-direct")).toBeNull();
+  });
+
+  it("keeps a seeded open collection open while revealing another on first mount", () => {
+    const c1 = { ...col("c1", [req("r1")]), expanded: true };
+    setup({
+      collections: [c1, col("c2", [req("r2")])],
+      activeCollectionId: "c2",
+    });
+    expect(screen.getByText("r1")).toBeTruthy();
+    expect(screen.getByText("r2")).toBeTruthy();
+  });
+
+  it("reveals a collection that is missing on the first render and present on the second", () => {
+    const onSetExpanded = vi.fn();
+    const first = makeProps({
+      collections: [col("c1", [req("r1")])],
+      activeCollectionId: "c2",
+      onSetExpanded,
+    });
+    const { rerender } = renderWithSidebar(<CollectionTree {...first} />);
+    expect(screen.queryByText("r-child")).toBeNull();
+
+    rerender(
+      <SidebarProvider>
+        <CollectionTree {...first} collections={[col("c1", [req("r1")]), col("c2", [req("r-child")])]} />
+      </SidebarProvider>,
+    );
+    expect(screen.getByText("r-child")).toBeTruthy();
+    expect(onSetExpanded).not.toHaveBeenCalled();
+  });
+
+  it("a name click marks and scrolls the collection the same way the palette does", () => {
+    const { scrolled, restore } = spyScroll();
+    function Harness() {
+      const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null);
+      return (
+        <CollectionTree
+          {...makeProps({
+            collections: [col("c1", [req("r1")]), col("c2", [req("r2")])],
+            activeCollectionId,
+            onOpenCollection: setActiveCollectionId,
+          })}
+        />
+      );
+    }
+    try {
+      renderWithSidebar(<Harness />);
+      expect(screen.queryByText("r2")).toBeNull();
+      const open = document.querySelector('[data-node-id="c2"] [aria-label="open-collection"]');
+      fireEvent.click(open!);
+      expect(screen.getByText("r2")).toBeTruthy();
+      const row = document.querySelector('[data-node-id="c2"]');
+      expect(row?.getAttribute("data-active")).toBe("true");
+      expect(row?.className).toContain("before:bg-sidebar-accent");
+      expect(row?.className).toContain("after:bg-primary");
+      expect(scrolled).toContain(row);
+    } finally {
+      restore();
+    }
   });
 });
 

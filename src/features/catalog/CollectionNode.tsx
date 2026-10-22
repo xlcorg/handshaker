@@ -7,7 +7,7 @@ import { RenameInput } from "./RenameInput";
 import { PinButton } from "./PinButton";
 import { FolderNode } from "./FolderNode";
 import { RequestRow } from "./RequestRow";
-import { bleedStyle } from "./bleed";
+import { bleedStyle, selectedRowClass } from "./bleed";
 import type { TreeCallbacks } from "./treeTypes";
 import { messages } from "@/lib/messages";
 
@@ -56,6 +56,7 @@ export function CollectionNode({ col, cb }: CollectionNodeProps) {
       <RowMenu items={items}>
         <div
           data-node-id={col.id}
+          data-active={overviewActive || undefined}
           data-drop={hint ?? undefined}
           onDragOver={(e) => {
             e.preventDefault();
@@ -71,6 +72,7 @@ export function CollectionNode({ col, cb }: CollectionNodeProps) {
             "group relative isolate flex items-center gap-1 pr-8 pl-1.5 text-xs font-medium",
             "before:pointer-events-none before:absolute before:inset-y-0 before:left-[var(--bl)] before:right-[var(--br)] before:-z-10 before:rounded-md before:content-['']",
             "hover:before:bg-sidebar-accent/50",
+            overviewActive && selectedRowClass,
             focused && "ring-1 ring-inset ring-ring",
             hint === "inside" && "bg-primary/10",
           )}
