@@ -7,11 +7,7 @@ import { DraftAddressBar, type TwoWayControls } from "./DraftAddressBar";
 import { useContractRead } from "./useContractRead";
 import { useEffectiveAuth } from "./useEffectiveAuth";
 import { RequestTabs } from "./RequestTabs";
-import {
-  applyMethodSelection,
-  resetBodyToTemplate,
-  varsResolverFor,
-} from "./actions";
+import { resetBodyToTemplate, varsResolverFor } from "./actions";
 import { useCatalog } from "@/features/catalog/CatalogProvider";
 import { cancelCall, halfCloseStream, recordedDispatch, sendStreamMessage } from "./callLifecycle";
 import { StreamView } from "@/features/stream/StreamView";
@@ -20,7 +16,7 @@ import {
   useStreamEntry,
   type StreamEntry,
 } from "@/features/stream/streamStore";
-import { workflowStore } from "./store";
+import type { SelectedMethod } from "@/features/shell/SelectedMethod";
 import type { DraftOrigin } from "./store";
 import { useSendHotkey } from "./useSendHotkey";
 import { FocusSplit } from "./FocusSplit";
@@ -44,13 +40,7 @@ interface CallPanelProps {
   /** `default_tls` of the draft's origin collection — what a null (inherit) TLS override
    *  resolves to at Send/probe time. Unbound draft (no origin) ⇒ false. */
   originDefaultTls?: boolean;
-  /** Origin-bound only: a method was just picked. (prev, next) carry the service/method
-   *  before and after the switch — lets the owner auto-rename the saved request when its
-   *  name still tracks the old method. */
-  onMethodSelected?: (
-    prev: { service: string; method: string },
-    next: { service: string; method: string },
-  ) => void;
+  onSelectMethod: (method: SelectedMethod) => void;
   /** Bound draft only. Credits that saved request with one execution. */
   origin?: DraftOrigin | null;
 }
@@ -61,7 +51,7 @@ export function CallPanel({
   onQuickAddMethod,
   originVars,
   originDefaultTls,
-  onMethodSelected,
+  onSelectMethod,
   origin,
 }: CallPanelProps) {
   const activeWf = useActiveWorkflow();
@@ -190,28 +180,7 @@ export function CallPanel({
       defaultTls={originDefaultTls ?? false}
       onRefresh={refreshContract}
       onReflectCancel={reflection.cancel}
-      onSelectMethod={(m) => {
-        // Snapshot the pre-switch method BEFORE applyMethodSelection patches the draft,
-        // so the owner can decide whether the saved name still tracked it.
-        const prev = { service: step.service, method: step.method };
-        void applyMethodSelection(
-          onPatch,
-          {
-            address: step.address,
-            tls: step.tls,
-            collectionId: step.collectionId,
-            envName: activeWf.envName,
-          },
-          {
-            requestJson: step.requestJson,
-            service: step.service,
-            method: step.method,
-          },
-          m,
-          workflowStore.activeWorkflow().steps,
-        );
-        onMethodSelected?.(prev, { service: m.service, method: m.method });
-      }}
+      onSelectMethod={onSelectMethod}
       onSend={send}
       onCancel={cancel}
       twoWay={twoWay}

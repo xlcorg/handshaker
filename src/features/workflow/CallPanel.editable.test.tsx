@@ -116,13 +116,13 @@ beforeEach(() => {
 
 describe("CallPanel", () => {
   it("renders the draft address header", async () => {
-    await renderPanel(<CallPanel step={draft} onPatch={() => {}} />);
+    await renderPanel(<CallPanel step={draft} onPatch={() => {}} onSelectMethod={() => {}} />);
     expect(screen.getByLabelText("draft-address")).toBeTruthy();
   });
 
   it("toggles TLS through onPatch from the draft header", async () => {
     const onPatch = vi.fn();
-    await renderPanel(<CallPanel step={draft} onPatch={onPatch} />);
+    await renderPanel(<CallPanel step={draft} onPatch={onPatch} onSelectMethod={() => {}} />);
     // draft.tls === true (explicit on) → lock shows "TLS on"; clicking cycles to off
     fireEvent.click(screen.getByLabelText("TLS on"));
     expect(onPatch).toHaveBeenCalledWith({ tls: false });
@@ -130,7 +130,7 @@ describe("CallPanel", () => {
 
   it("Ctrl+Enter sends the draft (sets status: sending)", async () => {
     workflowStore.setDraft(draft);
-    await renderPanel(<CallPanel step={draft} onPatch={() => {}} />);
+    await renderPanel(<CallPanel step={draft} onPatch={() => {}} onSelectMethod={() => {}} />);
     fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
     // The first effect of send is to mark the step as sending.
     expect(workflowStore.getState().draft).toMatchObject({ status: "sending" });
@@ -140,7 +140,7 @@ describe("CallPanel", () => {
 
   it("Ctrl+R also sends the draft (physical-key, layout-independent)", async () => {
     workflowStore.setDraft(draft);
-    await renderPanel(<CallPanel step={draft} onPatch={() => {}} />);
+    await renderPanel(<CallPanel step={draft} onPatch={() => {}} onSelectMethod={() => {}} />);
     fireEvent.keyDown(window, { code: "KeyR", key: "r", ctrlKey: true });
     expect(workflowStore.getState().draft).toMatchObject({ status: "sending" });
     // The send itself is async — let it settle inside act.
@@ -150,7 +150,7 @@ describe("CallPanel", () => {
   it("does not start a second send when already sending (button stays Send pre-gate)", async () => {
     const onPatch = vi.fn();
     const sendingStep = { ...draft, status: "sending" as const };
-    await renderPanel(<CallPanel step={sendingStep} onPatch={onPatch} />);
+    await renderPanel(<CallPanel step={sendingStep} onPatch={onPatch} onSelectMethod={() => {}} />);
     // Pre-gate the action button still reads "Send"; clicking it must be a no-op.
     fireEvent.click(screen.getByRole("button", { name: /send/i }));
     expect(onPatch).not.toHaveBeenCalled();
@@ -159,7 +159,7 @@ describe("CallPanel", () => {
 
 describe("CallPanel contract tab", () => {
   it("shows the Contract tab", async () => {
-    await renderPanel(<CallPanel step={draft} onPatch={() => {}} />);
+    await renderPanel(<CallPanel step={draft} onPatch={() => {}} onSelectMethod={() => {}} />);
     fireEvent.click(screen.getByRole("tab", { name: "Contract" }));
     // schema fetch is mocked away → both sides null → placeholder text
     expect(screen.getByText(messages.contract.unavailable)).toBeInTheDocument();
@@ -201,7 +201,7 @@ describe("CallPanel contract tab", () => {
       service: "p.v1.S",
       method: "GetSides",
     });
-    await renderPanel(<CallPanel step={sideDraft} onPatch={() => {}} />);
+    await renderPanel(<CallPanel step={sideDraft} onPatch={() => {}} onSelectMethod={() => {}} />);
     // The panel defaults to Body; open the Contract tab explicitly. Schemas
     // resolve async — the tab then lists both sides at once.
     fireEvent.click(screen.getByRole("tab", { name: "Contract" }));
@@ -231,7 +231,7 @@ describe("CallPanel method kind (derived live from the catalog)", () => {
       output_schema: { root: "t.M", messages: [], enums: [] },
       skeleton: "{}",
     }));
-    await renderPanel(<CallPanel step={draft} onPatch={() => {}} />);
+    await renderPanel(<CallPanel step={draft} onPatch={() => {}} onSelectMethod={() => {}} />);
     // Reflection is debounced: before the catalog lands the kind is unknown → no badge.
     expect(screen.queryByText(messages.methodKind.badge.server)).toBeNull();
     expect(
@@ -261,7 +261,7 @@ describe("CallPanel method kind (derived live from the catalog)", () => {
       service: "p.v1.S",
       method: "Watch",
     });
-    await renderPanel(<CallPanel step={watch} onPatch={() => {}} />);
+    await renderPanel(<CallPanel step={watch} onPatch={() => {}} onSelectMethod={() => {}} />);
     fireEvent.click(screen.getByRole("tab", { name: "Contract" }));
     await waitFor(
       () => {
@@ -299,7 +299,7 @@ describe("CallPanel reflection refresh", () => {
       service: "p.v1.S",
       method: "WireRefresh",
     });
-    await renderPanel(<CallPanel step={wireDraft} onPatch={() => {}} />);
+    await renderPanel(<CallPanel step={wireDraft} onPatch={() => {}} onSelectMethod={() => {}} />);
     await waitFor(() => expect(grpcContractRead).toHaveBeenCalled());
     const reads = () => vi.mocked(grpcContractRead).mock.calls.length;
     const before = reads();
@@ -372,7 +372,7 @@ describe("CallPanel collection-auth inheritance (auth_effective)", () => {
       service: "p.v1.S",
       method: "GetInherit",
     });
-    await renderPanel(<CallPanel step={inheritDraft} onPatch={() => {}} />);
+    await renderPanel(<CallPanel step={inheritDraft} onPatch={() => {}} onSelectMethod={() => {}} />);
     // Wait for the async effective-auth fetch to resolve (Auth tab display).
     await waitFor(() => expect(authEffective).toHaveBeenCalled());
     fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
@@ -398,7 +398,7 @@ describe("CallPanel collection-auth inheritance (auth_effective)", () => {
       service: "p.v1.S",
       method: "GetAuthTab",
     });
-    await renderPanel(<CallPanel step={inheritDraft} onPatch={() => {}} />);
+    await renderPanel(<CallPanel step={inheritDraft} onPatch={() => {}} onSelectMethod={() => {}} />);
     fireEvent.click(screen.getByRole("tab", { name: "Auth" }));
     await waitFor(() =>
       expect(screen.getByText(/oauth2_client_credentials/)).toBeInTheDocument(),

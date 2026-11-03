@@ -139,7 +139,7 @@ afterEach(() => {
 describe("controls-kind precedence", () => {
   it("with no catalog and a previously executed client call, the draft shows Open and opens as client", async () => {
     const step = streamSnapshot("client");
-    await renderPanel(<CallPanel step={step} onPatch={vi.fn()} />);
+    await renderPanel(<CallPanel step={step} onPatch={vi.fn()} onSelectMethod={() => {}} />);
     expect(screen.getByRole("button", { name: m.open })).toBeInTheDocument();
     expect(
       screen.getByText(messages.methodKind.badge.client),
@@ -165,7 +165,7 @@ describe("controls-kind precedence", () => {
       streamId: "rid",
     };
     vi.useFakeTimers();
-    await renderPanel(<CallPanel step={live} onPatch={vi.fn()} />);
+    await renderPanel(<CallPanel step={live} onPatch={vi.fn()} onSelectMethod={() => {}} />);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1500);
     });
@@ -183,7 +183,7 @@ describe("controls-kind precedence", () => {
   it("after the call ends the catalog kind wins again over the executed kind", async () => {
     serveCatalog(catalogWith("M", false, true));
     const step = streamSnapshot("client");
-    await renderPanel(<CallPanel step={step} onPatch={vi.fn()} />);
+    await renderPanel(<CallPanel step={step} onPatch={vi.fn()} onSelectMethod={() => {}} />);
     await screen.findByText(
       messages.methodKind.badge.server,
       {},

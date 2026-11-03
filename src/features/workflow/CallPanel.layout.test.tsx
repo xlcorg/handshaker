@@ -61,7 +61,7 @@ beforeEach(() => {
 describe("CallPanel body layout", () => {
   it("renders a resizable group with request + response panels and a handle", async () => {
     const { container } = await renderCallPanel(
-      <CallPanel step={draft} onPatch={() => {}} />,
+      <CallPanel step={draft} onPatch={() => {}} onSelectMethod={() => {}} />,
     );
     expect(
       container.querySelector('[data-slot="resizable-panel-group"]'),
@@ -81,7 +81,7 @@ describe("CallPanel body layout", () => {
   // internally via min-h-0 + scroll-thin regions).
   it("clips each panel's content horizontally so a narrowed panel can't show a native scrollbar", async () => {
     const { container } = await renderCallPanel(
-      <CallPanel step={draft} onPatch={() => {}} />,
+      <CallPanel step={draft} onPatch={() => {}} onSelectMethod={() => {}} />,
     );
     const panels = container.querySelectorAll('[data-slot="resizable-panel"]');
     expect(panels.length).toBe(2);
@@ -96,7 +96,7 @@ describe("CallPanel body layout", () => {
   // NOT via aria-orientation/data-orientation (verified against the installed fork).
   it("maps split='vertical' (Left/Right) to a row-direction (horizontal) group", async () => {
     const { container } = await renderCallPanel(
-      <CallPanel step={draft} onPatch={() => {}} />,
+      <CallPanel step={draft} onPatch={() => {}} onSelectMethod={() => {}} />,
     );
     const group = container.querySelector(
       '[data-slot="resizable-panel-group"]',
@@ -107,7 +107,7 @@ describe("CallPanel body layout", () => {
   it("maps split='horizontal' (Top/Bottom) to a column-direction (vertical) group", async () => {
     h.split = "horizontal";
     const { container } = await renderCallPanel(
-      <CallPanel step={draft} onPatch={() => {}} />,
+      <CallPanel step={draft} onPatch={() => {}} onSelectMethod={() => {}} />,
     );
     const group = container.querySelector(
       '[data-slot="resizable-panel-group"]',
