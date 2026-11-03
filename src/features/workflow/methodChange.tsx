@@ -150,8 +150,6 @@ export function useMethodChange({
     setView(next);
   }
 
-  // The question is only for this saved call at `from`. Drop it without
-  // patching the draft, and leave a commit that is already in flight alone.
   if (
     gate.current.phase === "asking" &&
     !draftStillAt(draft, origin, gate.current.intent)
@@ -190,7 +188,6 @@ export function useMethodChange({
   function onSelectMethod(selected: SelectedMethod) {
     const { draft: live, draftOrigin } = workflowStore.getState();
     if (live?.protocol !== "grpc") return;
-    // The open question keeps its first method. A later click must not retarget it.
     if (gate.current.phase !== "idle") return;
     const to = { service: selected.service, method: selected.method };
     if (draftOrigin === null || sameMethod(live, to)) {
@@ -241,7 +238,6 @@ export function useMethodChange({
   }
 
   function cancelAsking() {
-    // Confirm also closes the dialog. Only an open question is a cancel.
     if (gate.current.phase !== "asking") return;
     writeGate(idle);
   }
