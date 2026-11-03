@@ -14,6 +14,19 @@ export const messages = {
       duplicateRequest: "Duplicate request",
       duplicatedAs: (name: string) => `Duplicated as "${name}"`,
     },
+    methodChange: {
+      title: "Change method?",
+      body: (
+        fromService: string,
+        fromMethod: string,
+        toService: string,
+        toMethod: string,
+      ) =>
+        `${fromService} / ${fromMethod} is saved. Create a new request for ${toService} / ${toMethod}, or change this request.`,
+      cancel: "Cancel",
+      create: "Create new",
+      change: "Change current",
+    },
     draft: {
       newRequest: "New request",
       savedRequestFallback: "Saved request",

@@ -111,7 +111,7 @@ describe("CallPanel picks the call by the derived kind", () => {
       method: "Watch",
     });
     workflowStore.setDraft(step);
-    await renderPanel(<CallPanel step={step} onPatch={() => {}} />);
+    await renderPanel(<CallPanel step={step} onPatch={() => {}} onSelectMethod={() => {}} />);
     await screen.findByText(
       messages.methodKind.badge.server,
       {},
@@ -135,7 +135,7 @@ describe("CallPanel picks the call by the derived kind", () => {
   it("unknown kind (no catalog): Send takes the unary path", async () => {
     const step = { ...newStep({ address: "h:443", tls: true, service: "p.v1.S", method: "GetX" }), streamId: "stale" };
     workflowStore.setDraft(step);
-    await renderPanel(<CallPanel step={step} onPatch={() => {}} />);
+    await renderPanel(<CallPanel step={step} onPatch={() => {}} onSelectMethod={() => {}} />);
     fireEvent.click(screen.getByRole("button", { name: /send/i }));
     await act(async () => {});
     expect(api.grpcSend).toHaveBeenCalledTimes(1);
@@ -176,7 +176,7 @@ describe("CallPanel picks the call by the derived kind", () => {
       const current = workflowStore.getState().draft;
       if (current?.protocol === "grpc" && current.id === step.id) statuses.push(current.status);
     });
-    await renderPanel(<CallPanel step={step} onPatch={() => {}} />);
+    await renderPanel(<CallPanel step={step} onPatch={() => {}} onSelectMethod={() => {}} />);
 
     fireEvent.click(screen.getByRole("button", { name: /send/i }));
     await act(async () => {});
@@ -207,7 +207,7 @@ describe("CallPanel picks the call by the derived kind", () => {
     if (!live || live.protocol !== "grpc") throw new Error("expected the opened draft");
     const rid = live.requestId!;
     vi.useFakeTimers();
-    await renderPanel(<CallPanel step={live} onPatch={() => {}} />);
+    await renderPanel(<CallPanel step={live} onPatch={() => {}} onSelectMethod={() => {}} />);
     expect(screen.getByRole("button", { name: /send/i })).toBeInTheDocument();
     act(() => {
       vi.advanceTimersByTime(250);
@@ -241,7 +241,7 @@ describe("CallPanel send hotkeys around a server stream", () => {
       streamId: "rid",
     };
     const onPatch = vi.fn();
-    await renderPanel(<CallPanel step={live} onPatch={onPatch} />);
+    await renderPanel(<CallPanel step={live} onPatch={onPatch} onSelectMethod={() => {}} />);
 
     fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
     fireEvent.keyDown(window, { key: "Enter", metaKey: true });
@@ -275,7 +275,7 @@ describe("CallPanel send hotkeys around a server stream", () => {
       streamId: "old",
     };
     workflowStore.setDraft(ended);
-    await renderPanel(<CallPanel step={ended} onPatch={() => {}} />);
+    await renderPanel(<CallPanel step={ended} onPatch={() => {}} onSelectMethod={() => {}} />);
     await screen.findByText(
       messages.methodKind.badge.server,
       {},
@@ -301,7 +301,7 @@ describe("CallPanel send hotkeys around a server stream", () => {
       streamId: null,
     };
     workflowStore.setDraft(cancelled);
-    await renderPanel(<CallPanel step={cancelled} onPatch={() => {}} />);
+    await renderPanel(<CallPanel step={cancelled} onPatch={() => {}} onSelectMethod={() => {}} />);
     await screen.findByText(
       messages.methodKind.badge.server,
       {},
@@ -330,7 +330,7 @@ describe("CallPanel response slot", () => {
       requestId: "rid",
       streamId: "rid",
     };
-    await renderPanel(<CallPanel step={step} onPatch={() => {}} />);
+    await renderPanel(<CallPanel step={step} onPatch={() => {}} onSelectMethod={() => {}} />);
     expect(
       screen.getByRole("tab", { name: messages.stream.tabs.messages }),
     ).toBeInTheDocument();
@@ -363,7 +363,7 @@ describe("CallPanel response slot", () => {
         message: "Request timed out after 30000ms",
       },
     };
-    await renderPanel(<CallPanel step={step} onPatch={() => {}} />);
+    await renderPanel(<CallPanel step={step} onPatch={() => {}} onSelectMethod={() => {}} />);
     // The existing face: title + hint from the fault kind, Body tab; no stream footer.
     expect(screen.getByText("Request timed out")).toBeInTheDocument();
     expect(screen.getByTestId("diag-hint")).toBeInTheDocument();
@@ -383,7 +383,7 @@ describe("CallPanel response slot", () => {
       service: "p.v1.S",
       method: "GetX",
     });
-    await renderPanel(<CallPanel step={step} onPatch={() => {}} />);
+    await renderPanel(<CallPanel step={step} onPatch={() => {}} onSelectMethod={() => {}} />);
     expect(
       screen.getByRole("tab", { name: messages.response.tabs.body }),
     ).toBeInTheDocument();
@@ -421,7 +421,7 @@ describe("CallPanel two-way (client / bidi) calls", () => {
       serveCatalog(catalogWith("Chat", true, kind === "bidi"));
       const step = bidiStep();
       workflowStore.setDraft(step);
-      await renderPanel(<CallPanel step={step} onPatch={() => {}} />);
+      await renderPanel(<CallPanel step={step} onPatch={() => {}} onSelectMethod={() => {}} />);
       await screen.findByText(
         messages.methodKind.badge[kind],
         {},
@@ -453,7 +453,7 @@ describe("CallPanel two-way (client / bidi) calls", () => {
       collectionId: "c1",
     };
     vi.useFakeTimers();
-    await renderPanel(<CallPanel step={live} onPatch={vi.fn()} />);
+    await renderPanel(<CallPanel step={live} onPatch={vi.fn()} onSelectMethod={() => {}} />);
     act(() => {
       vi.advanceTimersByTime(250);
     });
@@ -491,7 +491,7 @@ describe("CallPanel two-way (client / bidi) calls", () => {
       streamId: "rid",
     };
     vi.useFakeTimers();
-    await renderPanel(<CallPanel step={live} onPatch={vi.fn()} />);
+    await renderPanel(<CallPanel step={live} onPatch={vi.fn()} onSelectMethod={() => {}} />);
     act(() => {
       vi.advanceTimersByTime(250);
     });
@@ -516,7 +516,7 @@ describe("CallPanel two-way (client / bidi) calls", () => {
       streamId: "rid",
     };
     const onPatch = vi.fn();
-    await renderPanel(<CallPanel step={live} onPatch={onPatch} />);
+    await renderPanel(<CallPanel step={live} onPatch={onPatch} onSelectMethod={() => {}} />);
 
     fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
     await act(async () => {});
@@ -546,7 +546,7 @@ describe("CallPanel two-way (client / bidi) calls", () => {
       requestId: "rid",
       streamId: "rid",
     };
-    await renderPanel(<CallPanel step={live} onPatch={vi.fn()} />);
+    await renderPanel(<CallPanel step={live} onPatch={vi.fn()} onSelectMethod={() => {}} />);
 
     fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
     await act(async () => {});
@@ -558,7 +558,7 @@ describe("CallPanel two-way (client / bidi) calls", () => {
 
   it("Ctrl+Enter on an idle bidi method = Open", async () => {
     serveCatalog(catalogWith("Chat", true, true));
-    await renderPanel(<CallPanel step={bidiStep()} onPatch={vi.fn()} />);
+    await renderPanel(<CallPanel step={bidiStep()} onPatch={vi.fn()} onSelectMethod={() => {}} />);
     await screen.findByText(
       messages.methodKind.badge.bidi,
       {},
@@ -588,7 +588,7 @@ describe("CallPanel two-way (client / bidi) calls", () => {
       streamId: "rid",
     };
     const onPatch = vi.fn();
-    await renderPanel(<CallPanel step={live} onPatch={onPatch} />);
+    await renderPanel(<CallPanel step={live} onPatch={onPatch} onSelectMethod={() => {}} />);
 
     fireEvent.keyDown(window, { key: "Enter", ctrlKey: true });
     await act(async () => {});

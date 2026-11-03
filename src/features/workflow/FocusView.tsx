@@ -14,6 +14,7 @@ import { openSavedRequest } from "@/features/catalog/actions";
 import { patchUiState } from "@/features/catalog/uiState";
 import { findSavedRequest } from "@/features/catalog/treeNav";
 import { isAutoName, suggestSaveTarget } from "@/features/catalog/grouping";
+import { useMethodChange } from "./methodChange";
 import { Tooltip } from "@/components/ui/tooltip";
 import type { Step } from "./model";
 import { compactFocusRing } from "@/lib/focusRing";
@@ -33,7 +34,7 @@ export function FocusView({
   const draft = useDraft();
   const origin = useDraftOrigin();
   const dirty = useDraftDirty();
-  const { tree, duplicateItem, renameItem } = useCatalog();
+  const { tree, duplicateItem, renameItem, addItem } = useCatalog();
 
   // Origin-bound drafts autosave, so duplicating never loses edits — no discard guard.
   async function duplicate() {
@@ -64,6 +65,20 @@ export function FocusView({
       () => {},
     );
   };
+
+  const { onSelectMethod, dialog } = useMethodChange({
+    draft,
+    origin,
+    currentTree: () => tree,
+    addItem,
+    openSaved: (collectionId, saved) => {
+      openSavedRequest(collectionId, saved);
+      void patchUiState({
+        active_request: { collection_id: collectionId, item_id: saved.id },
+      });
+    },
+    onMethodSelected: handleMethodSelected,
+  });
 
   const originVars = origin
     ? tree.find((c) => c.id === origin.collectionId)?.variables
@@ -148,7 +163,7 @@ export function FocusView({
             // draft has no target collection, so the «+» is hidden rather than silently
             // landing the method in some arbitrary collection.
             onQuickAddMethod={origin ? onQuickAddMethod : undefined}
-            onMethodSelected={origin ? handleMethodSelected : undefined}
+            onSelectMethod={onSelectMethod}
             originVars={originVars}
             originDefaultTls={originDefaultTls}
             origin={origin}
@@ -159,6 +174,7 @@ export function FocusView({
           </div>
         )}
       </div>
+      {dialog}
     </div>
   );
 }
