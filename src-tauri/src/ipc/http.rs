@@ -1,5 +1,6 @@
 //! Plain HTTP DTOs.
 
+use handshaker_core::auth::RequestAuth;
 use handshaker_core::collections::HttpTemplate;
 use handshaker_core::http::{
     HeaderRow, HttpBody, HttpMethod, HttpResponse, ResponseBody, UrlProblem,
@@ -81,6 +82,31 @@ impl HttpBodyIpc {
     }
 }
 
+/// HTTP request auth over IPC. File `{ "kind": "none" }` is `Inherit`. File
+/// `{ "kind": "off" }` is `Override` of `{ "kind": "none" }`. React never sees `off`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum RequestAuthIpc {
+    Inherit,
+    Override { config: SavedAuthConfigIpc },
+}
+
+impl RequestAuthIpc {
+    pub fn from_core(auth: RequestAuth) -> Self {
+        match auth {
+            RequestAuth::Inherit => Self::Inherit,
+            RequestAuth::Override(config) => Self::Override { config: SavedAuthConfigIpc::from_core(config) },
+        }
+    }
+
+    pub fn into_core(self) -> RequestAuth {
+        match self {
+            Self::Inherit => RequestAuth::Inherit,
+            Self::Override { config } => RequestAuth::Override(config.into_core()),
+        }
+    }
+}
+
 /// The HTTP request as authored: `{{var}}` intact, disabled and keyless rows included.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 pub struct HttpTemplateIpc {
@@ -89,7 +115,7 @@ pub struct HttpTemplateIpc {
     pub query: Vec<MetadataRowIpc>,
     pub headers: Vec<MetadataRowIpc>,
     pub body: HttpBodyIpc,
-    pub auth: SavedAuthConfigIpc,
+    pub auth: RequestAuthIpc,
 }
 
 impl HttpTemplateIpc {
@@ -104,7 +130,7 @@ impl HttpTemplateIpc {
                 .map(MetadataRowIpc::from_core)
                 .collect(),
             body: HttpBodyIpc::from_core(t.body),
-            auth: SavedAuthConfigIpc::from_core(t.auth),
+            auth: RequestAuthIpc::from_core(t.auth),
         }
     }
 
@@ -238,6 +264,24 @@ impl HttpSendReportIpc {
 
 fn saturate_u32(v: u64) -> u32 {
     v.min(u64::from(u32::MAX)) as u32
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn file_none_is_inherit_and_file_off_is_an_override() {
+        let inherit = RequestAuthIpc::Inherit;
+        let core = inherit.clone().into_core();
+        assert_eq!(serde_json::to_value(&core).unwrap(), serde_json::json!({ "kind": "none" }));
+        assert_eq!(RequestAuthIpc::from_core(core), inherit);
+
+        let off = RequestAuthIpc::Override { config: SavedAuthConfigIpc::None };
+        let core = off.clone().into_core();
+        assert_eq!(serde_json::to_value(&core).unwrap(), serde_json::json!({ "kind": "off" }));
+        assert_eq!(RequestAuthIpc::from_core(core), off);
+    }
 }
 
 /// Why a resolved URL cannot be sent. Never carries the URL: it can hold secrets.

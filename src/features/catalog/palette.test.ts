@@ -8,7 +8,7 @@ const httpTemplate: HttpTemplateIpc = {
   query: [],
   headers: [],
   body: { kind: "none" },
-  auth: { kind: "none" },
+  auth: { kind: "inherit" },
 };
 
 function req(id: string, name: string, template: Partial<GrpcTemplateIpc> = {}): ItemIpc {

@@ -367,7 +367,7 @@ pub(crate) mod tests {
 
     use super::*;
     use crate::auth::{
-        AuthCredentials, OAuth2ClientCredentialsConfig, SavedAuthConfig, StaticTokenSource,
+        AuthCredentials, OAuth2ClientCredentialsConfig, RequestAuth, SavedAuthConfig, StaticTokenSource,
     };
     use crate::grpc::testing::{fixture_cached_contract, FakeTransport};
     use crate::grpc::{ContractKey, InMemoryContractCache};
@@ -983,6 +983,10 @@ pub(crate) mod tests {
         }
 
         fn order(auth: SavedAuthConfig) -> HttpTemplate {
+            let auth = match auth {
+                SavedAuthConfig::None => RequestAuth::Inherit,
+                other => RequestAuth::Override(other),
+            };
             HttpTemplate {
                 method: HttpMethod::Post,
                 url_template: "https://api.test/orders".into(),

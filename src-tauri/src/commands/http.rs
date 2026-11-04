@@ -102,7 +102,7 @@ mod tests {
             ],
             "headers": [{ "key": "x-trace", "value": "t1", "enabled": true }],
             "body": { "kind": "json", "text": "{\"sku\":\"A1\"}" },
-            "auth": { "kind": "none" },
+            "auth": { "kind": "inherit" },
         }))
         .expect("the frontend's wire shape parses")
     }

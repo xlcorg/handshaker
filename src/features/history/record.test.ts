@@ -105,7 +105,7 @@ describe("buildHttpRecord", () => {
       query: [{ key: "off", value: "1", enabled: false }],
       headers: [],
       body: { kind: "text", text: "hi {{name}}" },
-      auth: { kind: "none" },
+      auth: { kind: "inherit" },
     },
   });
 
@@ -129,7 +129,7 @@ describe("buildHttpRecord", () => {
           query: [{ key: "off", value: "1", enabled: false }],
           headers: [],
           body: { kind: "text", text: "hi {{name}}" },
-          auth: { kind: "none" },
+          auth: { kind: "inherit" },
         },
         outcome: { type: "response", response },
       },

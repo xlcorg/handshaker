@@ -33,7 +33,7 @@ export const EMPTY_HTTP_TEMPLATE: HttpTemplateIpc = {
   query: [],
   headers: [],
   body: { kind: "none" },
-  auth: { kind: "none" },
+  auth: { kind: "inherit" },
 };
 
 export function newHttpStep(

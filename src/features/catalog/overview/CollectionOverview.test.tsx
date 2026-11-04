@@ -111,7 +111,7 @@ describe("CollectionOverview", () => {
     // microtask settle inside act() before asserting.
     await act(async () => {});
     fireEvent.click(screen.getByText("Bearer"));
-    expect(ipc.collectionSetNodeAuth).toHaveBeenCalledWith("c1", null, {
+    expect(ipc.collectionSetNodeAuth).toHaveBeenCalledWith("c1", {
       kind: "env_var", env_var: "", header_name: "authorization", prefix: "Bearer ",
       environments: [],
     });

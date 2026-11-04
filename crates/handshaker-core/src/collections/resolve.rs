@@ -11,7 +11,7 @@ use std::collections::HashMap;
 
 use crate::auth::oauth2::TokenResponse;
 use crate::auth::{
-    materialize_env_var, pick_auth_config, AuthCredentials, OAuth2ClientCredentialsConfig, SavedAuthConfig,
+    materialize_env_var, pick_auth_config, AuthCredentials, OAuth2ClientCredentialsConfig, RequestAuth, SavedAuthConfig,
     TokenSource,
 };
 use crate::env::Environment;
@@ -71,7 +71,7 @@ impl<'a> Resolution<'a> {
     /// Request then collection, env-gated. An OAuth2 pick's token_url, client_id,
     /// client_secret and scopes resolve into this accumulator, so an unresolved one is
     /// reported alongside the request's own vars.
-    pub(crate) fn pick_auth(&mut self, request_auth: &SavedAuthConfig) -> AuthPick {
+    pub(crate) fn pick_auth(&mut self, request_auth: &RequestAuth) -> AuthPick {
         let collection_auth = self.collection.map(|c| &c.auth);
         let picked =
             pick_auth_config(request_auth, collection_auth, self.active_env.map(|e| e.name.as_str())).cloned();
@@ -257,7 +257,8 @@ async fn resolve_request_scoped(
     let address = r.take(&request.address_template);
     let body = with_body.then(|| r.take(&request.body_template));
     let metadata = r.rows(&request.metadata);
-    let pick = r.pick_auth(&request.auth);
+    let request_auth = RequestAuth::from_grpc(&request.auth);
+    let pick = r.pick_auth(&request_auth);
     let mut s = r.settle()?;
 
     let tls = request.tls_override.unwrap_or(s.default_tls());

@@ -63,7 +63,7 @@ const httpTemplate: HttpTemplateIpc = {
   query: [{ key: "dry", value: "1", enabled: false }],
   headers: [{ key: "x-tenant", value: "acme", enabled: true }],
   body: { kind: "form", fields: [{ key: "name", value: "a", enabled: true }] },
-  auth: { kind: "env_var", env_var: "TOK", header_name: "authorization", prefix: "Bearer " },
+  auth: { kind: "override", config: { kind: "env_var", env_var: "TOK", header_name: "authorization", prefix: "Bearer " } },
 };
 
 describe("HTTP templates", () => {
@@ -75,7 +75,7 @@ describe("HTTP templates", () => {
       query: [{ key: "dry", value: "1", enabled: false }],
       headers: [{ key: "x-tenant", value: "acme", enabled: true }],
       body: { kind: "form", fields: [{ key: "name", value: "a", enabled: true }] },
-      auth: { kind: "env_var", env_var: "TOK", header_name: "authorization", prefix: "Bearer " },
+      auth: { kind: "override", config: { kind: "env_var", env_var: "TOK", header_name: "authorization", prefix: "Bearer " } },
     });
   });
 

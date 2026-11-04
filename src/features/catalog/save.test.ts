@@ -48,7 +48,7 @@ describe("HTTP drafts", () => {
         query: [],
         headers: [{ key: "accept", value: "application/json", enabled: true }],
         body: { kind: "json", text: '{"name":"a"}' },
-        auth: { kind: "none" },
+        auth: { kind: "inherit" },
       },
     }),
     run: { status: "error", error: { kind: "refused", message: "x" } },
@@ -60,7 +60,7 @@ describe("HTTP drafts", () => {
     query: [],
     headers: [{ key: "accept", value: "application/json", enabled: true }],
     body: { kind: "json", text: '{"name":"a"}' },
-    auth: { kind: "none" },
+    auth: { kind: "inherit" },
   };
 
   it("saves an HTTP draft as a request whose template carries protocol http and no run state", async () => {

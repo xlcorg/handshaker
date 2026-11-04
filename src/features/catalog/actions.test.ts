@@ -98,7 +98,7 @@ describe("HTTP requests", () => {
     query: [{ key: "page", value: "2", enabled: true }],
     headers: [{ key: "accept", value: "application/json", enabled: true }],
     body: { kind: "json", text: '{"name":"a"}' },
-    auth: { kind: "none" },
+    auth: { kind: "inherit" },
   };
   const savedHttp: SavedRequestIpc = {
     id: "h1",
@@ -140,7 +140,7 @@ describe("HTTP requests", () => {
       protocol: "http",
       collectionId: null,
       template: {
-        method: "GET", url_template: "", query: [], headers: [], body: { kind: "none" }, auth: { kind: "none" },
+        method: "GET", url_template: "", query: [], headers: [], body: { kind: "none" }, auth: { kind: "inherit" },
       },
       run: { status: "draft" },
     });

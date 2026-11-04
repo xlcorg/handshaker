@@ -655,7 +655,6 @@ export const commands = {
   },
   async collectionSetNodeAuth(
     collectionId: string,
-    itemId: string | null,
     config: SavedAuthConfigIpc,
   ): Promise<Result<null, IpcError>> {
     try {
@@ -663,7 +662,6 @@ export const commands = {
         status: "ok",
         data: await TAURI_INVOKE("collection_set_node_auth", {
           collectionId,
-          itemId,
           config,
         }),
       };
@@ -1049,7 +1047,7 @@ export type HttpTemplateIpc = {
   query: MetadataRowIpc[];
   headers: MetadataRowIpc[];
   body: HttpBodyIpc;
-  auth: SavedAuthConfigIpc;
+  auth: RequestAuthIpc;
 };
 /**
  * Result of applying an import (merge).
@@ -1224,6 +1222,13 @@ export type RecordedMessageIpc = {
   preview: string;
   json: string | null;
 };
+/**
+ * HTTP request auth over IPC. File `{ "kind": "none" }` is `Inherit`. File
+ * `{ "kind": "off" }` is `Override` of `{ "kind": "none" }`. React never sees `off`.
+ */
+export type RequestAuthIpc =
+  | { kind: "inherit" }
+  | { kind: "override"; config: SavedAuthConfigIpc };
 /**
  * Over IPC the tag is always present, so no compat repr is needed here.
  */

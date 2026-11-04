@@ -158,25 +158,11 @@ impl AppState {
     pub fn collection_set_node_auth_impl(
         &self,
         collection_id: &str,
-        item_id: Option<String>,
         config: SavedAuthConfigIpc,
     ) -> Result<(), CoreError> {
         let cid = parse_collection_id(collection_id)?;
         let mut c = self.require_collection(cid)?;
-        let core = config.into_core();
-        match item_id {
-            None => c.auth = core,
-            Some(s) => {
-                let iid = parse_item_id(&s)?;
-                match tree::find_item_mut(&mut c.items, iid) {
-                    Some(Item::Request(r)) => r.template.set_auth(core),
-                    Some(Item::Folder(_)) => {
-                        return Err(CoreError::InvalidTarget("folders carry no auth".into()))
-                    }
-                    None => return Err(CoreError::InvalidTarget(format!("item {iid:?} not found"))),
-                }
-            }
-        }
+        c.auth = config.into_core();
         self.collection_store.upsert(c)
     }
 
@@ -310,8 +296,8 @@ pub async fn collection_restore_item(state: State<'_, AppState>, collection_id: 
 
 #[tauri::command]
 #[specta::specta]
-pub async fn collection_set_node_auth(state: State<'_, AppState>, collection_id: String, item_id: Option<String>, config: SavedAuthConfigIpc) -> Result<(), IpcError> {
-    state.collection_set_node_auth_impl(&collection_id, item_id, config).map_err(IpcError::from)
+pub async fn collection_set_node_auth(state: State<'_, AppState>, collection_id: String, config: SavedAuthConfigIpc) -> Result<(), IpcError> {
+    state.collection_set_node_auth_impl(&collection_id, config).map_err(IpcError::from)
 }
 
 #[tauri::command]
@@ -508,40 +494,18 @@ mod tests {
     }
 
     #[test]
-    fn set_node_auth_on_collection_and_request() {
+    fn set_node_auth_writes_the_collection() {
         let state = AppState::default();
         state.collection_upsert_impl(empty_collection_ipc(1, "c")).unwrap();
-        state.collection_add_item_impl(&cid(1), None, request_ipc(20, "r")).unwrap();
         let cfg = SavedAuthConfigIpc::EnvVar {
             env_var: "TOK".into(),
             header_name: "authorization".into(),
             prefix: "Bearer ".into(),
             environments: vec![],
         };
-        state.collection_set_node_auth_impl(&cid(1), None, cfg.clone()).unwrap();
-        state.collection_set_node_auth_impl(&cid(1), Some(cid(20)), cfg).unwrap();
+        state.collection_set_node_auth_impl(&cid(1), cfg).unwrap();
         let got = state.collection_get_impl(&cid(1)).unwrap();
         assert!(matches!(got.auth, SavedAuthConfigIpc::EnvVar { .. }));
-        let auth = match &got.items[0] {
-            ItemIpc::Request(SavedRequestIpc { template: RequestTemplateIpc::Grpc(g), .. }) => &g.auth,
-            _ => panic!(),
-        };
-        assert!(matches!(auth, SavedAuthConfigIpc::EnvVar { .. }));
-    }
-
-    #[test]
-    fn set_node_auth_on_folder_is_rejected() {
-        let state = AppState::default();
-        state.collection_upsert_impl(empty_collection_ipc(1, "c")).unwrap();
-        state.collection_add_item_impl(&cid(1), None, folder_ipc(10, "f")).unwrap();
-        let cfg = SavedAuthConfigIpc::EnvVar {
-            env_var: "TOK".into(),
-            header_name: "authorization".into(),
-            prefix: "Bearer ".into(),
-            environments: vec![],
-        };
-        let err = state.collection_set_node_auth_impl(&cid(1), Some(cid(10)), cfg).unwrap_err();
-        assert!(matches!(err, CoreError::InvalidTarget(_)));
     }
 
     #[test]

@@ -433,10 +433,9 @@ export async function authEffective(
 
 export async function collectionSetNodeAuth(
   collectionId: string,
-  itemId: string | null,
   config: SavedAuthConfigIpc,
 ): Promise<void> {
-  const r = await commands.collectionSetNodeAuth(collectionId, itemId, config);
+  const r = await commands.collectionSetNodeAuth(collectionId, config);
   if (r.status === "error") throw r.error;
 }
 

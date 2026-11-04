@@ -9,9 +9,7 @@
 //! materializes through the async `TokenSource` seam — there is no sync
 //! `resolve_auth` for it.
 
-use std::collections::HashMap;
-
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::error::CoreError;
 
@@ -26,26 +24,41 @@ pub fn auth_active_for_env(environments: &[String], active_env: Option<&str>) ->
     environments.is_empty() || active_env.is_some_and(|e| environments.iter().any(|x| x == e))
 }
 
-/// Pure pick: nearest active non-`None` config wins along request → collection.
-/// A config scoped to environments not including `active_env` is skipped (treated
-/// as absent). Returns the winning config by reference, or `None` (unauthenticated).
-/// This is the single home of the auth-pick rule — UI asks via IPC, never re-derives.
+/// One walk. `Inherit` uses the collection. `Override(None)` sends no auth and
+/// does not read the collection. Any other override wins when it is active for
+/// `active_env`. An inactive override uses the collection. Collection `None`,
+/// or an inactive collection scheme, sends no auth.
+///
+/// This is the single home of the auth-pick rule. The UI asks via IPC.
 pub fn pick_auth_config<'a>(
-    request_auth: &'a SavedAuthConfig,
+    request_auth: &'a RequestAuth,
     collection_auth: Option<&'a SavedAuthConfig>,
     active_env: Option<&str>,
 ) -> Option<&'a SavedAuthConfig> {
-    for cfg in [Some(request_auth), collection_auth].into_iter().flatten() {
-        let envs: &[String] = match cfg {
-            SavedAuthConfig::None => continue,
-            SavedAuthConfig::EnvVar(c) => &c.environments,
-            SavedAuthConfig::OAuth2ClientCredentials(c) => &c.environments,
-        };
-        if auth_active_for_env(envs, active_env) {
-            return Some(cfg);
+    match request_auth {
+        RequestAuth::Override(SavedAuthConfig::None) => None,
+        RequestAuth::Override(cfg) if scheme_active(cfg, active_env) => Some(cfg),
+        RequestAuth::Override(_) | RequestAuth::Inherit => {
+            active_collection(collection_auth, active_env)
         }
     }
-    None
+}
+
+fn scheme_active(cfg: &SavedAuthConfig, active_env: Option<&str>) -> bool {
+    let envs = match cfg {
+        SavedAuthConfig::None => return false,
+        SavedAuthConfig::EnvVar(c) => &c.environments,
+        SavedAuthConfig::OAuth2ClientCredentials(c) => &c.environments,
+    };
+    auth_active_for_env(envs, active_env)
+}
+
+fn active_collection<'a>(
+    collection_auth: Option<&'a SavedAuthConfig>,
+    active_env: Option<&str>,
+) -> Option<&'a SavedAuthConfig> {
+    let cfg = collection_auth?;
+    scheme_active(cfg, active_env).then_some(cfg)
 }
 
 fn default_auth_header_name() -> String {
@@ -97,30 +110,83 @@ pub struct OAuth2ClientCredentialsConfig {
     pub environments: Vec<String>,
 }
 
-/// One auth strategy for a node, per active environment.
+/// One auth scheme. A collection stores this. A gRPC request stores this too,
+/// and `None` there means inherit. An HTTP request stores [`RequestAuth`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum SavedAuthConfig {
-    /// Explicitly unauthenticated — stops inheritance (Postman "No Auth").
+    /// No credential.
     None,
     EnvVar(EnvVarAuthConfig),
     #[serde(rename = "oauth2_client_credentials")]
     OAuth2ClientCredentials(OAuth2ClientCredentialsConfig),
 }
 
-/// Per-environment auth map carried by Collection / Folder / Request.
+/// What an HTTP request stores.
 ///
-/// A key present (even `SavedAuthConfig::None`) means "this node defines auth for
-/// that env" and stops inheritance. A key absent means "inherit from the ancestor".
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AuthByEnv {
-    pub configs: HashMap<String, SavedAuthConfig>,
+/// On disk, inherit is `{ "kind": "none" }` so files that already say that,
+/// and the next save of an untouched request, keep that spelling. Explicit
+/// no-auth is `{ "kind": "off" }`. Bearer, API key, and OAuth2 stay the
+/// `SavedAuthConfig` object.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum RequestAuth {
+    #[default]
+    Inherit,
+    Override(SavedAuthConfig),
 }
 
-impl AuthByEnv {
-    /// The config this node defines for `env_name`, if any.
-    pub fn for_env(&self, env_name: &str) -> Option<&SavedAuthConfig> {
-        self.configs.get(env_name)
+impl RequestAuth {
+    /// gRPC stores a scheme. `None` inherits. Any other scheme overrides.
+    pub fn from_grpc(auth: &SavedAuthConfig) -> Self {
+        match auth {
+            SavedAuthConfig::None => RequestAuth::Inherit,
+            other => RequestAuth::Override(other.clone()),
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+enum RequestAuthFile {
+    None,
+    Off,
+    EnvVar(EnvVarAuthConfig),
+    #[serde(rename = "oauth2_client_credentials")]
+    OAuth2ClientCredentials(OAuth2ClientCredentialsConfig),
+}
+
+impl From<RequestAuthFile> for RequestAuth {
+    fn from(file: RequestAuthFile) -> Self {
+        match file {
+            RequestAuthFile::None => RequestAuth::Inherit,
+            RequestAuthFile::Off => RequestAuth::Override(SavedAuthConfig::None),
+            RequestAuthFile::EnvVar(cfg) => RequestAuth::Override(SavedAuthConfig::EnvVar(cfg)),
+            RequestAuthFile::OAuth2ClientCredentials(cfg) => {
+                RequestAuth::Override(SavedAuthConfig::OAuth2ClientCredentials(cfg))
+            }
+        }
+    }
+}
+
+#[derive(Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+enum ExplicitOff {
+    Off,
+}
+
+impl Serialize for RequestAuth {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            RequestAuth::Inherit => SavedAuthConfig::None.serialize(serializer),
+            RequestAuth::Override(SavedAuthConfig::None) => ExplicitOff::Off.serialize(serializer),
+            RequestAuth::Override(cfg) => cfg.serialize(serializer),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for RequestAuth {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        RequestAuthFile::deserialize(deserializer).map(RequestAuth::from)
     }
 }
 
@@ -167,15 +233,6 @@ mod tests {
             CoreError::Auth(m) => assert!(m.contains("not set")),
             other => panic!("expected Auth, got {other:?}"),
         }
-    }
-
-    #[test]
-    fn auth_by_env_serde_round_trip() {
-        let mut abe = AuthByEnv::default();
-        abe.configs.insert("prod".into(), SavedAuthConfig::None);
-        let json = serde_json::to_string(&abe).unwrap();
-        let back: AuthByEnv = serde_json::from_str(&json).unwrap();
-        assert_eq!(abe, back);
     }
 
     #[test]
@@ -230,13 +287,18 @@ mod tests {
     #[test]
     fn pick_prefers_request_over_collection() {
         let req = SavedAuthConfig::EnvVar(EnvVarAuthConfig {
-            env_var: "R".into(), header_name: "authorization".into(),
-            prefix: "Bearer ".into(), environments: vec![],
+            env_var: "R".into(),
+            header_name: "authorization".into(),
+            prefix: "Bearer ".into(),
+            environments: vec![],
         });
         let coll = SavedAuthConfig::EnvVar(EnvVarAuthConfig {
-            env_var: "C".into(), header_name: "authorization".into(),
-            prefix: "Bearer ".into(), environments: vec![],
+            env_var: "C".into(),
+            header_name: "authorization".into(),
+            prefix: "Bearer ".into(),
+            environments: vec![],
         });
+        let req = RequestAuth::Override(req);
         let picked = pick_auth_config(&req, Some(&coll), Some("prod")).unwrap();
         match picked {
             SavedAuthConfig::EnvVar(c) => assert_eq!(c.env_var, "R"),
@@ -247,27 +309,94 @@ mod tests {
     #[test]
     fn pick_falls_back_to_collection_when_request_none() {
         let coll = SavedAuthConfig::EnvVar(EnvVarAuthConfig {
-            env_var: "C".into(), header_name: "authorization".into(),
-            prefix: "Bearer ".into(), environments: vec![],
+            env_var: "C".into(),
+            header_name: "authorization".into(),
+            prefix: "Bearer ".into(),
+            environments: vec![],
         });
-        let picked = pick_auth_config(&SavedAuthConfig::None, Some(&coll), None).unwrap();
+        let req = RequestAuth::Inherit;
+        let picked = pick_auth_config(&req, Some(&coll), None).unwrap();
         assert!(matches!(picked, SavedAuthConfig::EnvVar(c) if c.env_var == "C"));
     }
 
     #[test]
     fn pick_gates_scoped_config_out_of_other_env() {
         let coll = SavedAuthConfig::EnvVar(EnvVarAuthConfig {
-            env_var: "C".into(), header_name: "authorization".into(),
-            prefix: "Bearer ".into(), environments: vec!["prod".into()],
+            env_var: "C".into(),
+            header_name: "authorization".into(),
+            prefix: "Bearer ".into(),
+            environments: vec!["prod".into()],
         });
-        assert!(pick_auth_config(&SavedAuthConfig::None, Some(&coll), Some("dev")).is_none());
-        assert!(pick_auth_config(&SavedAuthConfig::None, Some(&coll), None).is_none()); // "No environment"
-        assert!(pick_auth_config(&SavedAuthConfig::None, Some(&coll), Some("prod")).is_some());
+        assert!(pick_auth_config(&RequestAuth::Inherit, Some(&coll), Some("dev")).is_none());
+        assert!(pick_auth_config(&RequestAuth::Inherit, Some(&coll), None).is_none()); // "No environment"
+        assert!(pick_auth_config(&RequestAuth::Inherit, Some(&coll), Some("prod")).is_some());
     }
 
     #[test]
     fn pick_none_everywhere_is_none() {
-        assert!(pick_auth_config(&SavedAuthConfig::None, Some(&SavedAuthConfig::None), Some("prod")).is_none());
-        assert!(pick_auth_config(&SavedAuthConfig::None, None, Some("prod")).is_none());
+        let req = RequestAuth::Inherit;
+        let none = SavedAuthConfig::None;
+        assert!(pick_auth_config(&req, Some(&none), Some("prod")).is_none());
+        assert!(pick_auth_config(&req, None, Some("prod")).is_none());
+    }
+
+    #[test]
+    fn pick_explicit_none_ignores_the_collection() {
+        let coll = SavedAuthConfig::EnvVar(EnvVarAuthConfig {
+            env_var: "C".into(),
+            header_name: "authorization".into(),
+            prefix: "Bearer ".into(),
+            environments: vec![],
+        });
+        let off = RequestAuth::Override(SavedAuthConfig::None);
+        assert!(pick_auth_config(&off, Some(&coll), Some("prod")).is_none());
+    }
+
+    #[test]
+    fn pick_inactive_override_falls_through_to_the_collection() {
+        let req = RequestAuth::Override(SavedAuthConfig::EnvVar(EnvVarAuthConfig {
+            env_var: "R".into(),
+            header_name: "authorization".into(),
+            prefix: "Bearer ".into(),
+            environments: vec!["prod".into()],
+        }));
+        let coll = SavedAuthConfig::EnvVar(EnvVarAuthConfig {
+            env_var: "C".into(),
+            header_name: "authorization".into(),
+            prefix: "Bearer ".into(),
+            environments: vec![],
+        });
+        let picked = pick_auth_config(&req, Some(&coll), Some("dev")).unwrap();
+        assert!(matches!(picked, SavedAuthConfig::EnvVar(c) if c.env_var == "C"));
+    }
+
+    #[test]
+    fn request_auth_file_keeps_schemes_and_splits_none_from_off() {
+        let bearer = SavedAuthConfig::EnvVar(EnvVarAuthConfig {
+            env_var: "TOK".into(),
+            header_name: "authorization".into(),
+            prefix: "Bearer ".into(),
+            environments: vec![],
+        });
+        let stored = RequestAuth::Override(bearer);
+        let json = serde_json::to_value(&stored).unwrap();
+        assert_eq!(json["kind"], "env_var");
+        assert_eq!(serde_json::from_value::<RequestAuth>(json).unwrap(), stored);
+        assert_eq!(
+            serde_json::to_value(RequestAuth::Inherit).unwrap(),
+            serde_json::json!({ "kind": "none" })
+        );
+        assert_eq!(
+            serde_json::from_str::<RequestAuth>(r#"{"kind":"none"}"#).unwrap(),
+            RequestAuth::Inherit
+        );
+        assert_eq!(
+            serde_json::to_value(RequestAuth::Override(SavedAuthConfig::None)).unwrap(),
+            serde_json::json!({ "kind": "off" })
+        );
+        assert_eq!(
+            serde_json::from_str::<RequestAuth>(r#"{"kind":"off"}"#).unwrap(),
+            RequestAuth::Override(SavedAuthConfig::None)
+        );
     }
 }

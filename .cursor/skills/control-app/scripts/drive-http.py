@@ -489,6 +489,122 @@ def wait_auth(pred) -> dict:
     raise DriveError(f"collection auth did not update: {last}")
 
 
+def walk_items(items: list) -> list:
+    found = []
+    for item in items:
+        found.append(item)
+        if item.get("type") == "folder":
+            found.extend(walk_items(item.get("items") or []))
+    return found
+
+
+def saved_request(name: str) -> dict:
+    for path in (data_dir() / "collections").glob("*.json"):
+        doc = json.loads(path.read_text())
+        data = doc.get("data") or {}
+        for item in walk_items(data.get("items") or []):
+            if item.get("type") == "request" and item.get("name") == name:
+                protocol = item.get("protocol") or (item.get("template") or {}).get("protocol")
+                if protocol == "http":
+                    return item
+    raise DriveError(f"saved http request {name} missing")
+
+
+def wait_request_auth(name: str, pred) -> dict:
+    # The collection file is the spelling export and import keep.
+    deadline = time.time() + 8
+    last = None
+    while time.time() < deadline:
+        last = saved_request(name).get("auth") or {}
+        if pred(last):
+            return last
+        time.sleep(0.2)
+    raise DriveError(f"request auth did not update: {last}")
+
+
+def evidence_dir() -> Path:
+    dest = Path("/tmp/handshaker-verify/current") / "evidence"
+    dest.mkdir(parents=True, exist_ok=True)
+    return dest
+
+
+DIALOG_STUB = r"""
+if (!window.__hs) {
+  const real = window.fetch.bind(window);
+  window.__hs = { path: null, seen: [] };
+  window.fetch = function (input, init) {
+    const url = String((input && input.url) || input);
+    window.__hs.seen.push(url);
+    const dialog = url.includes("plugin%3Adialog%7C") || url.includes("plugin:dialog|");
+    if (dialog) {
+      return Promise.resolve(new Response(JSON.stringify(window.__hs.path), {
+        status: 200,
+        headers: { "Tauri-Response": "ok", "Content-Type": "application/json" }
+      }));
+    }
+    return real(input, init);
+  };
+}
+return "stub";
+"""
+
+
+def install_dialog_stub() -> None:
+    evaljs(DIALOG_STUB)
+
+
+def arm_dialog(path: Path) -> None:
+    install_dialog_stub()
+    evaljs(f"window.__hs.path = {json.dumps(str(path))}; return window.__hs.path")
+
+
+def export_collection(path: Path) -> None:
+    if path.exists():
+        path.unlink()
+    arm_dialog(path)
+    click("[aria-label='collection actions']")
+    click("[aria-label='export']")
+    deadline = time.time() + 10
+    while time.time() < deadline:
+        if path.exists() and path.stat().st_size > 0:
+            return
+        time.sleep(0.2)
+    raise DriveError(f"export did not write {path}")
+
+
+def exported_request_auth(path: Path, name: str) -> dict:
+    doc = json.loads(path.read_text())
+    collections = (doc.get("data") or {}).get("collections") or []
+    for collection in collections:
+        for item in walk_items(collection.get("items") or []):
+            if item.get("type") == "request" and item.get("name") == name:
+                return item.get("auth") or {}
+    raise DriveError(f"export has no request {name}")
+
+
+def import_collection(path: Path) -> None:
+    arm_dialog(path)
+    click("[aria-label='collection actions']")
+    click("[aria-label='import']")
+    wait_until(
+        """
+        const el = document.querySelector("[role=alertdialog]");
+        return el ? el.innerText : "";
+        """,
+        lambda text: isinstance(text, str) and "Import collections?" in text,
+        timeout=10,
+    )
+    click("xpath=//*[@role='alertdialog']//button[normalize-space()='Import']")
+
+
+def open_request_auth() -> None:
+    click('xpath=//button[normalize-space()="Auth"]')
+    wait_until(
+        "return !!document.querySelector('[aria-label=\"Inherit from collection\"]')",
+        lambda v: v is True,
+    )
+
+
 def set_input_placeholder(placeholder: str, value: str) -> None:
     script = (
         SET_NATIVE
@@ -684,8 +800,8 @@ def main() -> None:
     time.sleep(0.4)
     insert_body('{"item":"{{bodyVal}}"}')
     save_request("Echo probe")
-    # A previous drive may have left OAuth2 on the collection. Request auth
-    # `{kind: none}` does not block that: pick skips None and uses the collection.
+    # A previous drive may have left OAuth2 on the collection. Inherit does not
+    # block that, so clear the collection scheme before the unauthenticated send.
     configure_none()
     view = send_and_wait()
     if "200" not in view["meta"]:
@@ -709,12 +825,14 @@ def main() -> None:
     print("pass auth none + local substitution", flush=True)
 
     configure_bearer()
-    click('xpath=//button[normalize-space()="Auth"]')
+    open_request_auth()
     auth_text = page_text()
-    if "kind: env_var" not in auth_text or "variable: HS_BEARER" not in auth_text:
-        raise DriveError(f"auth tab did not show bearer: {auth_text[:800]}")
-    inherited = "Auth is inherited from the service (configured in the service panel)."
-    print(f"auth-tab-inherited-copy={inherited in auth_text}", flush=True)
+    inherit_line = "Bearer from My Collection."
+    old_inherited = "Auth is inherited from the service (configured in the service panel)."
+    if inherit_line not in auth_text or old_inherited in auth_text:
+        raise DriveError(f"auth tab inherit line missing: {auth_text[:800]}")
+    print(f"auth-tab-inherited-copy={inherit_line in auth_text and old_inherited not in auth_text}", flush=True)
+    shot("http-auth-inherit")
     view = send_and_wait()
     if "200" not in view["meta"]:
         raise DriveError(f"bearer meta: {view['meta']!r}\n{view['text'][:800]}")
@@ -734,6 +852,96 @@ def main() -> None:
     )
     shot("http-auth-bearer")
     print("pass bearer", flush=True)
+
+    open_request_auth()
+    click('[aria-label="API key"]')
+    wait_until(
+        "return !!document.querySelector('input[placeholder=\"API_KEY_VAR\"]')",
+        lambda v: v is True,
+    )
+    set_input_placeholder("API_KEY_VAR", "HS_APIKEY")
+    shot("http-auth-override")
+    api_key_auth = wait_request_auth(
+        "Echo probe",
+        lambda auth: auth.get("kind") == "env_var"
+        and auth.get("env_var") == "HS_APIKEY"
+        and auth.get("header_name") == "x-api-key",
+    )
+    view = send_and_wait()
+    if "200" not in view["meta"]:
+        raise DriveError(f"request api key meta: {view['meta']!r}\n{view['text'][:800]}")
+    got = last_path(view["log"], "/echo", view["log_before"])
+    if not got:
+        raise DriveError("request api key produced no /echo")
+    assert_exchange(
+        got,
+        method="POST",
+        path="/echo",
+        query_key="q",
+        query_val="from-local",
+        hdr="alpha",
+        body_val="ada",
+        auth_header="x-api-key",
+        auth_value=APIKEY_SECRET,
+    )
+    if header(got, "authorization"):
+        raise DriveError(f"request api key still had collection bearer: {header(got, 'authorization')}")
+    print("pass request api key override", flush=True)
+
+    click('[aria-label="None"]')
+    off_auth = wait_request_auth("Echo probe", lambda auth: auth.get("kind") == "off")
+    view = send_and_wait()
+    if "200" not in view["meta"]:
+        raise DriveError(f"request none meta: {view['meta']!r}\n{view['text'][:800]}")
+    got = last_path(view["log"], "/echo", view["log_before"])
+    if not got:
+        raise DriveError("request none produced no /echo")
+    assert_exchange(
+        got,
+        method="POST",
+        path="/echo",
+        query_key="q",
+        query_val="from-local",
+        hdr="alpha",
+        body_val="ada",
+        auth_header=None,
+        auth_value=None,
+    )
+    print("pass request explicit none", flush=True)
+
+    click('xpath=//div[@data-node-id][.//span[normalize-space()="Echo probe"]]')
+    time.sleep(0.4)
+    open_request_auth()
+    reopened = page_text()
+    if "This request sends no auth." not in reopened:
+        raise DriveError(f"reopened request lost explicit none: {reopened[:800]}")
+    if saved_request("Echo probe").get("auth", {}).get("kind") != "off":
+        raise DriveError(f"reopened file auth: {saved_request('Echo probe').get('auth')}")
+    print("pass reopened explicit none", flush=True)
+
+    export_path = evidence_dir() / "http-auth-export.json"
+    export_collection(export_path)
+    exported_auth = exported_request_auth(export_path, "Echo probe")
+    if exported_auth.get("kind") != "off":
+        raise DriveError(f"export dropped explicit none: {exported_auth}")
+    print("pass export kept off", flush=True)
+
+    click('[aria-label="Inherit from collection"]')
+    wait_request_auth("Echo probe", lambda auth: auth.get("kind") == "none")
+    import_collection(export_path)
+    restored = wait_request_auth("Echo probe", lambda auth: auth.get("kind") == "off")
+    if restored.get("kind") != "off":
+        raise DriveError(f"import did not restore off: {restored}")
+    print("pass import restored off", flush=True)
+
+    click('xpath=//div[@data-node-id][.//span[normalize-space()="Echo probe"]]')
+    time.sleep(0.4)
+    open_request_auth()
+    click('[aria-label="Inherit from collection"]')
+    wait_request_auth("Echo probe", lambda auth: auth.get("kind") == "none")
+    if api_key_auth.get("kind") != "env_var" or off_auth.get("kind") != "off":
+        raise DriveError(f"override spelling lost api key {api_key_auth} or off {off_auth}")
+    print("pass request inherit restored", flush=True)
 
     configure_apikey()
     view = send_and_wait()

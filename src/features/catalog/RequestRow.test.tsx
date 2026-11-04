@@ -50,7 +50,7 @@ function httpReq(
       query: [],
       headers: [],
       body: { kind: "none" },
-      auth: { kind: "none" },
+      auth: { kind: "inherit" },
     },
     last_used_at: null,
     use_count: 0,

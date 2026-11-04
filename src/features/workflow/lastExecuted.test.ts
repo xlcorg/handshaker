@@ -64,7 +64,7 @@ const template: HttpTemplateIpc = {
   ],
   headers: [],
   body: { kind: "none" },
-  auth: { kind: "none" },
+  auth: { kind: "inherit" },
 };
 
 function done(status: number): HttpRun {
