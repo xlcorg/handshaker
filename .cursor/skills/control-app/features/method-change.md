@@ -18,6 +18,8 @@ picked method and shows no dialog.
 - Picking the method that is already selected does not ask. The call still
   applies.
 - An unsaved draft does not ask. An HTTP draft does not ask.
+- The body names the short service and both methods: `Echo / Send is saved. Create a new request for Echo / ServerStream, or change this request.` (`messages.workflow.methodChange.body`, service shortened by `serviceShortName`).
+- Body field hints. The Request tab toggle is `aria-label="Toggle field hints"` (pref `bodyHints`, on by default). `useContractRead` drops the previous method's input and output schemas in the same turn the selected method changes, then reads the new contract immediately instead of waiting out the 400ms address debounce. The dialog does not change the method, so the old hints stay until Change current, until Create new opens the sibling, or until a draft applies the pick.
 
 ## How to get to it (user POV)
 

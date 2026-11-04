@@ -3,16 +3,17 @@
 A server-streaming call shows a timeline instead of a single response body.
 The end state that proves this works: the Messages tab lists one row per
 pong, and the footer node `data-testid="stream-footer"` reads `OK` with a
-message count (`1 msg` / `N msgs`). While the call is open the same footer
-reads `STREAMING`, or `OPENING` while the stream is still opening.
+message count (`1 msg` / `N msgs`), a byte size, and an elapsed time. While
+the call is open the same footer reads `STREAMING`, `OPENING` while the
+stream is still opening, or `HALF-CLOSED` after End stream on a two-way call.
 
 ## Sub-features
 
 - `test.Echo/ServerStream` — `▶ Send` once, then the server pushes `Pong` rows (`echoed` like `echo: <id> #1`).
 - `test.Echo/ClientStream` and `test.Echo/Bidi` — the idle button is `▶ Open`. After open, the group `aria-label="Stream controls"` holds `Send message ▸`, `End stream`, and `Cancel`.
 - Messages tab (search, and on two-way calls a direction group `aria-label="Filter by direction"` with chips All, Received, and Sent).
-- Headers and Trailers tabs. The Contract tab is present on an editable draft even when both schemas are still null. A missing schema shows `Contract unavailable`.
-- Save messages / Assemble from the export menu once the call is terminal.
+- Headers and Trailers tabs. The Contract tab is present on an editable draft even when both schemas are still null. Catalog and both schemas come from one `grpcContractRead` (`useContractRead`). Both schemas null shows `Contract unavailable — the method schema was not received (reflection is off or the server is unreachable).` Exactly one schema null shows `Request schema unavailable.` or `Response schema unavailable.` beside the proto listing.
+- Save messages / Assemble from the export menu (`aria-label="Export"`) once the call has ended or was cancelled. Assemble rows appear only when the opened response type has `bytes` fields. `test.Echo/ServerStream` has none, so that menu is Save messages only.
 
 ## How to get to it (user POV)
 
@@ -57,6 +58,7 @@ the 250ms busy gate says the call is still live; it is not the end state.
 ## Gotchas
 
 - Server-streaming keeps the unary-looking `▶ Send` label. `▶ Open` means the method is client-streaming or bidi. The kind badge on the picked method reads `stream`, `client`, or `bidi`.
+- `HALF-CLOSED` is the live footer after End stream, before the call ends. The echo server with `--count 3 --delay-ms 50` finishes the bidi call in well under a second, so a poll can see only the terminal `OK` line. That `OK` line is the end state.
 - `Send message ▸` and `End stream` stay disabled until the stream is open, and disable again after half-close. `Cancel` stays.
 - The echo server's `--hang` flag never answers a client stream after half-close. Do not use it for a passing check.
 - The timeline is a flat scrollable list, newest first. Assert on the footer count and one visible `echoed` preview, not on a pixel position.

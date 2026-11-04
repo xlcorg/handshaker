@@ -13,6 +13,8 @@ placeholder `Empty collection` is visible under the field.
 - Open a collection overview (`aria-label="open-collection"`) with tabs Overview, Authorization, Variables, and `aria-label="close-overview"`.
 - Collapse / expand all, sort (`aria-label="sort-collections"`), pin. The pin button is `aria-label="pin-collection"` while unpinned and `aria-label="unpin-collection"` while pinned.
 - Export and import of one JSON format, `handshaker-export`. Sidebar `aria-label="collection actions"`, the collection row menu, and Settings → Import / Export. `scripts/drive-transfer.py` drives all of those paths.
+- Command palette. Ctrl+K and Ctrl+P (`paletteChords` in `src/features/catalog/paletteHotkey.ts`, physical `code` `KeyK` or `KeyP`). The dialog's screen-reader title is `Command palette`. The search placeholder is `Search collections and requests…`. Choosing a collection calls `onOpenCollection`, which opens the overview and reveals that row in the sidebar.
+- Save destination from the host. The unbound Save dialog (`Save request`) pre-selects a collection with `defaultPickTarget` (`src/features/catalog/savePicker.ts`): the collection name's tokens are a prefix of the address host, env words such as `local` and `staging` dropped. The selected row is `[aria-label="save-destination"] [role="treeitem"][aria-selected="true"]`. `Recommended location` is a different chip: `suggestSaveTarget` names a folder after the service (`test.Echo` → folder `Echo`) and its button is `Add`.
 
 ## How to get to it (user POV)
 
@@ -82,9 +84,11 @@ then wraps `window.fetch` so only `plugin:dialog` save and open return a path.
 The confirm dialog, the toasts, and the catalog reload stay real.
 
 Confirm title is `Import collections?`. Buttons are `Cancel` and `Import`.
-The body is `N collections and M environments will be imported.` When ids or
-environment names already exist it adds `K already exist and will be updated.`
-It always ends with `Nothing is deleted.` Export toast is `Exported`. Import
+The body starts `N collections and M environments will be imported.` When ids or
+environment names already exist it adds `K already exist and will be updated.`,
+or `1 already exists and will be updated.` when that count is 1. It always
+continues `Matching items are updated. Items only on this machine are kept. Nothing is deleted.`
+Export toast is `Exported`. Import
 toast is `Imported — A added, U updated`. The toaster duration is 1500ms.
 Mark existing `[data-sonner-toast]` nodes before the click, or the next wait
 sees a toast that already expired.
@@ -108,11 +112,39 @@ no color leaves the local color. New environments are appended. The active
 environment is unchanged. Nothing outside the file is removed, and nothing
 that exists only locally is removed either.
 
-The dialog says matching items are updated, items only on this machine are
-kept, and nothing is deleted. `scripts/drive-reimport-merge.py` exports a
-collection, adds a request in the window, edits one request in the file, and
-re-imports. The local request, the edited request, and the new file request
-are all present afterward.
+`scripts/drive-reimport-merge.py` exports a collection, adds a request in the
+window, edits one request in the file, and re-imports. The local request, the
+edited request, and the new file request are all present afterward.
+
+Command palette, after at least one collection exists. The chord matches
+physical `code`, so a `KeyboardEvent` needs `code: "KeyK"` (a `key` of `k`
+alone does not match):
+
+```sh
+.cursor/skills/control-app/scripts/hsdrv.py click "[aria-label='collapse all']"
+.cursor/skills/control-app/scripts/hsdrv.py eval 'window.dispatchEvent(new KeyboardEvent("keydown",{key:"k",code:"KeyK",ctrlKey:true,bubbles:true,cancelable:true})); return document.querySelector("input[placeholder=\"Search collections and requests…\"]")!==null'
+```
+
+Type a collection name into that input with the native value setter and an
+`input` event, then click `[data-slot="command-item"]` whose text is the
+collection. The overview opens, and the sidebar row is
+`[data-node-id="<id>"][data-active="true"]`. Escape closes the palette
+without opening anything.
+
+Save destination. Create a collection and rename it to `billing` (set the
+rename field, then blur). New request, address `billing.example:50051`, pick
+any reflected method or leave the method empty — the host match does not need
+a method. Click `aria-label="Save"`. The dialog title is `Save request`. The
+selected destination is:
+
+```sh
+.cursor/skills/control-app/scripts/hsdrv.py eval 'const row=document.querySelector("[aria-label=save-destination] [role=treeitem][aria-selected=true]"); return row?row.innerText:""'
+```
+
+That text contains `billing` and not only `My Collection`. With a method
+selected, the dialog also shows `Recommended location` and an `Add` button
+for the service folder (`Echo` when the method is `test.Echo/Send`). Host
+match and that folder chip are independent.
 
 ## Gotchas
 
