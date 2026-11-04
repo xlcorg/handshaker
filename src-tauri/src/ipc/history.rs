@@ -552,7 +552,7 @@ impl HistoryPageIpc {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use handshaker_core::auth::SavedAuthConfig;
+    use handshaker_core::auth::{RequestAuth, SavedAuthConfig};
     use handshaker_core::collections::ids::{CollectionId, ItemId};
     use handshaker_core::collections::{GrpcTemplate, HttpTemplate, MetadataRow};
     use handshaker_core::http::{HeaderRow, HttpBody, HttpMethod, HttpResponse, ResponseBody};
@@ -711,7 +711,7 @@ pub(crate) mod tests {
                     body: HttpBody::Json {
                         text: "{\"n\":1}".into(),
                     },
-                    auth: SavedAuthConfig::None,
+                    auth: RequestAuth::Inherit,
                 },
                 outcome: HttpOutcome::Response {
                     response: HttpResponse {
@@ -756,7 +756,7 @@ pub(crate) mod tests {
                     "query": [{ "key": "dry", "value": "1", "enabled": false }],
                     "headers": [],
                     "body": { "kind": "json", "text": "{\"n\":1}" },
-                    "auth": { "kind": "none" },
+                    "auth": { "kind": "inherit" },
                 },
                 "outcome": {
                     "type": "response",

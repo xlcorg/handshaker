@@ -747,6 +747,15 @@ export const messages = {
       urlPlaceholder: "{{baseUrl}}/users or https://api.example.com/users",
     },
     tabs: { params: "Params", headers: "Headers", body: "Body", auth: "Auth" },
+    auth: {
+      inherit: "Inherit from collection",
+      none: "This request sends no auth.",
+      notInCollection:
+        "This request is not in a collection, so inherit sends no auth.",
+      hasNoAuth: (collection: string) => `${collection} has no auth.`,
+      applies: (scheme: string, collection: string) =>
+        `${scheme} from ${collection}.`,
+    },
     body: {
       modeLabel: "Body type",
       mode: { none: "None", json: "JSON", text: "Text", form: "Form" },

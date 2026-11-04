@@ -55,7 +55,7 @@ export const httpRequest: HttpTemplateIpc = {
   query: [{ key: "page", value: "2", enabled: true }],
   headers: [{ key: "accept", value: "application/json", enabled: true }],
   body: { kind: "json", text: '{"name":"a"}' },
-  auth: { kind: "none" },
+  auth: { kind: "inherit" },
 };
 
 export type HttpCallRecordOver = Partial<Omit<CallRecordIpc, "call">> & {

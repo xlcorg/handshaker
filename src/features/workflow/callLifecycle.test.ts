@@ -670,7 +670,7 @@ describe("recordedDispatch http", () => {
     query: [],
     headers: [{ key: "accept", value: "application/json", enabled: true }],
     body: { kind: "json", text: '{"name":"{{name}}"}' },
-    auth: { kind: "env_var", env_var: "TOK", header_name: "authorization", prefix: "Bearer " },
+    auth: { kind: "override", config: { kind: "env_var", env_var: "TOK", header_name: "authorization", prefix: "Bearer " } },
   };
   const response: HttpResponseIpc = {
     status: 503,
@@ -1028,7 +1028,7 @@ describe("recorded finish across protocols", () => {
     query: [],
     headers: [],
     body: { kind: "none" },
-    auth: { kind: "none" },
+    auth: { kind: "inherit" },
   };
   const httpResponse: HttpResponseIpc = {
     status: 200,

@@ -113,7 +113,7 @@ export function CollectionOverview({ collection, onChanged, onSelectRequest, onC
       .catch(() => {});
   };
   const persistAuth = (config: SavedAuthConfigIpc) => {
-    void ipc.collectionSetNodeAuth(collection.id, null, config).then(onChanged).catch(() => {});
+    void ipc.collectionSetNodeAuth(collection.id, config).then(onChanged).catch(() => {});
   };
   // Links ride the whole-collection upsert path, like description/TLS above — there is
   // no `collection_set_links` command. The write carries this render's snapshot, so a

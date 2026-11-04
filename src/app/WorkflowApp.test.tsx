@@ -319,7 +319,7 @@ describe("WorkflowApp Save flow", () => {
     const user = userEvent.setup();
     render(<WorkflowApp />);
     const http = newHttpStep({
-      template: { method: "POST", url_template: "{{base}}/users?x=1", query: [], headers: [], body: { kind: "none" }, auth: { kind: "none" } },
+      template: { method: "POST", url_template: "{{base}}/users?x=1", query: [], headers: [], body: { kind: "none" }, auth: { kind: "inherit" } },
     });
     act(() => workflowStore.setDraft(http));
     await user.click(screen.getByText("focus-save"));

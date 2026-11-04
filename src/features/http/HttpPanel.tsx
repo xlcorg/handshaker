@@ -13,7 +13,6 @@ import {
   workflowStore,
   type DraftOrigin,
 } from "@/features/workflow/store";
-import { useEffectiveAuth } from "@/features/workflow/useEffectiveAuth";
 import { useSendHotkey } from "@/features/workflow/useSendHotkey";
 import { HttpAddressBar } from "./HttpAddressBar";
 import { HttpRequestTabs } from "./HttpRequestTabs";
@@ -30,7 +29,7 @@ export interface HttpPanelProps {
 
 export function HttpPanel({ draft, origin, originVars }: HttpPanelProps) {
   const envName = useActiveWorkflow().envName;
-  const { bumpUsage } = useCatalog();
+  const { bumpUsage, tree } = useCatalog();
   const envRevision = useEnvRevision();
   const key = resolveKey({
     collectionId: draft.collectionId,
@@ -43,11 +42,11 @@ export function HttpPanel({ draft, origin, originVars }: HttpPanelProps) {
     () => buildVarCandidates(activeEnvVars, originVars),
     [activeEnvVars, originVars],
   );
-  const effectiveAuth = useEffectiveAuth(
-    draft.template.auth,
-    { collection_id: draft.collectionId, env_name: envName },
-    key,
-  );
+  const collection = useMemo(() => {
+    if (!draft.collectionId) return null;
+    const found = tree.find((c) => c.id === draft.collectionId);
+    return found ? { name: found.name, auth: found.auth } : null;
+  }, [tree, draft.collectionId]);
 
   const edit = (patch: Partial<HttpTemplateIpc>) =>
     workflowStore.editHttpTemplate(draft.id, patch);
@@ -79,8 +78,9 @@ export function HttpPanel({ draft, origin, originVars }: HttpPanelProps) {
       <FocusSplit
         request={
           <HttpRequestTabs
+            draftId={draft.id}
             template={draft.template}
-            effectiveAuth={effectiveAuth}
+            collection={collection}
             onChange={edit}
             onSubmit={submit}
             varCandidates={variables}

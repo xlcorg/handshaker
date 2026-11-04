@@ -4,7 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::auth::SavedAuthConfig;
+use crate::auth::{RequestAuth, SavedAuthConfig};
 use crate::http::{HttpBody, HttpMethod};
 
 use super::MetadataRow;
@@ -16,23 +16,6 @@ use super::MetadataRow;
 pub enum RequestTemplate {
     Grpc(GrpcTemplate),
     Http(HttpTemplate),
-}
-
-impl RequestTemplate {
-    /// The request-level auth config, whatever the protocol (the auth pick is protocol-neutral).
-    pub fn auth(&self) -> &SavedAuthConfig {
-        match self {
-            RequestTemplate::Grpc(g) => &g.auth,
-            RequestTemplate::Http(h) => &h.auth,
-        }
-    }
-
-    pub fn set_auth(&mut self, auth: SavedAuthConfig) {
-        match self {
-            RequestTemplate::Grpc(g) => g.auth = auth,
-            RequestTemplate::Http(h) => h.auth = auth,
-        }
-    }
 }
 
 /// A gRPC call template.
@@ -62,7 +45,8 @@ pub struct HttpTemplate {
     /// one. The materialized auth header replaces a user row of the same name.
     pub headers: Vec<MetadataRow>,
     pub body: HttpBody,
-    pub auth: SavedAuthConfig,
+    #[serde(default)]
+    pub auth: RequestAuth,
 }
 
 /// The on-disk read form. serde has no default for a missing internal tag, so this repr is

@@ -90,7 +90,7 @@ const template: HttpTemplateIpc = {
   query: [],
   headers: [],
   body: { kind: "none" },
-  auth: { kind: "none" },
+  auth: { kind: "inherit" },
 };
 
 const response: HttpResponseIpc = {

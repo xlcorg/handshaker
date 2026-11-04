@@ -1,23 +1,19 @@
 import { useState } from "react";
-import type {
-  HttpTemplateIpc,
-  ResolutionReportIpc,
-  SavedAuthConfigIpc,
-} from "@/ipc/bindings";
+import type { HttpTemplateIpc, ResolutionReportIpc } from "@/ipc/bindings";
 import { UnderlineTabs } from "@/components/ui/underline-tabs";
 import { MetadataEditor } from "@/features/workflow/MetadataEditor";
-import { AuthReadOnly } from "@/features/workflow/RequestTabs";
 import type { VarCandidate } from "@/features/vars/candidates";
 import type { ResolveKey } from "@/features/workflow/resolveKey";
 import { messages } from "@/lib/messages";
+import { HttpAuthTab, type HttpAuthCollection } from "./HttpAuthTab";
 import { HttpBodyEditor } from "./HttpBodyEditor";
 
 type Tab = "params" | "headers" | "body" | "auth";
 
 export interface HttpRequestTabsProps {
+  draftId: string;
   template: HttpTemplateIpc;
-  /** The pick core made from the request's and the collection's auth. */
-  effectiveAuth: SavedAuthConfigIpc;
+  collection: HttpAuthCollection | null;
   onChange: (patch: Partial<HttpTemplateIpc>) => void;
   onSubmit?: () => void;
   varCandidates?: VarCandidate[];
@@ -26,8 +22,9 @@ export interface HttpRequestTabsProps {
 }
 
 export function HttpRequestTabs({
+  draftId,
   template,
-  effectiveAuth,
+  collection,
   onChange,
   onSubmit,
   varCandidates,
@@ -76,7 +73,15 @@ export function HttpRequestTabs({
         )}
         {tab === "auth" && (
           <div className="h-full overflow-auto">
-            <AuthReadOnly auth={effectiveAuth} />
+            <HttpAuthTab
+              draftId={draftId}
+              auth={template.auth}
+              collection={collection}
+              onChange={(auth) => onChange({ auth })}
+              resolver={resolver}
+              resolveKey={resolveKey}
+              variables={varCandidates}
+            />
           </div>
         )}
       </div>

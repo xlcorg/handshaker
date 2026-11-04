@@ -3,7 +3,7 @@
 
 use std::collections::HashMap;
 
-use handshaker_core::auth::{materialize_env_var, pick_auth_config, SavedAuthConfig};
+use handshaker_core::auth::{materialize_env_var, pick_auth_config, RequestAuth, SavedAuthConfig};
 use handshaker_core::collections::resolve::preview_oauth_token;
 use tauri::State;
 
@@ -76,7 +76,8 @@ impl AppState {
             .and_then(|id| parse_collection_id(id).ok())
             .and_then(|cid| self.collection_store.get(cid))
             .map(|c| c.auth);
-        let req = step_auth.into_core();
+        let saved = step_auth.into_core();
+        let req = RequestAuth::from_grpc(&saved);
         let picked = pick_auth_config(&req, collection_auth.as_ref(), ctx.env_name.as_deref());
         Ok(SavedAuthConfigIpc::from_core(picked.cloned().unwrap_or(SavedAuthConfig::None)))
     }

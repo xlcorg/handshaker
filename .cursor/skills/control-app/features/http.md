@@ -25,20 +25,27 @@ drive is `scripts/drive-http.py` against `scripts/http-echo.py`.
 
 ## Auth types the app actually has
 
-The HTTP Auth tab is read-only (`AuthReadOnly`). Configuration is the collection overview → Authorization tab (`SavedAuthEditor`), persisted immediately by `collectionSetNodeAuth`. The wire enum is `SavedAuthConfig` (`crates/handshaker-core/src/auth/mod.rs`, mirrored as `SavedAuthConfigIpc`):
+The HTTP Auth tab is the mode selector. Inherit is the default for a new request and for a saved request whose `auth` key is missing or `{ "kind": "none" }`. The toggles, in order, are `Inherit from collection`, `None`, `Bearer`, `API key`, and `OAuth2`. While the stored value is inherit, the tab shows one line and does not mount the scheme fields.
 
-| UI toggle (`aria-label`) | Stored `kind` | What the echo receives |
+- No collection: `This request is not in a collection, so inherit sends no auth.`
+- Collection auth None: `{name} has no auth.`
+- Otherwise: `{scheme} from {name}.` Bearer and API key use those labels. The line does not print `kind: env_var`.
+
+`None` on the request writes `{ "kind": "off" }` and sends no collection credential. The tab says `This request sends no auth.` Bearer, API key, and OAuth2 write the scheme object below, and the request wins over the collection. The next save of an untouched inherit request stays `{ "kind": "none" }`. gRPC still treats `SavedAuthConfig::None` as inherit, and its Auth tab stays the read-only `AuthReadOnly` sentence.
+
+Collection auth is still the overview Authorization tab (`SavedAuthEditor`), persisted by `collectionSetNodeAuth(collectionId, config)`. Request auth saves only through the HTTP draft autosave. It does not call `collectionSetNodeAuth`.
+
+| UI toggle (`aria-label`) | Stored on an HTTP request | What the echo receives |
 | --- | --- | --- |
-| `None` | `none` | No `authorization` header and no `x-api-key` header. |
+| `Inherit from collection` | `{ "kind": "none" }` | The collection scheme. No auth header when the request is not in a collection, or the collection auth is None. |
+| `None` | `{ "kind": "off" }` | No collection credential. A user header of the same name stays. |
 | `Bearer` | `env_var` | Header `authorization: Bearer <secret>`. The field (placeholder `BEARER_TOKEN_VAR`) is the **OS environment variable name**, not a `{{var}}`. Default header name `authorization`, prefix `Bearer ` (trailing space). |
 | `API key` | `env_var` | Header `{header}: {prefix}{secret}`. Empty header name becomes `x-api-key`. The value field (placeholder `API_KEY_VAR`) is the OS variable name. The prefix can be empty. There is no query-string API key. |
 | `OAuth2` | `oauth2_client_credentials` | The only grant. POST `token_url` as `application/x-www-form-urlencoded` with `grant_type=client_credentials`, `client_id`, `client_secret`, and `scope`. The next request sends `authorization: Bearer <access_token>`. Token URL, client id, client secret, and scope are `{{var}}` templates. The OAuth header name and prefix are not substituted. |
 
 Not implemented, so they are not checks: HTTP Basic, API key in the query string, authorization-code, PKCE, digest, SigV4.
 
-Collection auth applies only after the request is saved (`setDraftOrigin` stamps `collectionId`). An unsaved draft has `collectionId: null`. A saved request stores `auth: { kind: "none" }`. `pick_auth_config` skips `SavedAuthConfig::None` and falls through to the collection, so request-level `none` does not block collection auth. The overview copy says a request can override collection auth; the HTTP editor has no place to set request auth.
-
-The Auth tab sentence `Auth is inherited from the service (configured in the service panel).` (`messages.ts` `authInherited`) is wrong for HTTP. The live drive still sees that sentence. Configuration is the collection Authorization tab. The overview sentence `a request can override it` is the same gap for HTTP: the HTTP editor has no request-level auth control.
+Collection auth applies only after the request is saved (`setDraftOrigin` stamps `collectionId`). An unsaved draft has `collectionId: null`, so inherit sends no auth. Export and import keep `{ "kind": "off" }` and an API key override as those objects. They do not rewrite them to inherit.
 
 OAuth2 on that Authorization tab has a `Get token` button (`SavedAuthEditor`, label `Get token`, `Getting token…` while the preview runs). Success shows a truncated access token, `expires in N min`, and `aria-label="Copy token"`. The button calls `auth_oauth2_preview`. That preview substitutes `{{var}}` from the active environment only. Send still substitutes the token URL, client id, client secret, and scope from the environment and the collection. A literal token URL such as `http://127.0.0.1:8765/token` needs no variable. `drive-http.py` does not click Get token.
 
@@ -102,16 +109,18 @@ The script asserts, in order, against the echo log and the window:
 2. `{{baseUrl}}/missing` → meta contains `404` and `Not Found`.
 3. `http://127.0.0.1:9/down` → `Service unavailable` and `Connection refused`, and the log does not grow.
 4. Saved POST `{{baseUrl}}/{{pathSeg}}` with query `{{qKey}}={{qVal}}`, header `X-Env: {{hdr}}`, JSON body `{"item":"{{bodyVal}}"}`, collection auth `None` → `POST /echo`, query `q=from-local`, `x-env: alpha`, body contains `ada`, no auth headers.
-5. Bearer (`HS_BEARER`) → `authorization: Bearer BearerSecret`.
-6. API key header `x-api-key`, empty prefix (`HS_APIKEY`) → `x-api-key: KeySecret` and no `authorization`.
-7. OAuth2 templates `{{baseUrl}}/token`, `{{oauthId}}`, `{{oauthSecret}}`, `{{oauthScope}}`. When `/token` is hit, the form is `grant_type=client_credentials&client_id=id-local&client_secret=sec-local&scope=scope.local`. The echo request is `authorization: Bearer tok-id-local`. A cache hit prints `oauth used the process token cache` and still checks that header.
-8. Switch the pill to `other` → query `q=from-other`, `x-env: beta`, body contains `bea`, `authorization: Bearer tok-id-other`. A new token POST uses `id-other` / `sec-other` / `scope.other`.
-9. `None` again → 200, no auth headers, still `other`'s query and body.
-10. URL `{{noSuchVar}}` → `Unresolved variables: {{noSuchVar}}`, log unchanged.
-11. URL `{{blank}}/echo` → `Invalid URL: start it with http:// or https://`, log unchanged.
-12. Restore the template. The first history row `POST` + `200`, and the sidebar row `Echo probe`, reopen the URL `{{baseUrl}}/{{pathSeg}}` without a new echo line.
+5. Bearer (`HS_BEARER`) on the collection. The request Auth tab shows `Bearer from My Collection.` and does not show the old service-panel sentence. The echo receives `authorization: Bearer BearerSecret`.
+6. Request API key override (`HS_APIKEY`, header `x-api-key`). The echo receives `x-api-key: KeySecret` and no `authorization`. The saved request stores the `env_var` object. Screenshot `http-auth-override` is the Auth tab with that scheme open.
+7. Request `None`. The saved request stores `{ "kind": "off" }`. The echo receives no auth header. Reopening the sidebar row still shows `This request sends no auth.` Export writes that `off` object into the bundle. Importing the bundle after the request was set back to inherit restores `{ "kind": "off" }`. Then set the request back to `Inherit from collection` so the file is `{ "kind": "none" }` again. Screenshot `http-auth-inherit` is the Auth tab on `Bearer from My Collection.`
+8. Collection API key header `x-api-key`, empty prefix (`HS_APIKEY`) → `x-api-key: KeySecret` and no `authorization`.
+9. OAuth2 templates `{{baseUrl}}/token`, `{{oauthId}}`, `{{oauthSecret}}`, `{{oauthScope}}`. When `/token` is hit, the form is `grant_type=client_credentials&client_id=id-local&client_secret=sec-local&scope=scope.local`. The echo request is `authorization: Bearer tok-id-local`. A cache hit prints `oauth used the process token cache` and still checks that header.
+10. Switch the pill to `other` → query `q=from-other`, `x-env: beta`, body contains `bea`, `authorization: Bearer tok-id-other`. A new token POST uses `id-other` / `sec-other` / `scope.other`.
+11. Collection `None` again → 200, no auth headers, still `other`'s query and body.
+12. URL `{{noSuchVar}}` → `Unresolved variables: {{noSuchVar}}`, log unchanged.
+13. URL `{{blank}}/echo` → `Invalid URL: start it with http:// or https://`, log unchanged.
+14. Restore the template. The first history row `POST` + `200`, and the sidebar row `Echo probe`, reopen the URL `{{baseUrl}}/{{pathSeg}}` without a new echo line.
 
-Screenshots land in the run's `evidence/` directory and are copied to `/opt/cursor/artifacts/`: `http-get-200`, `http-refused`, `http-auth-none`, `http-auth-bearer`, `http-auth-apikey`, `http-auth-oauth2`, `http-env-local`, `http-env-switched-pill`, `http-env-other`, `http-env-missing`, `http-env-empty`, `http-reopen`. A failed run also writes `http-failure`.
+Screenshots land in the run's `evidence/` directory and are copied to `/opt/cursor/artifacts/`: `http-get-200`, `http-refused`, `http-auth-none`, `http-auth-bearer`, `http-auth-inherit`, `http-auth-override`, `http-auth-apikey`, `http-auth-oauth2`, `http-env-local`, `http-env-switched-pill`, `http-env-other`, `http-env-missing`, `http-env-empty`, `http-reopen`. A failed run also writes `http-failure`.
 
 The same steps by hand, after `local` exists and is selected:
 

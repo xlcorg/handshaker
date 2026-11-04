@@ -454,7 +454,7 @@ mod tests {
                 "query": [{ "key": "page", "value": "{{page}}", "enabled": true }],
                 "headers": [{ "key": "", "value": "x", "enabled": true }],
                 "body": { "kind": "text", "text": "hi" },
-                "auth": { "kind": "none" },
+                "auth": { "kind": "inherit" },
             },
         });
 

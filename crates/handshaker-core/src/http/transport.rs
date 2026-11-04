@@ -149,7 +149,7 @@ mod tests {
             query: vec![],
             headers: vec![],
             body: HttpBody::None,
-            auth: crate::auth::SavedAuthConfig::None,
+            auth: crate::auth::RequestAuth::Inherit,
         };
         prepare(&t, None, None, &*static_tokens("t"), &NoBuiltins)
             .await

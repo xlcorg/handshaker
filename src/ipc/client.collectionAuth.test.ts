@@ -12,8 +12,8 @@ beforeEach(() => vi.clearAllMocks());
 describe("collectionSetNodeAuth wrapper", () => {
   it("calls the command and resolves on ok", async () => {
     vi.mocked(commands.collectionSetNodeAuth).mockResolvedValue({ status: "ok", data: null } as never);
-    await collectionSetNodeAuth("c1", null, { kind: "none" });
-    expect(commands.collectionSetNodeAuth).toHaveBeenCalledWith("c1", null, { kind: "none" });
+    await collectionSetNodeAuth("c1", { kind: "none" });
+    expect(commands.collectionSetNodeAuth).toHaveBeenCalledWith("c1", { kind: "none" });
   });
 
   it("throws the error payload on an error result", async () => {
@@ -21,6 +21,6 @@ describe("collectionSetNodeAuth wrapper", () => {
       status: "error",
       error: { message: "nope" },
     } as never);
-    await expect(collectionSetNodeAuth("c1", null, { kind: "none" })).rejects.toEqual({ message: "nope" });
+    await expect(collectionSetNodeAuth("c1", { kind: "none" })).rejects.toEqual({ message: "nope" });
   });
 });

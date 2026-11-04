@@ -1,9 +1,8 @@
 //! Postman-style recursive collections (master spec §5.5).
 //!
 //! A `Collection` owns a tree of `Item`s (`Folder` | `SavedRequest`). Folders
-//! are pure organization (no auth, no variables — master §5.2). Each node that
-//! can carry auth (Collection, SavedRequest) holds a single `SavedAuthConfig`
-//! (not a per-env map). Variables exist only at env + collection scope.
+//! are pure organization (no auth, no variables — master §5.2). Variables exist
+//! only at env + collection scope.
 //! Endpoints are `{{var}}` templates resolved to a `GrpcTarget` at send time.
 
 use std::collections::HashMap;
@@ -141,6 +140,7 @@ impl Item {
 #[cfg(test)]
 mod model_tests {
     use super::*;
+    use crate::auth::RequestAuth;
     use crate::http::{HttpBody, HttpMethod};
     use uuid::Uuid;
 
@@ -223,7 +223,7 @@ mod model_tests {
                 body: HttpBody::Form {
                     fields: vec![MetadataRow { key: "sku".into(), value: "A1".into(), enabled: true }],
                 },
-                auth: SavedAuthConfig::None,
+                auth: RequestAuth::Inherit,
             }),
         });
 

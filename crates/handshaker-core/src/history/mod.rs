@@ -358,7 +358,7 @@ impl HttpOutcome {
 #[cfg(test)]
 pub(crate) mod testing {
     use super::*;
-    use crate::auth::SavedAuthConfig;
+    use crate::auth::{RequestAuth, SavedAuthConfig};
     use crate::collections::MetadataRow;
     use crate::http::{HttpBody, ResponseBody};
 
@@ -428,7 +428,7 @@ pub(crate) mod testing {
             }],
             headers: vec![],
             body: HttpBody::None,
-            auth: SavedAuthConfig::None,
+            auth: RequestAuth::Inherit,
         }
     }
 

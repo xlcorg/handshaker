@@ -119,8 +119,8 @@ impl OutboundHttpRequest {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::auth::{AuthCredentials, SavedAuthConfig, StaticTokenSource};
-    use crate::collections::MetadataRow;
+    use crate::auth::{AuthCredentials, EnvVarAuthConfig, RequestAuth, SavedAuthConfig, StaticTokenSource};
+    use crate::collections::{Collection, CollectionId, MetadataRow};
     use crate::send::tests::{env_with_sec, oauth_template, NoBuiltins, SeqGuids};
 
     fn row(key: &str, value: &str) -> MetadataRow {
@@ -138,7 +138,7 @@ mod tests {
             query: vec![],
             headers: vec![],
             body: HttpBody::None,
-            auth: SavedAuthConfig::None,
+            auth: RequestAuth::Inherit,
         }
     }
 
@@ -159,7 +159,7 @@ mod tests {
         t.body = HttpBody::Form {
             fields: vec![row("{{$guid}}", "{{$guid}}")],
         };
-        t.auth = oauth_template();
+        t.auth = RequestAuth::Override(oauth_template());
 
         let p = prepare(
             &t,
@@ -240,7 +240,7 @@ mod tests {
     async fn the_auth_header_replaces_a_user_row_case_insensitively_and_reapplies_idempotently() {
         let mut t = template("http://api.test/x");
         t.headers = vec![row("Authorization", "Bearer mine"), row("x-a", "1")];
-        t.auth = oauth_template();
+        t.auth = RequestAuth::Override(oauth_template());
 
         let p = prepare(
             &t,
@@ -269,5 +269,96 @@ mod tests {
                 ("Authorization".to_string(), "Bearer new".to_string())
             ]
         );
+    }
+
+    fn bearer(env_var: &str) -> SavedAuthConfig {
+        SavedAuthConfig::EnvVar(EnvVarAuthConfig {
+            env_var: env_var.into(),
+            header_name: "authorization".into(),
+            prefix: "Bearer ".into(),
+            environments: vec![],
+        })
+    }
+
+    fn collection_with(auth: SavedAuthConfig) -> Collection {
+        Collection {
+            id: CollectionId(uuid::Uuid::from_u128(1)),
+            name: "c".into(),
+            items: vec![],
+            variables: indexmap::IndexMap::new(),
+            auth,
+            default_tls: false,
+            skip_tls_verify: false,
+            pinned: false,
+            description: None,
+            created_at: 0.0,
+            expanded: false,
+            links: vec![],
+        }
+    }
+
+    fn from_json(auth: Option<serde_json::Value>) -> HttpTemplate {
+        let mut value = serde_json::json!({
+            "method": "GET",
+            "url_template": "http://api.test/x",
+            "query": [],
+            "headers": [],
+            "body": { "kind": "none" },
+        });
+        if let Some(auth) = auth {
+            value["auth"] = auth;
+        }
+        serde_json::from_value(value).unwrap()
+    }
+
+    #[tokio::test]
+    async fn prepare_legacy_none_sends_collection_bearer() {
+        let var = "HANDSHAKER_TEST_PREPARE_LEGACY_NONE";
+        std::env::set_var(var, "secret");
+        let coll = collection_with(bearer(var));
+        let legacy = from_json(Some(serde_json::json!({ "kind": "none" })));
+        let missing = from_json(None);
+        for template in [&legacy, &missing] {
+            let prepared = prepare(template, Some(&coll), None, &tokens("unused"), &NoBuiltins).await.unwrap();
+            assert_eq!(
+                prepared.request.headers,
+                vec![("authorization".to_string(), "Bearer secret".to_string())]
+            );
+        }
+        std::env::remove_var(var);
+    }
+
+    #[tokio::test]
+    async fn prepare_bearer_override_sends_the_request_token() {
+        let collection_var = "HANDSHAKER_TEST_PREPARE_COLLECTION_TOKEN";
+        let request_var = "HANDSHAKER_TEST_PREPARE_REQUEST_TOKEN";
+        std::env::set_var(collection_var, "collection-token");
+        std::env::set_var(request_var, "request-token");
+        let coll = collection_with(bearer(collection_var));
+        let template = from_json(Some(serde_json::json!({
+            "kind": "env_var",
+            "env_var": request_var,
+            "header_name": "authorization",
+            "prefix": "Bearer ",
+        })));
+        let prepared = prepare(&template, Some(&coll), None, &tokens("unused"), &NoBuiltins).await.unwrap();
+        std::env::remove_var(collection_var);
+        std::env::remove_var(request_var);
+        assert_eq!(
+            prepared.request.headers,
+            vec![("authorization".to_string(), "Bearer request-token".to_string())]
+        );
+    }
+
+    #[tokio::test]
+    async fn prepare_off_sends_no_collection_credential() {
+        let var = "HANDSHAKER_TEST_PREPARE_OFF";
+        std::env::set_var(var, "secret");
+        let coll = collection_with(bearer(var));
+        let mut template = from_json(Some(serde_json::json!({ "kind": "off" })));
+        template.headers = vec![row("authorization", "local")];
+        let prepared = prepare(&template, Some(&coll), None, &tokens("unused"), &NoBuiltins).await.unwrap();
+        std::env::remove_var(var);
+        assert_eq!(prepared.request.headers, vec![("authorization".to_string(), "local".to_string())]);
     }
 }

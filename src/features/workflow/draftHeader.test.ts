@@ -61,7 +61,7 @@ describe("draftBreadcrumb", () => {
   });
 
   const httpDraft = newHttpStep({
-    template: { method: "GET", url_template: "{{base}}/users?page=2", query: [], headers: [], body: { kind: "none" }, auth: { kind: "none" } },
+    template: { method: "GET", url_template: "{{base}}/users?page=2", query: [], headers: [], body: { kind: "none" }, auth: { kind: "inherit" } },
   });
 
   it("labels an unbound HTTP draft as a new HTTP request", () => {
