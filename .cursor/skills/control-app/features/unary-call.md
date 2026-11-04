@@ -11,8 +11,8 @@ that proves this works: the response header shows `OK` plus an elapsed time
 - TLS lock (`aria-label="TLS inherit"` on a new draft, then `TLS on` / `TLS off` as it cycles).
 - Method picker. Closed label is `Select a method`. Search placeholder is `Find service.method…`.
 - Request / Metadata / Auth tabs. Body editor is the Request tab.
-- `▶ Send` (disabled while the method is empty). Ctrl+Enter sends from the body.
-- Response tabs Body, Trailers, Headers, Contract. Idle body copy is `Awaiting first call`.
+- `▶ Send` (disabled while the method is empty). Ctrl+Enter and Ctrl+R send from the body.
+- Response tabs Body, Trailers, Headers, Contract. Catalog and both schemas come from one `grpcContractRead` (`useContractRead`). Idle body copy is `Awaiting first call`. The meta line reads `No response yet` until the call finishes, then `OK`, the elapsed time, and the response size.
 
 ## How to get to it (user POV)
 
@@ -79,7 +79,7 @@ Handshaker session.
 
 - `▶ Send` is `disabled` until `step.method` is non-empty. Clicking it early does nothing.
 - A new draft's TLS state is inherit, and a new collection's `default_tls` is false, so inherit already means plaintext. An unbound draft has no collection, and inherit is plaintext there too. `nextTlsState` cycles inherit → on → off → inherit. On will try TLS against the echo server and fail.
-- The unedited body template is `{\n}`. `test.Echo/Send` then echoes an empty id (`echo: ` with nothing after the space). `echo: hi` requires a body whose `id` is `hi`. The template still returns `OK` and an `echoed` field.
+- A new draft's body is `{}`. Picking a method while that body is still pristine replaces it with `{\n}` so field hints can render. `test.Echo/Send` then echoes an empty id (`echo: ` with nothing after the space). `echo: hi` requires a body whose `id` is `hi`. Either body still returns `OK` and an `echoed` field.
 - The method list is empty until reflection returns. The picker footer is the status, not a second address-bar button.
 - Server-streaming `ServerStream` still uses `▶ Send`. `▶ Open` is only for client-streaming and bidi. Those are the streaming feature.
 - The Send button's tooltip is a portal; the visible label is `▶ Send`. Match that label. A button whose text merely contains `Send` is also the method picker once the chosen method is `Send`, and clicking it reopens the list.

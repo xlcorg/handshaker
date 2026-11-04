@@ -55,7 +55,7 @@ The result is `null`, and the pane is the one that was showing before the chord.
 ## Gotchas
 
 - Releasing Ctrl opens the highlighted row. Escape closes the list and leaves the pane unchanged.
-- Focus inside `[role="dialog"]`, `[role="alertdialog"]`, or `[role="menu"]` swallows the opening Ctrl+Tab. The list stays closed. Tab still moves the highlight if the list is already open.
+- Focus inside `[role="dialog"]`, `[role="alertdialog"]`, or `[role="menu"]` keeps the list closed. The command palette is a dialog, so Ctrl+Tab does not open this list while it is focused. The chord still calls `preventDefault`. Tab still moves the highlight if the list is already open. The listener is the single `keydown` table in `src/features/shell/hotkeys.ts`; this overlay registers its rows with `useChords`.
 - The listbox never becomes `document.activeElement`.
 - On macOS, Ctrl+click is a context click. The switcher swallows that context menu, including the menu event that arrives after the click has already closed the list.
 - The list keeps at most ten locations from this session. After a restart, Ctrl+Tab does nothing until the pane has shown two locations.

@@ -8,10 +8,10 @@ this works: the titlebar pill reads the new name (not `No environment`), and
 
 - The titlebar pill. With nothing active its text is `No environment`.
 - Menu header `Environments`, row `No environment`, and `aria-label="New environment"`.
-- Editor dialog titled `Environments`. A left list (`nav` `aria-label="Environments"`) and a variable pane. The draft row in that list is `New environment` (`data-field="newEnv"`).
+- Editor dialog titled `Environments`. A left list (`nav` `aria-label="Environments"`) and a variable pane. The `+` in that list is `aria-label="New environment"` and `data-field="newEnv"`. The draft row under it is a non-interactive item whose text is `New environment`. That row has no `data-field`.
 - Create. Name field `aria-label="Environment name"` (placeholder `e.g. prod`). Footer buttons `Cancel` and `Create`. `Create` stores the environment, selects it, and leaves the editor open on that environment. `Done` closes it.
 - Edit. Per-row pencil `aria-label="Edit <name>"`, or the environment's button in the left list (`data-field="env:<name>"`). Changes save on their own. Footer `Delete` (`aria-label="Delete environment"`) opens `Delete "<name>"?` with `Cancel` and `Delete environment`. `Done` closes.
-- Variables. The header button reads `Variable` (CSS uppercase, so `innerText` is `VARIABLE`). The value column is `Value`. Default sort trigger is `Sort: Oldest first`. The menu items are `Name A–Z`, `Name Z–A`, `Oldest first`, `Newest first`. Clicking the `VARIABLE` header from `Oldest first` or `Newest first` selects `Name A–Z`, then toggles `Name A–Z` / `Name Z–A`.
+- Variables. The header button's DOM text is `Variable` (`messages.envs.variableHeader`). CSS `uppercase` makes `innerText` `VARIABLE`. An xpath has to match `Variable`; `contains(.,"VARIABLE")` does not find the button. The value column is `Value`. Default sort trigger is `Sort: Oldest first`. The menu items are `Name A–Z`, `Name Z–A`, `Oldest first`, `Newest first`. Clicking the `Variable` header from `Oldest first` or `Newest first` selects `Name A–Z`, then toggles `Name A–Z` / `Name Z–A`.
 - `Add variable` (`data-field="add"`) appends a draft row and focuses `aria-label="Variable name"` (placeholder `VARIABLE_NAME`). The value cell is a `textarea` `aria-label="Value"`. The check button `aria-label="Add variable"` commits the draft. `aria-label="Cancel adding variable"` drops it.
 - Search. `aria-label="Search keys"`, placeholder `Search keys…`. A query that misses shows `No matching keys`.
 - The pane header shows `N variables` (or `1 variable`), then the save status to its right (`Saving…`, `Saved`, or `Not saved`). `Saved` stays briefly, then the status text clears. The status node is `role="status"`.
@@ -50,7 +50,7 @@ Sort, the header toggle, a variable, and search, still inside that dialog:
 .cursor/skills/control-app/scripts/hsdrv.py click "[aria-label='Blue']"
 .cursor/skills/control-app/scripts/hsdrv.py click 'xpath=//button[starts-with(normalize-space(.),"Sort:")]'
 .cursor/skills/control-app/scripts/hsdrv.py click 'xpath=//*[@role="menuitemradio"][normalize-space()="Oldest first"]'
-.cursor/skills/control-app/scripts/hsdrv.py click 'xpath=//th//button[contains(.,"VARIABLE")]'
+.cursor/skills/control-app/scripts/hsdrv.py click 'xpath=//th//button[contains(.,"Variable")]'
 .cursor/skills/control-app/scripts/hsdrv.py click '[data-field="add"]'
 .cursor/skills/control-app/scripts/hsdrv.py click "[aria-label='Search keys']"
 .cursor/skills/control-app/scripts/hsdrv.py click "xpath=//div[@role=\"dialog\"]//button[normalize-space()=\"Create\"]"

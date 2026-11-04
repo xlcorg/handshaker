@@ -5,7 +5,8 @@ description: >-
   via tauri-driver). Use when checking that the real window starts, or when
   verifying collections, collection export and import, a unary call,
   environments, a streaming RPC, settings, the Ctrl+Tab recent switcher,
-  call history, or an HTTP request against the running app.
+  call history, an HTTP request, a saved-method change, the command
+  palette, or OAuth Get token against the running app.
 ---
 
 # control-app

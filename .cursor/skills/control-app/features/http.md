@@ -38,7 +38,9 @@ Not implemented, so they are not checks: HTTP Basic, API key in the query string
 
 Collection auth applies only after the request is saved (`setDraftOrigin` stamps `collectionId`). An unsaved draft has `collectionId: null`. A saved request stores `auth: { kind: "none" }`. `pick_auth_config` skips `SavedAuthConfig::None` and falls through to the collection, so request-level `none` does not block collection auth. The overview copy says a request can override collection auth; the HTTP editor has no place to set request auth.
 
-The Auth tab sentence `Auth is inherited from the service (configured in the service panel).` (`messages.ts` `authInherited`) is wrong for HTTP. The live drive still sees that sentence. Configuration is the collection Authorization tab.
+The Auth tab sentence `Auth is inherited from the service (configured in the service panel).` (`messages.ts` `authInherited`) is wrong for HTTP. The live drive still sees that sentence. Configuration is the collection Authorization tab. The overview sentence `a request can override it` is the same gap for HTTP: the HTTP editor has no request-level auth control.
+
+OAuth2 on that Authorization tab has a `Get token` button (`SavedAuthEditor`, label `Get token`, `Getting token…` while the preview runs). Success shows a truncated access token, `expires in N min`, and `aria-label="Copy token"`. The button calls `auth_oauth2_preview`. That preview substitutes `{{var}}` from the active environment only. Send still substitutes the token URL, client id, client secret, and scope from the environment and the collection. A literal token URL such as `http://127.0.0.1:8765/token` needs no variable. `drive-http.py` does not click Get token.
 
 OAuth2 tokens are cached for the process. The cache key is token URL + client id + client secret + scopes. A second send with the same credentials does not POST `/token` again; the echo still receives `authorization: Bearer <access_token>`. Switching the active environment to different credentials does POST a new token.
 
@@ -145,6 +147,16 @@ Collection auth, after the request is saved under `My Collection`. Open the over
 .cursor/skills/control-app/scripts/hsdrv.py click "xpath=//button[normalize-space()=\"Authorization\"]"
 .cursor/skills/control-app/scripts/hsdrv.py click "[aria-label='Bearer']"
 ```
+
+Get token, on the same Authorization tab, with the echo listening. Switch to OAuth2, fill the four fields with literals (the preview does not need `{{var}}`), then click the button whose text is `Get token`:
+
+```sh
+.cursor/skills/control-app/scripts/hsdrv.py click "[aria-label='OAuth2']"
+.cursor/skills/control-app/scripts/hsdrv.py eval 'const set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,"value").set; const fill=(label,value)=>{const el=document.querySelector("[aria-label=\""+label+"\"]"); set.call(el,value); el.dispatchEvent(new Event("input",{bubbles:true}));}; fill("Token URL","http://127.0.0.1:8765/token"); fill("Client ID","id-preview"); fill("Client secret","sec-preview"); fill("Scope","scope.preview"); return true'
+.cursor/skills/control-app/scripts/hsdrv.py click "xpath=//button[normalize-space()=\"Get token\"]"
+```
+
+Done when the pane text contains `expires in 60 min` (the echo's `expires_in` is 3600) and `[aria-label="Copy token"]` is present. The echo log gained one `POST /token`.
 
 The environment editor is the two-pane dialog in `environments.md`. Add a
 variable with `data-field="add"`, type into `aria-label="Variable name"`
