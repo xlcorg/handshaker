@@ -511,7 +511,6 @@ def saved_request(name: str) -> dict:
 
 
 def wait_request_auth(name: str, pred) -> dict:
-    # The collection file is the spelling export and import keep.
     deadline = time.time() + 8
     last = None
     while time.time() < deadline:
@@ -800,8 +799,6 @@ def main() -> None:
     time.sleep(0.4)
     insert_body('{"item":"{{bodyVal}}"}')
     save_request("Echo probe")
-    # A previous drive may have left OAuth2 on the collection. Inherit does not
-    # block that, so clear the collection scheme before the unauthenticated send.
     configure_none()
     view = send_and_wait()
     if "200" not in view["meta"]:

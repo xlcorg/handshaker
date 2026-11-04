@@ -45,7 +45,6 @@ pub struct HttpTemplate {
     /// one. The materialized auth header replaces a user row of the same name.
     pub headers: Vec<MetadataRow>,
     pub body: HttpBody,
-    /// `{ "kind": "none" }` and a missing key are inherit. `{ "kind": "off" }` sends no auth.
     #[serde(default)]
     pub auth: RequestAuth,
 }

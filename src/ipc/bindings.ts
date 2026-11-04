@@ -1222,10 +1222,6 @@ export type RecordedMessageIpc = {
   preview: string;
   json: string | null;
 };
-/**
- * HTTP request auth over IPC. File `{ "kind": "none" }` is `Inherit`. File
- * `{ "kind": "off" }` is `Override` of `{ "kind": "none" }`. React never sees `off`.
- */
 export type RequestAuthIpc =
   | { kind: "inherit" }
   | { kind: "override"; config: SavedAuthConfigIpc };

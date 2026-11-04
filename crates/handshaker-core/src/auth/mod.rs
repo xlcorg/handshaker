@@ -24,12 +24,6 @@ pub fn auth_active_for_env(environments: &[String], active_env: Option<&str>) ->
     environments.is_empty() || active_env.is_some_and(|e| environments.iter().any(|x| x == e))
 }
 
-/// One walk. `Inherit` uses the collection. `Override(None)` sends no auth and
-/// does not read the collection. Any other override wins when it is active for
-/// `active_env`. An inactive override uses the collection. Collection `None`,
-/// or an inactive collection scheme, sends no auth.
-///
-/// This is the single home of the auth-pick rule. The UI asks via IPC.
 pub fn pick_auth_config<'a>(
     request_auth: &'a RequestAuth,
     collection_auth: Option<&'a SavedAuthConfig>,
@@ -110,24 +104,15 @@ pub struct OAuth2ClientCredentialsConfig {
     pub environments: Vec<String>,
 }
 
-/// One auth scheme. A collection stores this. A gRPC request stores this too,
-/// and `None` there means inherit. An HTTP request stores [`RequestAuth`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum SavedAuthConfig {
-    /// No credential.
     None,
     EnvVar(EnvVarAuthConfig),
     #[serde(rename = "oauth2_client_credentials")]
     OAuth2ClientCredentials(OAuth2ClientCredentialsConfig),
 }
 
-/// What an HTTP request stores.
-///
-/// On disk, inherit is `{ "kind": "none" }` so files that already say that,
-/// and the next save of an untouched request, keep that spelling. Explicit
-/// no-auth is `{ "kind": "off" }`. Bearer, API key, and OAuth2 stay the
-/// `SavedAuthConfig` object.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum RequestAuth {
     #[default]
@@ -136,7 +121,6 @@ pub enum RequestAuth {
 }
 
 impl RequestAuth {
-    /// gRPC stores a scheme. `None` inherits. Any other scheme overrides.
     pub fn from_grpc(auth: &SavedAuthConfig) -> Self {
         match auth {
             SavedAuthConfig::None => RequestAuth::Inherit,
@@ -145,10 +129,11 @@ impl RequestAuth {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 enum RequestAuthFile {
-    None,
+    #[serde(rename = "none")]
+    Inherit,
     Off,
     EnvVar(EnvVarAuthConfig),
     #[serde(rename = "oauth2_client_credentials")]
@@ -158,7 +143,7 @@ enum RequestAuthFile {
 impl From<RequestAuthFile> for RequestAuth {
     fn from(file: RequestAuthFile) -> Self {
         match file {
-            RequestAuthFile::None => RequestAuth::Inherit,
+            RequestAuthFile::Inherit => RequestAuth::Inherit,
             RequestAuthFile::Off => RequestAuth::Override(SavedAuthConfig::None),
             RequestAuthFile::EnvVar(cfg) => RequestAuth::Override(SavedAuthConfig::EnvVar(cfg)),
             RequestAuthFile::OAuth2ClientCredentials(cfg) => {
@@ -168,17 +153,13 @@ impl From<RequestAuthFile> for RequestAuth {
     }
 }
 
-#[derive(Serialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-enum ExplicitOff {
-    Off,
-}
-
 impl Serialize for RequestAuth {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match self {
-            RequestAuth::Inherit => SavedAuthConfig::None.serialize(serializer),
-            RequestAuth::Override(SavedAuthConfig::None) => ExplicitOff::Off.serialize(serializer),
+            RequestAuth::Inherit => RequestAuthFile::Inherit.serialize(serializer),
+            RequestAuth::Override(SavedAuthConfig::None) => {
+                RequestAuthFile::Off.serialize(serializer)
+            }
             RequestAuth::Override(cfg) => cfg.serialize(serializer),
         }
     }
@@ -328,7 +309,7 @@ mod tests {
             environments: vec!["prod".into()],
         });
         assert!(pick_auth_config(&RequestAuth::Inherit, Some(&coll), Some("dev")).is_none());
-        assert!(pick_auth_config(&RequestAuth::Inherit, Some(&coll), None).is_none()); // "No environment"
+        assert!(pick_auth_config(&RequestAuth::Inherit, Some(&coll), None).is_none());
         assert!(pick_auth_config(&RequestAuth::Inherit, Some(&coll), Some("prod")).is_some());
     }
 

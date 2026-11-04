@@ -1,9 +1,8 @@
 //! Postman-style recursive collections (master spec §5.5).
 //!
 //! A `Collection` owns a tree of `Item`s (`Folder` | `SavedRequest`). Folders
-//! are pure organization (no auth, no variables — master §5.2). A collection
-//! and a gRPC request each hold one `SavedAuthConfig` (gRPC `None` inherits).
-//! An HTTP request holds `RequestAuth`. Variables exist only at env + collection scope.
+//! are pure organization (no auth, no variables — master §5.2). Variables exist
+//! only at env + collection scope.
 //! Endpoints are `{{var}}` templates resolved to a `GrpcTarget` at send time.
 
 use std::collections::HashMap;

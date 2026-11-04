@@ -82,8 +82,6 @@ impl HttpBodyIpc {
     }
 }
 
-/// HTTP request auth over IPC. File `{ "kind": "none" }` is `Inherit`. File
-/// `{ "kind": "off" }` is `Override` of `{ "kind": "none" }`. React never sees `off`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum RequestAuthIpc {
