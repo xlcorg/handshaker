@@ -54,7 +54,7 @@ The result is `null`, and the pane is the one that was showing before the chord.
 
 ## Gotchas
 
-- Releasing Ctrl opens the highlighted row. Escape closes the list and leaves the pane unchanged.
+- Releasing Ctrl opens the highlighted row. That release is a Control `keyup` listener in `RecentSwitcher.tsx`, separate from the keydown table. Escape closes the list and leaves the pane unchanged. A pointerdown outside the list, or the window blurring, cancels the gesture the same way and does not open the highlighted row.
 - Focus inside `[role="dialog"]`, `[role="alertdialog"]`, or `[role="menu"]` keeps the list closed. The command palette is a dialog, so Ctrl+Tab does not open this list while it is focused. The chord still calls `preventDefault`. Tab still moves the highlight if the list is already open. The listener is the single `keydown` table in `src/features/shell/hotkeys.ts`; this overlay registers its rows with `useChords`.
 - The listbox never becomes `document.activeElement`.
 - On macOS, Ctrl+click is a context click. The switcher swallows that context menu, including the menu event that arrives after the click has already closed the list.
