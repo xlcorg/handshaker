@@ -65,6 +65,8 @@ python3 .cursor/skills/control-app/scripts/drive-transfer.py
 
 `drive-transfer.py` starts and stops `scripts/http-echo.py`. It does not start the gRPC echo server.
 
+The Round trip fixture's collection auth is OAuth2 client-credentials. An HTTP item stored as `{ "kind": "none" }` inherits that scheme (see [HTTP request](http.md)): POST, PATCH, DELETE, HEAD, and OPTIONS arrive as `authorization: Bearer tok-echo-client`. GET stores its own Bearer `env_var` (`HS_BEARER`). PUT stores its own API key and sends no `authorization`. The fixture does not use request `{ "kind": "off" }`.
+
 The only format is an envelope written by `persist`. `schema_version` is 1.
 `data.kind` is `handshaker-export`. `data.collections` and `data.environments`
 follow. Postman, Insomnia, OpenAPI, HAR, and cURL are not import paths.

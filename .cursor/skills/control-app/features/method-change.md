@@ -29,11 +29,13 @@ window, open the sidebar `+` menu and choose `New request`. Type
 says `Select a method`), wait until `Echo` / `Send` appears, and click `Send`.
 Click `Save` (`aria-label="Save"`). The save dialog name field is
 `aria-label="Request name"`. Save into `My Collection`. The toolbar then
-shows `Saved`.
+shows a save icon. Its accessible name is `Saved`
+(`[data-testid="autosave-status"]`, `aria-label="Saved"`). The word is the
+tooltip.
 
 Open the method dropdown again and click a different method row, such as
-`ServerStream`. The dialog appears. The picker still shows `Send` until you
-choose Change current or Create new.
+`ServerStream`. The dialog appears. The closed picker still shows `Echo` /
+`Send` until you choose Change current or Create new.
 
 ## Driving it with Tauri WebDriver
 
@@ -57,7 +59,7 @@ That string contains the saved method and the picked method. Cancel:
 .cursor/skills/control-app/scripts/hsdrv.py click "xpath=//div[@role=\"alertdialog\"]//button[normalize-space()=\"Cancel\"]"
 ```
 
-The picker button still shows `Send`. Change current is the button
+The closed picker still shows `Echo` / `Send`. Change current is the button
 `Change current` in that dialog. Create new is the button `Create new`. After
 Create new, the open request row is the new sibling (`data-node-id` on the
 row in `[aria-label="collections-tree"]`), and the picker shows the method

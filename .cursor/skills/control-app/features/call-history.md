@@ -15,7 +15,7 @@ plus `index.json`.
 - Filter `[data-testid="history-filter"]` (placeholder `Filter by service, method, address or status`) matches service, method, address and status text.
 - Chips `history-chip-all`, `history-chip-ok`, `history-chip-failed` in the group `aria-label="Show calls"`, each with `aria-pressed`. A gRPC OK row is status 0 only. An HTTP OK row is a status below 400 (`httpVerdict` in `src/lib/http-status.ts`); `404` is Failed. Failed is also a non-zero gRPC status, a fault, a cancel, or an HTTP client error (`Request failed`, `Service unavailable`).
 - Rows. Columns are Time, Method, Status, Elapsed, Address. `history-row-open` is the row's native button. `history-row-rerun` is the icon button at its right edge.
-- Detail `[data-testid="history-detail"]` follows the focused row. It shows Request, Metadata (enabled rows only), Response or Messages, Headers, Trailers, and `history-detail-rerun`.
+- Detail `[data-testid="history-detail"]` opens for the selected row. Arrow focus on `history-row-open` selects it. A gRPC record shows Request, Metadata (enabled rows only), Response or Messages, Headers, and Trailers. An HTTP record shows Params, Request headers, Request body, Response, and Headers (`messages.http.history`). Section headings are CSS `uppercase`, so `innerText` reads `PARAMS`, `REQUEST HEADERS`, and `REQUEST BODY`. The section `aria-label` keeps the message-string casing. Both records end with `history-detail-rerun`.
 
 ## How to get to it (user POV)
 

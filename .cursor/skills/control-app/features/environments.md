@@ -84,7 +84,7 @@ together with the pill text. The active name is also written to
 - The menu heading is CSS `uppercase`, so `innerText` is `ENVIRONMENTS`.
   Environment rows are `//*[@data-env-row="NAME"]//*[@role="menuitem"]`.
   A row xpath that only matches `menuitem` hits the row and its edit control.
-- `onSaved` is not awaited. `environments.json` and `active_env.json` can
+- `onStored` is not awaited. `environments.json` and `active_env.json` can
   exist before the pill text changes. Poll the pill. `Create` leaves the
   dialog open.
 - A full export includes environments. A one-collection export writes

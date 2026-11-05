@@ -11,7 +11,7 @@ that proves this works: the response header shows `OK` plus an elapsed time
 - TLS lock (`aria-label="TLS inherit"` on a new draft, then `TLS on` / `TLS off` as it cycles).
 - Method picker. Closed label is `Select a method`. Search placeholder is `Find service.method…`.
 - Request / Metadata / Auth tabs. Body editor is the Request tab.
-- `▶ Send` (disabled while the method is empty). Ctrl+Enter and Ctrl+R send from the body.
+- `▶ Send` (disabled while the method is empty). Ctrl+Enter and Ctrl+R send while the call panel is open. The body editor uses the same chords when it has focus.
 - Response tabs Body, Trailers, Headers, Contract. Catalog and both schemas come from one `grpcContractRead` (`useContractRead`). Idle body copy is `Awaiting first call`. The meta line reads `No response yet` until the call finishes, then `OK`, the elapsed time, and the response size.
 
 ## How to get to it (user POV)

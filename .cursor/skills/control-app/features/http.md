@@ -25,7 +25,9 @@ drive is `scripts/drive-http.py` against `scripts/http-echo.py`.
 
 ## Auth types the app actually has
 
-The HTTP Auth tab is the mode selector. Inherit is the default for a new request and for a saved request whose `auth` key is missing or `{ "kind": "none" }`. The toggles, in order, are `Inherit from collection`, `None`, `Bearer`, `API key`, and `OAuth2`. While the stored value is inherit, the tab shows one line and does not mount the scheme fields.
+The HTTP Auth tab is the mode selector. Inherit is the default for a new request and for a saved request whose file `auth` key is missing or `{ "kind": "none" }`. The toggles, in order, are `Inherit from collection`, `None`, `Bearer`, `API key`, and `OAuth2`. The draft and the IPC value use a different spelling: `{ kind: "inherit" }`, or `{ kind: "override", config }` where `config` is a `SavedAuthConfig`. The collection file keeps the spellings in the table below.
+
+While the draft is inherit, the tab shows one line and does not mount the scheme fields. `None`, `Bearer`, `API key`, and `OAuth2` mount `AuthSchemeFields`, the same fields the collection Authorization tab shows inside `SavedAuthEditor`. `None` uses that component only to show `This request sends no auth.`
 
 - No collection: `This request is not in a collection, so inherit sends no auth.`
 - Collection auth None: `{name} has no auth.`
@@ -35,7 +37,7 @@ The HTTP Auth tab is the mode selector. Inherit is the default for a new request
 
 Collection auth is still the overview Authorization tab (`SavedAuthEditor`), persisted by `collectionSetNodeAuth(collectionId, config)`. Request auth saves only through the HTTP draft autosave. It does not call `collectionSetNodeAuth`.
 
-| UI toggle (`aria-label`) | Stored on an HTTP request | What the echo receives |
+| UI toggle (`aria-label`) | Collection file | What the echo receives |
 | --- | --- | --- |
 | `Inherit from collection` | `{ "kind": "none" }` | The collection scheme. No auth header when the request is not in a collection, or the collection auth is None. |
 | `None` | `{ "kind": "off" }` | No collection credential. A user header of the same name stays. |
@@ -47,7 +49,7 @@ Not implemented, so they are not checks: HTTP Basic, API key in the query string
 
 Collection auth applies only after the request is saved (`setDraftOrigin` stamps `collectionId`). An unsaved draft has `collectionId: null`, so inherit sends no auth. Export and import keep `{ "kind": "off" }` and an API key override as those objects. They do not rewrite them to inherit.
 
-OAuth2 on that Authorization tab has a `Get token` button (`SavedAuthEditor`, label `Get token`, `Getting token…` while the preview runs). Success shows a truncated access token, `expires in N min`, and `aria-label="Copy token"`. The button calls `auth_oauth2_preview`. That preview substitutes `{{var}}` from the active environment only. Send still substitutes the token URL, client id, client secret, and scope from the environment and the collection. A literal token URL such as `http://127.0.0.1:8765/token` needs no variable. `drive-http.py` does not click Get token.
+OAuth2 `Get token` is on `AuthSchemeFields`, so it shows both on the collection Authorization tab and on the request Auth tab once that tab's toggle is `OAuth2`. The label is `Get token`, and `Getting token…` while the preview runs. Success shows a truncated access token, `expires in N min`, and `aria-label="Copy token"`. The button calls `auth_oauth2_preview`. That preview substitutes `{{var}}` from the active environment only. Send still substitutes the token URL, client id, client secret, and scope from the environment and the collection. A literal token URL such as `http://127.0.0.1:8765/token` needs no variable. `drive-http.py` does not click Get token. The hand steps below click it on the collection Authorization tab. On the request Auth tab, click `[aria-label='OAuth2']`, then the button whose text is `Get token`.
 
 OAuth2 tokens are cached for the process. The cache key is token URL + client id + client secret + scopes. A second send with the same credentials does not POST `/token` again; the echo still receives `authorization: Bearer <access_token>`. Switching the active environment to different credentials does POST a new token.
 
@@ -109,9 +111,9 @@ The script asserts, in order, against the echo log and the window:
 2. `{{baseUrl}}/missing` → meta contains `404` and `Not Found`.
 3. `http://127.0.0.1:9/down` → `Service unavailable` and `Connection refused`, and the log does not grow.
 4. Saved POST `{{baseUrl}}/{{pathSeg}}` with query `{{qKey}}={{qVal}}`, header `X-Env: {{hdr}}`, JSON body `{"item":"{{bodyVal}}"}`, collection auth `None` → `POST /echo`, query `q=from-local`, `x-env: alpha`, body contains `ada`, no auth headers.
-5. Bearer (`HS_BEARER`) on the collection. The request Auth tab shows `Bearer from My Collection.` and does not show the old service-panel sentence. The echo receives `authorization: Bearer BearerSecret`.
+5. Bearer (`HS_BEARER`) on the collection. The request Auth tab shows `Bearer from My Collection.` and does not show the old service-panel sentence. Screenshot `http-auth-inherit` is that tab, before Send. Send then receives `authorization: Bearer BearerSecret`. Screenshot `http-auth-bearer` is the 200 response.
 6. Request API key override (`HS_APIKEY`, header `x-api-key`). The echo receives `x-api-key: KeySecret` and no `authorization`. The saved request stores the `env_var` object. Screenshot `http-auth-override` is the Auth tab with that scheme open.
-7. Request `None`. The saved request stores `{ "kind": "off" }`. The echo receives no auth header. Reopening the sidebar row still shows `This request sends no auth.` Export writes that `off` object into the bundle. Importing the bundle after the request was set back to inherit restores `{ "kind": "off" }`. Then set the request back to `Inherit from collection` so the file is `{ "kind": "none" }` again. Screenshot `http-auth-inherit` is the Auth tab on `Bearer from My Collection.`
+7. Request `None`. The saved request stores `{ "kind": "off" }`. The echo receives no auth header. Reopening the sidebar row still shows `This request sends no auth.` Export writes that `off` object into the bundle. Importing the bundle after the request was set back to inherit restores `{ "kind": "off" }`. Then set the request back to `Inherit from collection` so the file is `{ "kind": "none" }` again.
 8. Collection API key header `x-api-key`, empty prefix (`HS_APIKEY`) → `x-api-key: KeySecret` and no `authorization`.
 9. OAuth2 templates `{{baseUrl}}/token`, `{{oauthId}}`, `{{oauthSecret}}`, `{{oauthScope}}`. When `/token` is hit, the form is `grant_type=client_credentials&client_id=id-local&client_secret=sec-local&scope=scope.local`. The echo request is `authorization: Bearer tok-id-local`. A cache hit prints `oauth used the process token cache` and still checks that header.
 10. Switch the pill to `other` → query `q=from-other`, `x-env: beta`, body contains `bea`, `authorization: Bearer tok-id-other`. A new token POST uses `id-other` / `sec-other` / `scope.other`.
