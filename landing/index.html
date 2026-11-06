@@ -1,0 +1,490 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <script>
+      document.documentElement.classList.add("motion");
+    </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- PLACEHOLDER: no marketing domain is named in the repo. The Tauri identifier dev.handshaker.app is an app id, not a confirmed site, so canonical and og:url are omitted. -->
+    <title>Handshaker, desktop gRPC client for macOS and Windows</title>
+    <meta
+      name="description"
+      content="Desktop client for internal gRPC and HTTP. Reflection, unary and streaming calls, collections, and OAuth2. MIT license for macOS and Windows."
+    />
+    <meta name="robots" content="index, follow" />
+    <meta name="theme-color" content="#0a0a0a" />
+    <meta property="og:title" content="Handshaker, desktop gRPC client for macOS and Windows" />
+    <meta
+      property="og:description"
+      content="Call unary and streaming gRPC, plus HTTP, from a desktop window. Reflection lists the methods. MIT license."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="assets/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Handshaker, desktop gRPC client for macOS and Windows" />
+    <meta
+      name="twitter:description"
+      content="Call unary and streaming gRPC, plus HTTP, from a desktop window. Reflection lists the methods. MIT license."
+    />
+    <meta name="twitter:image" content="assets/og.png" />
+    <link rel="icon" href="assets/favicon.png" type="image/png" />
+    <link rel="apple-touch-icon" href="assets/icon-128.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/styles.css" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Handshaker",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "macOS, Windows",
+        "softwareVersion": "0.3.7",
+        "license": "https://opensource.org/license/mit",
+        "downloadUrl": [
+          "https://github.com/xlcorg/handshaker/releases/download/v0.3.7/Handshaker_0.3.7_aarch64.dmg",
+          "https://github.com/xlcorg/handshaker/releases/download/v0.3.7/Handshaker_0.3.7_x64-setup.exe"
+        ],
+        "codeRepository": "https://github.com/xlcorg/handshaker"
+      }
+    </script>
+  </head>
+  <body>
+    <a class="skip" href="#content">Skip to content</a>
+    <header class="site-header">
+      <div class="nav-pill">
+        <a class="brand" href="#top">
+          <img src="assets/mark.svg" width="20" height="20" alt="" />
+          Handshaker
+        </a>
+        <nav class="nav-links" aria-label="Page">
+          <a href="#top" aria-current="page">Overview</a>
+          <a href="#faq">Questions</a>
+        </nav>
+        <a class="btn btn-sm nav-cta" href="#download">Download</a>
+        <button class="ham" type="button" aria-expanded="false" aria-controls="menu" aria-label="Open menu" data-menu-button>
+          <span class="ham-lines" aria-hidden="true"><span></span><span></span></span>
+        </button>
+      </div>
+      <div class="nav-overlay" id="menu" data-menu hidden>
+        <a href="#top" aria-current="page">Overview</a>
+        <a href="#faq">Questions</a>
+        <a href="#download">Download</a>
+      </div>
+    </header>
+
+    <main id="content">
+      <section class="hero reveal" id="top">
+        <div class="wrap hero-grid">
+          <div>
+            <!-- PLACEHOLDER: hero headline is draft marketing copy for Artem to approve. The later two line tagline is the existing README line. -->
+            <p class="kicker">Desktop gRPC and HTTP client</p>
+            <h1>Call internal gRPC<br />from your desktop</h1>
+            <p class="lede">
+              A desktop client for internal gRPC services on macOS and Windows. Reflection lists methods from a host and port, and unary calls, streams, and HTTP requests share one window.
+            </p>
+            <div class="hero-actions">
+              <a class="btn" href="#download">Download version 0.3.7</a>
+            </div>
+            <p class="proof-line">MIT license · version 0.3.7 · macOS and Windows</p>
+          </div>
+          <figure class="shot">
+            <div class="win" aria-hidden="true">
+              <div class="win-title">
+                <img src="assets/mark.svg" width="14" height="14" alt="" />
+                Handshaker
+                <span class="env"><span class="dot"></span>Default</span>
+              </div>
+              <div class="win-body">
+                <div class="win-side">
+                  <div class="filter">Filter collections…</div>
+                  <div class="side-label">Collections</div>
+                  <div class="collection">echo</div>
+                  <div class="req"><span class="mark">gRPC</span>Send</div>
+                  <div class="req active"><span class="mark">gRPC</span>ServerStream</div>
+                  <div class="req"><span class="mark">gRPC</span>Download</div>
+                </div>
+                <div class="win-main">
+                  <div class="addr">
+                    <span class="lock" title="TLS off">
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <rect x="5" y="11" width="14" height="10" rx="2" />
+                        <path d="M8 11V7a4 4 0 0 1 7.5-2" />
+                      </svg>
+                    </span>
+                    <div class="addr-field">
+                      <span class="host">127.0.0.1:50051</span>
+                      <span class="method">Echo / <b>ServerStream</b></span>
+                      <span class="badge"><span></span>stream</span>
+                    </div>
+                    <span class="mini">Cancel</span>
+                  </div>
+                  <div class="tabs">
+                    <span aria-current="true">Messages</span>
+                    <span>Headers</span>
+                    <span>Trailers</span>
+                    <span>Contract</span>
+                  </div>
+                  <div class="rows">
+                    <div class="row">
+                      <span>#3</span><span class="dir">received</span>
+                      <span class="preview">{ <span class="key">"id"</span>: <span class="str">"ping"</span>, <span class="key">"echoed"</span>: <span class="str">"echo: ping #3"</span> }</span>
+                    </div>
+                    <div class="row">
+                      <span>#2</span><span class="dir">received</span>
+                      <span class="preview">{ <span class="key">"id"</span>: <span class="str">"ping"</span>, <span class="key">"echoed"</span>: <span class="str">"echo: ping #2"</span> }</span>
+                    </div>
+                    <div class="row">
+                      <span>#1</span><span class="dir">received</span>
+                      <span class="preview">{ <span class="key">"id"</span>: <span class="str">"ping"</span>, <span class="key">"echoed"</span>: <span class="str">"echo: ping #1"</span> }</span>
+                    </div>
+                  </div>
+                  <div class="statusline">
+                    <span class="pulse"></span>
+                    <b>STREAMING</b>
+                    <span>3 msgs</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <figcaption>
+              Illustration of a server stream in Handshaker, using the echo example from the repository. Service test.Echo, method ServerStream, address 127.0.0.1:50051, TLS off. Not a screenshot.
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section class="section reveal" id="problem" aria-labelledby="problem-title">
+        <div class="wrap">
+          <h2 id="problem-title">The call stays in one window</h2>
+          <p class="prose">
+            A streaming method is awkward to follow in a terminal. Messages keep arriving, the status shows up at the end, and the request you just ran is easy to lose.
+          </p>
+          <p class="prose">
+            Handshaker keeps the address, the method, the body, and the response in one desktop window. When you want the request again, it lives in a collection.
+          </p>
+        </div>
+      </section>
+
+      <section class="section reveal" id="benefits" aria-labelledby="benefits-title">
+        <div class="wrap">
+          <h2 id="benefits-title">What you can do with a service</h2>
+          <div class="benefits">
+            <article class="card">
+              <span class="icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+              </span>
+              <h3>Find methods from the address</h3>
+              <p>Type a host and port. Handshaker runs server reflection and lists each service and method. Refresh reflection when the contract changes. You do not import a proto file to start.</p>
+            </article>
+            <article class="card">
+              <span class="icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg>
+              </span>
+              <h3>Stay with the stream</h3>
+              <p>Server streaming uses Send, which becomes Cancel while the call is open. Client streaming and bidirectional calls use Open, then Send message and End stream. Messages land in a timeline, newest first.</p>
+            </article>
+            <article class="card">
+              <span class="icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="3.5" /><path d="m10 13 9-9 3 3-3 3-2-2-2 2-2-2-3 3" /></svg>
+              </span>
+              <h3>Leave secrets in the environment</h3>
+              <p>Bearer and API key store an OS environment variable name. OAuth2 client credentials use templates, including the client secret. Collection variables and the active environment fill <code>{{name}}</code> when you send.</p>
+            </article>
+            <article class="card">
+              <span class="icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5c0 1.1.9 2 2 2h1" /><path d="M16 21h1a2 2 0 0 0 2-2v-5a2 2 0 0 1 2-2 2 2 0 0 1-2-2V5a2 2 0 0 0-2-2h-1" /></svg>
+              </span>
+              <h3>Read the answer in parts</h3>
+              <p>A unary response has the body, headers, trailers, and the contract. A stream uses the same headers, trailers, and contract next to the message timeline. HTTP requests sit in the same collections.</p>
+            </article>
+            <article class="card">
+              <span class="icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="M7 10l5 5 5-5" /><path d="M12 15V3" /></svg>
+              </span>
+              <h3>Save the messages or assemble a file</h3>
+              <p>Save messages writes one JSON array of what the server sent. When a response field is bytes, Assemble writes one file. The repository echo example streams a PNG this way on Download.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="tagline-section" data-tagline aria-label="Tagline">
+        <div class="wrap">
+          <p class="tagline">
+            <span class="word">Pull</span>
+            <span class="word">the</span>
+            <span class="word">handles.</span>
+            <br />
+            <span class="word">We'll</span>
+            <span class="word">handle</span>
+            <br />
+            <span class="word">the</span>
+            <span class="word">handshake.</span>
+          </p>
+        </div>
+      </section>
+
+      <section class="section reveal" id="how" aria-labelledby="how-title">
+        <div class="wrap">
+          <h2 id="how-title">How a call starts</h2>
+          <div class="steps">
+            <article class="card">
+              <p class="step-num">01</p>
+              <h3>Install the desktop app</h3>
+              <p>Download the Apple Silicon disk image or the Windows 64 bit installer for version 0.3.7.</p>
+            </article>
+            <article class="card">
+              <p class="step-num">02</p>
+              <h3>Point it at a service</h3>
+              <p>Type the host and port. Reflection lists services and methods. Start an HTTP request from the same sidebar when the endpoint is not gRPC.</p>
+            </article>
+            <article class="card">
+              <p class="step-num">03</p>
+              <h3>Send, then read the response</h3>
+              <p>Edit the JSON body, metadata, and auth. Send a unary call, or open a stream and watch messages arrive.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section reveal" id="proof" aria-labelledby="proof-title">
+        <div class="wrap">
+          <h2 id="proof-title">Version 0.3.7 is a public release</h2>
+          <p class="prose">There are no customer quotes in the repository. These are the facts you can check on the release itself.</p>
+          <div class="facts">
+            <article class="card">
+              <h3>Version 0.3.7</h3>
+              <p>Published 22 October 2026. The app version in the repository matches that tag. The title bar can check for updates against the GitHub release.</p>
+            </article>
+            <article class="card">
+              <h3>macOS and Windows</h3>
+              <p>The release has an Apple Silicon disk image and a Windows 64 bit installer. It does not include an Intel Mac build or a Linux build.</p>
+            </article>
+            <article class="card">
+              <h3>MIT license</h3>
+              <p>Copyright 2026 xlcorg. The license grants use free of charge. Source and release files are on GitHub.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section reveal" id="faq" aria-labelledby="faq-title">
+        <div class="wrap">
+          <h2 id="faq-title">Questions</h2>
+          <div class="faq">
+            <article class="card">
+              <h3>What can Handshaker call?</h3>
+              <p>Unary gRPC, server streaming, client streaming, bidirectional streaming, and HTTP. HTTP methods are GET, POST, PUT, PATCH, DELETE, HEAD, and OPTIONS. Streaming methods show a stream, client, or bidi badge. Unary methods show no badge.</p>
+            </article>
+            <article class="card">
+              <h3>Where does the method list come from?</h3>
+              <p>Server reflection. You type a host and port, and Handshaker lists the services on that address. There is no proto file import. If reflection is off or the server cannot be reached, the contract stays unavailable until you refresh reflection.</p>
+            </article>
+            <article class="card">
+              <h3>Which systems can I install it on?</h3>
+              <p>macOS and Windows. Version 0.3.7 publishes an Apple Silicon disk image and a Windows 64 bit installer. That release has no Intel Mac build and no Linux build. The project README says Linux is untested.</p>
+            </article>
+            <article class="card">
+              <h3>How is authentication stored?</h3>
+              <p>The choices are None, Bearer, API key, and OAuth2. Bearer and API key store the name of an OS environment variable. The secret stays in the environment. OAuth2 uses client credentials, and its fields are templates, including the client secret. A request can override the collection.</p>
+            </article>
+            <article class="card">
+              <h3>What can a variable template resolve to?</h3>
+              <p>A collection variable, a value from the active environment, or a built in value generated when you send. Built in names are <code>{{$guid}}</code>, <code>{{$guid7}}</code>, <code>{{$timestamp}}</code>, <code>{{$unixMs}}</code>, <code>{{$isoTimestamp}}</code>, and <code>{{$randomInt}}</code>.</p>
+            </article>
+            <article class="card">
+              <h3>What does a stream look like?</h3>
+              <p>Messages appear in a timeline, newest first. Headers are available from the start, and trailers arrive when the stream ends. Cancel keeps what already arrived. Save messages writes one JSON array. Assemble writes one file from a bytes field. An open stream has no request deadline. A unary call uses the deadline under Settings, then Network.</p>
+            </article>
+            <article class="card">
+              <h3>How does TLS work?</h3>
+              <p>The address bar lock sets TLS on, off, or inherited from the collection. The collection default lives on its overview. You can skip certificate verification for a self signed or mismatched certificate. The app warns that skipped validation is for local or trusted endpoints.</p>
+            </article>
+            <article class="card">
+              <h3>Can I move collections to another machine?</h3>
+              <p>Export writes a JSON file of one collection, or of everything. Import merges that file. Matching items update. Items that exist only on this machine stay. Nothing is deleted. Environments travel in the same file.</p>
+            </article>
+            <article class="card">
+              <h3>How do updates work?</h3>
+              <p>The title bar has Check for updates. Releases are published on GitHub. The app reads the latest release manifest from that repository.</p>
+            </article>
+            <article class="card">
+              <!-- PLACEHOLDER: no price, plan, or payment step exists in the repo. Confirm with Artem before adding one. -->
+              <h3>Does Handshaker cost money?</h3>
+              <p>No price or plan is published. The software is MIT licensed, and that license grants use free of charge. This page does not sell a subscription.</p>
+            </article>
+            <article class="card">
+              <h3>Do I need an account?</h3>
+              <p>No Handshaker account. Install the app and point it at your own servers. The download is the public GitHub release.</p>
+            </article>
+            <article class="card">
+              <h3>Where is the source?</h3>
+              <p>The source is public at <a class="text-link" href="https://github.com/xlcorg/handshaker">github.com/xlcorg/handshaker</a> under the MIT license. Copyright 2026 xlcorg.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section reveal" id="risk" aria-labelledby="risk-title">
+        <div class="wrap">
+          <h2 id="risk-title">Install it and read the source</h2>
+          <p class="prose">The MIT license grants use free of charge. The installers are on the public GitHub release. There is no Handshaker account and no payment step on this page.</p>
+        </div>
+      </section>
+
+      <section class="section reveal" id="download" aria-labelledby="download-title">
+        <div class="wrap">
+          <h2 id="download-title">Download version 0.3.7</h2>
+          <p class="lede">A desktop client for internal gRPC services on macOS and Windows. Reflection lists methods from a host and port, and unary calls, streams, and HTTP requests share one window.</p>
+          <div class="downloads">
+            <article class="card download-card">
+              <h3>macOS</h3>
+              <p>Apple Silicon disk image. 11,271,770 bytes. An Intel Mac build is not in this release.</p>
+              <p class="file-meta">Handshaker_0.3.7_aarch64.dmg</p>
+              <a class="btn" href="https://github.com/xlcorg/handshaker/releases/download/v0.3.7/Handshaker_0.3.7_aarch64.dmg">Download for macOS</a>
+            </article>
+            <article class="card download-card">
+              <h3>Windows</h3>
+              <p>64 bit installer. 9,854,420 bytes.</p>
+              <p class="file-meta">Handshaker_0.3.7_x64-setup.exe</p>
+              <a class="btn" href="https://github.com/xlcorg/handshaker/releases/download/v0.3.7/Handshaker_0.3.7_x64-setup.exe">Download for Windows</a>
+            </article>
+          </div>
+          <p class="prose gap-top">
+            <a class="text-link" href="https://github.com/xlcorg/handshaker/releases/tag/v0.3.7">All files on the v0.3.7 release</a>
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer reveal">
+      <div class="wrap">
+        <div class="footer-row">
+          <a href="#top"><img class="lockup" src="assets/logo-lockup-dark.svg" width="148" height="40" alt="Handshaker" /></a>
+          <ul class="footer-links">
+            <li><a href="#download">Download</a></li>
+            <li><a href="https://github.com/xlcorg/handshaker">Source</a></li>
+            <li><a href="https://github.com/xlcorg/handshaker/blob/main/LICENSE">License</a></li>
+            <li><a href="privacy.html">Privacy</a></li>
+            <li><a href="terms.html">Terms</a></li>
+          </ul>
+        </div>
+        <p class="legal">Copyright 2026 xlcorg. This page does not set cookies and does not collect an email address.</p>
+      </div>
+    </footer>
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "What can Handshaker call?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Unary gRPC, server streaming, client streaming, bidirectional streaming, and HTTP. HTTP methods are GET, POST, PUT, PATCH, DELETE, HEAD, and OPTIONS. Streaming methods show a stream, client, or bidi badge. Unary methods show no badge."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Where does the method list come from?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Server reflection. You type a host and port, and Handshaker lists the services on that address. There is no proto file import. If reflection is off or the server cannot be reached, the contract stays unavailable until you refresh reflection."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Which systems can I install it on?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "macOS and Windows. Version 0.3.7 publishes an Apple Silicon disk image and a Windows 64 bit installer. That release has no Intel Mac build and no Linux build. The project README says Linux is untested."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How is authentication stored?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "The choices are None, Bearer, API key, and OAuth2. Bearer and API key store the name of an OS environment variable. The secret stays in the environment. OAuth2 uses client credentials, and its fields are templates, including the client secret. A request can override the collection."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What can a variable template resolve to?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "A collection variable, a value from the active environment, or a built in value generated when you send. Built in names are {{$guid}}, {{$guid7}}, {{$timestamp}}, {{$unixMs}}, {{$isoTimestamp}}, and {{$randomInt}}."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What does a stream look like?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Messages appear in a timeline, newest first. Headers are available from the start, and trailers arrive when the stream ends. Cancel keeps what already arrived. Save messages writes one JSON array. Assemble writes one file from a bytes field. An open stream has no request deadline. A unary call uses the deadline under Settings, then Network."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How does TLS work?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "The address bar lock sets TLS on, off, or inherited from the collection. The collection default lives on its overview. You can skip certificate verification for a self signed or mismatched certificate. The app warns that skipped validation is for local or trusted endpoints."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Can I move collections to another machine?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Export writes a JSON file of one collection, or of everything. Import merges that file. Matching items update. Items that exist only on this machine stay. Nothing is deleted. Environments travel in the same file."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How do updates work?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "The title bar has Check for updates. Releases are published on GitHub. The app reads the latest release manifest from that repository."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Does Handshaker cost money?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No price or plan is published. The software is MIT licensed, and that license grants use free of charge. This page does not sell a subscription."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Do I need an account?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No Handshaker account. Install the app and point it at your own servers. The download is the public GitHub release."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Where is the source?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "The source is public at github.com/xlcorg/handshaker under the MIT license. Copyright 2026 xlcorg."
+            }
+          }
+        ]
+      }
+    </script>
+    <script src="js/main.js"></script>
+  </body>
+</html>
